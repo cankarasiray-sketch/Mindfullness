@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.9.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.9.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -186,6 +186,18 @@ kısmaz. Ücretsiz anahtarda daraltma, kredinin ay ortasında bitip uygulamanın
 içindir. İstersen Ayarlar → Kredi planı'ndan kapatabilirsin; kredi biterse oranlar alınamaz ve yenilenene kadar
 kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
 
+**Birden fazla anahtar (1.9.1):** Ayarlar → Veri kaynağı'na en fazla 5 anahtar girilebilir (ör.
+arkadaşlarının kendi hesaplarından, kendi rızalarıyla verdikleri). Her sorguda önce hiç ölçülmemiş,
+sonra kalan kredisi en çok olan anahtar kullanılır; böylece yük anahtarlara yayılır. Kredisi biten
+ya da geçersiz anahtar (HTTP 401) ve istek sınırına takılan anahtar (429) o çalışmada atlanır,
+sorgu sıradakiyle tekrarlanır. Kalan kredi anahtar başına saklanır (anahtarın kendisi değil,
+özetinden türetilen kimlikle); kredi planı toplamı tek kota gibi kullanır, ör. 3 ücretsiz anahtar =
+ayda 1.500 kredi. Ayarlar'da anahtar başına kalan kredi, "Kaynakları test et" çıktısında anahtar
+durumu görünür (yalnızca son 4 karakter). Son kota yenilenmesinden (Ayarlar → yenilenme günü)
+eski ölçümler atılır ve anahtar yeniden ölçülür. Anahtarlar yalnızca telefonda saklanır. Sağlayıcı
+kötüye kullanım şüphesinde anahtarları iptal edebilir; bu durumda o anahtar atlanır, diğerleriyle
+devam edilir.
+
 Bir çalıştırmanın maliyeti: maçı olan her lig 1 kredi (2,5 Alt/Üst açıkken 2; Maç Sonucu ve
 Alt/Üst aynı sorguda gelir), sorulan her Karşılıklı Gol maçı 1 kredi. Maçı olmayan lig ve maç
 listesi sorguları ücretsizdir. Ör. 3 aktif lig + 4 KG maçı = 3×2 + 4 = 10 kredi. 1.8.9'dan beri
@@ -286,7 +298,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.9.0.apk
+./build.sh          # testler + build/BilincliKupon-1.9.1.apk
 ./build.sh test     # yalnızca testler
 ```
 

@@ -71,7 +71,32 @@ public final class Settings {
     public static final double ACTIVE_SHARE = 0.4;
 
     // kaynaklar
+    /**
+     * The Odds API anahtarları, satır satır (eski sürümlerde tek anahtar). Birden fazla anahtar
+     * varsa her sorguda kredisi en çok kalan kullanılır (OddsApi).
+     */
     public String oddsApiKey = "";
+
+    /** En fazla bu kadar anahtar. */
+    public static final int MAX_KEYS = 5;
+
+    /** Girilen anahtarlar (boşluk, satır, virgül ya da noktalı virgülle ayrılmış; tekrarlar atılır). */
+    public List<String> apiKeys() {
+        List<String> out = new ArrayList<>();
+        if (oddsApiKey == null) return out;
+        for (String k : oddsApiKey.trim().split("[\\s,;]+")) if (!k.isEmpty() && !out.contains(k)) out.add(k);
+        return out;
+    }
+
+    /** Kalıcı kayıtlarda anahtarın yerine geçen kimlik (anahtarın kendisi ikinci bir yere yazılmaz). */
+    public static String keyId(String key) {
+        return Integer.toHexString(key.hashCode());
+    }
+
+    /** Arayüzde ve raporlarda gösterilen kısa ad: son 4 karakter. */
+    public static String keyLabel(String key) {
+        return "…" + (key.length() > 4 ? key.substring(key.length() - 4) : key);
+    }
     /**
      * Varsayılan ligler: büyük 6 lig + Avrupa kupaları (hafta içi) + Hollanda ve Portekiz. Maçı
      * olmayan lig kredi harcamadığı için ligi seçili tutmak yalnızca oynadığı gün kredi harcar.
@@ -254,6 +279,7 @@ public final class Settings {
         if (m == null) return s;
         String key = Json.str(m, "oddsApiKey");
         s.oddsApiKey = key == null ? "" : key.trim();
+        s.oddsApiKey = String.join("\n", s.apiKeys()); // tek biçim: satır başına bir anahtar
         if (m.get("leagues") instanceof List) {
             s.leagues = new ArrayList<>();
             for (Object o : Json.arr(m.get("leagues"))) if (o instanceof String) s.leagues.add((String) o);
@@ -320,6 +346,7 @@ public final class Settings {
         if (chaseCooldownHours < 0 || chaseCooldownHours > 24 * 14) return "Kovalama beklemesi 0-336 saat olmalı";
         if (runHour < 0 || runHour > 23 || runMinute < 0 || runMinute > 59) return "Saat geçersiz";
         if (leagues.isEmpty()) return "En az bir lig seçilmeli";
+        if (apiKeys().size() > MAX_KEYS) return "En fazla " + MAX_KEYS + " API anahtarı girilebilir";
         if (maxCouponsPerDay < 1 || maxCouponsPerDay > 5) return "Günlük kupon sayısı 1 ile 5 arasında olmalı";
         if (!(maxDailyExposure >= maxStakeFraction && maxDailyExposure <= 0.30)) {
             return "Günlük toplam üst sınır, kupon başına sınırdan küçük olamaz ve en fazla %30 olabilir";

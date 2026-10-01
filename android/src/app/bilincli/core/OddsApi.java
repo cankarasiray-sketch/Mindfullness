@@ -63,12 +63,76 @@ public final class OddsApi {
      */
     static final long STALE_GAP_S = 3 * 3600, STALE_WINDOW_S = 6 * 3600;
 
+    private final List<String> keys;
+    /**
+     * Anahtar başına {kalan, kullanılan, ölçüm zamanı (ms)}; kimlik Settings.keyId. Çağıran önceki
+     * ölçümlerle doldurabilir (seçim için), çalışma sonunda kalıcı saklar.
+     */
+    public final Map<String, long[]> keyCredits = new LinkedHashMap<>();
+    /** Bu çalışmada kullanılamayan anahtarlar: kısa ad -> neden. Bir daha sorulmazlar. */
+    public final Map<String, String> keyProblems = new LinkedHashMap<>();
+
     public OddsApi(Http http, Settings cfg) throws Http.ProviderException {
-        if (cfg.oddsApiKey == null || cfg.oddsApiKey.isEmpty()) {
+        this.keys = cfg.apiKeys();
+        if (keys.isEmpty()) {
             throw new Http.ProviderException("The Odds API anahtarı yok. Ayarlar'dan gir.");
         }
         this.http = http;
         this.cfg = cfg;
+    }
+
+    /**
+     * Denenecek anahtar sırası: hiç ölçülmemiş olan önce (kalan kredisi öğrenilsin), sonra kalan
+     * kredisi en çok olan. Böylece kredi anahtarlara yayılır; biri iptal edilse de diğerleri kalır.
+     */
+    List<String> keyOrder() {
+        List<String> order = new ArrayList<>();
+        for (String k : keys) if (!keyProblems.containsKey(Settings.keyLabel(k))) order.add(k);
+        java.util.Collections.sort(order, new java.util.Comparator<String>() {
+            @Override
+            public int compare(String a, String b) {
+                long[] ca = keyCredits.get(Settings.keyId(a)), cb = keyCredits.get(Settings.keyId(b));
+                return Long.compare(cb == null ? Long.MAX_VALUE : cb[0], ca == null ? Long.MAX_VALUE : ca[0]);
+            }
+        });
+        return order;
+    }
+
+    /** Bilinen anahtarların toplamı (kredi planı tek kota gibi görür). */
+    private void refreshTotals() {
+        long rem = 0, use = 0;
+        boolean any = false;
+        for (String k : keys) {
+            long[] c = keyCredits.get(Settings.keyId(k));
+            if (c == null) continue;
+            any = true;
+            rem += c[0];
+            use += c[1];
+        }
+        if (any) {
+            remaining = String.valueOf(rem);
+            used = String.valueOf(use);
+        }
+    }
+
+    private static long number(String v, long fallback) {
+        if (v == null) return fallback;
+        try {
+            return (long) Double.parseDouble(v.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    /** "…ab12 480 kalan, …cd34 geçersiz ya da kredisi bitti (401)" ("Kaynakları test et" için). */
+    public String keySummary() {
+        List<String> parts = new ArrayList<>();
+        for (String k : keys) {
+            String label = Settings.keyLabel(k), problem = keyProblems.get(label);
+            long[] c = keyCredits.get(Settings.keyId(k));
+            parts.add(label + " " + (problem != null ? problem : c != null ? c[0] + " kalan" : "henüz kullanılmadı"));
+        }
+        return String.join(", ", parts);
     }
 
     private static double implied(double... prices) {
@@ -359,27 +423,51 @@ public final class OddsApi {
     }
 
     private Object get(String path, Map<String, String> params) throws Http.ProviderException {
-        Map<String, String> p = new LinkedHashMap<>();
-        p.put("apiKey", cfg.oddsApiKey);
-        p.putAll(params);
-        Http.Response r = http.get(BASE + path + Http.query(p), null);
-        String rem = r.headers.get("x-requests-remaining");
-        if (rem != null) remaining = rem;
-        String u = r.headers.get("x-requests-used");
-        if (u != null) used = u;
-        String last = r.headers.get("x-requests-last");
-        if (last != null) {
+        Http.ProviderException last = null;
+        for (String key : keyOrder()) {
+            Map<String, String> p = new LinkedHashMap<>();
+            p.put("apiKey", key);
+            p.putAll(params);
+            Http.Response r;
             try {
-                spent += (int) Double.parseDouble(last.trim());
-            } catch (NumberFormatException ignored) {
-                // başlık okunamadı: maliyet bilinmiyor
+                r = http.get(BASE + path + Http.query(p), null);
+            } catch (Http.ProviderException e) {
+                String m = String.valueOf(e.getMessage());
+                boolean quota = m.contains("HTTP 401"), limited = m.contains("HTTP 429");
+                if (keys.size() < 2 || !(quota || limited)) throw e;
+                // bu anahtarın kredisi bitti, anahtar geçersiz ya da istek sınırı: sıradakiyle dene
+                keyProblems.put(Settings.keyLabel(key), quota ? "geçersiz ya da kredisi bitti (401)" : "istek sınırı (429)");
+                if (quota) {
+                    long[] c = keyCredits.get(Settings.keyId(key));
+                    keyCredits.put(Settings.keyId(key), new long[] {0, c == null ? 0 : c[1], System.currentTimeMillis()});
+                    refreshTotals();
+                }
+                last = e;
+                continue;
+            }
+            String rem = r.headers.get("x-requests-remaining"), u = r.headers.get("x-requests-used");
+            if (rem != null) {
+                long[] prev = keyCredits.get(Settings.keyId(key));
+                keyCredits.put(Settings.keyId(key), new long[] {number(rem, 0), number(u, prev == null ? 0 : prev[1]),
+                    System.currentTimeMillis()});
+                refreshTotals();
+            }
+            String lastCost = r.headers.get("x-requests-last");
+            if (lastCost != null) {
+                try {
+                    spent += (int) Double.parseDouble(lastCost.trim());
+                } catch (NumberFormatException ignored) {
+                    // başlık okunamadı: maliyet bilinmiyor
+                }
+            }
+            try {
+                return Json.parse(r.body);
+            } catch (IllegalArgumentException e) {
+                throw new Http.ProviderException(path + ": JSON çözülemedi");
             }
         }
-        try {
-            return Json.parse(r.body);
-        } catch (IllegalArgumentException e) {
-            throw new Http.ProviderException(path + ": JSON çözülemedi");
-        }
+        throw new Http.ProviderException("Tüm API anahtarları kullanılamadı (" + keySummary() + ")"
+                + (last != null ? ": " + last.getMessage() : ""));
     }
 
     /** Günlük ve radar taraması: pencerede maçı olmayan ligler için oran çekilmez. */

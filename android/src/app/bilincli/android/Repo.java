@@ -11,6 +11,7 @@ import app.bilincli.core.Fmt;
 import app.bilincli.core.Forecasts;
 import app.bilincli.core.Http;
 import app.bilincli.core.Json;
+import app.bilincli.core.KeyCredits;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Matching;
 import app.bilincli.core.Models;
@@ -77,9 +78,23 @@ final class Repo {
         String rem = src.remainingCredits(), used = src.usedCredits();
         lastSpent = src.spent();
         lastRemaining = rem;
-        if (rem != null) {
-            prefs.edit().putString("credits", rem).putString("creditsUsed", used).putLong("creditsAt", System.currentTimeMillis()).apply();
+        if (rem == null) return;
+        // anahtar başına ölçümler saklanır; toplam, kredi planının kotasıdır
+        Map<String, long[]> merged = KeyCredits.merge(keyCredits(), src.keyCredits(), ledger.settings().apiKeys());
+        long[] t = KeyCredits.totals(merged);
+        if (t != null) {
+            rem = String.valueOf(t[0]);
+            used = String.valueOf(t[1]);
+            lastRemaining = rem;
         }
+        prefs.edit().putString("credits", rem).putString("creditsUsed", used).putLong("creditsAt", System.currentTimeMillis())
+                .putString("keyCredits", KeyCredits.write(merged)).apply();
+    }
+
+    /** Anahtar başına son ölçümler; son kota yenilenmesinden eskiler atılır (yeniden ölçülür). */
+    Map<String, long[]> keyCredits() {
+        return KeyCredits.parse(prefs.getString("keyCredits", null),
+                KeyCredits.lastResetMillis(Instant.now().atOffset(Fmt.TR).toLocalDate(), ledger.settings().creditResetDay));
     }
 
     /** Tam taramadan sonra: ayrıca lig verimini (değerli seçim sayısı) güncelle. */
@@ -200,6 +215,8 @@ final class Repo {
             return null;
         }
         m.put("at", Instant.ofEpochMilli(prefs.getLong("creditsAt", 0)).toString());
+        List<String> keys = ledger.settings().apiKeys();
+        if (keys.size() > 1) m.put("keys", KeyCredits.view(keyCredits(), keys));
         return m;
     }
 
@@ -298,6 +315,7 @@ final class Repo {
         Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), effective());
         src.memory = memory;
         src.knownActive = active(); // pencere maç sayıları zaten biliniyorsa tekrar sorulmaz
+        src.knownKeyCredits = keyCredits(); // birden fazla anahtar: kredisi en çok kalan seçilir
         src.bookCacheMaxAgeS = 20 * 60; // yarıda kesilen indirmede en fazla 20 dk'lık bülten (kontrol hariç)
         return src;
     }

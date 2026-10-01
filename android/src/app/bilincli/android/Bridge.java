@@ -418,6 +418,7 @@ public final class Bridge {
         String types = app.bilincli.core.Nesine.lastTypes;
         if (types != null && !types.isEmpty()) b.append("  Bülten: ").append(types).append('\n');
         b.append("  Kredi: bu test ").append(src.spent()).append(" · kalan ").append(src.remainingCredits()).append('\n');
+        if (repo.real().settings().apiKeys().size() > 1) b.append("  Anahtarlar: ").append(src.keySummary()).append('\n');
         if (src.bookNote != null) b.append("  Not: ").append(src.bookNote).append('\n');
         b.append("  Maç Sonucu: ").append(mark(cal.get("MS"))).append('\n');
         b.append("  Çifte Şans: ").append(mark(cal.get("CS"))).append('\n');

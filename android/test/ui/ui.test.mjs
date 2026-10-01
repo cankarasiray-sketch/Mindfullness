@@ -102,7 +102,7 @@ test("ilk kurulum: anahtar ve kasa uyarıları, şimdi üret", async () => {
 
 test("ayarlar: Türkçe ondalık ve yüzdeler doğru dönüştürülür", async () => {
   const t = boot(clone(baseState), "#ayarlar");
-  t.$("#sKey").value = "  abc123 ";
+  t.$("#sKey0").value = "  abc123 ";
   t.$$(".lg").find((x) => x.value === "soccer_epl").checked = false;
   t.$("#f_minLegEv").value = "2,5";
   t.$("#f_maxLegOdds").value = "3,2";
@@ -455,6 +455,26 @@ test("basketbol: kupon ve düşen oran etiketi, ayrı lig kartı, kaydedilir", a
   await t.tick();
   const st = t.calls.at(-1).payload.settings;
   assert.equal(st.leagues.includes("basketball_nba"), wanted);
+});
+
+test("birden fazla API anahtarı: alanlar, kayıt ve anahtar başına kredi", async () => {
+  const s = clone(baseState);
+  s.settings.oddsApiKey = "anahtar-bir-1111\nanahtar-iki-2222";
+  s.credits = { remaining: 780, at: s.now, keys: [
+    { label: "…1111", remaining: 480, at: s.now }, { label: "…2222", remaining: 300, at: s.now }, { label: "…3333", remaining: null, at: null }] };
+  const t = boot(s, "#ayarlar");
+  assert.equal(t.$("#sKey0").value, "anahtar-bir-1111");
+  assert.equal(t.$("#sKey1").value, "anahtar-iki-2222");
+  assert.equal(t.$$(".apikey").length, 5);
+  assert.match(t.text(), /Kalan API kredisi: 780/);
+  assert.match(t.text(), /…1111: 480 · …2222: 300 · …3333: henüz kullanılmadı/);
+  t.$("#sKey2").value = " anahtar-uc-3333 ";
+  t.$("#sKey3").value = "anahtar-bir-1111"; // tekrar: bir kez kaydedilir
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).payload.settings.oddsApiKey, "anahtar-bir-1111\nanahtar-iki-2222\nanahtar-uc-3333");
+  t.button("Göster").click();
+  assert.ok(t.$$(".apikey").every((x) => x.type === "text"));
 });
 
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {

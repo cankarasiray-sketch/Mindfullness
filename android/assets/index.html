@@ -668,14 +668,28 @@ var FIELDS = [
   ["maxCouponsPerDay", "Günde en fazla kupon (1-5)", false], ["maxDailyExposure", "Günlük toplam en fazla kasa (%)", true],
   ["weeklyLossLimit", "Haftalık kayıp limiti (%)", true], ["chaseCooldownHours", "Kovalama beklemesi (saat)", false]
 ];
+var MAX_KEYS = 5;
+function keyInputs(joined) {
+  var keys = (joined || "").split(/[\s,;]+/).filter(function (k) { return k; }), html = "";
+  for (var i = 0; i < MAX_KEYS; i++) {
+    html += '<input id="sKey' + i + '" class="apikey" type="password" autocomplete="off" placeholder="' + (i ? "Ek anahtar " + i + " (isteğe bağlı)" : "Anahtarın") + '" value="' + esc(keys[i] || "") + '"' + (i ? ' style="margin-top:6px"' : "") + ">";
+  }
+  return '<label>The Odds API anahtarları</label>' + html
+    + '<p class="small muted">Kendi anahtarın; istersen arkadaşlarının kendi hesaplarından, kendi rızalarıyla verdikleri anahtarlar (en fazla ' + MAX_KEYS + '). '
+    + "Her sorguda kredisi en çok kalan kullanılır, biten ya da geçersiz olan atlanır; kredi planı toplam krediyle çalışır. "
+    + "Anahtarlar yalnızca bu telefonda saklanır. Sağlayıcı kötüye kullanım şüphesinde anahtarları iptal edebilir.</p>";
+}
 function viewSettings() {
   var st = S.settings, html = "";
   if (S.demo) html += banners();
   html += '<div class="card"><h2>Veri kaynağı</h2><p class="small muted">Adil olasılıklar Pinnacle (ve aynı yanıttaki likit bahis borsası) oranlarından hesaplanır. Bu oranları The Odds API verir; her sorgu anahtarının aylık kotasından 1 kredi düşer (ücretsiz anahtar ayda 500, ücretli planlarda çok daha fazla). Kredi planı kalan krediye göre kapsamı kendisi ayarlar; büyük kotalı anahtarda daraltma olmaz. Maç listesi sorgusu kredi harcamaz, o gün maçı olmayan lig için oran çekilmez. iddaa oranları Nesine bülteninden ücretsiz okunur ve tüm bayilerde (Bilyoner, Nesine, Misli) aynıdır. Oynarken Bilyoner\'deki oranla karşılaştır.</p>'
-    + '<label>The Odds API anahtarı</label><input id="sKey" type="password" autocomplete="off" value="' + esc(st.oddsApiKey) + '">'
-    + '<div class="btns"><button class="b ghost" onclick="var k=document.getElementById(\'sKey\');k.type=k.type===\'password\'?\'text\':\'password\'">Göster</button>'
+    + keyInputs(st.oddsApiKey)
+    + '<div class="btns"><button class="b ghost" onclick="document.querySelectorAll(\'.apikey\').forEach(function(k){k.type=k.type===\'password\'?\'text\':\'password\'})">Göster</button>'
     + '<button class="b ghost" onclick="act(\'openUrl\',{url:\'https://the-odds-api.com/#get-access\'},true)">Anahtar al</button></div>'
-    + (S.credits ? '<p class="small muted">Kalan API kredisi: <b>' + S.credits.remaining + "</b> (" + esc(dm(S.credits.at)) + " " + esc(hm(S.credits.at)) + ")</p>" : "")
+    + (S.credits ? '<p class="small muted">Kalan API kredisi: <b>' + S.credits.remaining + "</b> (" + esc(dm(S.credits.at)) + " " + esc(hm(S.credits.at)) + ")"
+      + (S.credits.keys ? "<br>" + S.credits.keys.map(function (k) {
+        return esc(k.label) + ": " + (k.remaining == null ? "henüz kullanılmadı" : k.remaining === 0 ? "0 (bitti ya da geçersiz)" : k.remaining);
+      }).join(" · ") : "") + "</p>" : "")
     + '<div class="btns"><button class="b" onclick="checkSources()">Kaynakları test et</button></div><pre class="out" id="checkOut" style="display:none"></pre></div>';
   html += '<div class="card"><h2>Pazarlar</h2><p class="small muted">Daha çok pazar, daha çok değerli fırsat demektir. Her pazar, iddaa bülteniyle Pinnacle '
     + "karşılaştırılarak otomatik doğrulanır; eşleşme belirsizse kullanılmaz.</p>"
@@ -783,7 +797,9 @@ function readNum(id, isPct) {
 }
 function collectSettings() {
   var st = JSON.parse(JSON.stringify(S.settings));
-  st.oddsApiKey = val("sKey");
+  var keys = [];
+  for (var i = 0; i < MAX_KEYS; i++) { var k = val("sKey" + i); if (k && keys.indexOf(k) < 0) keys.push(k); }
+  st.oddsApiKey = keys.join("\n");
   st.leagues = Array.prototype.slice.call(document.querySelectorAll(".lg:checked")).map(function (x) { return x.value; });
   var t = val("sTime").split(":");
   st.runHour = parseInt(t[0], 10); st.runMinute = parseInt(t[1], 10);

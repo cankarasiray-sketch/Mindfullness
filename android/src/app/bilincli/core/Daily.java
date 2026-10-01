@@ -80,13 +80,31 @@ public final class Daily {
             this.cfg = cfg;
         }
 
+        /** Önceki çalışmalardan anahtar başına {kalan, kullanılan, zaman}; anahtar seçimi için. */
+        public Map<String, long[]> knownKeyCredits;
+
         private OddsApi api() throws Http.ProviderException {
             if (api == null) {
                 api = new OddsApi(http, cfg);
                 api.progress = progress;
                 api.knownInWindow = knownActive;
+                if (knownKeyCredits != null) api.keyCredits.putAll(knownKeyCredits);
             }
             return api;
+        }
+
+        /** Bu çalışmadan sonra anahtar başına kredi (kalıcı saklamak için; çağrı yapılmadıysa boş). */
+        public Map<String, long[]> keyCredits() {
+            return api == null ? new java.util.LinkedHashMap<String, long[]>() : api.keyCredits;
+        }
+
+        /** Bu çalışmada kullanılamayan anahtarlar (kısa ad -> neden). */
+        public Map<String, String> keyProblems() {
+            return api == null ? new java.util.LinkedHashMap<String, String>() : api.keyProblems;
+        }
+
+        public String keySummary() {
+            return api == null ? "" : api.keySummary();
         }
 
         /** Bu kaynağın kapsamı (kredi planına göre daraltılmış olabilir). */
