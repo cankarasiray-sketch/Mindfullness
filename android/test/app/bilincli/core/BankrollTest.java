@@ -129,6 +129,41 @@ public class BankrollTest {
     }
 
     @Test
+    public void creditPlanUsesTodaysActiveLeaguesAndRealUsage() {
+        Settings s = new Settings();
+        s.leagues.add("soccer_uefa_nations_league");
+        s.totals = true;
+        s.kgEvents = 4;
+        // milli maç arası: yalnızca Uluslar Ligi oynuyor (ücretsiz listeden), kupon ortalaması 1
+        Map<String, Integer> active = new LinkedHashMap<>();
+        for (String l : s.leagues) active.put(l, 0);
+        active.put("soccer_uefa_nations_league", 9);
+        CreditPlan.Plan light = CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null, active, 1.0);
+        assertFalse(light.notes.toString(), light.narrowed);
+        assertTrue(light.totals);
+        assertEquals(4, light.kgEvents);
+        assertEquals(1 * 2 + 4 + 5, light.cost, 1e-9); // Uluslar Ligi x2 (Alt/Üst) + 4 KG + gider (3 + 2x1)
+        // eski tahminle (her lig %40, her gün 5 kupon) aynı gün Alt/Üst ve KG kapanıyordu
+        CreditPlan.Plan old = CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null);
+        assertTrue(old.narrowed);
+        assertEquals(0, old.kgEvents);
+        // yoğun gün: hepsi oynuyor; önce KG, sonra Alt/Üst, sonra en az fırsat çıkaran ligler
+        for (String l : s.leagues) active.put(l, 8);
+        active.put("soccer_france_ligue_one", 0); // maçı olmayan lig "çıkarılmaz" (kredi harcamaz zaten)
+        CreditPlan.Plan heavy = CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null, active, 1.0);
+        assertTrue(heavy.narrowed);
+        assertEquals(0, heavy.kgEvents);
+        assertFalse(heavy.totals);
+        assertTrue(heavy.cost <= heavy.budget);
+        assertTrue(heavy.leagues.contains("soccer_france_ligue_one"));
+        assertEquals(11, heavy.leagues.size()); // 12 lig: 11 oynayan, 1 maçsız; oynayanlardan 10'u kalır
+        // KG maliyeti penceredeki maç sayısını aşmaz
+        for (String l : s.leagues) active.put(l, 0);
+        active.put("soccer_uefa_nations_league", 2);
+        assertEquals(1 * 2 + 2 + 5, CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null, active, 1.0).cost, 1e-9);
+    }
+
+    @Test
     public void creditResetDayAndYield() {
         assertEquals(14, CreditPlan.daysLeft(LocalDate.of(2026, 10, 1), 15));
         assertEquals(1, CreditPlan.daysLeft(LocalDate.of(2026, 10, 14), 15));

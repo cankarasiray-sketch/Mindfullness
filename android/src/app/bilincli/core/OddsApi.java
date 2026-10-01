@@ -27,6 +27,19 @@ public final class OddsApi {
     public final List<String> idle = new ArrayList<>();
     /** Lig bazında ayrıntı ("Kaynakları test et" için). */
     public final List<String> report = new ArrayList<>();
+    /** Önceden (ücretsiz listeyle) öğrenilmiş pencere maç sayıları: tekrar sorulmaz. */
+    public Map<String, Integer> knownInWindow;
+
+    /** Liglerin karar penceresindeki maç sayıları (kota harcamaz; alınamazsa -1). */
+    public Map<String, Integer> activeCounts(java.util.Collection<String> leagues, Instant now) {
+        Map<String, Integer> out = new LinkedHashMap<>();
+        for (String l : leagues) {
+            out.put(l, eventsInWindow(l, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
+                    now.plusSeconds(Math.round(cfg.windowHours * 3600))));
+        }
+        return out;
+    }
+
     /** Arayüze ilerleme (null olabilir). */
     public Daily.Progress progress;
     /** true: maçı olmayan lig için sıradaki maç tarihi de sorulur (ücretsiz maç listesi). */
@@ -419,7 +432,8 @@ public final class OddsApi {
             String name = CreditPlan.leagueName(league);
             index++;
             if (progress != null) progress.step("Pinnacle oranları " + index + "/" + leagues.size() + ": " + name);
-            int inWindow = now == null ? -1 : eventsInWindow(league, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
+            int inWindow = now == null ? -1 : knownInWindow != null && knownInWindow.containsKey(league) ? knownInWindow.get(league)
+                    : eventsInWindow(league, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
                     now.plusSeconds(Math.round(cfg.windowHours * 3600)));
             if (inWindow == 0) {
                 idle.add(league);

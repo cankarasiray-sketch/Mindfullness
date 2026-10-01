@@ -233,6 +233,7 @@ public final class Bridge {
                 requireReal(repo);
                 Daily.Result r;
                 synchronized (Repo.LOCK) {
+                    repo.probeActive();
                     Daily.LiveSources src = repo.live();
                     r = Daily.generate(repo.real(), src, Json.bool(p, "force", false), false, repo.radar);
                     repo.storeKickoffs(r);
@@ -378,6 +379,8 @@ public final class Bridge {
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
         repo.refreshInternationals(new Daily.LiveSources(new AndroidHttp(activity), repo.real().settings()), true);
+        progress("Bugün oynayan ligler belirleniyor (ücretsiz)…");
+        repo.probeActive();
         Daily.LiveSources src = repo.live();
         src.progress = new Daily.Progress() {
             @Override

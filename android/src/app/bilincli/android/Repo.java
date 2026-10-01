@@ -129,6 +129,42 @@ final class Repo {
         return s;
     }
 
+    /** Bugünün pencere maç sayıları (ücretsiz listeden) ve öğrenildiği an. */
+    private volatile Map<String, Integer> activeToday;
+    private volatile Instant activeAt;
+
+    /** Taranacak liglerde karar penceresinde kaç maç var (kota harcamaz); planı doğru kurmak için. */
+    void probeActive() {
+        Settings s = scanSettings();
+        if (s.oddsApiKey.isEmpty()) return;
+        try {
+            Daily.LiveSources probe = new Daily.LiveSources(new AndroidHttp(app), s);
+            activeToday = probe.activeCounts(s.leagues, Instant.now());
+            activeAt = Instant.now();
+        } catch (Http.ProviderException ignored) {
+            // bilinmiyor: plan ortalama payla kurulur
+        }
+    }
+
+    /** Son 3 saatte öğrenildiyse bugünün pencere maç sayıları, yoksa null. */
+    Map<String, Integer> active() {
+        Instant at = activeAt;
+        return at != null && at.isAfter(Instant.now().minusSeconds(3 * 3600)) ? activeToday : null;
+    }
+
+    /** Son 14 günde günlük ortalama kupon (az geçmişte 1). */
+    double avgCoupons() {
+        java.time.LocalDate today = Instant.now().atOffset(Fmt.TR).toLocalDate();
+        String from = today.minusDays(14).toString();
+        int runs = 0, coupons = 0;
+        for (Ledger.Run r : ledger.runs(30)) {
+            if (r.day.compareTo(from) < 0) continue;
+            runs++;
+            if ("kupon".equals(r.decision)) coupons += r.ids().size();
+        }
+        return runs < 3 ? 1.0 : (double) coupons / runs;
+    }
+
     CreditPlan.Plan plan() {
         Map<String, Double> yield;
         try {
@@ -138,7 +174,8 @@ final class Repo {
             yield = new LinkedHashMap<>();
         }
         return CreditPlan.plan(scanSettings(), parseLong(prefs.getString("credits", null)),
-                parseLong(prefs.getString("creditsUsed", null)), Instant.now().atOffset(Fmt.TR).toLocalDate(), yield);
+                parseLong(prefs.getString("creditsUsed", null)), Instant.now().atOffset(Fmt.TR).toLocalDate(), yield,
+                active(), avgCoupons());
     }
 
     /** Canlı çekimlerde kullanılan ayarlar: kullanıcının ayarları, kredi planına göre daraltılmış. */
@@ -185,6 +222,7 @@ final class Repo {
                 throw new Http.ProviderException("API kredisi az kaldı (" + credits().get("remaining")
                         + "); günlük karar için saklanıyor, radar bekliyor.");
             }
+            probeActive();
             Daily.LiveSources src = live();
             try {
                 Daily.Fetch f = Daily.fetch(src, Instant.now());
@@ -253,6 +291,7 @@ final class Repo {
     Daily.LiveSources live() {
         Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), effective());
         src.memory = memory;
+        src.knownActive = active(); // pencere maç sayıları zaten biliniyorsa tekrar sorulmaz
         return src;
     }
 
@@ -272,6 +311,7 @@ final class Repo {
                 return out;
             }
             refreshInternationals(new Daily.LiveSources(new AndroidHttp(app), ledger.settings()), false);
+            probeActive();
             Daily.LiveSources src = live();
             out.settleMessages = Daily.settle(ledger, src, forecasts);
             String today = Fmt.dayKey(Instant.now());

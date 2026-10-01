@@ -57,6 +57,13 @@ public final class Daily {
         private OddsApi api;
         /** null olabilir. */
         public Progress progress;
+        /** Bugün öğrenilmiş pencere maç sayıları (lig -> sayı); null olabilir. */
+        public Map<String, Integer> knownActive;
+
+        /** Liglerin karar penceresindeki maç sayıları (kota harcamaz). */
+        public Map<String, Integer> activeCounts(java.util.Collection<String> leagues, Instant now) throws Http.ProviderException {
+            return api().activeCounts(leagues, now);
+        }
 
         void step(String text) {
             if (progress != null) progress.step(text);
@@ -73,6 +80,7 @@ public final class Daily {
             if (api == null) {
                 api = new OddsApi(http, cfg);
                 api.progress = progress;
+                api.knownInWindow = knownActive;
             }
             return api;
         }

@@ -64,6 +64,37 @@ public final class CreditPlan {
         return 6 + 2 * coupons;
     }
 
+    /**
+     * avgCoupons ≥ 0 ise gider gerçek kullanımdan: pas günlerinde kontrol ve kapanış kredisi
+     * harcanmaz, bu yüzden her gün en fazla kupon varsaymak gereksiz daraltır.
+     */
+    static double overhead(int coupons, double avgCoupons) {
+        if (avgCoupons < 0) return overhead(coupons);
+        return 3 + 2 * Math.min(coupons, avgCoupons);
+    }
+
+    /** Ligin bugünkü ağırlığı: maçı biliniyorsa 1/0, bilinmiyorsa ortalama pay. */
+    static double weight(String league, Map<String, Integer> active) {
+        if (active == null || !active.containsKey(league)) return Settings.ACTIVE_SHARE;
+        return active.get(league) == 0 ? 0 : 1; // -1: liste alınamadı, oran yine çekilir
+    }
+
+    static double cost(Plan p, Map<String, Integer> active, double avgCoupons) {
+        double w = 0;
+        int matches = 0;
+        boolean known = active != null;
+        for (String l : p.leagues) {
+            w += weight(l, active);
+            if (known) {
+                Integer n = active.get(l);
+                if (n == null || n < 0) known = false;
+                else matches += n;
+            }
+        }
+        int kg = known ? Math.min(p.kgEvents, matches) : p.kgEvents; // KG yalnızca penceredeki maçlar için
+        return w * (p.totals ? 2 : 1) * (1 + p.radarScans) + kg + overhead(p.coupons, avgCoupons);
+    }
+
     /** Seçili liglerin yalnızca o gün oynayanları kredi harcar (Settings.ACTIVE_SHARE). */
     static double cost(int leagues, boolean totals, int radar, int kg, int overhead) {
         return leagues * Settings.ACTIVE_SHARE * (totals ? 2 : 1) * (1 + radar) + kg + overhead;
@@ -83,6 +114,15 @@ public final class CreditPlan {
      * yield: lig -> son taramalardaki değerli seçim sayısının hareketli ortalaması.
      */
     public static Plan plan(Settings cfg, Long remaining, Long used, LocalDate today, Map<String, Double> yield) {
+        return plan(cfg, remaining, used, today, yield, null, -1);
+    }
+
+    /**
+     * active: bugün karar penceresindeki maç sayısı (lig -> sayı; ücretsiz maç listesinden;
+     * bilinmiyorsa null). avgCoupons: son günlerin ortalama kupon sayısı (bilinmiyorsa -1).
+     */
+    public static Plan plan(Settings cfg, Long remaining, Long used, LocalDate today, Map<String, Double> yield,
+                            final Map<String, Integer> active, double avgCoupons) {
         Plan p = new Plan();
         p.totals = cfg.totals;
         p.kgEvents = cfg.kgEvents;
@@ -97,7 +137,7 @@ public final class CreditPlan {
         p.quota = quota;
         p.budget = Math.max(0, left - RESERVE) / p.daysLeft;
         if (!cfg.creditAuto) {
-            p.cost = cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(p.coupons));
+            p.cost = cost(p, active, avgCoupons);
             return p;
         }
         // Ligler: en az fırsat çıkaran sonda (eşitlikte kullanıcının sırası korunur).
@@ -112,7 +152,14 @@ public final class CreditPlan {
         });
         int[] radarSteps = {4, 2, 1, 0};
         int[] kgSteps = {12, 8, 4, 0};
-        while (cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(p.coupons)) > p.budget) {
+        while (cost(p, active, avgCoupons) > p.budget) {
+            int droppable = -1; // bugün maçı olan, en az fırsat çıkaran lig (maçsız lig kredi harcamaz)
+            for (int i = p.leagues.size() - 1; i >= 0 && p.leagues.size() > 1; i--) {
+                if (weight(p.leagues.get(i), active) > 0) {
+                    droppable = i;
+                    break;
+                }
+            }
             if (p.kgEvents > 0) {
                 p.kgEvents = next(kgSteps, p.kgEvents);
                 note(p, "kg", p.kgEvents > 0 ? "Karşılıklı Gol en fazla " + p.kgEvents + " maç" : "Karşılıklı Gol bugünlük kapatıldı");
@@ -125,19 +172,19 @@ public final class CreditPlan {
             } else if (p.totals) {
                 p.totals = false;
                 note(p, "totals", "2,5 Alt/Üst bugünlük kapatıldı");
-            } else if (p.leagues.size() > 1) {
-                String dropped = p.leagues.remove(p.leagues.size() - 1);
+            } else if (droppable >= 0) {
+                String dropped = p.leagues.remove(droppable);
                 note(p, "lig:" + dropped, leagueName(dropped) + " bugünlük çıkarıldı (en az fırsat çıkaran lig)");
             } else if (p.coupons > 1) {
                 p.coupons--;
                 note(p, "kupon", "Günde en fazla " + p.coupons + " kupon");
             } else {
-                note(p, "az", "Kredi çok az: yalnızca " + leagueName(p.leagues.get(0)) + " taranıyor, yine de bütçeyi aşabilir");
+                note(p, "az", "Kredi çok az: kapsam en aza indi, yine de bütçeyi aşabilir");
                 break;
             }
             p.narrowed = true;
         }
-        p.cost = cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(p.coupons));
+        p.cost = cost(p, active, avgCoupons);
         // kullanıcının lig sırasını koru
         List<String> kept = new ArrayList<>();
         for (String l : cfg.leagues) if (p.leagues.contains(l)) kept.add(l);

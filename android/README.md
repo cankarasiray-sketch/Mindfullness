@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.8.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.8.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -180,6 +180,9 @@ kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
   maç) → radar (4→2→1→0) → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig (son taramalardaki
   değerli seçim sayısının hareketli ortalaması). Senin seçmediğin hiçbir şey eklenmez; plan her
   gün gerçek kalan krediden yeniden hesaplanır, daraltma olursa Bugün sekmesinde yazar.
+  1.8.6'dan itibaren plan, o gün gerçekten oynayan ligleri ücretsiz maç listesinden önceden öğrenir
+  ve kupon giderini son 14 günün ortalama kupon sayısından hesaplar; hafif günlerde Alt/Üst ve KG
+  gereksiz yere kapanmaz, maçı olmayan lig "çıkarılmaz" (zaten kredi harcamaz).
 
 ## Daha çok fırsat: pazarlar, günde 3 kupon, veri doğrulama (1.3)
 
@@ -241,7 +244,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.8.5.apk
+./build.sh          # testler + build/BilincliKupon-1.8.6.apk
 ./build.sh test     # yalnızca testler
 ```
 
