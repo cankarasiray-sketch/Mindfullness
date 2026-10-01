@@ -373,6 +373,9 @@ public class CoreTest {
         assertTrue(Http.blockedHint(new java.net.SocketException("Connection reset"), "https://api.the-odds-api.com/v4")
                 .contains("VPN açıkken dene"));
         assertEquals("", Http.blockedHint(new java.net.SocketTimeoutException("Read timed out"), "https://bulten.nesine.com"));
+        // yarıda kesilen yanıt da geçici sayılır (yeniden denenir)
+        assertTrue(Http.isReset(new java.io.IOException("unexpected end of stream on https://bulten.nesine.com/...")));
+        assertTrue(Http.isReset(new java.io.EOFException("\\n not found")));
         assertTrue(Http.blockedHint(new javax.net.ssl.SSLHandshakeException("Remote host terminated the handshake")).contains("engelleniyor"));
         assertEquals("", Http.blockedHint(new java.net.SocketTimeoutException("timeout").getClass().equals(java.net.SocketTimeoutException.class)
                 ? new java.io.IOException("Read timed out") : new java.io.IOException("x")));

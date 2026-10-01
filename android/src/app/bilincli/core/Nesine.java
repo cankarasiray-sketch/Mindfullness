@@ -194,6 +194,33 @@ public final class Nesine {
         }
     }
 
+    /** Son başarılı bülten (yarıda kesilen indirmelere karşı kısa süreli yedek). */
+    private static volatile String lastBody;
+    private static volatile Instant lastAt;
+
+    /**
+     * Canlı okunamazsa, en fazla maxCacheAgeS saniyelik son başarılı bülten kullanılır ve noteOut[0]'a
+     * yazılır. maxCacheAgeS = 0: yalnızca canlı (maç öncesi kontrol ve otomatik oynama böyle çağırır).
+     */
+    public static List<BookEvent> fetch(Http http, long maxCacheAgeS, Instant now, String[] noteOut) throws Http.ProviderException {
+        try {
+            return fetch(http);
+        } catch (Http.ProviderException e) {
+            String body = lastBody;
+            Instant at = lastAt;
+            if (maxCacheAgeS <= 0 || body == null || at == null || at.plusSeconds(maxCacheAgeS).isBefore(now)) throw e;
+            long min = Math.max(1, (now.getEpochSecond() - at.getEpochSecond()) / 60);
+            if (noteOut != null) noteOut[0] = "Nesine canlı okunamadı (" + e.getMessage() + "); " + min + " dk önceki bülten kullanıldı.";
+            return parse(Json.parse(body));
+        }
+    }
+
+    /** Test için yedeği temizler. */
+    static void clearCache() {
+        lastBody = null;
+        lastAt = null;
+    }
+
     public static List<BookEvent> fetch(Http http) throws Http.ProviderException {
         Map<String, String> headers = new LinkedHashMap<>();
         headers.put("Referer", "https://www.nesine.com/");
@@ -203,8 +230,11 @@ public final class Nesine {
         try {
             payload = Json.parse(r.body);
         } catch (IllegalArgumentException e) {
-            throw new Http.ProviderException("Nesine yanıtı JSON değil");
+            throw new Http.ProviderException("Nesine yanıtı JSON değil (yarıda kesilmiş olabilir)");
         }
-        return parse(payload);
+        List<BookEvent> out = parse(payload);
+        lastBody = r.body;
+        lastAt = Instant.now();
+        return out;
     }
 }

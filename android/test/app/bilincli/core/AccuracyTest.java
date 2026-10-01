@@ -188,6 +188,38 @@ public class AccuracyTest {
     }
 
     @Test
+    public void nesineBackupOnlyForShortOutagesNeverForPlayChecks() throws Exception {
+        Nesine.clearCache();
+        final boolean[] fail = {false};
+        Http http = new Http() {
+            public Response get(String url, Map<String, String> headers) throws ProviderException {
+                if (fail[0]) throw new ProviderException(url + " -> bağlantı hatası: unexpected end of stream");
+                return new Response(200, "{\"sg\":{\"EA\":[{\"TYPE\":1,\"HN\":\"A\",\"AN\":\"B\",\"D\":\"03.10.2026\","
+                        + "\"T\":\"20:00\",\"C\":1,\"MBS\":1,\"MA\":[{\"MTID\":1,\"SOV\":0.0,\"OCA\":[{\"N\":1,\"O\":2.1},"
+                        + "{\"N\":2,\"O\":3.3},{\"N\":3,\"O\":3.4}]}]}]}}", new LinkedHashMap<String, String>());
+            }
+        };
+        assertEquals(1, Nesine.fetch(http, 1200, Instant.now(), null).size());
+        fail[0] = true;
+        String[] note = new String[1];
+        assertEquals(1, Nesine.fetch(http, 1200, Instant.now().plusSeconds(300), note).size());
+        assertTrue(note[0], note[0].contains("5 dk önceki bülten kullanıldı"));
+        try {
+            Nesine.fetch(http, 0, Instant.now(), null); // oynama kontrolü: yalnızca canlı
+            throw new AssertionError("yedek kullanılmamalıydı");
+        } catch (Http.ProviderException expected) {
+            assertTrue(expected.getMessage().contains("unexpected end of stream"));
+        }
+        try {
+            Nesine.fetch(http, 1200, Instant.now().plusSeconds(1500), null); // 25 dk: çok eski
+            throw new AssertionError("eski yedek kullanılmamalıydı");
+        } catch (Http.ProviderException expected) {
+            // beklenen
+        }
+        Nesine.clearCache();
+    }
+
+    @Test
     public void forecastLogScoresAccuracy() {
         Ledger.MemoryStorage store = new Ledger.MemoryStorage(null);
         Forecasts f = new Forecasts(store);

@@ -292,6 +292,7 @@ final class Repo {
         Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), effective());
         src.memory = memory;
         src.knownActive = active(); // pencere maç sayıları zaten biliniyorsa tekrar sorulmaz
+        src.bookCacheMaxAgeS = 20 * 60; // yarıda kesilen indirmede en fazla 20 dk'lık bülten (kontrol hariç)
         return src;
     }
 
@@ -351,6 +352,7 @@ final class Repo {
                     if ("KG".equals(l.market)) kg.add(l.sharpRef);
                 }
             }
+            src.bookCacheMaxAgeS = 0; // oynama kararı: yalnızca canlı bülten
             List<Models.BookEvent> book = src.book();
             List<Models.SharpEvent> sharp = src.sharp(leagues);
             // Karşılıklı Gol bacakları: Pinnacle oranı maç bazında çekilir (maç başına bir kez)

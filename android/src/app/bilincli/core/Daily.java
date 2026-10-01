@@ -57,6 +57,10 @@ public final class Daily {
         private OddsApi api;
         /** null olabilir. */
         public Progress progress;
+        /** Canlı bülten okunamazsa kullanılabilecek en eski yedek (sn); 0 = yalnızca canlı. */
+        public long bookCacheMaxAgeS;
+        /** Yedek bülten kullanıldıysa açıklaması. */
+        public String bookNote;
         /** Bugün öğrenilmiş pencere maç sayıları (lig -> sayı); null olabilir. */
         public Map<String, Integer> knownActive;
 
@@ -168,7 +172,10 @@ public final class Daily {
         @Override
         public List<BookEvent> book() throws Http.ProviderException {
             step("iddaa bülteni okunuyor (Nesine)…");
-            return Nesine.fetch(http);
+            String[] note = new String[1];
+            List<BookEvent> out = Nesine.fetch(http, bookCacheMaxAgeS, Instant.now(), note);
+            bookNote = note[0];
+            return out;
         }
 
         @Override

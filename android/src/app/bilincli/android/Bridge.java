@@ -406,6 +406,7 @@ public final class Bridge {
         b.append("  Nesine: ").append(f.book.size()).append(" maç · Pinnacle: ").append(f.sharp.size())
                 .append(" maç · eşleşen: ").append(pairs.size()).append('\n');
         b.append("  Kredi: bu test ").append(src.spent()).append(" · kalan ").append(src.remainingCredits()).append('\n');
+        if (src.bookNote != null) b.append("  Not: ").append(src.bookNote).append('\n');
         b.append("  Maç Sonucu: ").append(mark(cal.get("MS"))).append('\n');
         b.append("  Çifte Şans: ").append(mark(cal.get("CS"))).append('\n');
         b.append("  2,5 Alt/Üst: ").append(mark(cal.get("AU25"))).append('\n');

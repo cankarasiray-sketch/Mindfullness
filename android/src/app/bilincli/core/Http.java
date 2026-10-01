@@ -56,10 +56,14 @@ public interface Http {
         return blockedHint(e, "");
     }
 
+    /** Geçici bağlantı hatası (sıfırlanma, yarıda kesilen yanıt): yeniden denemeye değer. */
     static boolean isReset(Exception e) {
         String m = String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT);
         return e instanceof java.net.SocketException || e instanceof javax.net.ssl.SSLException
-                || m.contains("reset") || m.contains("handshake") || m.contains("closed by peer");
+                || e instanceof java.io.EOFException || e instanceof java.net.ProtocolException
+                || m.contains("reset") || m.contains("handshake") || m.contains("closed by peer")
+                || m.contains("end of stream") || m.contains("stream was reset") || m.contains("broken pipe")
+                || m.contains("abort");
     }
 
     /** Kaynağa göre: Nesine VPN'siz (Türkiye) açılır, The Odds API Türkiye'den VPN ister. */

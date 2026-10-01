@@ -27,7 +27,7 @@ final class AndroidHttp extends Http.UrlHttp {
 
     @Override
     protected int attempts(URL u) {
-        return direct(u) ? 3 : 2;
+        return direct(u) ? 4 : 2; // Nesine bülteni büyük: VPN üzerinden yarıda kesilebiliyor
     }
 
     @Override
