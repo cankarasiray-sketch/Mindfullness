@@ -76,6 +76,23 @@ def test_variant_markers():
     assert len(match_events(book, sharp)) == 1
 
 
+@pytest.mark.parametrize(
+    "tr,en",
+    [("Türkiye", "Turkey"), ("Türkiye", "Türkiye"), ("Almanya", "Germany"), ("Bosna Hersek", "Bosnia & Herzegovina"),
+     ("Çekya", "Czech Republic"), ("Çekya", "Czechia"), ("Güney Kore", "Korea Republic"), ("ABD", "USA"),
+     ("Fildişi Sahili", "Côte d'Ivoire"), ("İrlanda", "Republic of Ireland"), ("Kuzey İrlanda", "Northern Ireland"),
+     ("G.Kıbrıs Rum Kesimi", "Cyprus"), ("Galler", "Wales")],
+)
+def test_national_team_names(tr, en):
+    assert normalize(tr) == normalize(en)
+    book = [BookEvent(ref="b", home=tr, away="Galler" if tr != "Galler" else "İskoçya", kickoff=NOW, league="", mbs=1, odds={})]
+    sharp = [SharpEvent(ref="s", sport_key="x", home=en, away="Wales" if tr != "Galler" else "Scotland", kickoff=NOW, fair={})]
+    assert len(match_events(book, sharp)) == 1
+    # milli takımın U21 ya da kadın takımı ana takımla eşleşmez
+    u21 = [SharpEvent(ref="s", sport_key="x", home=en + " U21", away="Wales U21", kickoff=NOW, fair={})]
+    assert match_events(book, u21) == []
+
+
 def test_each_event_matched_once():
     book = [_ev(BookEvent, "b1", "Milan", "Roma")]
     sharp = [_ev(SharpEvent, "s1", "AC Milan", "AS Roma"),

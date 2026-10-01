@@ -81,6 +81,11 @@ public final class Daily {
             return api == null ? new ArrayList<String>() : api.idle;
         }
 
+        /** Aktif futbol turnuvaları {kod, ad} (kota harcamaz). */
+        public List<String[]> sports() throws Http.ProviderException {
+            return api().fetchSports();
+        }
+
         /** "Kaynakları test et" için lig bazında ayrıntılı rapor üret. */
         public void diagnose() throws Http.ProviderException {
             api().diagnose = true;

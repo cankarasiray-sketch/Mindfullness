@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.7.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.8.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -22,7 +22,17 @@ ağdan siteye erişimin engellendiğinin tipik görüntüsüdür. Uygulamanın v
 tarayıcısında `https://api.the-odds-api.com/v4/sports` adresini aç: kısa bir hata metni (anahtar
 eksik) görürsen veri adresine erişim vardır, yalnızca kayıt sayfası açılmıyordur; "Bağlantı
 sıfırlandı" görürsen veri adresi de engellidir. Başka bir ağ (Wi-Fi / mobil veri) dene.
-"Kaynakları test et" de bu durumda "erişim engelleniyor olabilir" der.
+"Kaynakları test et" de bu durumda "erişim engelleniyor olabilir" der. Not: Chrome adresi açsa
+bile uygulamanın bağlantısı engele takılabilir (tarayıcı site adını şifreleyerek bağlanabiliyor,
+standart Android bağlantısı bunu yapmıyor). Bu durumda uygulama ancak VPN açıkken veri alır;
+sabah kararı ve maç öncesi kontroller için VPN'i "Her zaman açık" yap (Android: Ayarlar → Ağ →
+VPN → uygulamanın yanındaki dişli → Her zaman açık).
+
+**Milli maçlar (1.8):** Milli maç arasında lig maçı olmaz. Ayarlar → Milli maçlar açıkken
+(varsayılan) The Odds API'de o an aktif milli turnuvalar (Uluslar Ligi, Dünya Kupası elemeleri,
+hazırlık maçları...) günde bir kez ücretsiz spor listesinden bulunup taramaya eklenir. Bülten
+Türkçe ("Almanya"), keskin piyasa İngilizce ("Germany") yazdığı için yaklaşık 100 ülke adı
+eşlenir; U21 ve kadın milli takımları A takımıyla eşleşmez.
 
 **"Keskin piyasa: 0 maç" görürsen:** Seçili liglerin hiçbirinde önümüzdeki 24 saatte maç yoktur
 (ör. Perşembe günü yerli ligler oynamaz). Uygulama maç listesine ücretsiz bakar ve maçı olmayan
@@ -226,7 +236,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.7.3.apk
+./build.sh          # testler + build/BilincliKupon-1.8.apk
 ./build.sh test     # yalnızca testler
 ```
 

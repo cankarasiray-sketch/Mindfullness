@@ -11,6 +11,7 @@ import android.webkit.WebView;
 import app.bilincli.core.Daily;
 import app.bilincli.core.Engine;
 import app.bilincli.core.Fmt;
+import app.bilincli.core.Http;
 import app.bilincli.core.Json;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Matching;
@@ -58,6 +59,14 @@ public final class Bridge {
         extra.put("credits", repo.credits());
         extra.put("creditPlan", repo.plan().toMap());
         extra.put("accuracy", repo.forecasts.summary());
+        List<Object> intl = new ArrayList<>();
+        for (String[] r : repo.internationals()) {
+            List<Object> row = new ArrayList<>();
+            row.add(r[0]);
+            row.add(r[1]);
+            intl.add(row);
+        }
+        extra.put("intlLeagues", intl);
         String version = "?";
         try {
             version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
@@ -347,6 +356,7 @@ public final class Bridge {
     /** Veri kaynaklarını dener, doğrulama raporunu ve pazar envanterini gösterir. */
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
+        repo.refreshInternationals(new Daily.LiveSources(new Http.UrlHttp(), repo.real().settings()), true);
         Daily.LiveSources src = repo.live();
         Daily.Fetch f;
         try {

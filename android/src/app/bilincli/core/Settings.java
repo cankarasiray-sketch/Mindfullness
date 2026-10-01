@@ -110,6 +110,15 @@ public final class Settings {
      * olduğunu gösterirse olasılıklar iddaa fiyatına doğru küçültülür (EdgeCalibration).
      */
     public boolean edgeGuard = true;
+    /**
+     * Milli maçlar: The Odds API'de o an aktif milli takım turnuvaları (Uluslar Ligi, Dünya Kupası
+     * elemeleri, hazırlık maçları...) taramaya kendiliğinden eklenir. Maçı olmayan turnuva kredi
+     * harcamaz.
+     */
+    public boolean internationals = true;
+
+    /** Keşfedilen turnuvaların görünen adları (kod -> ad); süreç boyu önbellek. */
+    public static final Map<String, String> EXTRA_NAMES = new java.util.concurrent.ConcurrentHashMap<>();
     /** Kredi planlayıcı: kalan krediye göre lig/pazar/radar kapsamını otomatik daraltır. */
     public boolean creditAuto = true;
     /** The Odds API kredisinin yenilendiği ayın günü (1-28). */
@@ -210,6 +219,7 @@ public final class Settings {
         m.put("runHour", (long) runHour);
         m.put("runMinute", (long) runMinute);
         m.put("edgeGuard", edgeGuard);
+        m.put("internationals", internationals);
         m.put("profile", detectProfile());
         m.put("v", 3L);
         m.put("radarScans", (long) radarScans);
@@ -256,6 +266,7 @@ public final class Settings {
         s.runMinute = (int) Json.lng(m, "runMinute", s.runMinute);
         s.radarScans = (int) Json.lng(m, "radarScans", s.radarScans);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
+        s.internationals = Json.bool(m, "internationals", s.internationals);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {
             // 1.4 → 1.5: profiller günde 5 kupona çıktı (ortak Kelly); profil kullanıcısını taşı
             s.maxCouponsPerDay = 5;

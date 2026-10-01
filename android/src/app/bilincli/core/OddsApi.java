@@ -267,6 +267,31 @@ public final class OddsApi {
         return d;
     }
 
+    /** Milli takım turnuvalarını tanıyan anahtar parçaları (The Odds API spor kodları). */
+    static final String[] INTERNATIONAL = {"world_cup", "nations_league", "euro_qual", "european_championship",
+        "friendl", "africa_cup", "copa_america", "gold_cup", "asian_cup", "international"};
+
+    public static boolean isInternational(String key) {
+        if (key == null || !key.startsWith("soccer_") || key.contains("women")) return false;
+        for (String p : INTERNATIONAL) if (key.contains(p)) return true;
+        return false;
+    }
+
+    /**
+     * Şu an aktif futbol turnuvaları {kod, ad} (/v4/sports, kota harcamaz). Şampiyonluk
+     * (outright) pazarları hariç.
+     */
+    public List<String[]> fetchSports() throws Http.ProviderException {
+        List<String[]> out = new ArrayList<>();
+        for (Object o : Json.arr(get("/sports", new LinkedHashMap<String, String>()))) {
+            Map<String, Object> s = Json.obj(o);
+            if (s == null || !"Soccer".equalsIgnoreCase(Json.str(s, "group")) || !Json.bool(s, "active", false)
+                    || Json.bool(s, "has_outrights", false) || Json.str(s, "key") == null) continue;
+            out.add(new String[] {Json.str(s, "key"), Json.str(s, "title") == null ? Json.str(s, "key") : Json.str(s, "title")});
+        }
+        return out;
+    }
+
     /** Çifte Şans adil olasılıkları Maç Sonucu'ndan türetilir (ek kredi gerekmez). */
     public static Map<String, Double> doubleChance(Map<String, Double> ms) {
         if (ms == null || ms.get("1") == null || ms.get("X") == null || ms.get("2") == null) return null;

@@ -14,6 +14,7 @@ import app.bilincli.core.Json;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Matching;
 import app.bilincli.core.Models;
+import app.bilincli.core.OddsApi;
 import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
@@ -91,6 +92,43 @@ final class Repo {
     }
 
     /** Bugünün kredi planı: kalan krediye göre daraltılmış kapsam. */
+    /** Kayıtlı milli turnuvalar: {kod, ad}. */
+    List<String[]> internationals() {
+        List<String[]> out = new ArrayList<>();
+        for (String row : prefs.getString("intl", "").split(";")) {
+            int i = row.indexOf('|');
+            if (i > 0) out.add(new String[] {row.substring(0, i), row.substring(i + 1)});
+        }
+        for (String[] r : out) Settings.EXTRA_NAMES.put(r[0], r[1]);
+        return out;
+    }
+
+    /** Aktif milli turnuvaları günde bir kez (ücretsiz spor listesinden) yeniler. */
+    void refreshInternationals(Daily.LiveSources src, boolean force) {
+        String today = Fmt.dayKey(Instant.now());
+        if (!force && today.equals(prefs.getString("intlDay", ""))) return;
+        try {
+            StringBuilder b = new StringBuilder();
+            for (String[] s : src.sports()) {
+                if (!OddsApi.isInternational(s[0])) continue;
+                if (b.length() > 0) b.append(';');
+                b.append(s[0]).append('|').append(s[1].replace(";", ",").replace("|", "/"));
+            }
+            prefs.edit().putString("intl", b.toString()).putString("intlDay", today).apply();
+        } catch (Http.ProviderException ignored) {
+            // liste alınamadı: önceki liste kullanılır, sonraki çalışmada yeniden denenir
+        }
+    }
+
+    /** Taranacak kapsam: kullanıcının ligleri + (açıksa) aktif milli turnuvalar. */
+    Settings scanSettings() {
+        Settings s = ledger.settings();
+        if (s.internationals) {
+            for (String[] r : internationals()) if (!s.leagues.contains(r[0])) s.leagues.add(r[0]);
+        }
+        return s;
+    }
+
     CreditPlan.Plan plan() {
         Map<String, Double> yield;
         try {
@@ -99,13 +137,13 @@ final class Repo {
             // arayüz kilitsiz okur; arka plan işi hafızayı tam o an yazıyorsa nötr verimle hesapla
             yield = new LinkedHashMap<>();
         }
-        return CreditPlan.plan(ledger.settings(), parseLong(prefs.getString("credits", null)),
+        return CreditPlan.plan(scanSettings(), parseLong(prefs.getString("credits", null)),
                 parseLong(prefs.getString("creditsUsed", null)), Instant.now().atOffset(Fmt.TR).toLocalDate(), yield);
     }
 
     /** Canlı çekimlerde kullanılan ayarlar: kullanıcının ayarları, kredi planına göre daraltılmış. */
     Settings effective() {
-        return CreditPlan.effective(ledger.settings(), plan());
+        return CreditPlan.effective(scanSettings(), plan());
     }
 
     /** Son bilinen kalan kredi ve zamanı (bilinmiyorsa null). */
@@ -233,6 +271,7 @@ final class Repo {
                 out.setupNeeded = true; // anahtar yokken ağ isteği yapma
                 return out;
             }
+            refreshInternationals(new Daily.LiveSources(new Http.UrlHttp(), ledger.settings()), false);
             Daily.LiveSources src = live();
             out.settleMessages = Daily.settle(ledger, src, forecasts);
             String today = Fmt.dayKey(Instant.now());

@@ -58,7 +58,8 @@ public interface Http {
                 || m.contains("reset") || m.contains("handshake") || m.contains("closed by peer");
         if (!reset) return "";
         return ". Bağlantı karşı taraftan kesildi: bu adrese bulunduğun ağdan erişim engelleniyor olabilir."
-                + " Başka bir ağ (Wi-Fi / mobil veri) dene; engel sürerse uygulama bu kaynaktan veri alamaz.";
+                + " VPN açıkken dene; uygulamanın sabah kararı ve maç öncesi kontrolleri için VPN'i"
+                + " 'Her zaman açık' yap (Android: Ayarlar > Ağ > VPN).";
     }
 
     /** Hata mesajlarında API anahtarı görünmesin. */

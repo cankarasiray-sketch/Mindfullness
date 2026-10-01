@@ -147,7 +147,8 @@ public final class CreditPlan {
 
     static String leagueName(String key) {
         for (String[] l : Settings.KNOWN_LEAGUES) if (l[0].equals(key)) return l[1];
-        return key;
+        String extra = Settings.EXTRA_NAMES.get(key);
+        return extra != null ? extra : key;
     }
 
     private static int next(int[] steps, int current) {

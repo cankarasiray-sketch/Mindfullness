@@ -687,6 +687,11 @@ function viewSettings() {
   html += '<div class="card"><h2>Kasa takibi</h2><label class="check"><input type="checkbox" id="sAuto"' + (st.autoTrack ? " checked" : "") + ">Otomatik</label>"
     + '<p class="small muted">Açıkken: ilk maçtan 90 dk önce kupon güncel iddaa ve Pinnacle oranlarıyla kontrol edilir; hâlâ avantajlıysa o anki oranlar ve güncel kasaya göre '
     + "tutarla oynanmış sayılır, bildirim gelir, sonuçla kasa kendiliğinden güncellenir. Oynamadıysan \"Oynamadım, geri al\". Kapalıyken yalnızca \"Oynadım\"a bastığın kuponlar kasadan düşer.</p></div>";
+  var intl = S.intlLeagues || [];
+  html += '<div class="card"><h2>Milli maçlar</h2><label class="check"><input type="checkbox" id="sIntl"' + (st.internationals ? " checked" : "") + ">Aktif milli turnuvaları otomatik tara</label>"
+    + '<p class="small muted">' + (intl.length ? "Şu an aktif: " + esc(intl.map(function (x) { return x[1]; }).join(", ")) + "."
+      : "Aktif milli turnuva listesi henüz alınmadı (Kaynakları test et ile güncellenir).")
+    + " Liste The Odds API'den günde bir kez ücretsiz alınır; milli maç arasında lig maçı olmadığında kupon bu maçlardan kurulur. Takım adları Türkçe–İngilizce eşlenir (Almanya ⇄ Germany).</p></div>";
   html += '<div class="card"><h2>Kanıt koruması</h2><label class="check"><input type="checkbox" id="sEdge"' + (st.edgeGuard ? " checked" : "") + ">Açık</label>"
     + '<p class="small muted">Kapanış oranları avantajın yarısından fazlasının eridiğini gösterirse tutarlar kendiliğinden küçülür. Ayrıntı: Geçmiş → Kanıt koruması.</p></div>';
   html += creditCard(st);
@@ -725,6 +730,8 @@ function profilesCard(st) {
 }
 function leagueName(k) {
   for (var i = 0; i < S.knownLeagues.length; i++) if (S.knownLeagues[i][0] === k) return S.knownLeagues[i][1];
+  var intl = S.intlLeagues || [];
+  for (var j = 0; j < intl.length; j++) if (intl[j][0] === k) return intl[j][1];
   return k;
 }
 function creditCard(st) {
@@ -763,8 +770,9 @@ function collectSettings() {
   var tot = document.getElementById("sTotals");
   st.totals = !!(tot && tot.checked);
   st.kgEvents = parseInt(val("sKg") || "0", 10);
-  var au = document.getElementById("sAuto"), ca = document.getElementById("sCreditAuto"), eg = document.getElementById("sEdge");
+  var au = document.getElementById("sAuto"), ca = document.getElementById("sCreditAuto"), eg = document.getElementById("sEdge"), ni = document.getElementById("sIntl");
   st.autoTrack = !!(au && au.checked);
+  st.internationals = !!(ni && ni.checked);
   st.edgeGuard = !!(eg && eg.checked);
   st.creditAuto = !!(ca && ca.checked);
   st.creditResetDay = parseInt(val("sResetDay") || "1", 10);

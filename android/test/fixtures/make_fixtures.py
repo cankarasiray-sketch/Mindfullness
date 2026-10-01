@@ -41,6 +41,10 @@ names = TEAMS + [
     "IŞIK ÜNİVERSİTESİ", "Iğdır FK", "Ümraniyespor", "Şanlıurfaspor", "Ankaragücü", "MKE Ankaragücü",
     "Galatasaray (K)", "Fenerbahçe Kadın", "Arsenal W", "Arsenal Women", "Fenerbahçe U19", "Besiktas U21",
     "Barcelona B", "Jong Ajax", "Ajax", "Bayern Munich II", "Real Madrid Castilla", "B. Mönchengladbach",
+    "Türkiye", "Turkey", "Almanya", "Germany", "İspanya", "Spain", "Bosna Hersek", "Bosnia & Herzegovina",
+    "Çekya", "Czechia", "Czech Republic", "Güney Kore", "Korea Republic", "ABD", "USA", "Fildişi Sahili",
+    "Côte d'Ivoire", "İrlanda", "Republic of Ireland", "Kuzey İrlanda", "Northern Ireland", "Galler", "Wales",
+    "G.Kıbrıs Rum Kesimi", "Cyprus", "Türkiye U21", "Almanya (K)",
 ]
 pairs = [(rng.choice(names), rng.choice(names)) for _ in range(400)]
 pairs += [(names[i], names[i + 1]) for i in range(len(names) - 1)]

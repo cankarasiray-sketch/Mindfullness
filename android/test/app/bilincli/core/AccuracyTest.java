@@ -150,6 +150,44 @@ public class AccuracyTest {
     }
 
     @Test
+    public void nationalTeamsMatchAcrossLanguages() {
+        List<BookEvent> b = Arrays.asList(book("b1", "Türkiye", "İspanya", 3.1, 3.3, 2.3),
+                book("b2", "Bosna Hersek", "Galler", 2.6, 3.1, 2.9), book("b3", "Türkiye U21", "İspanya U21", 2.5, 3.2, 2.8));
+        List<SharpEvent> s = Arrays.asList(sharp("s1", "Turkey", "Spain", 0.30, 0.29, 0.41),
+                sharp("s2", "Bosnia & Herzegovina", "Wales", 0.36, 0.31, 0.33));
+        List<Models.Pair> pairs = Matching.match(b, s);
+        assertEquals(2, pairs.size());
+        for (Models.Pair p : pairs) assertFalse(p.book.ref.equals("b3")); // U21 ana takımla eşleşmez
+    }
+
+    @Test
+    public void internationalTournamentsDiscovered() throws Exception {
+        Http http = new Http() {
+            public Response get(String url, Map<String, String> headers) {
+                assertTrue(url.contains("/v4/sports?"));
+                return new Response(200, "[{\"key\":\"soccer_uefa_nations_league\",\"group\":\"Soccer\",\"title\":\"UEFA Nations League\",\"active\":true,\"has_outrights\":false},"
+                        + "{\"key\":\"soccer_fifa_world_cup_winner\",\"group\":\"Soccer\",\"title\":\"FIFA World Cup Winner\",\"active\":true,\"has_outrights\":true},"
+                        + "{\"key\":\"soccer_epl\",\"group\":\"Soccer\",\"title\":\"EPL\",\"active\":true,\"has_outrights\":false},"
+                        + "{\"key\":\"basketball_nba\",\"group\":\"Basketball\",\"title\":\"NBA\",\"active\":true,\"has_outrights\":false}]",
+                        new LinkedHashMap<String, String>());
+            }
+        };
+        Settings cfg = new Settings();
+        cfg.oddsApiKey = "k";
+        List<String[]> sports = new OddsApi(http, cfg).fetchSports();
+        assertEquals(2, sports.size()); // futbol, aktif, şampiyonluk pazarı olmayan
+        assertTrue(OddsApi.isInternational("soccer_uefa_nations_league"));
+        assertTrue(OddsApi.isInternational("soccer_fifa_world_cup_qualifiers_europe"));
+        assertTrue(OddsApi.isInternational("soccer_international_friendlies"));
+        assertFalse(OddsApi.isInternational("soccer_epl"));
+        assertFalse(OddsApi.isInternational("soccer_fifa_womens_world_cup"));
+        Settings.EXTRA_NAMES.put("soccer_uefa_nations_league", "UEFA Nations League");
+        assertEquals("UEFA Nations League", CreditPlan.leagueName("soccer_uefa_nations_league"));
+        Settings back = Settings.fromMap(Json.parseObject(Json.write(new Settings().toMap())));
+        assertTrue(back.internationals);
+    }
+
+    @Test
     public void forecastLogScoresAccuracy() {
         Ledger.MemoryStorage store = new Ledger.MemoryStorage(null);
         Forecasts f = new Forecasts(store);
