@@ -499,6 +499,25 @@ test("kredi bol: ek ligler ayrı satırda, genişletme ayarı kaydedilir", async
   assert.equal(t.calls.at(-1).payload.settings.creditExpand, false);
 });
 
+test("bugünkü maçlar bilinmiyorsa açıklama ve ücretsiz sorgu düğmesi", async () => {
+  const s = clone(baseState);
+  s.settings.oddsApiKey = "k";
+  s.creditPlan = {
+    leagues: ["soccer_epl"], expanded: [], activeKnown: false, totals: true, kgEvents: 12, radarScans: 4, daysLeft: 31,
+    budget: 78.7, cost: 73, remaining: 2455, quota: 2500, coupons: 5, narrowed: false, notes: [],
+  };
+  const t = boot(s, "#ayarlar");
+  assert.match(t.text(), /henüz sorulmadı/);
+  t.button("Bugünün maçlarını sor (ücretsiz)").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).action, "probe");
+  s.creditPlan.activeKnown = true;
+  const t2 = boot(s, "#ayarlar");
+  const card = t2.$$(".card").find((x) => x.querySelector("h2") && x.querySelector("h2").textContent === "Kredi planı");
+  assert.doesNotMatch(card.textContent, /henüz sorulmadı/);
+  assert.ok(!t2.$$("button").some((b) => b.textContent.includes("Bugünün maçlarını sor")));
+});
+
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {
   const s = clone(baseState);
   const old = s.coupons.find((x) => x.id !== s.todayRun.couponId);

@@ -785,7 +785,10 @@ function creditCard(st) {
       + (p.expanded && p.expanded.length ? item("Kredi bol, ek ligler", esc(p.expanded.map(leagueName).join(", "))) : "")
       + item("Alt/Üst · KG · radar", (p.totals ? "açık" : "kapalı") + " · " + (p.kgEvents ? p.kgEvents + " maç" : "kapalı") + " · " + (p.radarScans ? "günde " + p.radarScans : "kapalı"))
       + item("Günlük kupon", "en fazla " + p.coupons)
-      + "</div>" + (p.notes.length ? '<p class="small muted">' + esc(p.notes.join("; ")) + ".</p>" : "");
+      + "</div>" + (p.notes.length ? '<p class="small muted">' + esc(p.notes.join("; ")) + ".</p>" : "")
+      + (p.activeKnown === false && st.oddsApiKey ? '<p class="small muted">Bugün hangi liglerin oynadığı henüz sorulmadı (ör. güncellemeden sonra): '
+        + "gider her ligin %40 ihtimalle oynadığı varsayımıyla tahmin edildi ve ek lig eklenmedi. Sabahki çalışmada kendiliğinden öğrenilir.</p>"
+        + '<div class="btns"><button class="b ghost" onclick="act(\'probe\')">Bugünün maçlarını sor (ücretsiz)</button></div>' : "");
   }
   return html + '<p class="small muted">Kredi, The Odds API anahtarının aylık sorgu kotasıdır (uygulamayı tek kişi kullansa da). Kredi yetmezse önce Karşılıklı Gol, sonra radar, günlük kupon 5→3, Alt/Üst, en son en az değerli fırsat çıkaran lig kısılır. '
     + "Kredi bolsa (ör. birden fazla anahtar) seçmediğin ligler de o gün taranır: bugün maçı olan, geçmişte en çok değerli seçim çıkaran önce; tahmini gider günlük bütçenin %85'ini geçmez. "

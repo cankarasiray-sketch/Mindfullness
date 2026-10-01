@@ -272,6 +272,19 @@ public final class Bridge {
                 return "Ayarlar kaydedildi. Sonraki çalışma: " + next.atOffset(Fmt.TR).toLocalDateTime().toString()
                         .replace('T', ' ').substring(0, 16);
             }
+            case "probe": {
+                requireReal(repo);
+                synchronized (Repo.LOCK) {
+                    repo.probeActive();
+                }
+                Map<String, Integer> active = repo.active();
+                if (active == null) throw new IllegalStateException("Maç listesi alınamadı (bağlantı ya da anahtar).");
+                int playing = 0;
+                for (int n : active.values()) if (n > 0) playing++;
+                List<String> extra = repo.plan().expanded;
+                return "Bugün maçı olan " + playing + " lig." + (extra.isEmpty() ? "" : " Kredi bol: " + extra.size() + " ek lig taranacak.")
+                        + " (Kredi harcanmadı.)";
+            }
             case "check":
                 return check(repo);
             case "demoStart": {

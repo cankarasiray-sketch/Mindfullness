@@ -66,6 +66,24 @@ final class Repo {
         forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
+        loadActive();
+    }
+
+    /** Uygulama yeniden başlasa da (ör. güncelleme) son 3 saatlik maç sayıları kaybolmasın. */
+    private void loadActive() {
+        try {
+            String raw = prefs.getString("active", null);
+            long at = prefs.getLong("activeAt", 0);
+            if (raw == null || at == 0) return;
+            Map<String, Integer> out = new LinkedHashMap<>();
+            for (Map.Entry<String, Object> e : Json.parseObject(raw).entrySet()) {
+                if (e.getValue() instanceof Number) out.put(e.getKey(), ((Number) e.getValue()).intValue());
+            }
+            activeToday = out;
+            activeAt = Instant.ofEpochMilli(at);
+        } catch (RuntimeException ignored) {
+            // bozuk kayıt: bir sonraki sorguda yeniden öğrenilir
+        }
     }
 
     /** Canlı çağrıdan sonra: doğrulama hafızasını ve kalan API kredisini sakla. */
@@ -164,8 +182,12 @@ final class Repo {
             if (roomToExpand(s)) { // kredi bol: plan ek lig seçebilsin diye onlarınki de (ücretsiz)
                 for (String[] l : Settings.KNOWN_LEAGUES) if (!leagues.contains(l[0])) leagues.add(l[0]);
             }
-            activeToday = probe.activeCounts(leagues, Instant.now());
+            Map<String, Integer> counts = probe.activeCounts(leagues, Instant.now());
+            activeToday = counts;
             activeAt = Instant.now();
+            Map<String, Object> raw = new LinkedHashMap<>();
+            for (Map.Entry<String, Integer> e : counts.entrySet()) raw.put(e.getKey(), (long) e.getValue());
+            prefs.edit().putString("active", Json.write(raw)).putLong("activeAt", activeAt.toEpochMilli()).apply();
         } catch (Http.ProviderException ignored) {
             // bilinmiyor: plan ortalama payla kurulur
         }

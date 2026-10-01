@@ -38,6 +38,8 @@ public final class CreditPlan {
         public long quota;
         public boolean narrowed;
         public List<String> notes = new ArrayList<>();
+        /** Bugünkü maç sayıları biliniyor mu (bilinmiyorsa gider ortalama payla tahmin edildi). */
+        public boolean activeKnown;
         /** Kredi bol olduğu için bugün eklenen (kullanıcının seçmediği) ligler. */
         public List<String> expanded = new ArrayList<>();
         final List<String> noteKeys = new ArrayList<>();
@@ -57,6 +59,7 @@ public final class CreditPlan {
             m.put("narrowed", narrowed);
             m.put("notes", new ArrayList<Object>(notes));
             m.put("expanded", new ArrayList<Object>(expanded));
+            m.put("activeKnown", activeKnown);
             return m;
         }
     }
@@ -136,6 +139,7 @@ public final class CreditPlan {
         p.coupons = cfg.maxCouponsPerDay;
         p.leagues.addAll(cfg.leagues);
         p.daysLeft = daysLeft(today, cfg.creditResetDay);
+        p.activeKnown = active != null;
         long quota = remaining != null && used != null ? remaining + used : DEFAULT_QUOTA;
         double left = remaining != null ? remaining
                 : (double) quota * p.daysLeft / today.lengthOfMonth(); // ilk çalışma: ay içinde orantılı

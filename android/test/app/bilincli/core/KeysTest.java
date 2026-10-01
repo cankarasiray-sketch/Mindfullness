@@ -159,6 +159,8 @@ public class KeysTest {
         // 5 anahtar: 2455 kalan, 31 gün -> günde ~78,7; seçili ligler ~34 kredi
         CreditPlan.Plan p = CreditPlan.plan(s, 2455L, 45L, LocalDate.of(2026, 10, 1), yield, active, 1.0);
         assertTrue(!p.narrowed);
+        assertTrue(p.activeKnown);
+        assertTrue(!CreditPlan.plan(s, 2455L, 45L, LocalDate.of(2026, 10, 1), yield).activeKnown);
         assertEquals(Arrays.asList("soccer_greece_super_league", "soccer_efl_champ"), p.expanded); // Belçika sığmadı
         assertTrue(p.cost <= CreditPlan.EXPAND_SHARE * p.budget);
         assertEquals(57, p.cost, 1e-9); // 4 oynayan lig x 2 pazar x 5 tarama + 12 KG + 5 gider
