@@ -190,6 +190,7 @@ function dayLabel(day) { var p = day.split("-"); return p[2] + "." + p[1] + "." 
 function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
   if (market === "BS") return "Basket MS " + outcome;
+  if (market.indexOf("BT@") === 0) return "Basket " + market.slice(3).replace(".", ",") + (outcome === "ALT" ? " Alt" : " Üst");
   if (market === "AU25") return outcome === "ALT" ? "2,5 Alt" : "2,5 Üst";
   if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
   if (market === "CS") return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
@@ -596,7 +597,7 @@ function accuracyCard() {
     + (bins ? '<p class="small muted" style="margin-top:8px">Kalibrasyon: tahmin edilen olasılık ile gerçekleşme sıklığı (en az 20 sonuçlu dilimler)</p><div class="list">' + bins + "</div>" : "")
     + foot;
 }
-var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans", BS: "Basketbol MS"};
+var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans", BS: "Basketbol MS", BT: "Basketbol Alt/Üst"};
 function edgeCard() {
   var e = S.edge, all = e && e["*"];
   if (!all) return "";
@@ -694,7 +695,7 @@ function viewSettings() {
   html += '<div class="card"><h2>Pazarlar</h2><p class="small muted">Daha çok pazar, daha çok değerli fırsat demektir. Her pazar, iddaa bülteniyle Pinnacle '
     + "karşılaştırılarak otomatik doğrulanır; eşleşme belirsizse kullanılmaz.</p>"
     + '<label class="check"><input type="checkbox" checked disabled>Maç Sonucu (1-X-2)</label>'
-    + '<label class="check"><input type="checkbox" id="sTotals"' + (st.totals ? " checked" : "") + '>2,5 Alt/Üst <span class="small muted">(lig başına kredi ×2)</span></label>'
+    + '<label class="check"><input type="checkbox" id="sTotals"' + (st.totals ? " checked" : "") + '>Alt/Üst: futbolda 2,5, basketbolda toplam sayı <span class="small muted">(lig başına kredi ×2)</span></label>'
     + '<label>Karşılıklı Gol: günde en fazla kaç maç</label><select id="sKg">' + [[0, "Kapalı"], [4, "4 maç"], [8, "8 maç"], [12, "12 maç"]].map(function (o) {
       return '<option value="' + o[0] + '"' + (st.kgEvents === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + '</select><p class="small muted">KG oranı Pinnacle\'dan maç bazında çekilir (maç başına 1 kredi). Önce ücretsiz model ön elemesi yapılır: iddaa\'nın KG oranı avantaj veremeyecek kadar düşükse o maç sorulmaz, kredi harcanmaz. '
@@ -706,9 +707,10 @@ function viewSettings() {
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.filter(function (l) { return !isBasket(l); }).map(lgBox).join("")
     + '<p class="small muted">Seçili lig yalnızca maçı olduğu gün kredi harcar (tarama başına 1, Alt/Üst açıkken 2). Maç listesi sorgusu ücretsizdir.</p></div>';
   html += '<div class="card" id="basketCard"><h2>Basketbol</h2>' + S.knownLeagues.filter(isBasket).map(lgBox).join("")
-    + '<p class="small muted">Yalnızca maç sonucu (uzatmalar dahil, beraberlik yok), tarama başına 1 kredi. Pinnacle fiyatıyla karşılaştırılır; '
-    + 'avantajlı seçimler futbolla aynı günün kuponlarına girer ("Basket MS 1/2"). Bilyoner\'de basketbol → Maç Sonucu pazarından oyna. '
-    + 'iddaa\'nın hangi pazarının maç sonucu olduğu Pinnacle\'la karşılaştırılarak otomatik bulunur; "Kaynakları test et" çıktısında Basketbol MS ✓ görünmeli.</p></div>';
+    + '<p class="small muted">Maç sonucu (uzatmalar dahil, beraberlik yok) ve Pazarlar\'da Alt/Üst açıksa toplam sayı Alt/Üst (uzatmalar dahil). '
+    + 'Tarama başına 1 kredi, Alt/Üst açıkken 2. Avantajlı seçimler futbolla aynı günün kuponlarına girer ("Basket MS 1", "Basket 161,5 Üst"). '
+    + 'Alt/Üst\'te iddaa\'nın çizgisi Pinnacle\'ın ana çizgisinden en fazla 3 sayı farklıysa olasılık o çizgiye çevrilir; tam sayı çizgiler kullanılmaz. '
+    + 'iddaa pazarları Pinnacle\'la karşılaştırılarak otomatik bulunur; "Kaynakları test et" özetinde Basketbol MS ve Basketbol Alt/Üst ✓ görünmeli.</p></div>';
   html += '<div class="card"><h2>Düşen oran radarı</h2><p class="small muted">Gün içinde piyasayı yeniden tarar: Pinnacle\'da oranı hızla düşen sonuçları ve '
     + "sabah olmayan yeni değer fırsatlarını bulur. Bugün oynanmış kupon yoksa güncel oranlarla yeni kupon önerir ve bildirir.</p>"
     + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"]].map(function (o) {

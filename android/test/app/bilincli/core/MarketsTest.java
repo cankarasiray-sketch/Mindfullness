@@ -278,7 +278,7 @@ public class MarketsTest {
         assertEquals(Math.round(30 * 13 * Settings.ACTIVE_SHARE) + 240, base);
         s.totals = true;
         int totals = s.estimatedMonthlyCredits();
-        assertEquals(Math.round(30 * (11 * 2 + 2) * Settings.ACTIVE_SHARE) + 240, totals); // basketbolda Alt/Üst yok
+        assertEquals(Math.round(30 * 13 * 2 * Settings.ACTIVE_SHARE) + 240, totals); // basketbolda da toplam sayı
         s.kgEvents = 6;
         assertEquals(totals + 180, s.estimatedMonthlyCredits());
         // 1.7.2'ye taşıma: eski varsayılan 6 lig değiştirilmemişse yeni varsayılana geçer, özel seçim korunur

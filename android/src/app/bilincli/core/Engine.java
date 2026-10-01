@@ -53,7 +53,7 @@ public final class Engine {
         for (Pair p : pairs) {
             if (p.book.kickoff.isBefore(earliest) || p.book.kickoff.isAfter(latest)) continue;
             for (Map.Entry<String, Map<String, Double>> m : p.book.odds.entrySet()) {
-                Map<String, Double> fair = p.sharp.fair.get(m.getKey());
+                Map<String, Double> fair = Models.fair(p.sharp, m.getKey()); // basketbol Alt/Üst: iddaa çizgisine
                 if (fair == null || fair.isEmpty()) continue;
                 for (Map.Entry<String, Double> o : m.getValue().entrySet()) {
                     Double prob = fair.get(o.getKey());
@@ -158,6 +158,7 @@ public final class Engine {
         for (BookEvent ev : book) {
             for (Map.Entry<String, Map<String, Double>> m : ev.odds.entrySet()) {
                 if ("CS".equals(m.getKey())) continue; // Çifte Şans'ta olasılıklar toplamı 2; marj ayrı ölçülmez
+                String family = Models.family(m.getKey()); // basketbol Alt/Üst'ün her çizgisi tek "BT" marjında
                 int expected = "MS".equals(m.getKey()) ? 3 : 2;
                 Map<String, Double> o = m.getValue();
                 if (o.size() != expected) continue;
@@ -169,8 +170,8 @@ public final class Engine {
                     arr[i++] = v;
                 }
                 if (!ok) continue;
-                double[] a = acc.get(m.getKey());
-                if (a == null) acc.put(m.getKey(), a = new double[2]);
+                double[] a = acc.get(family);
+                if (a == null) acc.put(family, a = new double[2]);
                 a[0] += OddsMath.margin(arr);
                 a[1] += 1;
             }

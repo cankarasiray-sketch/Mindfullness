@@ -35,6 +35,11 @@ public final class Fmt {
         return s.replace(",", "X").replace(".", ",").replace("X", ".");
     }
 
+    /** Alt/Üst çizgisi: 161,5. */
+    public static String line(double x) {
+        return num(x, 1);
+    }
+
     public static String odds(double x) {
         return num(x, 2);
     }

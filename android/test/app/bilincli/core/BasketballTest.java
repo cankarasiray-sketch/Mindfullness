@@ -74,7 +74,8 @@ public class BasketballTest {
         assertEquals(Models.FOOTBALL, ev.get(0).sport);
         BookEvent b = ev.get(1);
         assertEquals(Models.BASKETBALL, b.sport);
-        assertEquals(Collections.singleton("BS#20"), b.odds.keySet()); // handikap ve toplam sayı (özel değerli) alınmaz
+        // maç sonucu adayı ve özel değerli Alt/Üst adayları (handikap çizgisi kalibrasyonda elenir)
+        assertEquals(new java.util.HashSet<>(Arrays.asList("BS#20", "BT#21@-4.5", "BT#22@161.5")), b.odds.keySet());
         assertEquals(1.65, b.odds.get("BS#20").get("1"), 0); // N sırası: ilk = ev sahibi
         assertEquals(2.15, b.odds.get("BS#20").get("2"), 0);
         assertEquals("futbol 1, basketbol 1, tür 5 1", Nesine.lastTypes);
@@ -83,14 +84,16 @@ public class BasketballTest {
     }
 
     @Test
-    public void pinnacleTwoWayMoneylineAndOneCreditPerLeague() throws Exception {
+    public void pinnacleTwoWayMoneylineAndTotalsLine() throws Exception {
         final List<String> urls = new ArrayList<>();
         Http http = new Http() {
             public Response get(String url, Map<String, String> headers) {
                 urls.add(url);
                 return new Response(200, "[{\"id\":\"e1\",\"commence_time\":\"2026-10-01T17:45:00Z\",\"home_team\":\"Fenerbahce Beko\","
                         + "\"away_team\":\"Real Madrid\",\"bookmakers\":[{\"key\":\"pinnacle\",\"markets\":[{\"key\":\"h2h\",\"outcomes\":["
-                        + "{\"name\":\"Fenerbahce Beko\",\"price\":1.62},{\"name\":\"Real Madrid\",\"price\":2.42}]}]}]}]",
+                        + "{\"name\":\"Fenerbahce Beko\",\"price\":1.62},{\"name\":\"Real Madrid\",\"price\":2.42}]},"
+                        + "{\"key\":\"totals\",\"outcomes\":[{\"name\":\"Over\",\"price\":1.95,\"point\":163.5},"
+                        + "{\"name\":\"Under\",\"price\":1.87,\"point\":163.5}]}]}]}]",
                         new LinkedHashMap<String, String>());
             }
         };
@@ -98,14 +101,20 @@ public class BasketballTest {
         cfg.oddsApiKey = "k";
         cfg.totals = true;
         List<SharpEvent> ev = new OddsApi(http, cfg).fetchEvents(Collections.singletonList(LEAGUE));
-        assertTrue(urls.get(0), urls.get(0).contains("markets=h2h&")); // Alt/Üst açıkken bile yalnızca maç sonucu
+        assertTrue(urls.get(0), urls.get(0).contains("markets=h2h%2Ctotals&"));
         Map<String, Double> bs = ev.get(0).fair.get("BS");
         assertEquals(1.0, bs.get("1") + bs.get("2"), 1e-9);
         assertTrue(bs.get("1") > 0.59 && bs.get("1") < 0.61);
         assertNull(ev.get(0).fair.get("MS"));
+        Map<String, Double> bt = ev.get(0).fair.get("BT"); // Pinnacle'ın çizgisi ve olasılıkları
+        assertEquals(163.5, bt.get("LINE"), 0);
+        assertEquals(1.0, bt.get("ALT") + bt.get("UST"), 1e-9);
+        assertTrue(bt.get("UST") < 0.5);
+        assertFalse(ev.get(0).fair.keySet().toString(), ev.get(0).fair.keySet().toString().contains("@"));
         assertEquals(Models.BASKETBALL, ev.get(0).sport());
         assertEquals("h2h,totals", Settings.markets("soccer_epl", true));
-        assertEquals(1, Settings.scanCost(LEAGUE, true));
+        assertEquals(2, Settings.scanCost(LEAGUE, true));
+        assertEquals(1, Settings.scanCost(LEAGUE, false));
         assertEquals(2, Settings.scanCost("soccer_epl", true));
     }
 
@@ -203,7 +212,7 @@ public class BasketballTest {
         Map<String, Object> v4 = migrated.toMap();
         v4.put("leagues", new ArrayList<Object>(Arrays.asList("soccer_epl")));
         assertEquals(Collections.singletonList("soccer_epl"), Settings.fromMap(v4).leagues);
-        // kredi: basketbol ligi Alt/Üst açıkken de tarama başına 1
+        // kredi: Alt/Üst açıkken her lig (basketbol dahil) tarama başına 2
         CreditPlan.Plan p = new CreditPlan.Plan();
         p.leagues = new ArrayList<>(Arrays.asList("soccer_epl", LEAGUE));
         p.totals = true;
@@ -211,8 +220,8 @@ public class BasketballTest {
         Map<String, Integer> active = new LinkedHashMap<>();
         active.put("soccer_epl", 3);
         active.put(LEAGUE, 4);
-        assertEquals(2 + 1 + CreditPlan.overhead(1, -1), CreditPlan.cost(p, active, -1), 1e-9);
+        assertEquals(2 + 2 + CreditPlan.overhead(1, -1), CreditPlan.cost(p, active, -1), 1e-9);
         p.kgEvents = 12; // KG yalnızca futbol maçları için sayılır
-        assertEquals(2 + 1 + 3 + CreditPlan.overhead(1, -1), CreditPlan.cost(p, active, -1), 1e-9);
+        assertEquals(2 + 2 + 3 + CreditPlan.overhead(1, -1), CreditPlan.cost(p, active, -1), 1e-9);
     }
 }

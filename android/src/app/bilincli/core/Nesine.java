@@ -117,7 +117,14 @@ public final class Nesine {
                 if (basket) {
                     // Basketbolda beraberlik yok: özel değersiz iki seçenekli pazarlar maç sonucu
                     // adayıdır (uzatmalar dahil). Hangisi olduğunu Calibration, Pinnacle'la bulur.
-                    // Handikap ve toplam sayı pazarları (özel değerli) şimdilik kullanılmaz.
+                    // Özel değerli iki seçenekli pazarlar (toplam sayı, handikap, yarı/takım toplamı)
+                    // Alt/Üst adayıdır; Calibration yalnızca Pinnacle'ın toplam çizgisine yakın
+                    // olanları ve doğrulanan pazar kodunu kullanır.
+                    if (raw.size() == 2 && special && raw.containsKey("1") && raw.containsKey("2")) {
+                        String key = Calibration.RAW_BT + mtid + "@" + sov;
+                        odds.put(key, raw);
+                        if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
+                    }
                     if (raw.size() == 2 && !special) {
                         List<Long> ns = new ArrayList<>();
                         for (String k : raw.keySet()) ns.add(Long.parseLong(k));

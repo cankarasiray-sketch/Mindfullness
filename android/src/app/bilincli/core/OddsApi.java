@@ -167,7 +167,30 @@ public final class OddsApi {
             out.put("BS", m);
             return out;
         }
-        if (basket) return null; // basketbolda şimdilik yalnızca maç sonucu
+        if ("totals".equals(key) && basket) {
+            // toplam sayı: çizgi maçtan maça değişir; pazar çizgiyle anahtarlanır ("BT@163.5") ki
+            // farklı çizgideki siteler birbirine karıştırılmasın
+            Double point = null;
+            for (Object o : Json.arr(market.get("outcomes"))) {
+                Map<String, Object> oc = Json.obj(o);
+                Double pt = Json.num(oc, "point"), price = Json.num(oc, "price");
+                if (pt == null || price == null) continue;
+                if (point != null && !point.equals(pt)) return null; // iki ayrı çizgi: belirsiz
+                point = pt;
+                byName.put(Json.str(oc, "name"), price);
+            }
+            Double u = byName.get("Under"), ov = byName.get("Over");
+            if (point == null || u == null || ov == null || u <= 1 || ov <= 1) return null;
+            double[] p = OddsMath.devigPower(new double[] {u, ov});
+            String k = "BT@" + point;
+            if (overround != null) overround.put(k, implied(u, ov));
+            Map<String, Double> m = new LinkedHashMap<>();
+            m.put("ALT", p[0]);
+            m.put("UST", p[1]);
+            out.put(k, m);
+            return out;
+        }
+        if (basket) return null; // basketbolda maç sonucu ve toplam sayı
         if ("h2h".equals(key)) {
             for (Object o : Json.arr(market.get("outcomes"))) {
                 Map<String, Object> oc = Json.obj(o);
@@ -292,7 +315,8 @@ public final class OddsApi {
                         fair.put(e.getKey(), mix);
                         sources.add(e.getKey() + ":" + cfg.preferredBook + "+borsa");
                     }
-                } else if (books.size() >= cfg.minBooks) {
+                } else if (books.size() >= cfg.minBooks && !e.getKey().startsWith("BT@")) {
+                    // (basketbol Alt/Üst yalnızca Pinnacle'ın çizgisinden: çizgiler sitelere göre değişir)
                     Map<String, Double> avg = new LinkedHashMap<>();
                     for (String outcome : books.values().iterator().next().keySet()) {
                         double s = 0;
@@ -308,6 +332,18 @@ public final class OddsApi {
             }
             Map<String, Double> cs = doubleChance(fair.get("MS"));
             if (cs != null) fair.put("CS", cs);
+            // basketbol Alt/Üst: Pinnacle'ın çizgisi ve olasılıkları "BT" olarak saklanır; iddaa'nın
+            // çizgisine dönüşüm Models.fair'de
+            for (String k : new ArrayList<>(fair.keySet())) {
+                if (!k.startsWith("BT@")) continue;
+                Map<String, Double> f = fair.remove(k);
+                if (fair.containsKey("BT")) continue;
+                Map<String, Double> bt = new LinkedHashMap<>();
+                bt.put("LINE", Models.line(k));
+                bt.put("ALT", f.get("ALT"));
+                bt.put("UST", f.get("UST"));
+                fair.put("BT", bt);
+            }
             if (fair.isEmpty()) lastParse[2]++;
             if (!fair.isEmpty()) {
                 events.add(new SharpEvent(Json.str(ev, "id"), sportKey, home, away, Instant.parse(commence),

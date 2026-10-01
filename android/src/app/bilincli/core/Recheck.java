@@ -105,12 +105,12 @@ public final class Recheck {
             } else if (b == null || b.odds.get(l.market) == null || b.odds.get(l.market).get(l.outcome) == null) {
                 status = "not_found";
                 problems.add(where + " iddaa bülteninde yok (kaldırılmış ya da askıda olabilir)");
-            } else if (s == null || s.fair.get(l.market) == null || s.fair.get(l.market).get(l.outcome) == null) {
+            } else if (s == null || Models.fair(s, l.market) == null || Models.fair(s, l.market).get(l.outcome) == null) {
                 status = "no_fair";
                 problems.add(where + " için güncel Pinnacle oranı yok");
             } else {
                 double o = b.odds.get(l.market).get(l.outcome);
-                double f = s.fair.get(l.market).get(l.outcome);
+                double f = Models.fair(s, l.market).get(l.outcome);
                 // karar kalibre olasılıkla; kayıt (fairNow) ham adil olasılıkla
                 double fu = cfg.edgeRatios == null ? f
                         : EdgeCalibration.adjust(f, o, EdgeCalibration.ratio(cfg.edgeRatios, l.market));

@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.9.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.9.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -69,9 +69,21 @@ arındırılmış fiyatıyla karşılaştırılır. Avantajlı seçimler futboll
 kuponlarında "Basket MS 1/2" olarak görünür, futbol maçlarıyla aynı kupona da girebilir. Bilyoner'de
 basketbol → Maç Sonucu pazarından oynanır.
 
-- **Kredi:** Basketbol ligi yalnızca maçı olduğu gün, tarama başına 1 kredi harcar (Alt/Üst
-  açıkken bile; basketbolda yalnızca maç sonucu sorulur). Kredi planı gerekirse en az fırsat
-  çıkaran ligi (basketbol dahil) o gün çıkarır. Ayarlar → Basketbol kartından kapatılabilir.
+- **Kredi:** Basketbol ligi yalnızca maçı olduğu gün kredi harcar: tarama başına 1, Alt/Üst
+  açıkken 2 (futbolla aynı). Kredi planı gerekirse en az fırsat çıkaran ligi (basketbol dahil) o
+  gün çıkarır. Ayarlar → Basketbol kartından kapatılabilir.
+- **Alt/Üst (toplam sayı, 1.9.2):** Pazarlar'daki Alt/Üst açıksa basketbolda toplam sayı da
+  karşılaştırılır (uzatmalar dahil). Pinnacle tek (ana) çizgi verir, iddaa çoğu zaman başka bir
+  çizgi: toplam sayı normal dağılımlı kabul edilir (standart sapma NBA'de 19, diğerlerinde 16),
+  ortalama Pinnacle'ın çizgisi ve Üst olasılığından bulunur, iddaa çizgisindeki olasılık buradan
+  okunur. Yalnızca en fazla 3 sayı farklı çizgiler (2 sayı farkta sapma varsayımının hatası ~1
+  puan) ve buçuklu çizgiler (tam sayıda iade ihtimali) kullanılır. Kuponda "Basket 161,5 Üst".
+  Nesine'nin pazar kodu, Pinnacle çizgisine yakın çizgi sunan pazardan bulunur (yarı ve takım
+  toplamları, handikaplar çizgi farkıyla elenir). Seçenek yönü ana çizgide anlaşılamaz (iki taraf
+  da ~%50); yalnızca çizgisi Pinnacle'dan farklı maçlardan ya da aynı maçın birden fazla
+  çizgisindeki oran değişiminden belirlenir, iki kanıt çelişirse kullanılmaz; kanıt yoksa son
+  güvenilir eşleme, o da yoksa pazar kullanılmaz. Dönüştürülmüş Pinnacle olasılığından 15
+  puandan uzak çizgi ayıklanır.
 - **Veri doğrulama:** Nesine'nin basketbol pazar kodu sabit kabul edilmez. Özel değersiz iki
   seçenekli pazarlar arasından, seçenek yönü dahil, Pinnacle'la en iyi örtüşen bulunur; yanlış
   eşleşen tek maç kararı bozmasın diye sapma ortancayla ölçülür. Ardından maç bazında tutarlılık:
@@ -82,8 +94,7 @@ basketbol → Maç Sonucu pazarından oynanır.
 - **Eşleştirme:** Futbol ve basketbol maçları birbiriyle asla eşlenmez (Fenerbahçe, Real Madrid
   gibi iki sporda da oynayan kulüpler). Türkçe ve sponsorlu adlar (Kızılyıldız = Crvena Zvezda,
   Armani Milano = Olimpia Milano) eşleştirme sözlüğünde.
-- **Sonuç:** Uzatmalar dahil skordan. Handikap ve toplam sayı pazarları kullanılmaz: çizgileri
-  maçtan maça değişir ve Pinnacle'ın ana çizgisiyle birebir aynı olmadıkça karşılaştırılamaz.
+- **Sonuç:** Uzatmalar dahil skordan. Handikap pazarları kullanılmaz.
 - **Dikkat:** NBA maçları Türkiye saatiyle gece 02:00–05:00. Sabah bulunan avantaj, maç saatine
   kadar sakatlık haberleriyle kaybolabilir; kanıt koruması (CLV) basketbolu ayrı ölçer ve
   avantaj kapanışta tutmuyorsa basketbol seçimlerini küçültür. Tahmin isabeti kartı yalnızca
@@ -298,7 +309,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.9.1.apk
+./build.sh          # testler + build/BilincliKupon-1.9.2.apk
 ./build.sh test     # yalnızca testler
 ```
 

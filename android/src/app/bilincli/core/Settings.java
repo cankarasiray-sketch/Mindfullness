@@ -42,21 +42,24 @@ public final class Settings {
         {"basketball_nba", "NBA (basketbol)"},
     };
 
-    /** 1.9: basketbol ligleri (yalnızca maç sonucu; tarama başına 1 kredi). */
+    /** 1.9: basketbol ligleri (maç sonucu; Alt/Üst açıksa toplam sayı). */
     static final List<String> BASKETBALL_LEAGUES = Arrays.asList("basketball_euroleague", "basketball_nba");
 
     public static boolean isBasketball(String league) {
         return league != null && league.startsWith("basketball_");
     }
 
-    /** Ligin oran sorgusundaki pazarlar: basketbolda yalnızca maç sonucu. */
+    /**
+     * Ligin oran sorgusundaki pazarlar: maç sonucu, Alt/Üst açıksa toplam (futbolda 2,5;
+     * basketbolda toplam sayı, Pinnacle'ın ana çizgisi).
+     */
     public static String markets(String league, boolean totals) {
-        return isBasketball(league) || !totals ? "h2h" : "h2h,totals";
+        return totals ? "h2h,totals" : "h2h";
     }
 
     /** Ligin tarama başına kredi maliyeti (pazar sayısı; bölge "eu"). */
     public static int scanCost(String league, boolean totals) {
-        return isBasketball(league) || !totals ? 1 : 2;
+        return totals ? 2 : 1;
     }
 
     /** 1.7.2 öncesi varsayılan ligler (taşıma için). */

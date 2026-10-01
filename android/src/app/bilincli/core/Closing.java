@@ -48,8 +48,9 @@ public final class Closing {
             for (Leg l : c.legs) {
                 if (!needs(l, now)) continue;
                 SharpEvent s = byRef.get(l.sharpRef);
-                if (s == null || s.fair.get(l.market) == null) continue;
-                Double f = s.fair.get(l.market).get(l.outcome);
+                Map<String, Double> fair = s == null ? null : Models.fair(s, l.market);
+                if (fair == null) continue;
+                Double f = fair.get(l.outcome);
                 if (f == null) continue;
                 ledger.setClosing(c.id, l.position, f);
                 n++;

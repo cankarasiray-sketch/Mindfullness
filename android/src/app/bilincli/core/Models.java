@@ -21,9 +21,61 @@ public final class Models {
         return sportKey != null && sportKey.startsWith("basketball_") ? BASKETBALL : FOOTBALL;
     }
 
+    /**
+     * Basketbol toplam sayı Alt/Üst: Pinnacle tek (ana) çizgi verir, iddaa çoğu zaman başka bir
+     * çizgi. Toplam sayı normal dağılımlı kabul edilir; ortalama Pinnacle'ın çizgisi ve Üst
+     * olasılığından bulunur, iddaa çizgisindeki olasılık buradan okunur. Fark büyüdükçe dağılım
+     * varsayımının hatası büyüdüğünden en fazla MAX_LINE_GAP sayılık fark kabul edilir.
+     */
+    public static final double MAX_LINE_GAP = 3.0;
+
+    /** Maç toplam sayısının standart sapması (yaklaşık): NBA 48 dk, diğerleri 40 dk. */
+    static double totalSd(String sportKey) {
+        return "basketball_nba".equals(sportKey) ? 19 : 16;
+    }
+
+    /** iddaa çizgisinde Üst olasılığı; çizgi tam sayıysa (iade ihtimali) ya da çok uzaksa null. */
+    public static Double overProb(SharpEvent s, double line) {
+        Map<String, Double> f = s.fair.get("BT");
+        if (f == null || f.get("LINE") == null || f.get("UST") == null) return null;
+        if (Math.abs(line - Math.rint(line)) < 1e-9) return null;
+        double base = f.get("LINE"), over = f.get("UST");
+        if (Math.abs(line - base) > MAX_LINE_GAP || !(over > 0 && over < 1)) return null;
+        double sd = totalSd(s.sportKey), mean = base + sd * OddsMath.normInv(over);
+        return 1 - OddsMath.normCdf((line - mean) / sd);
+    }
+
+    /** "BT@161.5" -> "BT" (pazar ailesi: kalibrasyon, marj ve analiz için). */
+    public static String family(String market) {
+        int i = market.indexOf('@');
+        return i < 0 ? market : market.substring(0, i);
+    }
+
+    /** Pazarın çizgisi ("BT@161.5" -> 161.5); çizgisiz pazarda null. */
+    public static Double line(String market) {
+        int i = market.indexOf('@');
+        return i < 0 ? null : Double.parseDouble(market.substring(i + 1));
+    }
+
+    /** Kararda kullanılan adil olasılıklar; basketbol Alt/Üst'te iddaa çizgisine dönüştürülür. */
+    public static Map<String, Double> fair(SharpEvent s, String market) {
+        if (market.startsWith("BT@")) {
+            Double over = overProb(s, line(market));
+            if (over == null) return null;
+            Map<String, Double> m = new LinkedHashMap<>();
+            m.put("ALT", 1 - over);
+            m.put("UST", over);
+            return m;
+        }
+        return s.fair.get(market);
+    }
+
     public static String outcomeLabel(String market, String outcome) {
         if ("MS".equals(market)) return "MS " + outcome;
         if ("BS".equals(market)) return "Basket MS " + outcome;
+        if (market.startsWith("BT@")) {
+            return "Basket " + Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
+        }
         if ("AU25".equals(market)) return "ALT".equals(outcome) ? "2,5 Alt" : "2,5 Üst";
         if ("KG".equals(market)) return "VAR".equals(outcome) ? "KG Var" : "KG Yok";
         if ("CS".equals(market)) return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
@@ -37,6 +89,7 @@ public final class Models {
         if ("KG".equals(market)) return "Karşılıklı Gol";
         if ("CS".equals(market)) return "Çifte Şans";
         if ("BS".equals(market)) return "Basketbol MS";
+        if ("BT".equals(family(market))) return "Basketbol Alt/Üst";
         return market;
     }
 

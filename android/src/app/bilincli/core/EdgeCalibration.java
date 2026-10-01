@@ -103,8 +103,9 @@ public final class EdgeCalibration {
             all.n++;
             all.predicted += pred;
             all.realized += real;
-            Segment s = by.get(o.market);
-            if (s == null) by.put(o.market, s = new Segment());
+            String market = Models.family(o.market); // basketbol Alt/Üst çizgileri tek segment
+            Segment s = by.get(market);
+            if (s == null) by.put(market, s = new Segment());
             s.n++;
             s.predicted += pred;
             s.realized += real;
@@ -141,7 +142,7 @@ public final class EdgeCalibration {
     /** Pazar için oran (yoksa genel). */
     public static double ratio(Map<String, Double> ratios, String market) {
         if (ratios == null) return 1.0;
-        Double r = ratios.get(market);
+        Double r = ratios.get(Models.family(market));
         if (r == null) r = ratios.get("*");
         return r == null ? 1.0 : r;
     }

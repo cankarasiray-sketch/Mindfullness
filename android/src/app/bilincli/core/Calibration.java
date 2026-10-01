@@ -27,6 +27,10 @@ public final class Calibration {
     public static final String RAW_CS = "CS#";
     /** Basketbol maç sonucu adayı (özel değersiz iki seçenekli pazar; 1 = ev, 2 = deplasman). */
     public static final String RAW_BS = "BS#";
+    /** Basketbol toplam sayı adayı: "BT#pazar@çizgi" (özel değerli iki seçenekli pazar). */
+    public static final String RAW_BT = "BT#";
+    /** Yön kanıtı sayılması için Üst olasılığının %50'den en az bu kadar uzak olması gerekir. */
+    static final double BT_INFORMATIVE = 0.04;
     static final String[] CS_KEYS = {"1X", "12", "X2"};
     /** Doğru eşleşmede iddaa ile Pinnacle olasılıklarının ortalama farkı bunun altında kalır. */
     static final double MAX_MAD = 0.06;
@@ -136,11 +140,12 @@ public final class Calibration {
         report.put("KG", twoWay(book, pairs, RAW_KG, "KG", new String[] {"VAR", "YOK"}, notes, memory));
         report.put("CS", doubleChance(book, pairs, notes, memory));
         report.put("BS", basketball(book, pairs, notes, memory));
+        report.put("BT", basketTotals(book, pairs, notes, memory));
         for (BookEvent b : book) {
             Iterator<String> it = b.odds.keySet().iterator();
             while (it.hasNext()) {
                 String k = it.next();
-                if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS) || k.startsWith(RAW_BS)) it.remove();
+                if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS) || k.startsWith(RAW_BS) || k.startsWith(RAW_BT)) it.remove();
             }
         }
 
@@ -148,7 +153,7 @@ public final class Calibration {
         int suspicious = 0;
         for (Pair p : pairs) {
             for (Map.Entry<String, Map<String, Double>> m : p.book.odds.entrySet()) {
-                Map<String, Double> fair = p.sharp.fair.get(m.getKey());
+                Map<String, Double> fair = Models.fair(p.sharp, m.getKey());
                 if (fair == null) continue;
                 Iterator<Map.Entry<String, Double>> it = m.getValue().entrySet().iterator();
                 while (it.hasNext()) {
@@ -195,6 +200,165 @@ public final class Calibration {
             }
         }
         return dropped > 0 ? r + ", " + dropped + " uyumsuz maç ayıklandı" : r;
+    }
+
+    private static String btMtid(String rawKey) {
+        return rawKey.substring(RAW_BT.length(), rawKey.indexOf('@'));
+    }
+
+    private static double btLine(String rawKey) {
+        return Double.parseDouble(rawKey.substring(rawKey.indexOf('@') + 1));
+    }
+
+    /**
+     * Basketbol toplam sayı Alt/Üst. Pinnacle'ın ana çizgisi iddaa çizgisine Models.overProb ile
+     * çevrilir. Aday pazarlar arasından (yarı ve takım toplamları, handikaplar çizgi farkıyla
+     * kendiliğinden elenir) en çok maçta Pinnacle çizgisine yakın olan pazar kodu seçilir.
+     *
+     * Yön (bültenin 1. seçeneği Alt mı Üst mü) ana çizgide anlaşılamaz: aynı çizgide iki taraf da
+     * ~%50'dir. Bu yüzden yalnızca bilgi taşıyan ölçümler kullanılır: iddaa çizgisinin
+     * Pinnacle'dan farklı olduğu maçlar (Üst olasılığı %50'den uzak) ve aynı maçta birden fazla
+     * çizgi varsa oranların çizgiyle değişimi (çizgi yükseldikçe Üst'ün oranı yükselir). Kanıt
+     * yetmezse son güvenilir eşleme kullanılır, o da yoksa pazar kullanılmaz.
+     */
+    static String basketTotals(List<BookEvent> book, List<Pair> pairs, List<String> notes, Map<String, Object> memory) {
+        boolean any = false;
+        for (BookEvent b : book) any |= Models.BASKETBALL.equals(b.sport);
+        if (!any) return "bültende basketbol yok";
+        Map<String, Integer> near = new LinkedHashMap<>(); // pazar -> çizgisi Pinnacle'a yakın maç sayısı
+        Map<String, List<Double>> fit = new LinkedHashMap<>(); // pazar|yön -> bilgi taşıyan ölçümlerde fark
+        Map<String, int[]> votes = new LinkedHashMap<>(); // pazar -> {yön 0 oyu, yön 1 oyu} (çok çizgili maçlar)
+        int withPinnacle = 0;
+        for (Pair p : pairs) {
+            if (p.sharp.fair.get("BT") == null) continue;
+            withPinnacle++;
+            Map<String, List<double[]>> byMtid = new LinkedHashMap<>(); // pazar -> {çizgi, 1. seçenek oranı}
+            for (Map.Entry<String, Map<String, Double>> m : p.book.odds.entrySet()) {
+                if (!m.getKey().startsWith(RAW_BT)) continue;
+                String mtid = btMtid(m.getKey());
+                double line = btLine(m.getKey());
+                Double over = Models.overProb(p.sharp, line);
+                if (over == null) continue;
+                List<double[]> l = byMtid.get(mtid);
+                if (l == null) byMtid.put(mtid, l = new ArrayList<>());
+                l.add(new double[] {line, m.getValue().get("1")});
+                if (Math.abs(over - 0.5) < BT_INFORMATIVE) continue;
+                double first = devig(m.getValue().get("1"), m.getValue().get("2"))[0];
+                for (int dir = 0; dir < 2; dir++) { // yön 0: 1. seçenek Alt
+                    String k = mtid + "|" + dir;
+                    if (!fit.containsKey(k)) fit.put(k, new ArrayList<Double>());
+                    fit.get(k).add(Math.abs(first - (dir == 0 ? 1 - over : over)));
+                }
+            }
+            for (Map.Entry<String, List<double[]>> e : byMtid.entrySet()) {
+                near.put(e.getKey(), (near.containsKey(e.getKey()) ? near.get(e.getKey()) : 0) + 1);
+                List<double[]> l = e.getValue();
+                if (l.size() < 2) continue;
+                java.util.Collections.sort(l, new java.util.Comparator<double[]>() {
+                    @Override
+                    public int compare(double[] a, double[] b) {
+                        return Double.compare(a[0], b[0]);
+                    }
+                });
+                double lo = l.get(0)[1], hi = l.get(l.size() - 1)[1];
+                if (Math.abs(hi - lo) < 0.03) continue;
+                int[] v = votes.get(e.getKey());
+                if (v == null) votes.put(e.getKey(), v = new int[2]);
+                v[hi < lo ? 0 : 1]++; // çizgi yükselince 1. seçeneğin oranı düşüyorsa 1. seçenek Alt
+            }
+        }
+        // pazar kodu: en çok maçta Pinnacle çizgisine yakın çizgi sunan
+        String mtid = null;
+        int best = 0, second = 0;
+        for (Map.Entry<String, Integer> e : near.entrySet()) {
+            if (e.getValue() > best) {
+                second = best;
+                best = e.getValue();
+                mtid = e.getKey();
+            } else if (e.getValue() > second) {
+                second = e.getValue();
+            }
+        }
+        String remembered = Json.str(memory, "BT");
+        String decided = null, how = null;
+        boolean twoCandidates = mtid != null && best >= MIN_N && second >= best / 2.0;
+        if (mtid != null && best >= MIN_N && !twoCandidates) {
+            List<Double> d0 = fit.get(mtid + "|0"), d1 = fit.get(mtid + "|1");
+            int[] v = votes.get(mtid);
+            int dir = -1;
+            if (d0 != null && d0.size() >= MIN_N) {
+                double m0 = median(d0), m1 = median(d1);
+                if (Math.min(m0, m1) <= MAX_MAD && Math.max(m0, m1) > Math.min(m0, m1) * 1.5 + 0.02) {
+                    dir = m0 < m1 ? 0 : 1;
+                    how = "sapma " + Fmt.pct(Math.min(m0, m1), false);
+                }
+            }
+            if (v != null && v[0] + v[1] >= 2 && Math.max(v[0], v[1]) >= 0.9 * (v[0] + v[1])) {
+                int byLines = v[0] > v[1] ? 0 : 1;
+                if (dir >= 0 && dir != byLines) {
+                    notes.add("Basketbol Alt/Üst: iki yön kanıtı çelişiyor; yanlış eşleşme riskine karşı kullanılmadı.");
+                    return "belirsiz, kullanılmadı";
+                }
+                if (dir < 0) how = "çok çizgili " + (v[0] + v[1]) + " maçtan";
+                dir = byLines;
+            }
+            if (dir >= 0) {
+                decided = mtid + "|" + dir;
+                memory.put("BT", decided);
+            }
+        }
+        if (decided == null) {
+            if (remembered == null) {
+                if (withPinnacle == 0) return "Pinnacle verisi yok ya da az maç";
+                if (mtid == null || best < MIN_N) return "Pinnacle çizgisine yakın iddaa çizgisi az (" + best + " maç)";
+                if (twoCandidates) return "birden fazla aday pazar, ayırt edilemedi; kullanılmadı";
+                return "yön belirlenemedi (iddaa çizgileri Pinnacle'la aynı), kullanılmadı";
+            }
+            decided = remembered;
+            how = null;
+        }
+        String code = decided.substring(0, decided.indexOf('|'));
+        boolean firstIsUnder = decided.endsWith("|0");
+        int adopted = 0, dropped = 0;
+        for (BookEvent b : book) {
+            for (Map.Entry<String, Map<String, Double>> m : new ArrayList<>(b.odds.entrySet())) {
+                if (!m.getKey().startsWith(RAW_BT) || !btMtid(m.getKey()).equals(code)) continue;
+                double line = btLine(m.getKey());
+                if (Math.abs(line - Math.rint(line)) < 1e-9) continue; // tam sayı çizgi: iade ihtimali
+                Map<String, Double> o = new LinkedHashMap<>();
+                o.put("ALT", m.getValue().get(firstIsUnder ? "1" : "2"));
+                o.put("UST", m.getValue().get(firstIsUnder ? "2" : "1"));
+                String target = "BT@" + line;
+                b.odds.put(target, o);
+                Integer mbs = b.marketMbs.get(m.getKey());
+                if (mbs != null) b.marketMbs.put(target, mbs);
+                adopted++;
+            }
+        }
+        // maç bazında tutarlılık: dönüştürülmüş Pinnacle olasılığından çok uzak çizgi kullanılmaz
+        for (Pair p : pairs) {
+            for (String k : new ArrayList<>(p.book.odds.keySet())) {
+                if (!k.startsWith("BT@")) continue;
+                Double over = Models.overProb(p.sharp, Models.line(k));
+                if (over == null) continue;
+                Map<String, Double> o = p.book.odds.get(k);
+                double q = devig(o.get("ALT"), o.get("UST"))[1];
+                if (Math.abs(q - over) > MAX_PAIR_DIFF) {
+                    p.book.odds.remove(k);
+                    dropped++;
+                }
+            }
+        }
+        String tail = (dropped > 0 ? ", " + dropped + " uyumsuz çizgi ayıklandı" : "");
+        if (how == null) return "önceki eşleme kullanıldı (pazar " + code + ", " + adopted + " çizgi)" + tail;
+        return "doğrulandı (pazar " + code + ", " + adopted + " çizgi, " + how + ")" + tail;
+    }
+
+    private static double median(List<Double> d) {
+        List<Double> s = new ArrayList<>(d);
+        java.util.Collections.sort(s);
+        int n = s.size();
+        return n % 2 == 1 ? s.get(n / 2) : (s.get(n / 2 - 1) + s.get(n / 2)) / 2;
     }
 
     /** {en büyük olasılık farkı, ev/deplasman ters çevrilince en büyük fark}; MS yoksa null. */
@@ -465,6 +629,7 @@ public final class Calibration {
         if (String.valueOf(r.get("KG")).startsWith("doğrulandı")) b.append(", KG ✓");
         if (String.valueOf(r.get("CS")).startsWith("doğrulandı")) b.append(", ÇŞ ✓");
         if (String.valueOf(r.get("BS")).startsWith("doğrulandı")) b.append(", Basket MS ✓");
+        if (String.valueOf(r.get("BT")).startsWith("doğrulandı")) b.append(", Basket A/Ü ✓");
         long mis = r.get("mismatched") instanceof Long ? (Long) r.get("mismatched") : 0;
         if (mis > 0) b.append(", ").append(mis).append(" uyumsuz eşleşme ayıklandı");
         long sus = r.get("suspicious") instanceof Long ? (Long) r.get("suspicious") : 0;
