@@ -1,0 +1,52 @@
+# Bilinçli Kupon ayarları. `bilincli kur` bu dosyayı bilincli.toml olarak kopyalar.
+# Oranlar ondalıkla yazılır: 0.03 = %3.
+
+[genel]
+veri_klasoru = "veri"            # kasa veritabanı ve panel.html burada tutulur
+
+[kaynaklar]
+# https://the-odds-api.com adresinden ücretsiz anahtar alınır.
+# Dosyaya yazmak yerine ODDS_API_KEY ortam değişkeni de kullanılabilir.
+odds_api_key = ""
+# Keskin piyasa oranlarının çekileceği ligler (The Odds API anahtarları).
+# Her lig günde 1 kredi harcar (pazar sayısı x). Ücretsiz plan ayda 500 kredi.
+ligler = [
+  "soccer_turkey_super_league",
+  "soccer_epl",
+  "soccer_spain_la_liga",
+  "soccer_italy_serie_a",
+  "soccer_germany_bundesliga",
+  "soccer_france_ligue_one",
+]
+pazarlar = ["h2h"]               # "totals" (2,5 Alt/Üst) eklenirse kredi iki katına çıkar
+bolge = "eu"
+tercih_edilen_site = "pinnacle"  # adil olasılık için en keskin site
+min_site_sayisi = 3              # tercih edilen site yoksa en az bu kadar sitenin ortalaması
+iddaa_kaynagi = "nesine"         # "nesine" (otomatik) ya da "dosya" (JSON'dan)
+iddaa_dosyasi = "veri/iddaa.json"
+
+[strateji]
+pencere_saat = 24                # 06:00'dan itibaren kaç saatlik maçlar
+min_sure_dakika = 30             # maç başlamadan en az bu kadar önce olmalı
+min_bacak_avantaji = 0.03        # her maçta iddaa oranı adil oranı en az %3 geçmeli
+min_kupon_avantaji = 0.05        # kuponun toplam beklenen değeri en az +%5
+min_kazanma_olasiligi = 0.20     # piyango kuponu olmasın: en az %20 tutma şansı
+min_bacak_orani = 1.25
+max_bacak_orani = 3.50
+min_kupon_orani = 1.50           # anlamlı kazanç için alt sınır
+max_mac = 4
+max_aday = 30
+kelly_carpani = 0.25             # çeyrek Kelly: tahmin hatasına karşı temkin
+max_bahis_orani = 0.03           # bir kupona kasanın en fazla %3'ü
+min_kupon_tutari = 50            # iddaa'nın güncel asgari kupon bedeline göre güncelle
+oneriyi_otomatik_oyna = false    # true: öneri, oynandı sayılır ve kasadan düşülür
+
+[limitler]
+haftalik_kayip_limiti = 0.15     # haftalık zarar kasanın %15'ini geçerse hafta sonuna kadar dur (0 = kapalı)
+kovalama_bekleme_saat = 48       # zarardayken para eklenirse bu kadar saat kupon yok (0 = kapalı)
+
+[bildirim]
+# Telegram'da @BotFather ile bot oluşturup token'ı, @userinfobot ile chat id'yi al.
+# Ortam değişkeni olarak da verilebilir: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID
+telegram_bot_token = ""
+telegram_chat_id = ""

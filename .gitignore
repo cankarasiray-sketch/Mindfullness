@@ -1,0 +1,14 @@
+# Kişisel veriler: kasa, kuponlar, API anahtarları. Repo herkese açık, bunlar asla commitlenmemeli.
+bilincli.toml
+veri/
+veri_demo/
+*.sqlite3
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
