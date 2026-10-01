@@ -64,8 +64,9 @@ public final class CreditPlan {
         return 6 + 2 * coupons;
     }
 
+    /** Seçili liglerin yalnızca o gün oynayanları kredi harcar (Settings.ACTIVE_SHARE). */
     static double cost(int leagues, boolean totals, int radar, int kg, int overhead) {
-        return leagues * (totals ? 2 : 1) * (1 + radar) + kg + overhead;
+        return leagues * Settings.ACTIVE_SHARE * (totals ? 2 : 1) * (1 + radar) + kg + overhead;
     }
 
     static int daysLeft(LocalDate today, int resetDay) {

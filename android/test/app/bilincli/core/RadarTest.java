@@ -165,7 +165,10 @@ public class RadarTest {
         int base = s.estimatedMonthlyCredits();
         s.radarScans = 2;
         assertEquals(2, s.radarHours().length);
-        assertEquals(base + 30 * s.leagues.size() * 2, s.estimatedMonthlyCredits());
+        // her tarama, o gün oynayan ligler kadar kredi (lig başına ~%40 gün)
+        int n = s.leagues.size();
+        assertEquals(base - Math.round(30 * n * Settings.ACTIVE_SHARE) + Math.round(30 * n * Settings.ACTIVE_SHARE * 3),
+                s.estimatedMonthlyCredits());
         assertNull(s.validate());
         s.radarScans = 3;
         assertNotNull(s.validate());

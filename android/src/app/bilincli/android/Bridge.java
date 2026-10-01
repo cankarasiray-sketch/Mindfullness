@@ -345,6 +345,11 @@ public final class Bridge {
     }
 
     /** Veri kaynaklarını dener, doğrulama raporunu ve pazar envanterini gösterir. */
+    private static String leagueName(String key) {
+        for (String[] l : Settings.KNOWN_LEAGUES) if (l[0].equals(key)) return l[1];
+        return key;
+    }
+
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
         Daily.LiveSources src = repo.live();
@@ -360,6 +365,12 @@ public final class Bridge {
         b.append("iddaa bülteni (Nesine): ").append(f.book.size()).append(" maç\n");
         b.append("Keskin piyasa (Pinnacle): ").append(f.sharp.size()).append(" maç · kalan API kredisi: ")
                 .append(src.remainingCredits()).append('\n');
+        if (!src.idleLeagues().isEmpty()) {
+            List<String> names = new ArrayList<>();
+            for (String l : src.idleLeagues()) names.add(leagueName(l));
+            b.append("Önümüzdeki 24 saatte maçı olmayan ligler (kredi harcanmadı): ").append(String.join(", ", names)).append('\n');
+        }
+        for (String w : src.warnings()) b.append("Uyarı: ").append(w).append('\n');
         List<Models.Pair> pairs = Matching.match(f.book, f.sharp);
         b.append("Eşleşen maç: ").append(pairs.size()).append('\n');
         for (int i = 0; i < Math.min(5, pairs.size()); i++) {
@@ -372,6 +383,8 @@ public final class Bridge {
         b.append("  Maç Sonucu: ").append(cal.get("MS")).append('\n');
         b.append("  2,5 Alt/Üst: ").append(cal.get("AU25")).append('\n');
         b.append("  Karşılıklı Gol: ").append(cal.get("KG")).append('\n');
+        b.append("  Çifte Şans: ").append(cal.get("CS")).append('\n');
+        b.append("  Uyumsuz eşleşme (ayıklanan maç): ").append(cal.get("mismatched")).append('\n');
         b.append("  Ayıklanan şüpheli oran: ").append(cal.get("suspicious")).append('\n');
         for (Object n : Json.arr(cal.get("notes"))) b.append("  · ").append(n).append('\n');
         Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), Daily.decisionSettings(repo.real()));

@@ -19,13 +19,50 @@ public final class Settings {
         {"soccer_portugal_primeira_liga", "Portekiz Primeira Liga"},
         {"soccer_uefa_champs_league", "UEFA Şampiyonlar Ligi"},
         {"soccer_uefa_europa_league", "UEFA Avrupa Ligi"},
+        {"soccer_uefa_europa_conference_league", "UEFA Konferans Ligi"},
+        {"soccer_efl_champ", "İngiltere Championship"},
+        {"soccer_belgium_first_div", "Belçika Pro Lig"},
+        {"soccer_spl", "İskoçya Premiership"},
+        {"soccer_germany_bundesliga2", "Almanya 2. Bundesliga"},
+        {"soccer_spain_segunda_division", "İspanya La Liga 2"},
+        {"soccer_italy_serie_b", "İtalya Serie B"},
+        {"soccer_france_ligue_two", "Fransa Ligue 2"},
+        {"soccer_greece_super_league", "Yunanistan Süper Lig"},
+        {"soccer_austria_bundesliga", "Avusturya Bundesliga"},
+        {"soccer_switzerland_superleague", "İsviçre Süper Lig"},
+        {"soccer_denmark_superliga", "Danimarka Superliga"},
+        {"soccer_poland_ekstraklasa", "Polonya Ekstraklasa"},
+        {"soccer_sweden_allsvenskan", "İsveç Allsvenskan"},
+        {"soccer_norway_eliteserien", "Norveç Eliteserien"},
+        {"soccer_brazil_campeonato", "Brezilya Série A"},
+        {"soccer_argentina_primera_division", "Arjantin Primera División"},
+        {"soccer_usa_mls", "ABD MLS"},
+        {"soccer_japan_j_league", "Japonya J1 Lig"},
     };
+
+    /** 1.7.2 öncesi varsayılan ligler (taşıma için). */
+    static final List<String> OLD_DEFAULT_LEAGUES = Arrays.asList(
+            "soccer_turkey_super_league", "soccer_epl", "soccer_spain_la_liga",
+            "soccer_italy_serie_a", "soccer_germany_bundesliga", "soccer_france_ligue_one");
+
+    /**
+     * Bir ligin herhangi bir günde karar penceresinde maçı olma payı (yaklaşık). Maçı olmayan lig
+     * için oran çekilmediğinden (ücretsiz maç listesi) kredi tahminleri bununla yapılır.
+     */
+    public static final double ACTIVE_SHARE = 0.4;
 
     // kaynaklar
     public String oddsApiKey = "";
+    /**
+     * Varsayılan ligler: büyük 6 lig + Avrupa kupaları (hafta içi) + Hollanda ve Portekiz. Maçı
+     * olmayan lig kredi harcamadığı için ligi seçili tutmak yalnızca oynadığı gün kredi harcar.
+     * (Masaüstü Python sürümü maç listesine bakmadığı için orada 6 lig varsayılandır.)
+     */
     public List<String> leagues = new ArrayList<>(Arrays.asList(
             "soccer_turkey_super_league", "soccer_epl", "soccer_spain_la_liga",
-            "soccer_italy_serie_a", "soccer_germany_bundesliga", "soccer_france_ligue_one"));
+            "soccer_italy_serie_a", "soccer_germany_bundesliga", "soccer_france_ligue_one",
+            "soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league",
+            "soccer_netherlands_eredivisie", "soccer_portugal_primeira_liga"));
     public String regions = "eu";
     public String preferredBook = "pinnacle";
     public int minBooks = 3;
@@ -99,7 +136,7 @@ public final class Settings {
     /** Aylık tahmini The Odds API kredisi (ücretsiz plan 500). */
     public int estimatedMonthlyCredits() {
         // lig başına günlük çekim x pazar sayısı + KG maç başına + sonuç, kontrol ve kapanış için yaklaşık pay
-        return 30 * leagues.size() * (1 + radarScans) * (totals ? 2 : 1) + 30 * kgEvents + 240;
+        return (int) Math.round(30 * leagues.size() * ACTIVE_SHARE * (1 + radarScans) * (totals ? 2 : 1)) + 30 * kgEvents + 240;
     }
 
     /** "temkinli", "yuksek" ya da "ozel" (kullanıcı Kelly/üst sınırı elle değiştirdi). */
@@ -174,7 +211,7 @@ public final class Settings {
         m.put("runMinute", (long) runMinute);
         m.put("edgeGuard", edgeGuard);
         m.put("profile", detectProfile());
-        m.put("v", 2L);
+        m.put("v", 3L);
         m.put("radarScans", (long) radarScans);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
@@ -223,6 +260,10 @@ public final class Settings {
             // 1.4 → 1.5: profiller günde 5 kupona çıktı (ortak Kelly); profil kullanıcısını taşı
             s.maxCouponsPerDay = 5;
             if ("ozel".equals(s.detectProfile())) s.maxCouponsPerDay = 3;
+        }
+        if (Json.lng(m, "v", 1) < 3 && new java.util.HashSet<>(s.leagues).equals(new java.util.HashSet<>(OLD_DEFAULT_LEAGUES))) {
+            // 1.7.2: eski varsayılan lig listesi değiştirilmemişse yeni varsayılana (Avrupa kupaları dahil)
+            s.leagues = new Settings().leagues;
         }
         s.profile = s.detectProfile();
         return s;

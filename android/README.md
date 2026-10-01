@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.7.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.7.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -23,6 +23,12 @@ tarayıcısında `https://api.the-odds-api.com/v4/sports` adresini aç: kısa bi
 eksik) görürsen veri adresine erişim vardır, yalnızca kayıt sayfası açılmıyordur; "Bağlantı
 sıfırlandı" görürsen veri adresi de engellidir. Başka bir ağ (Wi-Fi / mobil veri) dene.
 "Kaynakları test et" de bu durumda "erişim engelleniyor olabilir" der.
+
+**"Keskin piyasa: 0 maç" görürsen:** Seçili liglerin hiçbirinde önümüzdeki 24 saatte maç yoktur
+(ör. Perşembe günü yerli ligler oynamaz). Uygulama maç listesine ücretsiz bakar ve maçı olmayan
+lig için kredi harcamaz; test çıktısı bu ligleri listeler. Varsayılan ligler 1.7.2'den itibaren
+Avrupa kupalarını (hafta içi), Hollanda ve Portekiz'i de içerir; Ayarlar'dan 31 lig arasından
+seçim yapılabilir. Seçili lig yalnızca oynadığı gün kredi harcar.
 
 ## Bilyoner'de oynarken: bayat oranla oynama
 
@@ -220,7 +226,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.7.1.apk
+./build.sh          # testler + build/BilincliKupon-1.7.2.apk
 ./build.sh test     # yalnızca testler
 ```
 

@@ -131,6 +131,10 @@ def decide(
         "marjlar": market_margins(book),
         "ortalama_avantaj": mean(c.ev for c in allc) if allc else None,
     }
+    if not sharp:
+        return Decision(None, reason="Seçili liglerde karar penceresinde maç yok (keskin piyasada 0 maç). "
+                                     "O gün oynayan ligleri, ör. Avrupa kupalarını, Ayarlar'dan ekleyebilirsin.",
+                        stats=stats)
     if not pairs:
         return Decision(None, reason="iddaa bülteni ile keskin piyasa eşleştirilemedi; "
                                      "veri kaynaklarını kontrol et.", stats=stats)

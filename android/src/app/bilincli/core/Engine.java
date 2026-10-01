@@ -197,6 +197,10 @@ public final class Engine {
         for (Map.Entry<String, Double> e : marketMargins(book).entrySet()) margins.put(e.getKey(), e.getValue());
         stats.put("marjlar", margins);
         List<Proposal> none = new ArrayList<>();
+        if (sharp.isEmpty()) {
+            return withKickoffs(kos, new Decision(null, none, "Seçili liglerde karar penceresinde maç yok (keskin piyasada 0 maç). "
+                    + "O gün oynayan ligleri, ör. Avrupa kupalarını, Ayarlar'dan ekleyebilirsin.", stats));
+        }
         if (pairs.isEmpty()) {
             return withKickoffs(kos, new Decision(null, none, "iddaa bülteni ile keskin piyasa eşleştirilemedi; "
                     + "veri kaynaklarını kontrol et.", stats));

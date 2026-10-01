@@ -81,6 +81,11 @@ public final class Daily {
             return api == null ? new ArrayList<String>() : api.idle;
         }
 
+        /** Atlanan ligler ve hatalar (ör. bilinmeyen lig kodu). */
+        public List<String> warnings() {
+            return api == null ? new ArrayList<String>() : api.warnings;
+        }
+
         /**
          * Karşılıklı Gol için Pinnacle oranı maç bazında çekilir (maç başına 1 kredi). Yalnızca
          * iddaa'da aday KG pazarı olan, zaman penceresindeki ilk cfg.kgEvents maç için.
