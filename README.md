@@ -4,6 +4,9 @@ iddaa için değer odaklı kupon önerisi ve kasa takibi. Her sabah 06:00'da (T�
 bülteni tarar, matematiksel olarak avantajlı bir kupon varsa önerir, yoksa **pas** der.
 Kasanı tutar, oynadığın kuponların sonucunu kendisi kontrol eder, performansını dürüstçe raporlar.
 
+> **Android uygulaması:** Aynı mantık telefonda da çalışıyor; bilgisayar kapalıyken bile
+> 06:00'da bildirim gelir. Kurulum ve derleme için [android/README.md](android/README.md).
+
 ## Önce gerçek: garanti kazanç yok
 
 Hiçbir uygulama iddaa'da garanti kazanç sağlayamaz. Bunun sebebi şans değil, aritmetik:

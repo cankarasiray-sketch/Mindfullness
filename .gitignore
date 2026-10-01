@@ -12,3 +12,10 @@ dist/
 .venv/
 venv/
 .pytest_cache/
+
+# Android derlemesi
+android/.tools/
+android/build/
+android/.keystore/
+android/test/fixtures/parity.json
+android/test/ui/node_modules/

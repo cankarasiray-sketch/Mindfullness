@@ -1,0 +1,7 @@
+{
+  "name": "bilincli-ui-test",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node ui.test.mjs"},
+  "devDependencies": {"jsdom": "^25.0.1"}
+}
