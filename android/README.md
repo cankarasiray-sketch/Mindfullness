@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.7.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.7.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -15,6 +15,14 @@ telefonda tutar.
 5. Hazır. Karar her sabah gelir; istersen **Bugün** sekmesinden **Şimdi üret** diyebilirsin.
 
 Anahtar girmeden denemek için **Önce demoyu gör**: hayali takımlarla 60 günlük simülasyon.
+
+**the-odds-api.com açılmıyorsa ("Bağlantı sıfırlandı" / ERR_CONNECTION_RESET):** Bu, bulunduğun
+ağdan siteye erişimin engellendiğinin tipik görüntüsüdür. Uygulamanın veri aldığı adres
+(`api.the-odds-api.com`) de engelliyse uygulama Pinnacle oranlarını alamaz. Kontrol için telefonun
+tarayıcısında `https://api.the-odds-api.com/v4/sports` adresini aç: kısa bir hata metni (anahtar
+eksik) görürsen veri adresine erişim vardır, yalnızca kayıt sayfası açılmıyordur; "Bağlantı
+sıfırlandı" görürsen veri adresi de engellidir. Başka bir ağ (Wi-Fi / mobil veri) dene.
+"Kaynakları test et" de bu durumda "erişim engelleniyor olabilir" der.
 
 ## Bilyoner'de oynarken: bayat oranla oynama
 
@@ -212,7 +220,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.7.apk
+./build.sh          # testler + build/BilincliKupon-1.7.1.apk
 ./build.sh test     # yalnızca testler
 ```
 

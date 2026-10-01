@@ -366,6 +366,10 @@ public class CoreTest {
         assertEquals(Integer.valueOf(2), sc.get("abc").home);
         assertFalse(sc.get("live").completed);
         assertFalse(Http.safe("https://x/v4?apiKey=SECRET&a=1").contains("SECRET"));
+        assertTrue(Http.blockedHint(new java.net.SocketException("Connection reset")).contains("erişim engelleniyor olabilir"));
+        assertTrue(Http.blockedHint(new javax.net.ssl.SSLHandshakeException("Remote host terminated the handshake")).contains("engelleniyor"));
+        assertEquals("", Http.blockedHint(new java.net.SocketTimeoutException("timeout").getClass().equals(java.net.SocketTimeoutException.class)
+                ? new java.io.IOException("Read timed out") : new java.io.IOException("x")));
         try {
             new OddsApi(null, new Settings());
             fail();

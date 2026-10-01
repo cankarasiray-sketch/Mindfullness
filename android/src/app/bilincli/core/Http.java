@@ -48,6 +48,19 @@ public interface Http {
         return b.toString();
     }
 
+    /**
+     * Bağlantı sıfırlanması / TLS el sıkışmasının kesilmesi, Türkiye'de erişim engeli uygulanan
+     * adreslerde tipik görüntüdür; kullanıcıya ne yapabileceğini söyleyen açıklama.
+     */
+    static String blockedHint(Exception e) {
+        String m = String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT);
+        boolean reset = e instanceof java.net.SocketException || e instanceof javax.net.ssl.SSLException
+                || m.contains("reset") || m.contains("handshake") || m.contains("closed by peer");
+        if (!reset) return "";
+        return ". Bağlantı karşı taraftan kesildi: bu adrese bulunduğun ağdan erişim engelleniyor olabilir."
+                + " Başka bir ağ (Wi-Fi / mobil veri) dene; engel sürerse uygulama bu kaynaktan veri alamaz.";
+    }
+
     /** Hata mesajlarında API anahtarı görünmesin. */
     static String safe(String url) {
         return url.replaceAll("(?i)(apiKey|token)=[^&]*", "$1=***");
@@ -82,7 +95,7 @@ public interface Http {
                 }
                 return new Response(status, body, hs);
             } catch (IOException e) {
-                throw new ProviderException(safe(url) + " -> bağlantı hatası: " + e.getMessage());
+                throw new ProviderException(safe(url) + " -> bağlantı hatası: " + e.getMessage() + blockedHint(e));
             } finally {
                 if (c != null) c.disconnect();
             }
