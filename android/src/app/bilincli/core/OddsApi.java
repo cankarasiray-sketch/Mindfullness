@@ -27,6 +27,8 @@ public final class OddsApi {
     public final List<String> idle = new ArrayList<>();
     /** Lig bazında ayrıntı ("Kaynakları test et" için). */
     public final List<String> report = new ArrayList<>();
+    /** Arayüze ilerleme (null olabilir). */
+    public Daily.Progress progress;
     /** true: maçı olmayan lig için sıradaki maç tarihi de sorulur (ücretsiz maç listesi). */
     public boolean diagnose;
     /** Bu nesneyle yapılan sorguların toplam kredi maliyeti (x-requests-last). */
@@ -412,8 +414,11 @@ public final class OddsApi {
         int ok = 0;
         idle.clear();
         report.clear();
+        int index = 0;
         for (String league : leagues) {
             String name = CreditPlan.leagueName(league);
+            index++;
+            if (progress != null) progress.step("Pinnacle oranları " + index + "/" + leagues.size() + ": " + name);
             int inWindow = now == null ? -1 : eventsInWindow(league, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
                     now.plusSeconds(Math.round(cfg.windowHours * 3600)));
             if (inWindow == 0) {

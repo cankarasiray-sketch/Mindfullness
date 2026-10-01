@@ -468,6 +468,17 @@ test("tahmin isabeti: ölçüler, anlamlılık ve kalibrasyon", async () => {
   assert.ok(t3.$$(".card").some((x) => /Henüz sonuçlanmış maç yok \(12 maç bekliyor\)/.test(x.textContent)));
 });
 
+test("uzun işlemde ilerleme metni görünür, bitince temizlenir", async () => {
+  const t = boot(clone(baseState), "#ayarlar");
+  t.w.act("check");
+  assert.match(t.$("#busy").className, /show/);
+  t.w.onProgress("Pinnacle oranları 3/11: UEFA Nations League");
+  assert.equal(t.$("#progress").textContent, "Pinnacle oranları 3/11: UEFA Nations League");
+  await t.tick();
+  assert.doesNotMatch(t.$("#busy").className, /show/);
+  assert.equal(t.$("#progress").textContent, "");
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

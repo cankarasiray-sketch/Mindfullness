@@ -94,6 +94,9 @@ public final class Bridge {
                 } catch (RuntimeException e) {
                     result.put("ok", false);
                     result.put("message", "Beklenmeyen hata: " + e);
+                } catch (Throwable e) { // ör. bellek: arayüz hiçbir durumda dönen simgede kalmasın
+                    result.put("ok", false);
+                    result.put("message", "Beklenmeyen hata: " + e);
                 }
                 final String js = "window.onActResult(" + Json.write(callbackId) + "," + Json.write(result) + ")";
                 activity.runOnUiThread(new Runnable() {
@@ -354,10 +357,27 @@ public final class Bridge {
     }
 
     /** Veri kaynaklarını dener, doğrulama raporunu ve pazar envanterini gösterir. */
+    /** Bekleme ekranındaki ilerleme metni. */
+    void progress(String text) {
+        final String js = "window.onProgress && window.onProgress(" + Json.write(text) + ")";
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                web.evaluateJavascript(js, null);
+            }
+        });
+    }
+
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
         repo.refreshInternationals(new Daily.LiveSources(new AndroidHttp(activity), repo.real().settings()), true);
         Daily.LiveSources src = repo.live();
+        src.progress = new Daily.Progress() {
+            @Override
+            public void step(String text) {
+                progress(text);
+            }
+        };
         Daily.Fetch f;
         try {
             src.diagnose();

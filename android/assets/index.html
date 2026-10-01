@@ -80,6 +80,7 @@ font-size:14px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:2
 .busy{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:40;display:none;align-items:center;justify-content:center}
 .busy.show{display:flex}
 .spinner{width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin 1s linear infinite}
+.busy{flex-direction:column;gap:14px}.busy .progress{color:#fff;font-size:14px;max-width:80%;text-align:center;text-shadow:0 1px 2px rgba(0,0,0,.6)}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:26px 10px}
 .verdict{border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13.5px}
@@ -129,7 +130,7 @@ p{margin:6px 0}
 <nav id="nav"></nav>
 <div id="toast"></div>
 <div class="sheet-bg" id="sheetBg"><div class="sheet" id="sheet"></div></div>
-<div class="busy" id="busy"><div class="spinner"></div></div>
+<div class="busy" id="busy"><div class="spinner"></div><div class="progress" id="progress"></div></div>
 <script>
 "use strict";
 // ---- köprü ----------------------------------------------------------------
@@ -210,7 +211,11 @@ function toast(msg, err) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function () { t.className = ""; }, err ? 6000 : 3500);
 }
-function busy(on) { document.getElementById("busy").className = "busy" + (on ? " show" : ""); }
+function busy(on) {
+  document.getElementById("busy").className = "busy" + (on ? " show" : "");
+  if (!on) document.getElementById("progress").textContent = "";
+}
+window.onProgress = function (text) { var p = document.getElementById("progress"); if (p) p.textContent = text; };
 function openSheet(html) {
   document.getElementById("sheet").innerHTML = html;
   document.getElementById("sheetBg").className = "sheet-bg show";
@@ -673,7 +678,7 @@ function viewSettings() {
     + 'Korner gibi pazarlar için güvenilir keskin fiyat kaynağı doğrulanamadığından eklenmedi; "Kaynakları test et" çıktısındaki pazar envanterini paylaşırsan eşlenebilir.</p></div>';
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.map(function (l) {
     return '<label class="check"><input type="checkbox" class="lg" value="' + esc(l[0]) + '"' + (st.leagues.indexOf(l[0]) >= 0 ? " checked" : "") + ">" + esc(l[1]) + "</label>";
-  }).join("") + '<p class="small muted">Her lig günde 1 kredi harcar.</p></div>';
+  }).join("") + '<p class="small muted">Seçili lig yalnızca maçı olduğu gün kredi harcar (tarama başına 1, Alt/Üst açıkken 2). Maç listesi sorgusu ücretsizdir.</p></div>';
   html += '<div class="card"><h2>Düşen oran radarı</h2><p class="small muted">Gün içinde piyasayı yeniden tarar: Pinnacle\'da oranı hızla düşen sonuçları ve '
     + "sabah olmayan yeni değer fırsatlarını bulur. Bugün oynanmış kupon yoksa güncel oranlarla yeni kupon önerir ve bildirir.</p>"
     + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"]].map(function (o) {

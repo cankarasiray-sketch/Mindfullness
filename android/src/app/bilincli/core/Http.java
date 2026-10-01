@@ -91,6 +91,11 @@ public interface Http {
             return 2;
         }
 
+        /** Bu deneme başarısız olursa hata türü ne olursa olsun sonraki yol denensin mi (ör. VPN dışı ağ). */
+        protected boolean alwaysRetry(URL u, int attempt) {
+            return false;
+        }
+
         @Override
         public Response get(String url, Map<String, String> headers) throws ProviderException {
             URL u;
@@ -106,6 +111,7 @@ public interface Http {
                     return once(u, url, headers, attempt);
                 } catch (IOException e) {
                     last = e;
+                    if (alwaysRetry(u, attempt)) continue; // başka ağ yolu: beklemeden dene
                     if (!isReset(e)) break; // zaman aşımı vb.: yeniden deneme anlamsız
                     try {
                         Thread.sleep(1500L * (attempt + 1));
@@ -122,8 +128,8 @@ public interface Http {
             HttpURLConnection c = null;
             try {
                 c = open(u, attempt);
-                c.setConnectTimeout(20000);
-                c.setReadTimeout(45000);
+                if (c.getConnectTimeout() == 0) c.setConnectTimeout(15000);
+                c.setReadTimeout(30000);
                 c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) BilincliKupon/1.0");
                 c.setRequestProperty("Accept", "application/json");
                 if (headers != null) for (Map.Entry<String, String> h : headers.entrySet()) {

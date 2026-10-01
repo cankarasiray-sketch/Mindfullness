@@ -31,12 +31,23 @@ final class AndroidHttp extends Http.UrlHttp {
     }
 
     @Override
+    protected boolean alwaysRetry(URL u, int attempt) {
+        return direct(u) && attempt == 0 && usedDirect;
+    }
+
+    private volatile boolean usedDirect;
+
+    @Override
     protected HttpURLConnection open(URL u, int attempt) throws IOException {
+        usedDirect = false;
         if (direct(u) && attempt == 0) {
             Network n = nonVpnNetwork();
             if (n != null) {
                 try {
-                    return (HttpURLConnection) n.openConnection(u);
+                    HttpURLConnection c = (HttpURLConnection) n.openConnection(u);
+                    c.setConnectTimeout(6000); // VPN atlamaya izin vermiyorsa uzun beklemeden normal yola geç
+                    usedDirect = true;
+                    return c;
                 } catch (IOException | RuntimeException e) {
                     // bu ağa bağlanılamıyor: normal yol
                 }

@@ -46,10 +46,21 @@ public final class Daily {
         }
     }
 
+    /** Uzun işlemlerde arayüze ilerleme metni. */
+    public interface Progress {
+        void step(String text);
+    }
+
     public static final class LiveSources implements Sources {
         private final Http http;
         private final Settings cfg;
         private OddsApi api;
+        /** null olabilir. */
+        public Progress progress;
+
+        void step(String text) {
+            if (progress != null) progress.step(text);
+        }
         /** Calibration'ın son güvenilir pazar eşlemeleri (kalıcı saklamak çağıranın işi). */
         public Map<String, Object> memory = new java.util.LinkedHashMap<>();
 
@@ -59,7 +70,10 @@ public final class Daily {
         }
 
         private OddsApi api() throws Http.ProviderException {
-            if (api == null) api = new OddsApi(http, cfg);
+            if (api == null) {
+                api = new OddsApi(http, cfg);
+                api.progress = progress;
+            }
             return api;
         }
 
@@ -129,9 +143,11 @@ public final class Daily {
                 }
             });
             int n = 0;
+            int total = Math.min(cfg.kgEvents, due.size());
             for (Models.Pair p : due) {
                 if (n >= cfg.kgEvents) break;
                 try {
+                    step("Karşılıklı Gol oranı " + (n + 1) + "/" + total + ": " + p.book.home + " - " + p.book.away);
                     api().enrichEvent(p.sharp, "btts");
                     n++;
                 } catch (Http.ProviderException e) {
@@ -143,6 +159,7 @@ public final class Daily {
 
         @Override
         public List<BookEvent> book() throws Http.ProviderException {
+            step("iddaa bülteni okunuyor (Nesine)…");
             return Nesine.fetch(http);
         }
 
