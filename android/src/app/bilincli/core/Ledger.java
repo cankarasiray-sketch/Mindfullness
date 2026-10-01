@@ -423,7 +423,7 @@ public final class Ledger {
             l.market = leg.market;
             l.outcome = leg.outcome;
             l.odds = leg.odds;
-            l.fairProb = leg.prob;
+            l.fairProb = leg.rawProb; // kapanış ölçümü kalibre edilmemiş tahminle yapılır
             l.mbs = leg.mbs();
             c.legs.add(l);
         }

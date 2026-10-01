@@ -14,8 +14,10 @@ import java.util.Map;
  *
  * Günlük bütçe = (kalan kredi - yedek) / yenilenmeye kalan gün. Tahmini günlük maliyet bütçeyi
  * aşarsa, kredi başına en az fırsat getiren kalemden başlayarak kısılır:
- * Karşılıklı Gol (maç başına 1 kredi) → radar taramaları → 2,5 Alt/Üst → en az değerli fırsat
- * çıkaran lig. Kullanıcının seçmediği hiçbir şey eklenmez; plan yalnızca daraltır.
+ * Karşılıklı Gol (maç başına 1 kredi) → radar taramaları → günlük kupon 5→3 (her kupon maç öncesi
+ * kontrol ve kapanış oranı için kredi harcar; simülasyonda 3 kupon 5'in getirisinin çoğunu verdi)
+ * → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig → son çare kupon 3→1. Kullanıcının seçmediği
+ * hiçbir şey eklenmez; plan yalnızca daraltır.
  */
 public final class CreditPlan {
     private CreditPlan() {}
@@ -26,9 +28,11 @@ public final class CreditPlan {
     public static final class Plan {
         public List<String> leagues = new ArrayList<>();
         public boolean totals;
-        public int kgEvents, radarScans, daysLeft;
+        public int kgEvents, radarScans, coupons, daysLeft;
         public double budget, cost;
         public Long remaining;
+        /** Aylık kota (kalan + kullanılan; bilinmiyorsa ücretsiz plan varsayımı). */
+        public long quota;
         public boolean narrowed;
         public List<String> notes = new ArrayList<>();
         final List<String> noteKeys = new ArrayList<>();
@@ -39,10 +43,12 @@ public final class CreditPlan {
             m.put("totals", totals);
             m.put("kgEvents", (long) kgEvents);
             m.put("radarScans", (long) radarScans);
+            m.put("coupons", (long) coupons);
             m.put("daysLeft", (long) daysLeft);
             m.put("budget", budget);
             m.put("cost", cost);
             m.put("remaining", remaining);
+            m.put("quota", quota);
             m.put("narrowed", narrowed);
             m.put("notes", new ArrayList<Object>(notes));
             return m;
@@ -50,12 +56,12 @@ public final class CreditPlan {
     }
 
     /**
-     * Günlük sabit gider tahmini: sonuç sorguları (lig başına 2), maç öncesi kontroller ve kapanış
-     * oranları (kupon başına birkaç). Tahmin şaşsa da plan her gün gerçek kalan krediden yeniden
-     * hesaplandığı için kendini düzeltir.
+     * Günlük sabit gider tahmini: sonuç sorguları, maç öncesi kontroller ve kapanış oranları (kupon
+     * başına yaklaşık 2; aynı anda vadesi gelenler tek çekimle). Tahmin şaşsa da plan her gün
+     * gerçek kalan krediden yeniden hesaplandığı için kendini düzeltir.
      */
-    static int overhead(Settings cfg) {
-        return 4 + 3 * cfg.maxCouponsPerDay;
+    static int overhead(int coupons) {
+        return 6 + 2 * coupons;
     }
 
     static double cost(int leagues, boolean totals, int radar, int kg, int overhead) {
@@ -80,15 +86,17 @@ public final class CreditPlan {
         p.totals = cfg.totals;
         p.kgEvents = cfg.kgEvents;
         p.radarScans = cfg.radarScans;
+        p.coupons = cfg.maxCouponsPerDay;
         p.leagues.addAll(cfg.leagues);
         p.daysLeft = daysLeft(today, cfg.creditResetDay);
         long quota = remaining != null && used != null ? remaining + used : DEFAULT_QUOTA;
         double left = remaining != null ? remaining
                 : (double) quota * p.daysLeft / today.lengthOfMonth(); // ilk çalışma: ay içinde orantılı
         p.remaining = remaining;
+        p.quota = quota;
         p.budget = Math.max(0, left - RESERVE) / p.daysLeft;
         if (!cfg.creditAuto) {
-            p.cost = cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(cfg));
+            p.cost = cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(p.coupons));
             return p;
         }
         // Ligler: en az fırsat çıkaran sonda (eşitlikte kullanıcının sırası korunur).
@@ -101,29 +109,34 @@ public final class CreditPlan {
                 return c != 0 ? c : Integer.compare(order.indexOf(a), order.indexOf(b));
             }
         });
-        int oh = overhead(cfg);
         int[] radarSteps = {4, 2, 1, 0};
         int[] kgSteps = {12, 8, 4, 0};
-        while (cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, oh) > p.budget) {
+        while (cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(p.coupons)) > p.budget) {
             if (p.kgEvents > 0) {
                 p.kgEvents = next(kgSteps, p.kgEvents);
                 note(p, "kg", p.kgEvents > 0 ? "Karşılıklı Gol en fazla " + p.kgEvents + " maç" : "Karşılıklı Gol bugünlük kapatıldı");
             } else if (p.radarScans > 0) {
                 p.radarScans = next(radarSteps, p.radarScans);
                 note(p, "radar", p.radarScans > 0 ? "Radar günde en fazla " + p.radarScans + " tarama" : "Radar bugünlük kapatıldı");
+            } else if (p.coupons > 3) {
+                p.coupons = 3;
+                note(p, "kupon", "Günde en fazla 3 kupon");
             } else if (p.totals) {
                 p.totals = false;
                 note(p, "totals", "2,5 Alt/Üst bugünlük kapatıldı");
             } else if (p.leagues.size() > 1) {
                 String dropped = p.leagues.remove(p.leagues.size() - 1);
                 note(p, "lig:" + dropped, leagueName(dropped) + " bugünlük çıkarıldı (en az fırsat çıkaran lig)");
+            } else if (p.coupons > 1) {
+                p.coupons--;
+                note(p, "kupon", "Günde en fazla " + p.coupons + " kupon");
             } else {
                 note(p, "az", "Kredi çok az: yalnızca " + leagueName(p.leagues.get(0)) + " taranıyor, yine de bütçeyi aşabilir");
                 break;
             }
             p.narrowed = true;
         }
-        p.cost = cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, oh);
+        p.cost = cost(p.leagues.size(), p.totals, p.radarScans, p.kgEvents, overhead(p.coupons));
         // kullanıcının lig sırasını koru
         List<String> kept = new ArrayList<>();
         for (String l : cfg.leagues) if (p.leagues.contains(l)) kept.add(l);
@@ -159,6 +172,7 @@ public final class CreditPlan {
         s.totals = p.totals;
         s.kgEvents = p.kgEvents;
         s.radarScans = p.radarScans;
+        s.maxCouponsPerDay = p.coupons;
         return s;
     }
 

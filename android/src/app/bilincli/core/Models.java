@@ -17,6 +17,7 @@ public final class Models {
         if ("MS".equals(market)) return "MS " + outcome;
         if ("AU25".equals(market)) return "ALT".equals(outcome) ? "2,5 Alt" : "2,5 Üst";
         if ("KG".equals(market)) return "VAR".equals(outcome) ? "KG Var" : "KG Yok";
+        if ("CS".equals(market)) return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
         return market + " " + outcome;
     }
 
@@ -92,16 +93,23 @@ public final class Models {
         public final BookEvent book;
         public final SharpEvent sharp;
         public final String market, outcome;
-        public final double odds, prob;
+        /** prob: kararda kullanılan (kalibre) olasılık; rawProb: keskin piyasanın adil olasılığı. */
+        public final double odds, prob, rawProb;
 
         public Candidate(BookEvent book, SharpEvent sharp, String market, String outcome, double odds,
                          double prob) {
+            this(book, sharp, market, outcome, odds, prob, prob);
+        }
+
+        public Candidate(BookEvent book, SharpEvent sharp, String market, String outcome, double odds,
+                         double prob, double rawProb) {
             this.book = book;
             this.sharp = sharp;
             this.market = market;
             this.outcome = outcome;
             this.odds = odds;
             this.prob = prob;
+            this.rawProb = rawProb;
         }
 
         public double ev() {

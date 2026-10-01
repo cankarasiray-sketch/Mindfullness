@@ -47,6 +47,20 @@ public final class Recheck {
         return null;
     }
 
+    /** Şu an otomatik kontrolü gelmiş tüm kuponlar. */
+    public static List<Coupon> allDueForPrecheck(Ledger ledger, Instant now) {
+        List<Coupon> out = new ArrayList<>();
+        for (Coupon c : ledger.openCoupons()) {
+            if (c.played || c.legs.isEmpty()) continue;
+            Instant first = firstKickoff(c);
+            Instant at = first.minusSeconds(PRE_S);
+            if (now.isBefore(at) || !first.isAfter(now.plusSeconds(MIN_LEAD_S))) continue;
+            String last = c.lastCheck == null ? null : Json.str(c.lastCheck, "at");
+            if (last == null || Instant.parse(last).isBefore(at)) out.add(c);
+        }
+        return out;
+    }
+
     /** Bir sonraki otomatik kontrol zamanı (yoksa null). */
     public static Instant nextPrecheckTime(Ledger ledger, Instant now) {
         Instant best = null;
@@ -95,13 +109,16 @@ public final class Recheck {
             } else {
                 double o = b.odds.get(l.market).get(l.outcome);
                 double f = s.fair.get(l.market).get(l.outcome);
-                double ev = f * o - 1;
+                // karar kalibre olasılıkla; kayıt (fairNow) ham adil olasılıkla
+                double fu = cfg.edgeRatios == null ? f
+                        : EdgeCalibration.adjust(f, o, EdgeCalibration.ratio(cfg.edgeRatios, l.market));
+                double ev = fu * o - 1;
                 int mbs = b.mbsFor(l.market);
                 r.put("oddsNow", o);
                 r.put("fairNow", f);
                 r.put("evNow", ev);
                 r.put("mbsNow", (long) mbs);
-                prob *= f;
+                prob *= fu;
                 odds *= o;
                 if (ev < cfg.minLegEv) {
                     status = "edge_lost";

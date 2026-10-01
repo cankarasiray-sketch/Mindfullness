@@ -373,14 +373,15 @@ test("kasa takibi ve kredi planı ayarları; daraltma uyarısı", async () => {
   s.settings.oddsApiKey = "k";
   s.creditPlan = {
     leagues: ["soccer_turkey_super_league"], totals: false, kgEvents: 0, radarScans: 1, daysLeft: 20,
-    budget: 9.2, cost: 9, remaining: 199, narrowed: true,
+    budget: 9.2, cost: 9, remaining: 199, quota: 500, coupons: 3, narrowed: true,
     notes: ["Karşılıklı Gol maç sayısı 0'e indirildi", "2,5 Alt/Üst bugünlük kapatıldı"],
   };
   const t = boot(s);
   assert.match(t.text(), /Kredi planı bugün kapsamı daralttı/);
   assert.match(t.text(), /2,5 Alt\/Üst bugünlük kapatıldı/);
   t.w.show("ayarlar");
-  assert.match(t.text(), /Kalan kredi199/);
+  assert.match(t.text(), /Kalan kredi199 \/ ayda 500/);
+  assert.match(t.text(), /Günlük kuponen fazla 3/);
   assert.match(t.text(), /Yenilenmeye20 gün/);
   assert.match(t.text(), /Bugün taranan liglerTürkiye Süper Lig/);
   assert.match(t.text(), /kapalı · kapalı · günde 1/);
@@ -393,6 +394,42 @@ test("kasa takibi ve kredi planı ayarları; daraltma uyarısı", async () => {
   assert.equal(st.autoTrack, false);
   assert.equal(st.creditAuto, false);
   assert.equal(st.creditResetDay, 15);
+});
+
+test("kanıt koruması: geçmişte ölçüm, devredeyse uyarı, ayardan kapatılır", async () => {
+  const s = clone(baseState);
+  s.edge = {
+    "*": { n: 120, predicted: 0.07, realized: 0.01, ratio: 0.3, factor: 0.6 },
+    MS: { n: 90, predicted: 0.07, realized: 0.02, ratio: 0.35, factor: 0.7 },
+    KG: { n: 30, predicted: 0.08, realized: -0.01, ratio: 0.2, factor: 0.4 },
+  };
+  const t = boot(s);
+  assert.ok(t.$$(".banner").some((x) => /Kanıt koruması devrede\. Son 120 seçimde/.test(x.textContent)));
+  t.w.show("gecmis");
+  assert.match(t.text(), /Avantaj: öngörülen → kapanışta\+%7,0 → \+%1,0/);
+  assert.match(t.text(), /Karşılıklı Gol30 maç · ×0,40/);
+  assert.match(t.text(), /Devrede: avantajlar ×0,60/);
+  t.w.show("ayarlar");
+  assert.equal(t.$("#sEdge").checked, true);
+  t.$("#sEdge").checked = false;
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).payload.settings.edgeGuard, false);
+  // sağlam ölçüm: uyarı yok
+  const s2 = clone(baseState);
+  s2.edge = { "*": { n: 60, predicted: 0.06, realized: 0.05, ratio: 0.9, factor: 1 } };
+  const t2 = boot(s2);
+  assert.ok(!t2.$$(".banner").some((x) => /Kanıt koruması devrede/.test(x.textContent)));
+  t2.w.show("gecmis");
+  assert.match(t2.text(), /Devrede değil/);
+});
+
+test("Çifte Şans etiketi", async () => {
+  const s = clone(baseState);
+  const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
+  c.legs[0].market = "CS"; c.legs[0].outcome = "X2";
+  const t = boot(s);
+  assert.match(t.text(), /ÇŞ X-2/);
 });
 
 let failed = 0;

@@ -28,6 +28,8 @@ public final class Engine {
         public final List<Proposal> alternatives;
         public final String reason;
         public final Map<String, Object> stats;
+        /** Eşikleri geçen seçimler (ortak Kelly bunlardan kupon kurar). */
+        public List<Candidate> candidates = new ArrayList<>();
 
         Decision(Proposal proposal, List<Proposal> alternatives, String reason, Map<String, Object> stats) {
             this.proposal = proposal;
@@ -55,7 +57,9 @@ public final class Engine {
                     Double prob = fair.get(o.getKey());
                     double odds = o.getValue();
                     if (prob == null || odds <= 1.0) continue;
-                    Candidate c = new Candidate(p.book, p.sharp, m.getKey(), o.getKey(), odds, prob);
+                    double used = cfg.edgeRatios == null ? prob
+                            : EdgeCalibration.adjust(prob, odds, EdgeCalibration.ratio(cfg.edgeRatios, m.getKey()));
+                    Candidate c = new Candidate(p.book, p.sharp, m.getKey(), o.getKey(), odds, used, prob);
                     all.add(c);
                     if (odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds && c.ev() >= cfg.minLegEv) good.add(c);
                 }
@@ -151,6 +155,7 @@ public final class Engine {
         Map<String, double[]> acc = new LinkedHashMap<>();
         for (BookEvent ev : book) {
             for (Map.Entry<String, Map<String, Double>> m : ev.odds.entrySet()) {
+                if ("CS".equals(m.getKey())) continue; // Çifte Şans'ta olasılıklar toplamı 2; marj ayrı ölçülmez
                 int expected = "MS".equals(m.getKey()) ? 3 : 2;
                 Map<String, Double> o = m.getValue();
                 if (o.size() != expected) continue;
@@ -200,6 +205,8 @@ public final class Engine {
             return new Decision(null, none, cands.size() + " avantajlı seçim var ama MBS ve risk "
                     + "eşiklerini birlikte sağlayan kupon kurulamadı. Bugün pas.", stats);
         }
-        return new Decision(proposals.get(0), new ArrayList<>(proposals.subList(1, proposals.size())), "", stats);
+        Decision d = new Decision(proposals.get(0), new ArrayList<>(proposals.subList(1, proposals.size())), "", stats);
+        d.candidates = cands;
+        return d;
     }
 }

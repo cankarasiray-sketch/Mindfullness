@@ -26,6 +26,12 @@ public final class Settlement {
         if ("MS".equals(market)) actual = home > away ? "1" : away > home ? "2" : "X";
         else if ("AU25".equals(market)) actual = home + away >= 3 ? "UST" : "ALT";
         else if ("KG".equals(market)) actual = home > 0 && away > 0 ? "VAR" : "YOK";
+        else if ("CS".equals(market)) {
+            // Çifte Şans: iki sonucu birden kapsar
+            boolean won = "1X".equals(outcome) ? home >= away : "12".equals(outcome) ? home != away
+                    : "X2".equals(outcome) ? away >= home : false;
+            return won ? Models.WON : Models.LOST;
+        }
         else throw new IllegalArgumentException("bilinmeyen pazar: " + market);
         return outcome.equals(actual) ? Models.WON : Models.LOST;
     }

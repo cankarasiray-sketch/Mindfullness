@@ -58,12 +58,22 @@ public final class Daily {
             return api;
         }
 
+        /** Bu kaynağın kapsamı (kredi planına göre daraltılmış olabilir). */
+        public Settings settings() {
+            return cfg;
+        }
+
         public String remainingCredits() {
             return api == null ? null : api.remaining;
         }
 
         public String usedCredits() {
             return api == null ? null : api.used;
+        }
+
+        /** Son taramada maçı olmadığı için atlanan ligler. */
+        public List<String> idleLeagues() {
+            return api == null ? new ArrayList<String>() : api.idle;
         }
 
         /**
@@ -172,11 +182,70 @@ public final class Daily {
     }
 
     /**
-     * Kararın ana kuponu ve maç paylaşmayan alternatiflerinden günlük kupon sayısı kadarını kaydeder.
-     * Tutarlar Kelly'ye göre; toplamı günlük üst sınırı aşarsa orantılı küçültülür.
+     * Karar ayarları: kullanıcı ayarları + kapanış oranı ölçümünden kanıt koruması
+     * (EdgeCalibration). Motor ve güncel kontrol aynı ayarı kullanır.
+     */
+    public static Settings decisionSettings(Ledger ledger) {
+        Settings cfg = ledger.settings();
+        if (cfg.edgeGuard) cfg.edgeRatios = EdgeCalibration.fromLedger(ledger).ratios();
+        return cfg;
+    }
+
+    /** Kaynağın kredi planı günlük kupon sayısını daralttıysa o sınır da uygulanır. */
+    static Settings decisionSettings(Ledger ledger, Sources src) {
+        Settings cfg = decisionSettings(ledger);
+        if (src instanceof LiveSources) {
+            cfg.maxCouponsPerDay = Math.min(cfg.maxCouponsPerDay, ((LiveSources) src).settings().maxCouponsPerDay);
+        }
+        return cfg;
+    }
+
+    /**
+     * Günün kuponlarını kaydeder. Ortak Kelly (Portfolio) kuponları birlikte seçer ve tutarlandırır;
+     * kurulamazsa ana kupon ve maç paylaşmayan alternatifleri, toplamı günlük üst sınıra
+     * orantılı küçültülerek kullanılır.
      */
     static List<Long> createCoupons(Ledger ledger, Decision d, String day, Settings cfg, boolean autoPlay,
                                     String reasonPrefix, String summary, String[] noteOut) {
+        List<Long> ids = addPortfolio(ledger, d.candidates, day, cfg, autoPlay, cfg.maxCouponsPerDay,
+                cfg.maxDailyExposure, null, noteOut);
+        if (!ids.isEmpty()) {
+            String reason = (reasonPrefix == null ? "" : reasonPrefix) + (noteOut[0] == null ? "" : " " + noteOut[0]);
+            ledger.recordRun(day, "kupon", reason.trim(), ids, summary);
+            return ids;
+        }
+        return createIndependent(ledger, d, day, cfg, autoPlay, reasonPrefix, summary, noteOut);
+    }
+
+    /**
+     * Ortak Kelly kuponlarını deftere ekler (koşuyu kaydetmez). Asgari kupon bedelinin altında
+     * kalan küçük paylar atlanır; kasa boşsa kuponlar yalnızca takip için (tutarsız) kaydedilir.
+     */
+    static List<Long> addPortfolio(Ledger ledger, List<Models.Candidate> cands, String day, Settings cfg, boolean autoPlay,
+                                   int maxBets, double capLeft, java.util.Collection<String> exclude, String[] noteOut) {
+        List<Long> ids = new ArrayList<>();
+        if (cands == null || cands.isEmpty()) return ids;
+        Portfolio.Result res = Portfolio.optimize(cands, cfg, maxBets, capLeft, exclude);
+        if (res.picks.isEmpty()) return ids;
+        long balance = ledger.balance(), minimum = Math.round(cfg.minCouponAmount * 100);
+        List<Portfolio.Pick> picks = new ArrayList<>();
+        for (Portfolio.Pick p : res.picks) {
+            if (balance <= 0 || (long) (balance * p.fraction) / 100 * 100 >= minimum) picks.add(p);
+        }
+        if (picks.isEmpty()) picks.add(res.picks.get(0)); // en büyüğü: asgari bedele yükseltilir ya da takip
+        for (Portfolio.Pick p : picks) {
+            String[] n = new String[1];
+            long stake = computeStake(balance, p.fraction, cfg, n)[0];
+            if (noteOut[0] == null) noteOut[0] = n[0];
+            long id = ledger.addCoupon(p.proposal, day, stake, p.scale());
+            if (autoPlay && stake > 0 && stake <= ledger.balance()) ledger.markPlayed(id, stake, null);
+            ids.add(id);
+        }
+        return ids;
+    }
+
+    private static List<Long> createIndependent(Ledger ledger, Decision d, String day, Settings cfg, boolean autoPlay,
+                                                String reasonPrefix, String summary, String[] noteOut) {
         List<Proposal> props = new ArrayList<>();
         props.add(d.proposal);
         props.addAll(d.alternatives);
@@ -247,7 +316,7 @@ public final class Daily {
 
     public static Result generate(Ledger ledger, Sources src, boolean force, boolean autoPlay, Radar radar) {
         Instant now = ledger.now();
-        Settings cfg = ledger.settings();
+        Settings cfg = decisionSettings(ledger, src);
         Result r = new Result();
         r.day = Fmt.dayKey(now);
         Ledger.Run existing = ledger.runFor(r.day);
@@ -296,24 +365,23 @@ public final class Daily {
     }
 
     /**
-     * Radar taraması: piyasa verisini işler; bugün oynanmış kupon yoksa ve güncel oranlarla
-     * sabahkinden farklı bir kupon kurulabiliyorsa onu bugünün kuponu yapar.
+     * Radar taraması: piyasa verisini işler. Bugün henüz oynanmış kupon yoksa ve güncel oranlarla
+     * farklı bir kupon planı çıkıyorsa günün planı yenilenir. Oynanmış kupon varsa onlara
+     * dokunulmaz; kalan günlük üst sınır ve kupon hakkı içinde, bugünkü kuponlarda olmayan
+     * maçlardan ek kupon kurulur.
      */
     public static Intraday intraday(Ledger ledger, List<BookEvent> book, List<SharpEvent> sharp, Radar radar) {
+        return intraday(ledger, book, sharp, radar, null);
+    }
+
+    public static Intraday intraday(Ledger ledger, List<BookEvent> book, List<SharpEvent> sharp, Radar radar, Sources src) {
         Instant now = ledger.now();
-        Settings cfg = ledger.settings();
+        Settings cfg = decisionSettings(ledger, src);
         Intraday out = new Intraday();
         out.moves = radar.update(book, sharp, now, cfg, true);
         Closing.capture(ledger, sharp, now);
         String day = Fmt.dayKey(now);
         Ledger.Run run = ledger.runFor(day);
-        Ledger.Coupon today = run == null || run.couponId == null ? null : ledger.coupon(run.couponId);
-        if (run != null) {
-            for (Long id : run.ids()) {
-                Ledger.Coupon c = ledger.coupon(id);
-                if (c.played || c.result != null) return out; // oynanmış kuponları değiştirme
-            }
-        }
         String blocked = Guard.check(ledger, cfg, now);
         if (blocked != null) {
             out.blocked = blocked;
@@ -321,13 +389,63 @@ public final class Daily {
         }
         Decision d = Engine.decide(book, sharp, now, cfg);
         if (d.isPass()) return out;
-        if (today != null && sameSelections(today, d.proposal)) return out;
+        List<Long> todayIds = run == null ? new ArrayList<Long>() : run.ids();
+        boolean anyPlayed = false;
+        for (Long id : todayIds) {
+            Ledger.Coupon c = ledger.coupon(id);
+            if (c.played) anyPlayed = true;
+        }
         String[] note = new String[1];
-        List<Long> ids = createCoupons(ledger, d, day, cfg, false, "Gün içi taramada güncel oranlarla bulundu.",
-                Texts.statsLine(d.stats), note);
+        if (!anyPlayed) {
+            Portfolio.Result plan = Portfolio.optimize(d.candidates, cfg, cfg.maxCouponsPerDay, cfg.maxDailyExposure, null);
+            java.util.Set<String> fresh = new java.util.HashSet<>(), current = new java.util.HashSet<>();
+            if (plan.picks.isEmpty()) fresh.add(signature(d.proposal));
+            for (Portfolio.Pick p : plan.picks) fresh.add(signature(p.proposal));
+            for (Long id : todayIds) current.add(signature(ledger.coupon(id)));
+            if (fresh.equals(current)) return out;
+            List<Long> ids = createCoupons(ledger, d, day, cfg, false, "Gün içi taramada güncel oranlarla bulundu.",
+                    Texts.statsLine(d.stats), note);
+            out.newCouponId = ids.get(0);
+            out.newCouponIds = ids;
+            return out;
+        }
+        // Oynanmış kuponlar duruyor: kalan sınır içinde başka maçlardan ek kupon
+        double used = 0;
+        int active = 0;
+        java.util.Set<String> exclude = new java.util.HashSet<>();
+        for (Long id : todayIds) {
+            Ledger.Coupon c = ledger.coupon(id);
+            boolean pending = !c.played && c.result == null && Recheck.firstKickoff(c).isAfter(now);
+            if (!c.played && !pending) continue; // oynanmadan geçmiş kupon sınırı tüketmez
+            used += c.fraction > 0 ? c.fraction * c.scale : cfg.maxStakeFraction;
+            active++;
+            for (Ledger.Leg l : c.legs) exclude.add(l.bookRef);
+        }
+        double capLeft = cfg.maxDailyExposure - used;
+        int slots = cfg.maxCouponsPerDay - active;
+        if (capLeft < 0.005 || slots <= 0) return out;
+        List<Long> ids = addPortfolio(ledger, d.candidates, day, cfg, false, slots, capLeft, exclude, note);
+        if (ids.isEmpty()) return out;
+        List<Long> all = new ArrayList<>(todayIds);
+        all.addAll(ids);
+        ledger.recordRun(day, "kupon", (run.reason + " Gün içi taramada " + ids.size() + " ek kupon.").trim(), all, run.summary);
         out.newCouponId = ids.get(0);
         out.newCouponIds = ids;
         return out;
+    }
+
+    static String signature(Proposal p) {
+        List<String> k = new ArrayList<>();
+        for (Models.Candidate l : p.legs) k.add(l.book.ref + "|" + l.market + "|" + l.outcome);
+        java.util.Collections.sort(k);
+        return String.join(";", k);
+    }
+
+    static String signature(Ledger.Coupon c) {
+        List<String> k = new ArrayList<>();
+        for (Ledger.Leg l : c.legs) k.add(l.bookRef + "|" + l.market + "|" + l.outcome);
+        java.util.Collections.sort(k);
+        return String.join(";", k);
     }
 
     static boolean sameSelections(Ledger.Coupon c, Proposal p) {

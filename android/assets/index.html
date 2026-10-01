@@ -190,6 +190,7 @@ function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
   if (market === "AU25") return outcome === "ALT" ? "2,5 Alt" : "2,5 Üst";
   if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
+  if (market === "CS") return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
   return market + " " + outcome;
 }
 var RESULT = {kazandi: "Tuttu", kaybetti: "Yattı", iade: "İade"};
@@ -266,6 +267,8 @@ function banners() {
     + '<div class="btns"><button class="b" onclick="show(\'ayarlar\')">Anahtarı gir</button><button class="b ghost" onclick="act(\'demoStart\')">Önce demoyu gör</button></div></div>');
   if (S.stats.balance <= 0) out.push('<div class="banner">Kasan boş. Önerilen tutarlar kasana göre hesaplanır.'
     + '<div class="btns"><button class="b ghost" onclick="show(\'kasa\')">Kasaya para yatır</button></div></div>');
+  if (S.settings.edgeGuard && S.edge && S.edge["*"] && S.edge["*"].factor < 0.999) out.push('<div class="banner"><b>Kanıt koruması devrede.</b> Son '
+    + S.edge["*"].n + " seçimde avantajın çoğu kapanışa kadar erimiş; tutarlar ve kupon sayısı küçültüldü (×" + num(S.edge["*"].factor, 2) + ").</div>");
   if (S.creditPlan && S.creditPlan.narrowed && S.settings.oddsApiKey) out.push('<div class="banner"><b>Kredi planı bugün kapsamı daralttı</b> (günlük bütçe ~'
     + num(S.creditPlan.budget, 0) + " kredi): " + esc(S.creditPlan.notes.join("; ")) + '.<div class="btns"><button class="b ghost" onclick="show(\'ayarlar\')">Kredi planı</button></div></div>');
   if (S.credits && S.credits.remaining < 40) out.push('<div class="banner"><b>API kredisi az: ' + S.credits.remaining + ".</b> "
@@ -524,6 +527,7 @@ function viewHistory() {
     + item("Oynanan seçimler", v.playedN ? '<span class="' + cls(v.played) + '">' + pct(v.played, true) + "</span> (" + v.playedN + " maç)" : "henüz yok")
     + item("Tüm öneriler", v.allN ? '<span class="' + cls(v.all) + '">' + pct(v.all, true) + "</span> (" + v.allN + " maç)" : "henüz yok")
     + "</div>" + (v.playedN < 30 ? '<p class="small muted">Güvenilir yorum için en az 30 maç gerekir.</p>' : "") + "</div>";
+  html += edgeCard();
   html += analysisCard();
   html += '<div class="card"><h2>Kuponlar</h2><div class="list">' + (S.coupons.length ? S.coupons.map(function (c) {
     var pl = c.played && c.result ? (c.payout || 0) - c.stake : null;
@@ -550,6 +554,27 @@ function bars(rows) {
     return '<div class="bar"><span>' + esc(key) + '<br><span class="muted">' + r.won + "/" + r.n + (r.clv != null ? " · CLV " + pct(r.clv, true) : "")
       + '</span></span><div class="track">' + fill + '</div><span class="r ' + cls(r.pl) + '">' + tl(r.pl) + "<br>" + '<span class="muted">ROI ' + pct(r.roi, true) + "</span></span></div>";
   }).join("") + "</div>";
+}
+var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans"};
+function edgeCard() {
+  var e = S.edge, all = e && e["*"];
+  if (!all) return "";
+  var guard = S.settings.edgeGuard, rows = "";
+  rows += item("Ölçülen seçim", all.n ? all.n + " maç" : "henüz yok");
+  if (all.n) {
+    rows += item("Avantaj: öngörülen → kapanışta", pct(all.predicted, true) + ' → <span class="' + cls(all.realized) + '">' + pct(all.realized, true) + "</span>");
+    rows += item("Korunan pay (ön bilgiyle)", pct(all.ratio, false));
+  }
+  Object.keys(e).forEach(function (k) {
+    if (k === "*" || !e[k].n) return;
+    rows += item(esc(MARKET_NAME[k] || k), e[k].n + " maç · " + (e[k].factor >= 0.999 ? "tam" : "×" + num(e[k].factor, 2)));
+  });
+  var state = !guard ? "Kapalı (Ayarlar'dan açılabilir)." : all.factor >= 0.999
+    ? "Devrede değil: avantajın en az yarısı kapanışa kadar korunuyor (ya da veri henüz az)."
+    : "Devrede: avantajlar ×" + num(all.factor, 2) + " ile küçültülüyor; daha az ve daha küçük kupon.";
+  return '<div class="card"><h2>Kanıt koruması</h2><div class="list">' + rows + '</div><p class="small muted"><b>' + state + "</b> "
+    + "Her seçimin oynandığı andaki avantajı, maç başlamadan hemen önceki Pinnacle oranıyla karşılaştırılır. Gerçekleşen avantaj öngörülenin yarısının altına düşerse "
+    + "olasılıklar iddaa fiyatına doğru küçültülür. Simülasyonda gerçek avantaj varken kârı azaltmadı; avantaj sahte olduğunda aylık −%9'luk kaybı ~%0'a indirdi.</p></div>";
 }
 function analysisCard() {
   var a = S.analysis;
@@ -599,13 +624,13 @@ var FIELDS = [
   ["maxLegOdds", "En yüksek maç oranı", false], ["minCouponOdds", "En düşük kupon oranı", false],
   ["maxLegs", "Kupondaki en fazla maç", false], ["kellyMultiplier", "Kelly çarpanı", false],
   ["maxStakeFraction", "Kupon başına en fazla kasa (%)", true], ["minCouponAmount", "Asgari kupon tutarı (TL)", false],
-  ["maxCouponsPerDay", "Günde en fazla kupon (1-3)", false], ["maxDailyExposure", "Günlük toplam en fazla kasa (%)", true],
+  ["maxCouponsPerDay", "Günde en fazla kupon (1-5)", false], ["maxDailyExposure", "Günlük toplam en fazla kasa (%)", true],
   ["weeklyLossLimit", "Haftalık kayıp limiti (%)", true], ["chaseCooldownHours", "Kovalama beklemesi (saat)", false]
 ];
 function viewSettings() {
   var st = S.settings, html = "";
   if (S.demo) html += banners();
-  html += '<div class="card"><h2>Veri kaynağı</h2><p class="small muted">Adil olasılıklar Pinnacle oranlarından hesaplanır (The Odds API, ücretsiz plan ayda 500 kredi; bu ayarlarla maç öncesi kontrol ve kapanış dahil günde ~10-15 kredi, biterse lig sayısını azalt). iddaa oranları Nesine bülteninden okunur; iddaa oranları tüm bayilerde (Bilyoner, Nesine, Misli) aynıdır. Oynarken Bilyoner\'deki oranla karşılaştır.</p>'
+  html += '<div class="card"><h2>Veri kaynağı</h2><p class="small muted">Adil olasılıklar Pinnacle (ve aynı yanıttaki likit bahis borsası) oranlarından hesaplanır. Bu oranları The Odds API verir; her sorgu anahtarının aylık kotasından 1 kredi düşer (ücretsiz anahtar ayda 500, ücretli planlarda çok daha fazla). Kredi planı kalan krediye göre kapsamı kendisi ayarlar; büyük kotalı anahtarda daraltma olmaz. Maç listesi sorgusu kredi harcamaz, o gün maçı olmayan lig için oran çekilmez. iddaa oranları Nesine bülteninden ücretsiz okunur ve tüm bayilerde (Bilyoner, Nesine, Misli) aynıdır. Oynarken Bilyoner\'deki oranla karşılaştır.</p>'
     + '<label>The Odds API anahtarı</label><input id="sKey" type="password" autocomplete="off" value="' + esc(st.oddsApiKey) + '">'
     + '<div class="btns"><button class="b ghost" onclick="var k=document.getElementById(\'sKey\');k.type=k.type===\'password\'?\'text\':\'password\'">Göster</button>'
     + '<button class="b ghost" onclick="act(\'openUrl\',{url:\'https://the-odds-api.com/#get-access\'},true)">Anahtar al</button></div>'
@@ -635,6 +660,8 @@ function viewSettings() {
   html += '<div class="card"><h2>Kasa takibi</h2><label class="check"><input type="checkbox" id="sAuto"' + (st.autoTrack ? " checked" : "") + ">Otomatik</label>"
     + '<p class="small muted">Açıkken: ilk maçtan 90 dk önce kupon güncel iddaa ve Pinnacle oranlarıyla kontrol edilir; hâlâ avantajlıysa o anki oranlar ve güncel kasaya göre '
     + "tutarla oynanmış sayılır, bildirim gelir, sonuçla kasa kendiliğinden güncellenir. Oynamadıysan \"Oynamadım, geri al\". Kapalıyken yalnızca \"Oynadım\"a bastığın kuponlar kasadan düşer.</p></div>";
+  html += '<div class="card"><h2>Kanıt koruması</h2><label class="check"><input type="checkbox" id="sEdge"' + (st.edgeGuard ? " checked" : "") + ">Açık</label>"
+    + '<p class="small muted">Kapanış oranları avantajın yarısından fazlasının eridiğini gösterirse tutarlar kendiliğinden küçülür. Ayrıntı: Geçmiş → Kanıt koruması.</p></div>';
   html += creditCard(st);
   html += '<div class="card"><h2>Strateji ve kasa koruması</h2><div class="two">' + FIELDS.map(function (f) {
     var v = st[f[0]], shown = f[2] ? +(v * 100).toFixed(2) : v;
@@ -649,16 +676,16 @@ function viewSettings() {
     + '<div class="btns">' + (S.demo ? '<button class="b ghost" onclick="act(\'demoStop\')">Demodan çık</button>' : '<button class="b ghost" onclick="act(\'demoStart\')">Demoyu göster (60 gün, sentetik)</button>') + "</div></div>";
   html += '<div class="card"><h2>Bu uygulama ne yapar, ne yapmaz</h2><p class="small">Garanti kazanç yoktur. iddaa her orana marj koyar; MBS bu marjı maç maç çarpar. '
     + "Uygulama yalnızca iddaa oranının, keskin piyasanın marjı arındırılmış adil oranından yüksek olduğu seçimleri önerir; böyle bir kupon yoksa pas der. "
-    + "Tutar çeyrek Kelly ile, kasanın en fazla %" + num(st.maxStakeFraction * 100, 0) + "'ü olacak şekilde hesaplanır.</p>"
+    + "Günün kuponları birlikte tutarlandırılır (ortak Kelly); hiçbir kupon kasanın %" + num(st.maxStakeFraction * 100, 0) + "'ünü, günün toplamı %" + num(st.maxDailyExposure * 100, 0) + "'unu aşmaz.</p>"
     + '<p class="small muted">Nesine bülteni resmi bir API değildir; biçimi değişirse "Kaynakları test et" sıfır maç gösterir. Kumar kontrolünü zorlaştırmaya başladıysa YEDAM 115 ücretsiz destek verir. Sürüm ' + esc(S.version || "") + "</p></div>";
   return html;
 }
 var PROFILE_TEXT = {
-  temkinli: "Günde en fazla 3 bağımsız kupon; her biri kasanın en fazla %3'ü (çeyrek Kelly), günlük toplam en fazla %9. "
-    + "Demo simülasyonunda (200 ay) tipik ay +%2,3 ile +%2,8; en kötü ay −%18 ile −%19.",
-  yuksek: "Günde en fazla 3 bağımsız kupon; her biri kasanın en fazla %10'u (yarım Kelly), günlük toplam en fazla %20. "
-    + "Demo simülasyonunda en yüksek tipik aylık getiri: +%4,1 ile +%5,0; en kötü ay −%32 ile −%36. "
-    + "Daha büyük bahis getiriyi artırmaz, düşürür (tam Kelly'de tipik ay geriledi, 2 katında zarara döndü)."
+  temkinli: "Günde en fazla 5 kupon, birlikte tutarlandırılır (ortak çeyrek Kelly); kupon başına en fazla %3, günlük toplam en fazla %9. "
+    + "Demo simülasyonunda (200 ay, model hatası %2–%6) tipik ay +%1,7 ile +%2,4 (1.4 yöntemiyle +%1,1 ile +%1,4); en kötü ay −%15 ile −%25.",
+  yuksek: "Günde en fazla 5 kupon, ortak yarım Kelly; kupon başına en fazla %10, günlük toplam en fazla %20. "
+    + "Demo simülasyonunda tipik ay +%2,9 ile +%4,2 (1.4 yöntemiyle +%1,8 ile +%2,3); en kötü ay −%29 ile −%45. "
+    + "Daha büyük bahis (¾ ya da tam Kelly) en kötü ayı −%60/−%70'e indirdi; model hatası %6 olunca tam Kelly yarım Kelly'nin gerisinde kaldı."
 };
 function profilesCard(st) {
   return '<div class="card"><h2>Strateji profili</h2>' + S.profiles.map(function (p) {
@@ -679,14 +706,15 @@ function creditCard(st) {
     + '<div class="two"><div><label>Kredi yenilenme günü (ayın)</label><input id="sResetDay" inputmode="numeric" value="' + st.creditResetDay + '"></div></div>';
   if (p) {
     html += '<div class="list" style="margin-top:8px">'
-      + item("Kalan kredi", p.remaining != null ? String(p.remaining) : "henüz bilinmiyor")
+      + item("Kalan kredi", p.remaining != null ? String(p.remaining) + " / ayda " + p.quota : "henüz bilinmiyor")
       + item("Yenilenmeye", p.daysLeft + " gün")
       + item("Günlük bütçe / tahmini gider", "~" + num(p.budget, 1) + " / ~" + num(p.cost, 0) + " kredi")
       + item("Bugün taranan ligler", esc(p.leagues.map(leagueName).join(", ")))
       + item("Alt/Üst · KG · radar", (p.totals ? "açık" : "kapalı") + " · " + (p.kgEvents ? p.kgEvents + " maç" : "kapalı") + " · " + (p.radarScans ? "günde " + p.radarScans : "kapalı"))
+      + item("Günlük kupon", "en fazla " + p.coupons)
       + "</div>" + (p.notes.length ? '<p class="small muted">' + esc(p.notes.join("; ")) + ".</p>" : "");
   }
-  return html + '<p class="small muted">Plan yalnızca daraltır: kredi yetmezse önce Karşılıklı Gol, sonra radar, sonra Alt/Üst, en son en az değerli fırsat çıkaran lig kısılır. '
+  return html + '<p class="small muted">Kredi, The Odds API anahtarının aylık sorgu kotasıdır (uygulamayı tek kişi kullansa da). Plan yalnızca daraltır: kredi yetmezse önce Karşılıklı Gol, sonra radar, günlük kupon 5→3, Alt/Üst, en son en az değerli fırsat çıkaran lig kısılır. Kota büyükse hiçbir şey kısılmaz. '
     + "Her gün gerçek kalan krediye göre yeniden hesaplanır.</p></div>";
 }
 function readNum(id, isPct) {
@@ -708,8 +736,9 @@ function collectSettings() {
   var tot = document.getElementById("sTotals");
   st.totals = !!(tot && tot.checked);
   st.kgEvents = parseInt(val("sKg") || "0", 10);
-  var au = document.getElementById("sAuto"), ca = document.getElementById("sCreditAuto");
+  var au = document.getElementById("sAuto"), ca = document.getElementById("sCreditAuto"), eg = document.getElementById("sEdge");
   st.autoTrack = !!(au && au.checked);
+  st.edgeGuard = !!(eg && eg.checked);
   st.creditAuto = !!(ca && ca.checked);
   st.creditResetDay = parseInt(val("sResetDay") || "1", 10);
   FIELDS.forEach(function (f) { st[f[0]] = readNum("f_" + f[0], f[2]); });

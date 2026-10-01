@@ -76,6 +76,7 @@ public final class State {
         clvMap.put("all", clv[2]);
         clvMap.put("allN", (long) clv[3]);
         m.put("clv", clvMap);
+        m.put("edge", EdgeCalibration.fromLedger(ledger).toMap());
         m.put("outlook", Outlook.month(ledger, ledger.now()));
         List<Object> profiles = new ArrayList<>();
         for (Object[] p : Settings.PROFILES) {

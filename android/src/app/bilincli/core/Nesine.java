@@ -118,6 +118,12 @@ public final class Nesine {
                         odds.put("MS", outcomes);
                         if (mm != null && mm > 0) marketMbs = mm.intValue();
                     }
+                } else if (raw.size() == 3 && sov == null && raw.containsKey("1") && raw.containsKey("2") && raw.containsKey("3")) {
+                    // Üç seçenekli aday pazar (Çifte Şans olabilir; İlk Yarı Sonucu da üç seçeneklidir).
+                    // Hangisi olduğunu Calibration, Pinnacle'dan türetilen olasılıklarla bulur.
+                    String key = Calibration.RAW_CS + mtid;
+                    odds.put(key, raw);
+                    if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
                 } else if (raw.size() == 2 && raw.containsKey("1") && raw.containsKey("2")) {
                     // İki seçenekli aday pazarlar; hangisinin 2,5 Alt/Üst ya da Karşılıklı Gol olduğunu
                     // Calibration, Pinnacle oranlarıyla karşılaştırarak bulur.

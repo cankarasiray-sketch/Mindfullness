@@ -44,8 +44,8 @@ public final class Settings {
     public double kellyMultiplier = 0.25;
     public double maxStakeFraction = 0.03;
     public double minCouponAmount = 50;
-    /** Günde en fazla kaç bağımsız (maç paylaşmayan) kupon. */
-    public int maxCouponsPerDay = 3;
+    /** Günde en fazla kaç kupon (ortak Kelly ile birlikte tutarlandırılır). */
+    public int maxCouponsPerDay = 5;
     /** Bir günde tüm kuponlara toplam en fazla kasa oranı. */
     public double maxDailyExposure = 0.09;
 
@@ -68,10 +68,21 @@ public final class Settings {
      * güncel oranlarla oynanmış sayılır ve kasa sonuçla birlikte kendiliğinden güncellenir.
      */
     public boolean autoTrack = true;
+    /**
+     * Kanıt koruması: kapanış oranı ölçümü, gerçekleşen avantajın öngörülenin yarısından az
+     * olduğunu gösterirse olasılıklar iddaa fiyatına doğru küçültülür (EdgeCalibration).
+     */
+    public boolean edgeGuard = true;
     /** Kredi planlayıcı: kalan krediye göre lig/pazar/radar kapsamını otomatik daraltır. */
     public boolean creditAuto = true;
     /** The Odds API kredisinin yenilendiği ayın günü (1-28). */
     public int creditResetDay = 1;
+
+    /**
+     * Kapanış oranı ölçümünden pazar bazında avantaj oranları (EdgeCalibration). Kalıcı değildir;
+     * her karar öncesi defterden hesaplanır. null = kalibrasyon yok.
+     */
+    public transient java.util.Map<String, Double> edgeRatios;
 
     /** Gün içi radar taraması sayısı: 0 (kapalı), 1 (17:00), 2 (13:00, 18:00), 4 (10, 13, 16, 19). */
     public int radarScans = 0;
@@ -101,8 +112,8 @@ public final class Settings {
      */
     public static final Object[][] PROFILES = {
         // ad, başlık, Kelly çarpanı, kupon başına üst sınır, günlük kupon, günlük toplam üst sınır
-        {"temkinli", "Temkinli", 0.25, 0.03, 3, 0.09},
-        {"yuksek", "En yüksek getiri", 0.50, 0.10, 3, 0.20},
+        {"temkinli", "Temkinli", 0.25, 0.03, 5, 0.09},
+        {"yuksek", "En yüksek getiri", 0.50, 0.10, 5, 0.20},
     };
 
     public void applyProfile(String name) {
@@ -161,7 +172,9 @@ public final class Settings {
         m.put("chaseCooldownHours", chaseCooldownHours);
         m.put("runHour", (long) runHour);
         m.put("runMinute", (long) runMinute);
+        m.put("edgeGuard", edgeGuard);
         m.put("profile", detectProfile());
+        m.put("v", 2L);
         m.put("radarScans", (long) radarScans);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
@@ -205,6 +218,12 @@ public final class Settings {
         s.runHour = (int) Json.lng(m, "runHour", s.runHour);
         s.runMinute = (int) Json.lng(m, "runMinute", s.runMinute);
         s.radarScans = (int) Json.lng(m, "radarScans", s.radarScans);
+        s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
+        if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {
+            // 1.4 → 1.5: profiller günde 5 kupona çıktı (ortak Kelly); profil kullanıcısını taşı
+            s.maxCouponsPerDay = 5;
+            if ("ozel".equals(s.detectProfile())) s.maxCouponsPerDay = 3;
+        }
         s.profile = s.detectProfile();
         return s;
     }
@@ -223,7 +242,7 @@ public final class Settings {
         if (chaseCooldownHours < 0 || chaseCooldownHours > 24 * 14) return "Kovalama beklemesi 0-336 saat olmalı";
         if (runHour < 0 || runHour > 23 || runMinute < 0 || runMinute > 59) return "Saat geçersiz";
         if (leagues.isEmpty()) return "En az bir lig seçilmeli";
-        if (maxCouponsPerDay < 1 || maxCouponsPerDay > 3) return "Günlük kupon sayısı 1 ile 3 arasında olmalı";
+        if (maxCouponsPerDay < 1 || maxCouponsPerDay > 5) return "Günlük kupon sayısı 1 ile 5 arasında olmalı";
         if (!(maxDailyExposure >= maxStakeFraction && maxDailyExposure <= 0.30)) {
             return "Günlük toplam üst sınır, kupon başına sınırdan küçük olamaz ve en fazla %30 olabilir";
         }

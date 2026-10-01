@@ -38,7 +38,7 @@ public final class Demo {
     }
 
     private final long seed;
-    private final double margin = 0.08, priceNoise = 0.07, sharpNoise = 0.02;
+    private final double margin = 0.08, priceNoise = 0.07, sharpNoise;
     private final int perDay = 16;
     private final Map<String, List<Match>> days = new HashMap<>();
     /** sharpRef -> gerçek olasılıklar (kapanış oranı yerine; demo'da kapanış = gerçek). */
@@ -46,7 +46,21 @@ public final class Demo {
     public Instant now = Instant.now();
 
     public Demo(long seed) {
+        this(seed, 0.02);
+    }
+
+    /** sharpNoise: keskin piyasanın gerçek olasılıktan sapması (model hatası; simülasyon için). */
+    Demo(long seed, double sharpNoise) {
         this.seed = seed;
+        this.sharpNoise = sharpNoise;
+    }
+
+    /** Maçın gerçekleşen skoru (simülasyon için): {ev, deplasman}; bilinmiyorsa null. */
+    int[] score(String bookRef) {
+        for (List<Match> ms : days.values()) {
+            for (Match m : ms) if (m.book.ref.equals(bookRef)) return new int[] {m.home, m.away};
+        }
+        return null;
     }
 
     private List<Match> day(LocalDate date) {

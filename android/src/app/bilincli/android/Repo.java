@@ -144,7 +144,7 @@ final class Repo {
             Daily.LiveSources src = live();
             try {
                 Daily.Fetch f = Daily.fetch(src, Instant.now());
-                return Daily.intraday(ledger, f.book, f.sharp, radar);
+                return Daily.intraday(ledger, f.book, f.sharp, radar, src);
             } finally {
                 afterScan(src);
             }
@@ -244,34 +244,50 @@ final class Repo {
 
     /** Kuponu güncel iddaa + Pinnacle oranlarıyla yeniden değerlendirir ve sonucu kaydeder. */
     Map<String, Object> recheck(long couponId) throws Http.ProviderException {
+        List<Long> one = new ArrayList<>();
+        one.add(couponId);
+        return recheckAll(one).get(couponId);
+    }
+
+    /**
+     * Kuponları tek veri çekimiyle (liglerin birleşimi) kontrol eder: aynı anda vadesi gelen
+     * kuponlar için kredi bir kez harcanır. Tutarlar aynı kasadan hesaplanır (eşzamanlı Kelly).
+     */
+    Map<Long, Map<String, Object>> recheckAll(List<Long> ids) throws Http.ProviderException {
         synchronized (LOCK) {
-            Ledger.Coupon c = ledger.coupon(couponId);
             Daily.LiveSources src = live();
-            Set<String> leagues = new LinkedHashSet<>();
-            for (Ledger.Leg l : c.legs) if (l.sportKey != null) leagues.add(l.sportKey);
+            Set<String> leagues = new LinkedHashSet<>(), kg = new LinkedHashSet<>();
+            for (Long id : ids) {
+                for (Ledger.Leg l : ledger.coupon(id).legs) {
+                    if (l.sportKey != null) leagues.add(l.sportKey);
+                    if ("KG".equals(l.market)) kg.add(l.sharpRef);
+                }
+            }
             List<Models.BookEvent> book = src.book();
             List<Models.SharpEvent> sharp = src.sharp(leagues);
-            // Karşılıklı Gol bacakları: Pinnacle oranı maç bazında çekilir
-            for (Ledger.Leg l : c.legs) {
-                if (!"KG".equals(l.market)) continue;
-                for (Models.SharpEvent ev : sharp) {
-                    if (ev.ref.equals(l.sharpRef)) {
-                        try {
-                            src.enrich(ev, "btts");
-                        } catch (Http.ProviderException ignored) {
-                            // adil oran alınamazsa bacak "adil oran yok" olarak raporlanır
-                        }
-                    }
+            // Karşılıklı Gol bacakları: Pinnacle oranı maç bazında çekilir (maç başına bir kez)
+            for (Models.SharpEvent ev : sharp) {
+                if (!kg.contains(ev.ref)) continue;
+                try {
+                    src.enrich(ev, "btts");
+                } catch (Http.ProviderException ignored) {
+                    // adil oran alınamazsa bacak "adil oran yok" olarak raporlanır
                 }
             }
             Calibration.apply(book, sharp, memory);
             after(src);
             Instant now = Instant.now();
-            Map<String, Object> r = Recheck.run(c, book, sharp, now, ledger.settings(), ledger.balance());
-            ledger.saveCheck(couponId, r);
+            Settings cfg = Daily.decisionSettings(ledger);
+            long balance = ledger.balance();
+            Map<Long, Map<String, Object>> out = new LinkedHashMap<>();
+            for (Long id : ids) {
+                Map<String, Object> r = Recheck.run(ledger.coupon(id), book, sharp, now, cfg, balance);
+                ledger.saveCheck(id, r);
+                out.put(id, r);
+            }
             radar.update(book, sharp, now, ledger.settings(), false); // düşen oran radarına ek ölçüm
             Closing.capture(ledger, sharp, now);
-            return r;
+            return out;
         }
     }
 
@@ -294,32 +310,34 @@ final class Repo {
                     // kapanış alınamadı; CLV o bacak için boş kalır
                 }
             }
-            // Aynı anda vadesi gelen tüm kuponlar (günde 3 kupon olabilir)
-            Ledger.Coupon c;
-            Set<Long> seen = new LinkedHashSet<>();
-            while ((c = Recheck.dueForPrecheck(ledger, now)) != null && seen.add(c.id)) {
+            // Aynı anda vadesi gelen tüm kuponlar tek çekimle kontrol edilir
+            List<Long> dueIds = new ArrayList<>();
+            for (Ledger.Coupon c : Recheck.allDueForPrecheck(ledger, now)) dueIds.add(c.id);
+            if (!dueIds.isEmpty()) {
                 try {
-                    Map<String, Object> r = recheck(c.id);
-                    boolean ok = Boolean.TRUE.equals(r.get("playable"));
-                    long stake = Daily.applyCheck(ledger, c.id, r, ledger.settings());
-                    if (stake > 0) {
-                        Ledger.Coupon played = ledger.coupon(c.id);
-                        StringBuilder odds = new StringBuilder();
-                        for (Ledger.Leg l : played.legs) {
-                            odds.append(l.home).append(" - ").append(l.away).append(": ")
-                                    .append(Models.outcomeLabel(l.market, l.outcome)).append(" @ ").append(Fmt.odds(l.odds)).append('\n');
+                    Map<Long, Map<String, Object>> checks = recheckAll(dueIds);
+                    for (Long id : dueIds) {
+                        Map<String, Object> r = checks.get(id);
+                        boolean ok = Boolean.TRUE.equals(r.get("playable"));
+                        long stake = Daily.applyCheck(ledger, id, r, ledger.settings());
+                        if (stake > 0) {
+                            Ledger.Coupon played = ledger.coupon(id);
+                            StringBuilder odds = new StringBuilder();
+                            for (Ledger.Leg l : played.legs) {
+                                odds.append(l.home).append(" - ").append(l.away).append(": ")
+                                        .append(Models.outcomeLabel(l.market, l.outcome)).append(" @ ").append(Fmt.odds(l.odds)).append('\n');
+                            }
+                            out.add(new String[] {"Kupon #" + id + " oyna: " + Fmt.tl(stake) + " · oran " + Fmt.odds(played.totalOdds),
+                                    "Güncel oranlarla hâlâ avantajlı; kasadan düşüldü (otomatik takip). Bilyoner'de bu oranlarla oyna:\n"
+                                            + odds + "Oynamadıysan uygulamada 'Oynamadım, geri al'a bas."});
+                        } else {
+                            out.add(new String[] {ok ? "Kupon #" + id + " hâlâ oynanabilir" : "Kupon #" + id + ": oynama",
+                                    String.valueOf(r.get("verdict"))});
                         }
-                        out.add(new String[] {"Kupon #" + c.id + " oyna: " + Fmt.tl(stake) + " · oran " + Fmt.odds(played.totalOdds),
-                                "Güncel oranlarla hâlâ avantajlı; kasadan düşüldü (otomatik takip). Bilyoner'de bu oranlarla oyna:\n"
-                                        + odds + "Oynamadıysan uygulamada 'Oynamadım, geri al'a bas."});
-                    } else {
-                        out.add(new String[] {ok ? "Kupon #" + c.id + " hâlâ oynanabilir" : "Kupon #" + c.id + ": oynama",
-                                String.valueOf(r.get("verdict"))});
                     }
                 } catch (Http.ProviderException e) {
-                    out.add(new String[] {"Kupon #" + c.id + " kontrol edilemedi",
+                    out.add(new String[] {dueIds.size() == 1 ? "Kupon #" + dueIds.get(0) + " kontrol edilemedi" : dueIds.size() + " kupon kontrol edilemedi",
                             "Oynamadan önce uygulamada elle kontrol et. (" + e.getMessage() + ")"});
-                    break;
                 }
             }
         }

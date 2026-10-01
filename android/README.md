@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.4.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -45,6 +45,47 @@ bildirim olarak gelir.
   *En yüksek getiri* (yarım Kelly, en fazla %10). Demo simülasyonunda (200 ay) en yüksek tipik
   aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
   katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
+
+## Kâr için: ortak Kelly, kanıt koruması, Çifte Şans, borsa uzlaşısı (1.5)
+
+Her değişiklik uygulamanın kendi kodu üzerinde, sentetik iddaa piyasasında 200 aylık
+simülasyonla ölçüldü (model hatası %2 ve %6). Bu dünyada avantaj tasarım gereği vardır; rakamlar
+yöntemleri karşılaştırmak içindir, gerçek getiri vaadi değildir.
+
+- **Ortak Kelly:** Günün kuponları ayrı ayrı değil birlikte tutarlandırılır. Değerli seçimlerden
+  (maç başına bir, en çok 10) MBS'ye uyan tüm tekli ve kombine kuponlar aday olur; kuponlar maç
+  paylaşabilir. Kasanın beklenen log büyümesini en çok artıran tutarlar 2^n sonuç durumu
+  üzerinden tam hesaplanır, en büyük 5 kupon tutulur. Tipik ay: Temkinli +%1,1/+%1,4 →
+  +%1,7/+%2,4; En yüksek getiri +%1,8/+%2,3 → +%2,9/+%4,2. 5'ten fazla kupon fark yaratmadı.
+- **Kanıt koruması:** Oynama anındaki avantaj, maç öncesi Pinnacle kapanışıyla karşılaştırılır.
+  Gerçekleşen avantaj öngörülenin yarısının altına düşerse olasılıklar iddaa fiyatına doğru
+  küçültülür (pazar bazında; 30 maçlık ön bilgiyle). Gerçek avantaj varken kârı değiştirmedi;
+  "avantajların" çoğu gürültü olduğunda (model hatası %12) aylık −%9'luk kaybı ~%0'a, en kötü ayı
+  −%78'den −%14'e indirdi. Tüm avantajları her zaman küçültmek ise simülasyonda kârı azalttı; bu
+  yüzden yalnızca kanıt zayıfsa devreye girer.
+- **Çifte Şans:** Adil olasılık Maç Sonucu'ndan türetilir (ek kredi yok). Nesine'deki pazar
+  kodu ve seçenek sırası Pinnacle'la karşılaştırılarak bulunur; belirsizse kullanılmaz.
+- **Pinnacle + bahis borsası:** The Odds API yanıtında likit bir borsa (Betfair, Matchbook,
+  Smarkets) varsa adil olasılık %60 Pinnacle + %40 borsa ortalamasıdır (ek kredi yok). İkisi
+  5 puandan fazla ayrışıyorsa (biri bayat) o pazar o maçta kullanılmaz.
+- **Gün içi ek kupon:** Sabahki kuponlar oynandıysa dokunulmaz; radar, kalan günlük sınır ve
+  kupon hakkı içinde başka maçlardan ek kupon kurar.
+- **Kredi tasarrufu:** Maç listesi sorgusu kredi harcamaz; karar penceresinde maçı olmayan lig için
+  oran çekilmez. Aynı anda vadesi gelen kuponlar tek çekimle kontrol edilir. Kredi planı gerekirse
+  günlük kuponu 5'ten 3'e indirir (3 kupon, 5'in getirisinin çoğunu verdi).
+- **Profiller:** Kelly çarpanları değişmedi (çeyrek / yarım). ¾ ve tam Kelly tipik ayı biraz
+  artırdı ama en kötü ayı −%60/−%70'e indirdi; model hatası %6 olunca tam Kelly yarım Kelly'nin
+  gerisinde kaldı.
+
+### Kredi nedir, limit gerekli mi?
+
+Pinnacle oranlarını The Odds API verir. Her oran sorgusu, API anahtarının **aylık kotasından**
+kredi düşer; bu, uygulamayı kaç kişinin kullandığından bağımsız, anahtar başınadır. Ücretsiz
+anahtar ayda 500 kredidir; ücretli planlar çok daha fazlasını verir (güncel fiyat:
+the-odds-api.com). Uygulama kotayı yanıt başlıklarından okur: kota büyükse kredi planı hiçbir şeyi
+kısmaz. Ücretsiz anahtarda daraltma, kredinin ay ortasında bitip uygulamanın körleşmemesi
+içindir. İstersen Ayarlar → Kredi planı'ndan kapatabilirsin; kredi biterse oranlar alınamaz ve yenilenene kadar
+kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
 
 ## Ana paraya göre oyun planı, otomatik kasa, kredi planı (1.4)
 
@@ -128,7 +169,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.4.apk
+./build.sh          # testler + build/BilincliKupon-1.5.apk
 ./build.sh test     # yalnızca testler
 ```
 
@@ -151,6 +192,8 @@ kaldırılmadan kurulamaz.
 - **Eşdeğerlik (ParityTest):** Python sürümü 150 motor senaryosu, 479 takım adı eşleştirmesi ve
   oran hesapları için referans üretir (`test/fixtures/make_fixtures.py`). Java çekirdeği aynı
   girdide aynı kuponu, aynı olasılığı ve aynı Kelly payını 1e-9 hassasiyetle vermek zorunda.
+- **Kâr (ProfitTest):** ortak Kelly'nin optimallik (KKT) koşulları, sınırlar ve MBS, kanıt
+  koruması, Çifte Şans eşlemesi ve sonuçlandırma, Pinnacle + borsa uzlaşısı, boş lig atlama.
 - **Kasa ve kredi (BankrollTest):** güncel kasadan tutar, otomatik oynama ve geri alma,
   sonuçla kasanın güncellenmesi, kredi planının daraltma sırası ve yenilenme günü.
 - **Çekirdek (CoreTest):** kasa, iade kuralı, haftalık limit, kovalama beklemesi, sonuçlandırma,

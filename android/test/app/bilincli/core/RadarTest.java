@@ -98,7 +98,7 @@ public class RadarTest {
     }
 
     @Test
-    public void intradayCreatesCouponOnlyWhenNothingPlayed() {
+    public void intradayRebuildsUnplayedPlanAndAddsBesidePlayed() {
         // sabah: avantaj yok -> pas
         ledger.recordRun(Fmt.dayKey(NOW), "pas", "avantaj yok", (Long) null, "");
         List<BookEvent> book = Collections.singletonList(book(1, 2.30));
@@ -109,10 +109,19 @@ public class RadarTest {
         assertTrue(ledger.runFor(Fmt.dayKey(NOW)).reason.contains("Gün içi"));
         // aynı seçimler: yeni kupon yok
         assertNull(Daily.intraday(ledger, book, sharp, radar).newCouponId);
-        // oynanmış kupon değiştirilmez
+        // oynanmış kupon değiştirilmez; kalan günlük sınır içinde başka maçtan ek kupon kurulur
         ledger.markPlayed(r.newCouponId, 10000, null);
-        assertNull(Daily.intraday(ledger, Collections.singletonList(book(2, 2.40)),
-                Collections.singletonList(sharp(2, 0.50)), radar).newCouponId);
+        List<BookEvent> book2 = Arrays.asList(book(1, 2.30), book(2, 2.40));
+        List<SharpEvent> sharp2 = Arrays.asList(sharp(1, 0.50), sharp(2, 0.50));
+        Daily.Intraday more = Daily.intraday(ledger, book2, sharp2, radar);
+        assertNotNull(more.newCouponId);
+        Ledger.Run run = ledger.runFor(Fmt.dayKey(NOW));
+        assertEquals(Arrays.asList(r.newCouponId, more.newCouponId), run.ids());
+        assertTrue(run.reason, run.reason.contains("1 ek kupon"));
+        assertTrue(ledger.coupon(r.newCouponId).played);
+        for (Ledger.Leg l : ledger.coupon(more.newCouponId).legs) assertEquals("b2", l.bookRef);
+        // aynı veriyle tekrar: yeni kupon yok (iki maç da bugünün kuponlarında)
+        assertNull(Daily.intraday(ledger, book2, sharp2, radar).newCouponId);
     }
 
     @Test

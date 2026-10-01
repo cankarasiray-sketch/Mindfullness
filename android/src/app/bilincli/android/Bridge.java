@@ -366,7 +366,7 @@ public final class Bridge {
         b.append("  Karşılıklı Gol: ").append(cal.get("KG")).append('\n');
         b.append("  Ayıklanan şüpheli oran: ").append(cal.get("suspicious")).append('\n');
         for (Object n : Json.arr(cal.get("notes"))) b.append("  · ").append(n).append('\n');
-        Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), repo.real().settings());
+        Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), Daily.decisionSettings(repo.real()));
         b.append('\n').append(Texts.statsLine(d.stats)).append('\n');
         String inv = app.bilincli.core.Nesine.lastInventory;
         if (inv != null && !inv.isEmpty()) {

@@ -270,7 +270,7 @@ public class MarketsTest {
     public void profilesAndCreditEstimate() {
         Settings s = new Settings();
         assertEquals("temkinli", s.detectProfile());
-        assertEquals(3, s.maxCouponsPerDay);
+        assertEquals(5, s.maxCouponsPerDay);
         int base = s.estimatedMonthlyCredits();
         s.totals = true;
         assertEquals(base + 30 * s.leagues.size(), s.estimatedMonthlyCredits());
@@ -279,7 +279,17 @@ public class MarketsTest {
         s.maxDailyExposure = 0.02; // kupon başına sınırdan küçük olamaz
         assertTrue(s.validate() != null);
         Settings back = Settings.fromMap(Json.parseObject(Json.write(new Settings().toMap())));
-        assertEquals(3, back.maxCouponsPerDay);
+        assertEquals(5, back.maxCouponsPerDay);
         assertFalse(back.totals);
+        assertTrue(back.edgeGuard);
+        // 1.4'ten taşıma: profil kullanıcısı 5 kupona geçer, özel ayar korunur
+        Map<String, Object> old = new Settings().toMap();
+        old.remove("v");
+        old.put("maxCouponsPerDay", 3L);
+        Settings migrated = Settings.fromMap(old);
+        assertEquals(5, migrated.maxCouponsPerDay);
+        assertEquals("temkinli", migrated.profile);
+        old.put("kellyMultiplier", 0.3);
+        assertEquals(3, Settings.fromMap(old).maxCouponsPerDay);
     }
 }

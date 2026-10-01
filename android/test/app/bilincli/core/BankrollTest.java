@@ -75,15 +75,19 @@ public class BankrollTest {
 
     @Test
     public void creditPlanKeepsEverythingWhenBudgetAllows() {
-        Settings s = new Settings(); // 6 lig, yalnız MS: günde 6 + 13 kredi
+        Settings s = new Settings(); // 6 lig, yalnız MS, 5 kupon: günde 6 + 16 kredi
         CreditPlan.Plan p = CreditPlan.plan(s, 900L, 100L, LocalDate.of(2026, 10, 1), null);
         assertFalse(p.narrowed);
         assertEquals(6, p.leagues.size());
+        assertEquals(5, p.coupons);
         assertEquals(31, p.daysLeft); // 1 Ekim yenilendi: sonraki 1 Kasım
         // ücretsiz plan (500): aynı ayarlar sığmaz, ligler daraltılır
         CreditPlan.Plan free = CreditPlan.plan(s, 450L, 50L, LocalDate.of(2026, 10, 1), null);
         assertTrue(free.narrowed);
         assertTrue(free.cost <= free.budget);
+        assertEquals(3, free.coupons); // önce kupon sayısı 5 -> 3, sonra ligler
+        assertEquals(2, free.leagues.size());
+        assertEquals(3, CreditPlan.effective(s, free).maxCouponsPerDay);
     }
 
     @Test
@@ -96,8 +100,8 @@ public class BankrollTest {
         yield.put("soccer_turkey_super_league", 3.0);
         yield.put("soccer_epl", 2.0);
         yield.put("soccer_france_ligue_one", 0.1); // en az fırsat
-        // kalan 400 kredi, 21 gün: günde ~18 kredi
-        CreditPlan.Plan p = CreditPlan.plan(s, 400L, 100L, LocalDate.of(2026, 10, 11), yield);
+        // kalan 330 kredi, 21 gün: günde 15 kredi (3 kupon gideri 12 + 3 lig)
+        CreditPlan.Plan p = CreditPlan.plan(s, 330L, 170L, LocalDate.of(2026, 10, 11), yield);
         assertTrue(p.narrowed);
         assertEquals(0, p.kgEvents);
         assertEquals(0, p.radarScans);
@@ -105,10 +109,12 @@ public class BankrollTest {
         assertTrue(p.cost <= p.budget);
         assertFalse(p.leagues.contains("soccer_france_ligue_one"));
         assertTrue(p.leagues.contains("soccer_turkey_super_league"));
+        assertTrue(p.leagues.contains("soccer_epl"));
+        assertEquals(3, p.leagues.size());
         // her kalem için yalnızca son durum, okunur lig adıyla
-        assertEquals(Arrays.asList("Karşılıklı Gol bugünlük kapatıldı", "Radar bugünlük kapatıldı",
+        assertEquals(Arrays.asList("Karşılıklı Gol bugünlük kapatıldı", "Radar bugünlük kapatıldı", "Günde en fazla 3 kupon",
                 "2,5 Alt/Üst bugünlük kapatıldı", "Fransa Ligue 1 bugünlük çıkarıldı (en az fırsat çıkaran lig)"),
-                p.notes.subList(0, 4));
+                p.notes.subList(0, 5));
         Settings eff = CreditPlan.effective(s, p);
         assertEquals(p.leagues, eff.leagues);
         assertFalse(eff.totals);
