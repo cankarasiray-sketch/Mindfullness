@@ -774,18 +774,21 @@ function leagueName(k) {
 function creditCard(st) {
   var p = S.creditPlan;
   var html = '<div class="card"><h2>Kredi planı</h2><label class="check"><input type="checkbox" id="sCreditAuto"' + (st.creditAuto ? " checked" : "") + ">Krediye göre otomatik daralt</label>"
+    + '<label class="check"><input type="checkbox" id="sCreditExpand"' + (st.creditExpand ? " checked" : "") + ">Kredi bolsa ek lig tara</label>"
     + '<div class="two"><div><label>Kredi yenilenme günü (ayın)</label><input id="sResetDay" inputmode="numeric" value="' + st.creditResetDay + '"></div></div>';
   if (p) {
     html += '<div class="list" style="margin-top:8px">'
       + item("Kalan kredi", p.remaining != null ? String(p.remaining) + " / ayda " + p.quota : "henüz bilinmiyor")
       + item("Yenilenmeye", p.daysLeft + " gün")
       + item("Günlük bütçe / tahmini gider", "~" + num(p.budget, 1) + " / ~" + num(p.cost, 0) + " kredi")
-      + item("Bugün taranan ligler", esc(p.leagues.map(leagueName).join(", ")))
+      + item("Bugün taranan ligler", esc(p.leagues.filter(function (l) { return (p.expanded || []).indexOf(l) < 0; }).map(leagueName).join(", ")))
+      + (p.expanded && p.expanded.length ? item("Kredi bol, ek ligler", esc(p.expanded.map(leagueName).join(", "))) : "")
       + item("Alt/Üst · KG · radar", (p.totals ? "açık" : "kapalı") + " · " + (p.kgEvents ? p.kgEvents + " maç" : "kapalı") + " · " + (p.radarScans ? "günde " + p.radarScans : "kapalı"))
       + item("Günlük kupon", "en fazla " + p.coupons)
       + "</div>" + (p.notes.length ? '<p class="small muted">' + esc(p.notes.join("; ")) + ".</p>" : "");
   }
-  return html + '<p class="small muted">Kredi, The Odds API anahtarının aylık sorgu kotasıdır (uygulamayı tek kişi kullansa da). Plan yalnızca daraltır: kredi yetmezse önce Karşılıklı Gol, sonra radar, günlük kupon 5→3, Alt/Üst, en son en az değerli fırsat çıkaran lig kısılır. Kota büyükse hiçbir şey kısılmaz. '
+  return html + '<p class="small muted">Kredi, The Odds API anahtarının aylık sorgu kotasıdır (uygulamayı tek kişi kullansa da). Kredi yetmezse önce Karşılıklı Gol, sonra radar, günlük kupon 5→3, Alt/Üst, en son en az değerli fırsat çıkaran lig kısılır. '
+    + "Kredi bolsa (ör. birden fazla anahtar) seçmediğin ligler de o gün taranır: bugün maçı olan, geçmişte en çok değerli seçim çıkaran önce; tahmini gider günlük bütçenin %85'ini geçmez. "
     + "Her gün gerçek kalan krediye göre yeniden hesaplanır.</p></div>";
 }
 function readNum(id, isPct) {
@@ -814,6 +817,8 @@ function collectSettings() {
   st.internationals = !!(ni && ni.checked);
   st.edgeGuard = !!(eg && eg.checked);
   st.creditAuto = !!(ca && ca.checked);
+  var ce = document.getElementById("sCreditExpand");
+  st.creditExpand = !!(ce && ce.checked);
   st.creditResetDay = parseInt(val("sResetDay") || "1", 10);
   FIELDS.forEach(function (f) { st[f[0]] = readNum("f_" + f[0], f[2]); });
   st.maxLegs = Math.round(st.maxLegs);

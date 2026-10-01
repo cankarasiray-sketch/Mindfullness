@@ -160,11 +160,27 @@ final class Repo {
         if (s.oddsApiKey.isEmpty()) return;
         try {
             Daily.LiveSources probe = new Daily.LiveSources(new AndroidHttp(app), s);
-            activeToday = probe.activeCounts(s.leagues, Instant.now());
+            List<String> leagues = new ArrayList<>(s.leagues);
+            if (roomToExpand(s)) { // kredi bol: plan ek lig seçebilsin diye onlarınki de (ücretsiz)
+                for (String[] l : Settings.KNOWN_LEAGUES) if (!leagues.contains(l[0])) leagues.add(l[0]);
+            }
+            activeToday = probe.activeCounts(leagues, Instant.now());
             activeAt = Instant.now();
         } catch (Http.ProviderException ignored) {
             // bilinmiyor: plan ortalama payla kurulur
         }
+    }
+
+    /**
+     * Genişletmeye yer var mı: günlük kredi (kalan / yenilenmeye kalan gün) seçili liglerin tipik
+     * giderinin belirgin üstündeyse. Ücretsiz tek anahtarda (günde ~16) ek ligler hiç sorulmaz.
+     */
+    private boolean roomToExpand(Settings s) {
+        if (!s.creditAuto || !s.creditExpand) return false;
+        Long rem = parseLong(prefs.getString("credits", null));
+        if (rem == null) return false;
+        int days = CreditPlan.daysLeft(Instant.now().atOffset(Fmt.TR).toLocalDate(), s.creditResetDay);
+        return rem / (double) days > 40;
     }
 
     /** Son 3 saatte öğrenildiyse bugünün pencere maç sayıları, yoksa null. */

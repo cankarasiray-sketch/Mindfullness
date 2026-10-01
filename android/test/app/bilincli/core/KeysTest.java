@@ -140,4 +140,35 @@ public class KeysTest {
         assertEquals(1500, p.quota);
         assertTrue(!p.narrowed);
     }
+
+    @Test
+    public void ampleCreditsExpandToLeaguesWithMatchesToday() {
+        Settings s = new Settings();
+        s.totals = true;
+        s.radarScans = 4;
+        s.kgEvents = 12;
+        Map<String, Integer> active = new LinkedHashMap<>();
+        for (String[] l : Settings.KNOWN_LEAGUES) active.put(l[0], 0);
+        active.put("soccer_epl", 5); // seçili ve bugün oynayan
+        active.put("soccer_italy_serie_a", 4);
+        active.put("soccer_efl_champ", 12); // seçili değil, oynayan
+        active.put("soccer_belgium_first_div", 4);
+        active.put("soccer_greece_super_league", 3);
+        Map<String, Double> yield = new LinkedHashMap<>();
+        yield.put("soccer_greece_super_league", 3.0); // geçmişte en çok değerli seçim
+        // 5 anahtar: 2455 kalan, 31 gün -> günde ~78,7; seçili ligler ~34 kredi
+        CreditPlan.Plan p = CreditPlan.plan(s, 2455L, 45L, LocalDate.of(2026, 10, 1), yield, active, 1.0);
+        assertTrue(!p.narrowed);
+        assertEquals(Arrays.asList("soccer_greece_super_league", "soccer_efl_champ"), p.expanded); // Belçika sığmadı
+        assertTrue(p.cost <= CreditPlan.EXPAND_SHARE * p.budget);
+        assertEquals(57, p.cost, 1e-9); // 4 oynayan lig x 2 pazar x 5 tarama + 12 KG + 5 gider
+        assertTrue(CreditPlan.effective(s, p).leagues.contains("soccer_efl_champ"));
+        assertTrue(p.notes.contains("Kredi bol: 2 ek lig tarandı"));
+        // tek ücretsiz anahtar: genişleme yok (daraltma var)
+        assertTrue(CreditPlan.plan(s, 450L, 50L, LocalDate.of(2026, 10, 1), yield, active, 1.0).expanded.isEmpty());
+        // kapalıysa yok
+        s.creditExpand = false;
+        assertTrue(CreditPlan.plan(s, 2455L, 45L, LocalDate.of(2026, 10, 1), yield, active, 1.0).expanded.isEmpty());
+        assertTrue(!Settings.fromMap(s.toMap()).creditExpand);
+    }
 }

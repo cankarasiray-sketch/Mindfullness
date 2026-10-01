@@ -171,6 +171,11 @@ public final class Settings {
     public boolean creditAuto = true;
     /** The Odds API kredisinin yenilendiği ayın günü (1-28). */
     public int creditResetDay = 1;
+    /**
+     * Kredi bolsa (bütçe tahmini giderin çok üstündeyse) seçili olmayan ligler de o gün taranır:
+     * bugün maçı olan, geçmişte en çok değerli seçim çıkaran önce. Küçük kotada hiçbir şey eklenmez.
+     */
+    public boolean creditExpand = true;
 
     /**
      * Kapanış oranı ölçümünden pazar bazında avantaj oranları (EdgeCalibration). Kalıcı değildir;
@@ -262,6 +267,7 @@ public final class Settings {
         m.put("totals", totals);
         m.put("autoTrack", autoTrack);
         m.put("creditAuto", creditAuto);
+        m.put("creditExpand", creditExpand);
         m.put("creditResetDay", (long) creditResetDay);
         m.put("kgEvents", (long) kgEvents);
         m.put("weeklyLossLimit", weeklyLossLimit);
@@ -309,6 +315,7 @@ public final class Settings {
         s.totals = Json.bool(m, "totals", s.totals);
         s.autoTrack = Json.bool(m, "autoTrack", s.autoTrack);
         s.creditAuto = Json.bool(m, "creditAuto", s.creditAuto);
+        s.creditExpand = Json.bool(m, "creditExpand", s.creditExpand);
         s.creditResetDay = (int) Json.lng(m, "creditResetDay", s.creditResetDay);
         s.kgEvents = (int) Json.lng(m, "kgEvents", s.kgEvents);
         s.weeklyLossLimit = Json.dbl(m, "weeklyLossLimit", s.weeklyLossLimit);

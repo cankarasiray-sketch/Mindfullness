@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.9.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.9.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -209,6 +209,14 @@ eski ölçümler atılır ve anahtar yeniden ölçülür. Anahtarlar yalnızca t
 kötüye kullanım şüphesinde anahtarları iptal edebilir; bu durumda o anahtar atlanır, diğerleriyle
 devam edilir.
 
+**Kredi bolsa genişleme (1.9.3):** Daraltma gerekmiyor ve günlük kredi (kalan / yenilenmeye
+kalan gün) 40'ın üstündeyse, seçmediğin bilinen ligler de o gün taranır. Önce hepsinin bugünkü
+maç sayısı ücretsiz listeden öğrenilir; yalnızca bugün maçı olanlar, geçmiş taramalarda en çok
+değerli seçim çıkaran önce, tahmini gider günlük bütçenin %85'ini geçmeyecek kadar eklenir
+(kalan pay elle tarama, kontrol ve tahmin hatası için). Ayarlar → Kredi planı'nda "Kredi bol, ek
+ligler" satırında görünür; "Kredi bolsa ek lig tara" ile kapatılır. Tek ücretsiz anahtarda hiçbir
+şey eklenmez.
+
 Bir çalıştırmanın maliyeti: maçı olan her lig 1 kredi (2,5 Alt/Üst açıkken 2; Maç Sonucu ve
 Alt/Üst aynı sorguda gelir), sorulan her Karşılıklı Gol maçı 1 kredi. Maçı olmayan lig ve maç
 listesi sorguları ücretsizdir. Ör. 3 aktif lig + 4 KG maçı = 3×2 + 4 = 10 kredi. 1.8.9'dan beri
@@ -309,7 +317,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.9.2.apk
+./build.sh          # testler + build/BilincliKupon-1.9.3.apk
 ./build.sh test     # yalnızca testler
 ```
 

@@ -16,8 +16,11 @@ import java.util.Map;
  * aşarsa, kredi başına en az fırsat getiren kalemden başlayarak kısılır:
  * Karşılıklı Gol (maç başına 1 kredi) → radar taramaları → günlük kupon 5→3 (her kupon maç öncesi
  * kontrol ve kapanış oranı için kredi harcar; simülasyonda 3 kupon 5'in getirisinin çoğunu verdi)
- * → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig → son çare kupon 3→1. Kullanıcının seçmediği
- * hiçbir şey eklenmez; plan yalnızca daraltır.
+ * → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig → son çare kupon 3→1.
+ *
+ * Kredi bolsa (ör. birden fazla anahtar) ve daraltma gerekmiyorsa, creditExpand açıkken seçili
+ * olmayan ligler de o gün taranır: yalnızca bugün maçı olduğu bilinenler, en çok fırsat çıkaran
+ * önce, tahmini gider bütçenin %85'ini geçmeyecek kadar.
  */
 public final class CreditPlan {
     private CreditPlan() {}
@@ -35,6 +38,8 @@ public final class CreditPlan {
         public long quota;
         public boolean narrowed;
         public List<String> notes = new ArrayList<>();
+        /** Kredi bol olduğu için bugün eklenen (kullanıcının seçmediği) ligler. */
+        public List<String> expanded = new ArrayList<>();
         final List<String> noteKeys = new ArrayList<>();
 
         public Map<String, Object> toMap() {
@@ -51,6 +56,7 @@ public final class CreditPlan {
             m.put("quota", quota);
             m.put("narrowed", narrowed);
             m.put("notes", new ArrayList<Object>(notes));
+            m.put("expanded", new ArrayList<Object>(expanded));
             return m;
         }
     }
@@ -100,7 +106,7 @@ public final class CreditPlan {
         return leagues * Settings.ACTIVE_SHARE * (totals ? 2 : 1) * (1 + radar) + kg + overhead;
     }
 
-    static int daysLeft(LocalDate today, int resetDay) {
+    public static int daysLeft(LocalDate today, int resetDay) {
         LocalDate next = today.withDayOfMonth(Math.min(resetDay, today.lengthOfMonth()));
         if (!next.isAfter(today)) {
             LocalDate nm = today.plusMonths(1);
@@ -184,12 +190,46 @@ public final class CreditPlan {
             }
             p.narrowed = true;
         }
-        p.cost = cost(p, active, avgCoupons);
         // kullanıcının lig sırasını koru
         List<String> kept = new ArrayList<>();
         for (String l : cfg.leagues) if (p.leagues.contains(l)) kept.add(l);
         p.leagues = kept;
+        if (cfg.creditExpand && !p.narrowed) expand(p, active, avgCoupons, y);
+        p.cost = cost(p, active, avgCoupons);
         return p;
+    }
+
+    /** Genişletme bütçenin bu payına kadar: elle tarama, kontrol ve tahmin hatası için yer kalsın. */
+    static final double EXPAND_SHARE = 0.85;
+
+    /**
+     * Kredi bolsa seçili olmayan bilinen ligler eklenir: yalnızca bugün maçı olduğu (ücretsiz maç
+     * listesinden) kesin bilinenler; tahminle lig eklenmez. Geçmiş taramalarda en çok değerli seçim
+     * çıkaran önce (eşitlikte liste sırası). Her lig, tahmini gider bütçenin EXPAND_SHARE'ini
+     * aşmadıkça eklenir.
+     */
+    static void expand(Plan p, Map<String, Integer> active, double avgCoupons, final Map<String, Double> yield) {
+        final List<String> extra = new ArrayList<>();
+        for (String[] l : Settings.KNOWN_LEAGUES) if (!p.leagues.contains(l[0])) extra.add(l[0]);
+        final List<String> order = new ArrayList<>(extra);
+        Collections.sort(extra, new Comparator<String>() {
+            @Override
+            public int compare(String a, String b) {
+                int c = Double.compare(yield.containsKey(b) ? yield.get(b) : 1.0, yield.containsKey(a) ? yield.get(a) : 1.0);
+                return c != 0 ? c : Integer.compare(order.indexOf(a), order.indexOf(b));
+            }
+        });
+        for (String l : extra) {
+            Integer n = active == null ? null : active.get(l);
+            if (n == null || n <= 0) continue; // bugün maçı yok ya da bilinmiyor
+            p.leagues.add(l);
+            if (cost(p, active, avgCoupons) > EXPAND_SHARE * p.budget) {
+                p.leagues.remove(p.leagues.size() - 1);
+                continue; // daha az pazarlı ya da KG sınırına takılan bir lig yine sığabilir
+            }
+            p.expanded.add(l);
+        }
+        if (!p.expanded.isEmpty()) note(p, "genis", "Kredi bol: " + p.expanded.size() + " ek lig tarandı");
     }
 
     static String leagueName(String key) {

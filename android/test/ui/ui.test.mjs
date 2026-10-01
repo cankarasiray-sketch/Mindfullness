@@ -477,6 +477,28 @@ test("birden fazla API anahtarı: alanlar, kayıt ve anahtar başına kredi", as
   assert.ok(t.$$(".apikey").every((x) => x.type === "text"));
 });
 
+test("kredi bol: ek ligler ayrı satırda, genişletme ayarı kaydedilir", async () => {
+  const s = clone(baseState);
+  s.settings.oddsApiKey = "k";
+  s.settings.creditExpand = true;
+  s.creditPlan = {
+    leagues: ["soccer_epl", "soccer_efl_champ", "soccer_greece_super_league"], expanded: ["soccer_efl_champ", "soccer_greece_super_league"],
+    totals: true, kgEvents: 12, radarScans: 4, daysLeft: 31, budget: 78.7, cost: 57, remaining: 2455, quota: 2500, coupons: 5,
+    narrowed: false, notes: ["Kredi bol: 2 ek lig tarandı"],
+  };
+  const t = boot(s);
+  assert.doesNotMatch(t.$$(".banner").map((b) => b.textContent).join(" "), /daralttı/);
+  t.w.show("ayarlar");
+  assert.match(t.text(), /Bugün taranan liglerİngiltere Premier Lig(?!,)/);
+  assert.match(t.text(), /Kredi bol, ek liglerİngiltere Championship, Yunanistan Süper Lig/);
+  assert.match(t.text(), /Kredi bol: 2 ek lig tarandı/);
+  assert.equal(t.$("#sCreditExpand").checked, true);
+  t.$("#sCreditExpand").checked = false;
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).payload.settings.creditExpand, false);
+});
+
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {
   const s = clone(baseState);
   const old = s.coupons.find((x) => x.id !== s.todayRun.couponId);
