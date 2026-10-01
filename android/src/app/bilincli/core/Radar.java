@@ -112,6 +112,7 @@ public final class Radar {
                 r.put("away", c.book.away);
                 r.put("kickoff", c.book.kickoff.toString());
                 r.put("league", c.book.league);
+                r.put("sport", c.sharp.sportKey);
                 r.put("market", c.market);
                 r.put("outcome", c.outcome);
                 r.put("odds", c.odds);

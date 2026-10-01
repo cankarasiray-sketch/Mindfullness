@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.4.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -45,6 +45,28 @@ bildirim olarak gelir.
   *En yüksek getiri* (yarım Kelly, en fazla %10). Demo simülasyonunda (200 ay) en yüksek tipik
   aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
   katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
+
+## Ana paraya göre oyun planı, otomatik kasa, kredi planı (1.4)
+
+- **Bugünün oyun planı** (Bugün sekmesinin en üstü): bugünkü her kupon için ne kadar
+  oynanacağı (TL), bunun ana paranın yüzde kaçı olduğu ve tutarsa ne döneceği; altta toplam.
+  Ana para = kasadaki para + oyundaki kuponlar. Tutar sabah sabitlenmez: kuponun Kelly payı
+  saklanır ve **güncel kasadan** yeniden hesaplanır (dün kazandıysan bugünkü tutar büyür,
+  kaybettiysen küçülür). Güncel kontrol varsa onun oranı ve tutarı gösterilir; avantajı kaybolan
+  ya da başlamış kupona "–" yazılır.
+- **Otomatik kasa takibi** (Ayarlar → Kasa takibi, varsayılan açık): ilk maçtan 90 dk önceki
+  kontrolde güncel iddaa ve Pinnacle oranlarıyla hâlâ avantajlı çıkan kupon, **o anki oranlar ve
+  o anki kasaya göre tutarla** oynanmış sayılır ve bildirim gelir ("Kupon #12 oyna: 180,00 TL ·
+  oran 2,90"). Maç bitince kupon bu oranlarla sonuçlandırılır, kasa kendiliğinden güncellenir.
+  Avantajı kaybolan kupon oynanmış sayılmaz. Oynamadıysan kupondaki **Oynamadım, geri al**
+  tutarı kasaya iade eder (sonuçlanmadan önce). Kapatırsan yalnızca "Oynadım" dediğin kuponlar
+  kasadan düşer.
+- **Kredi planı** (Ayarlar → Kredi planı, varsayılan açık): The Odds API kredisi yenilenme
+  gününe kadar yetsin diye günlük bütçe = (kalan kredi − 15 yedek) / kalan gün. Tahmini gider
+  bütçeyi aşarsa kredi başına en az fırsat getirenden başlayarak kısar: Karşılıklı Gol (12→8→4→0
+  maç) → radar (4→2→1→0) → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig (son taramalardaki
+  değerli seçim sayısının hareketli ortalaması). Senin seçmediğin hiçbir şey eklenmez; plan her
+  gün gerçek kalan krediden yeniden hesaplanır, daraltma olursa Bugün sekmesinde yazar.
 
 ## Daha çok fırsat: pazarlar, günde 3 kupon, veri doğrulama (1.3)
 
@@ -106,7 +128,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.3.apk
+./build.sh          # testler + build/BilincliKupon-1.4.apk
 ./build.sh test     # yalnızca testler
 ```
 
@@ -129,6 +151,8 @@ kaldırılmadan kurulamaz.
 - **Eşdeğerlik (ParityTest):** Python sürümü 150 motor senaryosu, 479 takım adı eşleştirmesi ve
   oran hesapları için referans üretir (`test/fixtures/make_fixtures.py`). Java çekirdeği aynı
   girdide aynı kuponu, aynı olasılığı ve aynı Kelly payını 1e-9 hassasiyetle vermek zorunda.
+- **Kasa ve kredi (BankrollTest):** güncel kasadan tutar, otomatik oynama ve geri alma,
+  sonuçla kasanın güncellenmesi, kredi planının daraltma sırası ve yenilenme günü.
 - **Çekirdek (CoreTest):** kasa, iade kuralı, haftalık limit, kovalama beklemesi, sonuçlandırma,
   Nesine/The Odds API ayrıştırma, kalıcılık ve yedek, Türkçe telefonda biçimlendirme.
 - **Arayüz (test/ui):** jsdom üzerinde gerçek durum verisiyle oynadım akışı, ayarların Türkçe

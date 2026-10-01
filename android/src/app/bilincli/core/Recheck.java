@@ -133,7 +133,9 @@ public final class Recheck {
             } else if (prob < cfg.minWinProb) {
                 verdict = "Tutma olasılığı " + Fmt.pct(prob, false) + "'a düştü. Bu kuponu oynama.";
             } else {
-                double fraction = Math.min(cfg.kellyMultiplier * OddsMath.kellyFraction(prob, odds), cfg.maxStakeFraction);
+                // Günlük üst sınır küçültmesi korunur (aynı gün birden fazla kupon)
+                double fraction = Math.min(cfg.kellyMultiplier * OddsMath.kellyFraction(prob, odds), cfg.maxStakeFraction)
+                        * (c.scale > 0 ? c.scale : 1.0);
                 String[] note = new String[1];
                 long stake = Daily.computeStake(balance, fraction, cfg, note)[0];
                 out.put("stake", stake);

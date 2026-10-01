@@ -316,6 +316,85 @@ test("KG ve Alt/Üst etiketleri", async () => {
   assert.match(t.text(), /KG Var/);
 });
 
+test("oyun planı: hangi kupona kasanın yüzde kaçı, tutarsa ne döner", async () => {
+  const s = clone(baseState);
+  const c = unplayed(s);
+  c.stakeNow = 25000; // güncel kasadan hesaplanan tutar, sabahki öneriden önce gelir
+  const auto = s.coupons.find((x) => x.id !== c.id);
+  Object.assign(auto, { played: true, autoPlayed: true, stake: 15000, result: null, totalOdds: 2.26 });
+  const lost = s.coupons.find((x) => x.id !== c.id && x.id !== auto.id);
+  Object.assign(lost, { played: false, stake: 0, result: null, lastCheck: null });
+  lost.legs.forEach((l) => (l.kickoff = new Date(Date.parse(s.now) + 7200000).toISOString()));
+  lost.lastCheck = checkFor(lost, minus(s.now, 5), false);
+  s.todayRun.couponIds = [c.id, auto.id, lost.id];
+  s.stats.balance = 985000; s.stats.openStake = 15000; // kasa 10.000 TL
+  const t = boot(s);
+  const plan = t.$(".plan").textContent;
+  assert.match(plan, /BUGÜNÜN OYUN PLANI · ANA PARA 10\.000,00 TL/);
+  assert.match(plan, /250,00 TL%2,5 ana paratutarsa 695,00 TL/);
+  assert.match(plan, /oynandı \(otomatik\)/);
+  assert.match(plan, /150,00 TL%1,5 ana paratutarsa 339,00 TL/);
+  assert.match(plan, /oynama/);
+  assert.match(plan, /Toplam bahis400,00 TL \(%4,0\)/);
+  assert.match(plan, /Kasada 9\.850,00 TL \+ oyunda 150,00 TL/);
+  assert.match(plan, /Otomatik takip açık/);
+  assert.match(t.text(), /Oynandı \(otomatik\)/);
+});
+
+test("güncel kontrol tutarı planda kullanılır; elle takipte açıklama değişir", async () => {
+  const s = clone(baseState);
+  const c = unplayed(s);
+  c.stakeNow = 25000;
+  c.lastCheck = checkFor(c, minus(s.now, 5), true);
+  s.settings.autoTrack = false;
+  const t = boot(s);
+  const plan = t.$(".plan").textContent;
+  assert.match(plan, /oran 2,90oyna · güncel/);
+  assert.match(plan, /180,00 TL/);
+  assert.match(plan, /Elle takip/);
+});
+
+test("otomatik oynanan kupon geri alınabilir", async () => {
+  const s = clone(baseState);
+  const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
+  Object.assign(c, { played: true, autoPlayed: true, result: null });
+  const t = boot(s);
+  t.button("Oynamadım, geri al").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "unplay", payload: { coupon: c.id } });
+  // sonuçlanmış kupon geri alınamaz
+  Object.assign(c, { result: "kaybetti" });
+  const t2 = boot(s);
+  assert.ok(!t2.$$("button").some((b) => b.textContent.trim() === "Oynamadım, geri al"));
+});
+
+test("kasa takibi ve kredi planı ayarları; daraltma uyarısı", async () => {
+  const s = clone(baseState);
+  s.settings.oddsApiKey = "k";
+  s.creditPlan = {
+    leagues: ["soccer_turkey_super_league"], totals: false, kgEvents: 0, radarScans: 1, daysLeft: 20,
+    budget: 9.2, cost: 9, remaining: 199, narrowed: true,
+    notes: ["Karşılıklı Gol maç sayısı 0'e indirildi", "2,5 Alt/Üst bugünlük kapatıldı"],
+  };
+  const t = boot(s);
+  assert.match(t.text(), /Kredi planı bugün kapsamı daralttı/);
+  assert.match(t.text(), /2,5 Alt\/Üst bugünlük kapatıldı/);
+  t.w.show("ayarlar");
+  assert.match(t.text(), /Kalan kredi199/);
+  assert.match(t.text(), /Yenilenmeye20 gün/);
+  assert.match(t.text(), /Bugün taranan liglerTürkiye Süper Lig/);
+  assert.match(t.text(), /kapalı · kapalı · günde 1/);
+  t.$("#sAuto").checked = false;
+  t.$("#sCreditAuto").checked = false;
+  t.$("#sResetDay").value = "15";
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  const st = t.calls.at(-1).payload.settings;
+  assert.equal(st.autoTrack, false);
+  assert.equal(st.creditAuto, false);
+  assert.equal(st.creditResetDay, 15);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

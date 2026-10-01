@@ -56,6 +56,7 @@ public final class Bridge {
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
         extra.put("radar", repo.radarView());
         extra.put("credits", repo.credits());
+        extra.put("creditPlan", repo.plan().toMap());
         String version = "?";
         try {
             version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
@@ -182,6 +183,14 @@ public final class Bridge {
                 Scheduler.scheduleNextEvent(activity);
                 return "Kupon #" + id + " güncel oranlarla oynandı: " + Fmt.tl(stake) + ".";
             }
+            case "unplay": {
+                requireReal(repo);
+                long id = Json.lng(p, "coupon", -1);
+                synchronized (Repo.LOCK) {
+                    repo.real().unmarkPlayed(id);
+                }
+                return "Kupon #" + id + " oynanmadı olarak düzeltildi; tutar kasaya geri eklendi.";
+            }
             case "profile": {
                 synchronized (Repo.LOCK) {
                     Settings s = repo.real().settings();
@@ -213,7 +222,8 @@ public final class Bridge {
                 synchronized (Repo.LOCK) {
                     Daily.LiveSources src = repo.live();
                     r = Daily.generate(repo.real(), src, Json.bool(p, "force", false), false, repo.radar);
-                    repo.after(src);
+                    if (r.error == null && r.blocked == null && !r.skipped) repo.afterScan(src);
+                    else repo.after(src);
                 }
                 Scheduler.scheduleNextEvent(activity);
                 if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error);

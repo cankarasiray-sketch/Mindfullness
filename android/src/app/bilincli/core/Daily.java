@@ -62,6 +62,10 @@ public final class Daily {
             return api == null ? null : api.remaining;
         }
 
+        public String usedCredits() {
+            return api == null ? null : api.used;
+        }
+
         /**
          * Karşılıklı Gol için Pinnacle oranı maç bazında çekilir (maç başına 1 kredi). Yalnızca
          * iddaa'da aday KG pazarı olan, zaman penceresindeki ilk cfg.kgEvents maç için.
@@ -187,7 +191,7 @@ public final class Daily {
             String[] n = new String[1];
             long stake = computeStake(balance, p.stakeFraction * scale, cfg, n)[0];
             if (note == null) note = n[0];
-            long id = ledger.addCoupon(p, day, stake);
+            long id = ledger.addCoupon(p, day, stake, scale);
             if (autoPlay && stake > 0 && stake <= ledger.balance()) ledger.markPlayed(id, stake, null);
             ids.add(id);
         }
@@ -332,6 +336,27 @@ public final class Daily {
         for (Ledger.Leg l : c.legs) a.add(l.bookRef + "|" + l.market + "|" + l.outcome);
         for (Models.Candidate l : p.legs) b.add(l.book.ref + "|" + l.market + "|" + l.outcome);
         return a.equals(b);
+    }
+
+    /** Güncel kasaya göre önerilen tutar (oynanmamış kupon için). */
+    public static long stakeNow(Ledger ledger, Ledger.Coupon c, Settings cfg) {
+        if (c.fraction <= 0) return c.suggestedStake; // eski kayıtlar
+        return computeStake(ledger.balance(), c.fraction * c.scale, cfg, new String[1])[0];
+    }
+
+    /**
+     * Otomatik kasa takibi: kontrol "oynanabilir" dediyse kupon o anki güncel oranlar ve güncel
+     * kasaya göre tutarla oynanmış sayılır. Oynandıysa tutarı, oynanmadıysa 0 döndürür.
+     */
+    public static long applyCheck(Ledger ledger, long couponId, Map<String, Object> check, Settings cfg) {
+        Ledger.Coupon c = ledger.coupon(couponId);
+        if (!cfg.autoTrack || c.played || c.result != null || !Boolean.TRUE.equals(check.get("playable"))) return 0;
+        long stake = Json.lng(check, "stake", 0);
+        if (stake <= 0 || stake > ledger.balance()) return 0;
+        List<List<Double>> v = Recheck.checkedValues(check);
+        ledger.markPlayed(couponId, stake, v.get(0), v.get(1));
+        ledger.setAutoPlayed(couponId);
+        return stake;
     }
 
     public static Result runDaily(Ledger ledger, Sources src, boolean force, boolean autoPlay) {

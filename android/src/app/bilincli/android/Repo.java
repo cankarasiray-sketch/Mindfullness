@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import app.bilincli.core.Calibration;
 import app.bilincli.core.Closing;
+import app.bilincli.core.CreditPlan;
 import app.bilincli.core.Daily;
 import app.bilincli.core.DemoSim;
 import app.bilincli.core.Fmt;
@@ -18,6 +19,7 @@ import java.io.File;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -61,8 +63,43 @@ final class Repo {
     /** Canlı çağrıdan sonra: doğrulama hafızasını ve kalan API kredisini sakla. */
     void after(Daily.LiveSources src) {
         memoryStore.write(Json.write(memory));
-        String rem = src.remainingCredits();
-        if (rem != null) prefs.edit().putString("credits", rem).putLong("creditsAt", System.currentTimeMillis()).apply();
+        String rem = src.remainingCredits(), used = src.usedCredits();
+        if (rem != null) {
+            prefs.edit().putString("credits", rem).putString("creditsUsed", used).putLong("creditsAt", System.currentTimeMillis()).apply();
+        }
+    }
+
+    /** Tam taramadan sonra: ayrıca lig verimini (değerli seçim sayısı) güncelle. */
+    void afterScan(Daily.LiveSources src) {
+        CreditPlan.updateYield(memory, radar.view(), effective().leagues);
+        after(src);
+    }
+
+    private static Long parseLong(String v) {
+        if (v == null) return null;
+        try {
+            return (long) Double.parseDouble(v);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Bugünün kredi planı: kalan krediye göre daraltılmış kapsam. */
+    CreditPlan.Plan plan() {
+        Map<String, Double> yield;
+        try {
+            yield = CreditPlan.yieldOf(memory);
+        } catch (RuntimeException e) {
+            // arayüz kilitsiz okur; arka plan işi hafızayı tam o an yazıyorsa nötr verimle hesapla
+            yield = new LinkedHashMap<>();
+        }
+        return CreditPlan.plan(ledger.settings(), parseLong(prefs.getString("credits", null)),
+                parseLong(prefs.getString("creditsUsed", null)), Instant.now().atOffset(Fmt.TR).toLocalDate(), yield);
+    }
+
+    /** Canlı çekimlerde kullanılan ayarlar: kullanıcının ayarları, kredi planına göre daraltılmış. */
+    Settings effective() {
+        return CreditPlan.effective(ledger.settings(), plan());
     }
 
     /** Son bilinen kalan kredi ve zamanı (bilinmiyorsa null). */
@@ -109,7 +146,7 @@ final class Repo {
                 Daily.Fetch f = Daily.fetch(src, Instant.now());
                 return Daily.intraday(ledger, f.book, f.sharp, radar);
             } finally {
-                after(src);
+                afterScan(src);
             }
         }
     }
@@ -169,7 +206,7 @@ final class Repo {
     }
 
     Daily.LiveSources live() {
-        Daily.LiveSources src = new Daily.LiveSources(new Http.UrlHttp(), ledger.settings());
+        Daily.LiveSources src = new Daily.LiveSources(new Http.UrlHttp(), effective());
         src.memory = memory;
         return src;
     }
@@ -193,11 +230,14 @@ final class Repo {
             out.settleMessages = Daily.settle(ledger, src);
             String today = Fmt.dayKey(Instant.now());
             boolean due = !Instant.now().isBefore(todaysRunTime()) && ledger.runFor(today) == null;
+            boolean scanned = false;
             if (dailyTrigger || due) {
                 Daily.Result r = Daily.generate(ledger, src, false, false, radar);
                 if (!r.skipped) out.daily = r;
+                scanned = !r.skipped && r.error == null && r.blocked == null;
             }
-            after(src);
+            if (scanned) afterScan(src);
+            else after(src);
         }
         return out;
     }
@@ -247,21 +287,39 @@ final class Repo {
             Set<String> due = Closing.dueLeagues(ledger, now);
             if (!due.isEmpty()) {
                 try {
-                    Closing.capture(ledger, live().sharp(due), now);
+                    Daily.LiveSources cs = live();
+                    Closing.capture(ledger, cs.sharp(due), now);
+                    after(cs);
                 } catch (Http.ProviderException ignored) {
                     // kapanış alınamadı; CLV o bacak için boş kalır
                 }
             }
-            Ledger.Coupon c = Recheck.dueForPrecheck(ledger, now);
-            if (c != null) {
+            // Aynı anda vadesi gelen tüm kuponlar (günde 3 kupon olabilir)
+            Ledger.Coupon c;
+            Set<Long> seen = new LinkedHashSet<>();
+            while ((c = Recheck.dueForPrecheck(ledger, now)) != null && seen.add(c.id)) {
                 try {
                     Map<String, Object> r = recheck(c.id);
                     boolean ok = Boolean.TRUE.equals(r.get("playable"));
-                    out.add(new String[] {ok ? "Kupon #" + c.id + " hâlâ oynanabilir" : "Kupon #" + c.id + ": oynama",
-                            String.valueOf(r.get("verdict"))});
+                    long stake = Daily.applyCheck(ledger, c.id, r, ledger.settings());
+                    if (stake > 0) {
+                        Ledger.Coupon played = ledger.coupon(c.id);
+                        StringBuilder odds = new StringBuilder();
+                        for (Ledger.Leg l : played.legs) {
+                            odds.append(l.home).append(" - ").append(l.away).append(": ")
+                                    .append(Models.outcomeLabel(l.market, l.outcome)).append(" @ ").append(Fmt.odds(l.odds)).append('\n');
+                        }
+                        out.add(new String[] {"Kupon #" + c.id + " oyna: " + Fmt.tl(stake) + " · oran " + Fmt.odds(played.totalOdds),
+                                "Güncel oranlarla hâlâ avantajlı; kasadan düşüldü (otomatik takip). Bilyoner'de bu oranlarla oyna:\n"
+                                        + odds + "Oynamadıysan uygulamada 'Oynamadım, geri al'a bas."});
+                    } else {
+                        out.add(new String[] {ok ? "Kupon #" + c.id + " hâlâ oynanabilir" : "Kupon #" + c.id + ": oynama",
+                                String.valueOf(r.get("verdict"))});
+                    }
                 } catch (Http.ProviderException e) {
                     out.add(new String[] {"Kupon #" + c.id + " kontrol edilemedi",
                             "Oynamadan önce uygulamada elle kontrol et. (" + e.getMessage() + ")"});
+                    break;
                 }
             }
         }

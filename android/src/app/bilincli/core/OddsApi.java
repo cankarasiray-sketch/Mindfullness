@@ -18,7 +18,7 @@ public final class OddsApi {
 
     private final Http http;
     private final Settings cfg;
-    public String remaining;
+    public String remaining, used;
     public final List<String> warnings = new ArrayList<>();
 
     public OddsApi(Http http, Settings cfg) throws Http.ProviderException {
@@ -162,6 +162,8 @@ public final class OddsApi {
         Http.Response r = http.get(BASE + path + Http.query(p), null);
         String rem = r.headers.get("x-requests-remaining");
         if (rem != null) remaining = rem;
+        String u = r.headers.get("x-requests-used");
+        if (u != null) used = u;
         try {
             return Json.parse(r.body);
         } catch (IllegalArgumentException e) {

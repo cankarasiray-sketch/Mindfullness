@@ -107,7 +107,7 @@ final class Scheduler {
         Intent i = new Intent(ctx, AlarmReceiver.class).setAction(ACTION_RADAR);
         PendingIntent pi = PendingIntent.getBroadcast(ctx, 2, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Instant next = nextRadar(Repo.get(ctx).real().settings(), Instant.now());
+        Instant next = nextRadar(Repo.get(ctx).effective(), Instant.now()); // kredi planına göre
         if (next == null) {
             am.cancel(pi);
             return;

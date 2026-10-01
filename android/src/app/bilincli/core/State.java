@@ -37,9 +37,12 @@ public final class State {
         m.put("stats", st);
         m.put("todayRun", runMap(ledger.runFor(today)));
         List<Object> coupons = new ArrayList<>();
+        Settings cfg = ledger.settings();
         for (Coupon c : ledger.coupons()) {
             if (coupons.size() >= 80) break;
-            coupons.add(Ledger.couponMap(c));
+            Map<String, Object> cm = Ledger.couponMap(c);
+            if (!c.played && c.result == null) cm.put("stakeNow", Daily.stakeNow(ledger, c, cfg));
+            coupons.add(cm);
         }
         m.put("coupons", coupons);
         List<Object> runs = new ArrayList<>();

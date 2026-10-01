@@ -63,6 +63,16 @@ public final class Settings {
     public int runHour = 6;
     public int runMinute = 0;
 
+    /**
+     * Otomatik kasa takibi: kupon, ilk maçtan 90 dk önceki kontrolde hâlâ avantajlıysa o anki
+     * güncel oranlarla oynanmış sayılır ve kasa sonuçla birlikte kendiliğinden güncellenir.
+     */
+    public boolean autoTrack = true;
+    /** Kredi planlayıcı: kalan krediye göre lig/pazar/radar kapsamını otomatik daraltır. */
+    public boolean creditAuto = true;
+    /** The Odds API kredisinin yenilendiği ayın günü (1-28). */
+    public int creditResetDay = 1;
+
     /** Gün içi radar taraması sayısı: 0 (kapalı), 1 (17:00), 2 (13:00, 18:00), 4 (10, 13, 16, 19). */
     public int radarScans = 0;
 
@@ -143,6 +153,9 @@ public final class Settings {
         m.put("maxCouponsPerDay", (long) maxCouponsPerDay);
         m.put("maxDailyExposure", maxDailyExposure);
         m.put("totals", totals);
+        m.put("autoTrack", autoTrack);
+        m.put("creditAuto", creditAuto);
+        m.put("creditResetDay", (long) creditResetDay);
         m.put("kgEvents", (long) kgEvents);
         m.put("weeklyLossLimit", weeklyLossLimit);
         m.put("chaseCooldownHours", chaseCooldownHours);
@@ -183,6 +196,9 @@ public final class Settings {
         s.maxCouponsPerDay = (int) Json.lng(m, "maxCouponsPerDay", s.maxCouponsPerDay);
         s.maxDailyExposure = Json.dbl(m, "maxDailyExposure", s.maxDailyExposure);
         s.totals = Json.bool(m, "totals", s.totals);
+        s.autoTrack = Json.bool(m, "autoTrack", s.autoTrack);
+        s.creditAuto = Json.bool(m, "creditAuto", s.creditAuto);
+        s.creditResetDay = (int) Json.lng(m, "creditResetDay", s.creditResetDay);
         s.kgEvents = (int) Json.lng(m, "kgEvents", s.kgEvents);
         s.weeklyLossLimit = Json.dbl(m, "weeklyLossLimit", s.weeklyLossLimit);
         s.chaseCooldownHours = Json.dbl(m, "chaseCooldownHours", s.chaseCooldownHours);
@@ -211,6 +227,7 @@ public final class Settings {
         if (!(maxDailyExposure >= maxStakeFraction && maxDailyExposure <= 0.30)) {
             return "Günlük toplam üst sınır, kupon başına sınırdan küçük olamaz ve en fazla %30 olabilir";
         }
+        if (creditResetDay < 1 || creditResetDay > 28) return "Kredi yenilenme günü 1 ile 28 arasında olmalı";
         if (kgEvents < 0 || kgEvents > 20) return "Karşılıklı Gol maç sayısı 0 ile 20 arasında olmalı";
         if (radarScans != 0 && radarScans != 1 && radarScans != 2 && radarScans != 4) return "Radar sıklığı 0, 1, 2 ya da 4 olmalı";
         return null;

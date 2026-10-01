@@ -69,6 +69,10 @@ public final class Ledger {
         public List<Leg> legs = new ArrayList<>();
         /** Son "oynamadan önce kontrol" sonucu (Recheck.run çıktısı). */
         public Map<String, Object> lastCheck;
+        /** Kelly'ye göre kasa oranı (kupon başına üst sınır uygulanmış) ve günlük üst sınır küçültmesi. */
+        public double fraction, scale = 1.0;
+        /** Otomatik kasa takibiyle oynandı sayıldıysa true. */
+        public boolean autoPlayed;
     }
 
     public static final class Run {
@@ -202,6 +206,9 @@ public final class Ledger {
         }
         o.put("legs", legs);
         o.put("lastCheck", c.lastCheck);
+        o.put("fraction", c.fraction);
+        o.put("scale", c.scale);
+        o.put("autoPlayed", c.autoPlayed);
         return o;
     }
 
@@ -235,6 +242,9 @@ public final class Ledger {
             c.payout = x.get("payout") == null ? null : Json.lng(x, "payout", 0);
             c.settledAt = Json.str(x, "settledAt");
             c.lastCheck = Json.obj(x.get("lastCheck"));
+            c.fraction = Json.dbl(x, "fraction", 0);
+            c.scale = Json.dbl(x, "scale", 1.0);
+            c.autoPlayed = Json.bool(x, "autoPlayed", false);
             for (Object lo : Json.arr(x.get("legs"))) {
                 Map<String, Object> g = Json.obj(lo);
                 Leg l = new Leg();
@@ -384,7 +394,13 @@ public final class Ledger {
 
     // ---- kuponlar ---------------------------------------------------------
     public synchronized long addCoupon(Proposal p, String day, long suggestedStake) {
+        return addCoupon(p, day, suggestedStake, 1.0);
+    }
+
+    public synchronized long addCoupon(Proposal p, String day, long suggestedStake, double scale) {
         Coupon c = new Coupon();
+        c.fraction = p.stakeFraction;
+        c.scale = scale;
         c.id = nextCouponId++;
         c.createdAt = ts();
         c.day = day;
@@ -475,6 +491,28 @@ public final class Ledger {
         c.playedAt = ts();
         c.stake = stake;
         addTx("stake", -stake, c.id, "Kupon #" + c.id);
+        save();
+    }
+
+    /** Otomatik ya da yanlışlıkla "oynandı" sayılan kuponu geri alır (sonuçlanmadan önce). */
+    public synchronized void unmarkPlayed(long couponId) {
+        Coupon c = coupon(couponId);
+        if (!c.played) throw new LedgerException("Kupon #" + couponId + " zaten oynanmamış");
+        if (c.result != null) throw new LedgerException("Sonuçlanmış kupon geri alınamaz");
+        java.util.Iterator<Tx> it = txs.iterator();
+        while (it.hasNext()) {
+            Tx t = it.next();
+            if ("stake".equals(t.kind) && t.couponId != null && t.couponId == couponId) it.remove();
+        }
+        c.played = false;
+        c.autoPlayed = false;
+        c.playedAt = null;
+        c.stake = 0;
+        save();
+    }
+
+    public synchronized void setAutoPlayed(long couponId) {
+        coupon(couponId).autoPlayed = true;
         save();
     }
 
