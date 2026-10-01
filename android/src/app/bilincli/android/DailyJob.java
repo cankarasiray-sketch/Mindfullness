@@ -52,6 +52,7 @@ public final class DailyJob extends JobService {
                     if (daily) Notifier.show(DailyJob.this, "kupon", 12, "Günlük çalışma başarısız", String.valueOf(e.getMessage()));
                 } finally {
                     Scheduler.scheduleNextEvent(DailyJob.this);
+                    if (daily) Scheduler.scheduleNextRadar(DailyJob.this); // sabah kararından sonra maç saatlerine göre
                     // Yeniden deneme yok: veri alınamadıysa gün kaydedilmez ve 3 saatlik periyodik iş tamamlar.
                     jobFinished(params, false);
                 }

@@ -25,13 +25,14 @@ public class RadarTest {
 
     CoreTest.TestClock clock;
     Ledger ledger;
-    Ledger.MemoryStorage radarStore;
+    Ledger.MemoryStorage ledgerStore, radarStore;
     Radar radar;
 
     @Before
     public void setUp() {
         clock = new CoreTest.TestClock();
-        ledger = new Ledger(new Ledger.MemoryStorage(null), clock);
+        ledgerStore = new Ledger.MemoryStorage(null);
+        ledger = new Ledger(ledgerStore, clock);
         ledger.deposit(1000000, "");
         radarStore = new Ledger.MemoryStorage(null);
         radar = new Radar(radarStore);
@@ -122,6 +123,39 @@ public class RadarTest {
         for (Ledger.Leg l : ledger.coupon(more.newCouponId).legs) assertEquals("b2", l.bookRef);
         // aynı veriyle tekrar: yeni kupon yok (iki maç da bugünün kuponlarında)
         assertNull(Daily.intraday(ledger, book2, sharp2, radar).newCouponId);
+    }
+
+    @Test
+    public void replacedPlanIsNeverAutoPlayed() {
+        // sabah planı: maç 1 (oynanmadı); gün içinde oranlar değişti, plan maç 2 ile yenilendi
+        CoreTest.TestClock c = clock;
+        Daily.Intraday first = Daily.intraday(ledger, Collections.singletonList(book(1, 2.30)),
+                Collections.singletonList(sharp(1, 0.50)), radar);
+        long old = first.newCouponId;
+        Daily.Intraday next = Daily.intraday(ledger, Collections.singletonList(book(2, 2.40)),
+                Collections.singletonList(sharp(2, 0.50)), radar);
+        assertNotNull(next.newCouponId);
+        assertTrue(ledger.coupon(old).superseded);
+        assertFalse(ledger.coupon(next.newCouponId).superseded);
+        // eski kupon maç öncesi kontrole, kapanışa ve sonuçlandırmaya girmez
+        c.now = NOW.plusSeconds(10 * 3600 - 80 * 60); // maçtan 80 dk önce
+        for (Ledger.Coupon due : Recheck.allDueForPrecheck(ledger, c.now)) assertTrue(due.id != old);
+        for (Ledger.Coupon open : ledger.openCoupons()) assertTrue(open.id != old);
+        java.util.Map<String, Object> ok = new java.util.LinkedHashMap<>();
+        ok.put("playable", true);
+        ok.put("stake", 10000L);
+        ok.put("legs", new ArrayList<Object>());
+        assertEquals(0, Daily.applyCheck(ledger, old, ok, ledger.settings()));
+        // elle "oynadım" denirse yeniden açık kupon olur (Bilyoner'de oynanmış olabilir)
+        ledger.markPlayed(old, 10000, null);
+        assertFalse(ledger.coupon(old).superseded);
+        boolean open = false;
+        for (Ledger.Coupon o : ledger.openCoupons()) open |= o.id == old;
+        assertTrue(open);
+        // kalıcı
+        Ledger again = new Ledger(new Ledger.MemoryStorage(ledgerStore.read()), clock);
+        assertFalse(again.coupon(old).superseded);
+        assertTrue(again.coupon(next.newCouponId).played == false);
     }
 
     @Test

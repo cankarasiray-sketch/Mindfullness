@@ -30,6 +30,8 @@ public final class Engine {
         public final Map<String, Object> stats;
         /** Eşikleri geçen seçimler (ortak Kelly bunlardan kupon kurar). */
         public List<Candidate> candidates = new ArrayList<>();
+        /** Karar penceresindeki eşleşen maçların başlama saatleri (radar zamanlaması için). */
+        public List<Instant> kickoffs = new ArrayList<>();
 
         Decision(Proposal proposal, List<Proposal> alternatives, String reason, Map<String, Object> stats) {
             this.proposal = proposal;
@@ -180,6 +182,9 @@ public final class Engine {
 
     public static Decision decide(List<BookEvent> book, List<SharpEvent> sharp, Instant now, Settings cfg) {
         List<Pair> pairs = Matching.match(book, sharp);
+        List<Instant> kos = new ArrayList<>();
+        Instant from = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)), to = now.plusSeconds(Math.round(cfg.windowHours * 3600));
+        for (Pair p : pairs) if (!p.book.kickoff.isBefore(from) && !p.book.kickoff.isAfter(to)) kos.add(p.book.kickoff);
         List<List<Candidate>> built = buildCandidates(pairs, now, cfg);
         List<Candidate> cands = built.get(0), all = built.get(1);
         Map<String, Object> stats = new LinkedHashMap<>();
@@ -193,20 +198,25 @@ public final class Engine {
         stats.put("marjlar", margins);
         List<Proposal> none = new ArrayList<>();
         if (pairs.isEmpty()) {
-            return new Decision(null, none, "iddaa bülteni ile keskin piyasa eşleştirilemedi; "
-                    + "veri kaynaklarını kontrol et.", stats);
+            return withKickoffs(kos, new Decision(null, none, "iddaa bülteni ile keskin piyasa eşleştirilemedi; "
+                    + "veri kaynaklarını kontrol et.", stats));
         }
         if (cands.isEmpty()) {
-            return new Decision(null, none, all.size() + " seçim karşılaştırıldı, hiçbirinde iddaa oranı "
-                    + "adil oranı yeterince geçmiyor. Bugün pas.", stats);
+            return withKickoffs(kos, new Decision(null, none, all.size() + " seçim karşılaştırıldı, hiçbirinde iddaa oranı "
+                    + "adil oranı yeterince geçmiyor. Bugün pas.", stats));
         }
         List<Proposal> proposals = bestProposals(cands, cfg, 3);
         if (proposals.isEmpty()) {
-            return new Decision(null, none, cands.size() + " avantajlı seçim var ama MBS ve risk "
-                    + "eşiklerini birlikte sağlayan kupon kurulamadı. Bugün pas.", stats);
+            return withKickoffs(kos, new Decision(null, none, cands.size() + " avantajlı seçim var ama MBS ve risk "
+                    + "eşiklerini birlikte sağlayan kupon kurulamadı. Bugün pas.", stats));
         }
         Decision d = new Decision(proposals.get(0), new ArrayList<>(proposals.subList(1, proposals.size())), "", stats);
         d.candidates = cands;
+        return withKickoffs(kos, d);
+    }
+
+    private static Decision withKickoffs(List<Instant> kos, Decision d) {
+        d.kickoffs = kos;
         return d;
     }
 }

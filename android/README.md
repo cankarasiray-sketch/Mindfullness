@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -45,6 +45,22 @@ bildirim olarak gelir.
   *En yüksek getiri* (yarım Kelly, en fazla %10). Demo simülasyonunda (200 ay) en yüksek tipik
   aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
   katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
+
+## Para akışı düzeltmeleri ve maç saatine göre radar (1.6)
+
+- **Yenilenen plandaki eski kupon artık oynanmış sayılmaz.** Gün içi tarama ya da "Güncel oranlarla
+  yeni kupon" planı yenilediğinde, oynanmamış eski kuponlar açık kalıyor ve otomatik kasa takibi
+  onları da (aynı maçta yeni kuponla birlikte) oynanmış sayabiliyordu: çift bahis. Artık "Yenilendi"
+  olarak işaretlenir; kontrol, otomatik oynama, kapanış ve sonuçlandırma dışında kalır. Gerçekten
+  oynadıysan "Oynadım" ile yeniden açılır.
+- **Yeniden üretim oynanmış kuponlara dokunmaz.** Oynanmış kupon varken "Güncel oranlarla yeni
+  kupon" planı silmez; yeni kuponlar kalan günlük sınır içinde, başka maçlardan kurulur. Pas ya da
+  kayıp limiti sonucu da oynanmış günün kaydını silmez.
+- **Maça 90 dakikadan az kala kurulan kupon hemen kontrol edilir.** Önceden kontrol saati geçmiş
+  sayılıp atlanıyor, otomatik oynama kaçabiliyordu. Kapanış oranı alınamazsa 10 dakikada bir
+  yeniden denenir (kredi harcayan döngüye girmez).
+- **Radar maç saatine göre:** Günün maçları tarama sayısı kadar gruba bölünür, her tarama grubun ilk
+  maçından ~2,5 saat önce yapılır (en erken 09:00). Kredi aynıdır; maç bilgisi yoksa sabit saatler.
 
 ## Kâr için: ortak Kelly, kanıt koruması, Çifte Şans, borsa uzlaşısı (1.5)
 
@@ -136,7 +152,7 @@ kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
   sonuca 2,20 oran → 0,50 × 2,20 − 1 = +%10.
 - **Düşen oranlar:** Gün içinde Pinnacle'da olasılığı en az 3 puan artan (oranı düşen)
   sonuçlar. iddaa oranı henüz düşmediyse değer fırsatıdır ve bildirim gelir.
-- **Otomatik radar** (Ayarlar → Düşen oran radarı): günde 1, 2 ya da 4 tarama. Bugün oynanmış
+- **Otomatik radar** (Ayarlar → Düşen oran radarı): günde 1, 2 ya da 4 tarama, maç saatlerine göre. Bugün oynanmış
   kupon yoksa ve güncel oranlarla daha iyi bir kupon kurulabiliyorsa onu önerir. Her tarama lig
   sayısı kadar kredi harcar; ayarlar ekranı aylık tahmini gösterir.
 
@@ -169,7 +185,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.5.apk
+./build.sh          # testler + build/BilincliKupon-1.6.apk
 ./build.sh test     # yalnızca testler
 ```
 
@@ -193,7 +209,8 @@ kaldırılmadan kurulamaz.
   oran hesapları için referans üretir (`test/fixtures/make_fixtures.py`). Java çekirdeği aynı
   girdide aynı kuponu, aynı olasılığı ve aynı Kelly payını 1e-9 hassasiyetle vermek zorunda.
 - **Kâr (ProfitTest):** ortak Kelly'nin optimallik (KKT) koşulları, sınırlar ve MBS, kanıt
-  koruması, Çifte Şans eşlemesi ve sonuçlandırma, Pinnacle + borsa uzlaşısı, boş lig atlama.
+  koruması, Çifte Şans eşlemesi ve sonuçlandırma, Pinnacle + borsa uzlaşısı, boş lig atlama,
+  yenilenen planın oynanmaması, geç kurulan kuponun hemen kontrolü, maç saatine göre radar.
 - **Kasa ve kredi (BankrollTest):** güncel kasadan tutar, otomatik oynama ve geri alma,
   sonuçla kasanın güncellenmesi, kredi planının daraltma sırası ve yenilenme günü.
 - **Çekirdek (CoreTest):** kasa, iade kuralı, haftalık limit, kovalama beklemesi, sonuçlandırma,

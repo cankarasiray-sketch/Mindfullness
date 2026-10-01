@@ -222,15 +222,21 @@ public final class Bridge {
                 synchronized (Repo.LOCK) {
                     Daily.LiveSources src = repo.live();
                     r = Daily.generate(repo.real(), src, Json.bool(p, "force", false), false, repo.radar);
+                    repo.storeKickoffs(r);
                     if (r.error == null && r.blocked == null && !r.skipped) repo.afterScan(src);
                     else repo.after(src);
                 }
                 Scheduler.scheduleNextEvent(activity);
+                Scheduler.scheduleNextRadar(activity);
                 if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error);
                 if (r.skipped) return "Bugünün kararı zaten verilmiş.";
                 if (r.blocked != null) return r.blocked;
+                if (r.besidePlayed && r.couponIds.isEmpty()) {
+                    return "Oynanmış kuponlar duruyor; kalan günlük sınır içinde başka maçta yeni fırsat çıkmadı.";
+                }
+                if (r.besidePlayed) return r.couponIds.size() + " ek kupon üretildi (oynanmış kuponlara dokunulmadı).";
                 if (r.decision.isPass()) return "Bugün pas: " + r.decision.reason;
-                return "Yeni kupon #" + r.couponId + " üretildi.";
+                return r.couponIds.size() > 1 ? r.couponIds.size() + " yeni kupon üretildi." : "Yeni kupon #" + r.couponId + " üretildi.";
             }
             case "saveSettings": {
                 Settings s = Settings.fromMap(Json.obj(p.get("settings")));

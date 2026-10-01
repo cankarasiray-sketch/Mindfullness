@@ -63,6 +63,8 @@ public final class Recheck {
 
     /** Bir sonraki otomatik kontrol zamanı (yoksa null). */
     public static Instant nextPrecheckTime(Ledger ledger, Instant now) {
+        // vadesi gelmiş ama henüz kontrol edilmemiş kupon (ör. maça 90 dk'dan az kala kurulan): hemen
+        if (!allDueForPrecheck(ledger, now).isEmpty()) return now;
         Instant best = null;
         for (Coupon c : ledger.openCoupons()) {
             if (c.played || c.legs.isEmpty()) continue;

@@ -31,6 +31,8 @@ public final class Daily {
         public long stake;
         public String stakeNote, blocked, error;
         public boolean skipped;
+        /** Bugün oynanmış kupon vardı: plan yenilenmedi, yalnızca kalan sınır içinde ek kupon denendi. */
+        public boolean besidePlayed;
         public List<String> settleMessages = new ArrayList<>();
 
         public String headline() {
@@ -325,10 +327,11 @@ public final class Daily {
             r.couponId = existing.couponId;
             return r;
         }
+        boolean keep = existing != null && anyPlayed(ledger, existing); // oynanmış kuponlu koşu silinmez
         String blocked = Guard.check(ledger, cfg, now);
         if (blocked != null) {
             r.blocked = blocked;
-            ledger.recordRun(r.day, "koruma", blocked, (Long) null, "");
+            if (!keep) ledger.recordRun(r.day, "koruma", blocked, (Long) null, "");
             return r;
         }
         Fetch f;
@@ -345,11 +348,22 @@ public final class Daily {
         r.calibration = f.calibration;
         String summary = Texts.statsLine(d.stats);
         if (d.isPass()) {
+            if (keep) {
+                r.besidePlayed = true;
+                return r;
+            }
             ledger.recordRun(r.day, "pas", d.reason, (Long) null, summary);
             return r;
         }
         String[] note = new String[1];
-        r.couponIds = createCoupons(ledger, d, r.day, cfg, autoPlay, null, summary, note);
+        if (keep) {
+            // yeniden üretim: oynanmış kuponlara dokunulmaz, kalan sınır içinde başka maçlardan ek kupon
+            r.besidePlayed = true;
+            r.couponIds = addBeside(ledger, d, r.day, cfg, existing, now, "Güncel oranlarla yeniden tarandı:", note);
+            if (r.couponIds.isEmpty()) return r;
+        } else {
+            r.couponIds = createCoupons(ledger, d, r.day, cfg, autoPlay, null, summary, note);
+        }
         r.couponId = r.couponIds.get(0);
         r.stake = ledger.coupon(r.couponId).suggestedStake;
         r.stakeNote = note[0];
@@ -390,13 +404,8 @@ public final class Daily {
         Decision d = Engine.decide(book, sharp, now, cfg);
         if (d.isPass()) return out;
         List<Long> todayIds = run == null ? new ArrayList<Long>() : run.ids();
-        boolean anyPlayed = false;
-        for (Long id : todayIds) {
-            Ledger.Coupon c = ledger.coupon(id);
-            if (c.played) anyPlayed = true;
-        }
         String[] note = new String[1];
-        if (!anyPlayed) {
+        if (run == null || !anyPlayed(ledger, run)) {
             Portfolio.Result plan = Portfolio.optimize(d.candidates, cfg, cfg.maxCouponsPerDay, cfg.maxDailyExposure, null);
             java.util.Set<String> fresh = new java.util.HashSet<>(), current = new java.util.HashSet<>();
             if (plan.picks.isEmpty()) fresh.add(signature(d.proposal));
@@ -410,10 +419,28 @@ public final class Daily {
             return out;
         }
         // Oynanmış kuponlar duruyor: kalan sınır içinde başka maçlardan ek kupon
+        List<Long> ids = addBeside(ledger, d, day, cfg, run, now, "Gün içi taramada", note);
+        if (ids.isEmpty()) return out;
+        out.newCouponId = ids.get(0);
+        out.newCouponIds = ids;
+        return out;
+    }
+
+    static boolean anyPlayed(Ledger ledger, Ledger.Run run) {
+        for (Long id : run.ids()) if (ledger.coupon(id).played) return true;
+        return false;
+    }
+
+    /**
+     * Bugünün oynanmış (ve henüz başlamamış oynanmamış) kuponları dururken, kalan günlük üst sınır
+     * ve kupon hakkı içinde, o kuponlarda olmayan maçlardan ek kupon kurar ve günün koşusuna ekler.
+     */
+    static List<Long> addBeside(Ledger ledger, Decision d, String day, Settings cfg, Ledger.Run run, Instant now,
+                                String label, String[] note) {
         double used = 0;
         int active = 0;
         java.util.Set<String> exclude = new java.util.HashSet<>();
-        for (Long id : todayIds) {
+        for (Long id : run.ids()) {
             Ledger.Coupon c = ledger.coupon(id);
             boolean pending = !c.played && c.result == null && Recheck.firstKickoff(c).isAfter(now);
             if (!c.played && !pending) continue; // oynanmadan geçmiş kupon sınırı tüketmez
@@ -421,17 +448,16 @@ public final class Daily {
             active++;
             for (Ledger.Leg l : c.legs) exclude.add(l.bookRef);
         }
+        List<Long> ids = new ArrayList<>();
         double capLeft = cfg.maxDailyExposure - used;
         int slots = cfg.maxCouponsPerDay - active;
-        if (capLeft < 0.005 || slots <= 0) return out;
-        List<Long> ids = addPortfolio(ledger, d.candidates, day, cfg, false, slots, capLeft, exclude, note);
-        if (ids.isEmpty()) return out;
-        List<Long> all = new ArrayList<>(todayIds);
+        if (capLeft < 0.005 || slots <= 0) return ids;
+        ids = addPortfolio(ledger, d.candidates, day, cfg, false, slots, capLeft, exclude, note);
+        if (ids.isEmpty()) return ids;
+        List<Long> all = new ArrayList<>(run.ids());
         all.addAll(ids);
-        ledger.recordRun(day, "kupon", (run.reason + " Gün içi taramada " + ids.size() + " ek kupon.").trim(), all, run.summary);
-        out.newCouponId = ids.get(0);
-        out.newCouponIds = ids;
-        return out;
+        ledger.recordRun(day, "kupon", (run.reason + " " + label + " " + ids.size() + " ek kupon.").trim(), all, run.summary);
+        return ids;
     }
 
     static String signature(Proposal p) {
@@ -468,7 +494,7 @@ public final class Daily {
      */
     public static long applyCheck(Ledger ledger, long couponId, Map<String, Object> check, Settings cfg) {
         Ledger.Coupon c = ledger.coupon(couponId);
-        if (!cfg.autoTrack || c.played || c.result != null || !Boolean.TRUE.equals(check.get("playable"))) return 0;
+        if (!cfg.autoTrack || c.played || c.superseded || c.result != null || !Boolean.TRUE.equals(check.get("playable"))) return 0;
         long stake = Json.lng(check, "stake", 0);
         if (stake <= 0 || stake > ledger.balance()) return 0;
         List<List<Double>> v = Recheck.checkedValues(check);

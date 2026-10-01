@@ -73,6 +73,11 @@ public final class Ledger {
         public double fraction, scale = 1.0;
         /** Otomatik kasa takibiyle oynandı sayıldıysa true. */
         public boolean autoPlayed;
+        /**
+         * Günün planı güncel oranlarla yenilendiğinde oynanmamış eski kupon. Açık kupon sayılmaz:
+         * maç öncesi kontrol, otomatik oynama, kapanış ve sonuçlandırma dışında kalır.
+         */
+        public boolean superseded;
     }
 
     public static final class Run {
@@ -209,6 +214,7 @@ public final class Ledger {
         o.put("fraction", c.fraction);
         o.put("scale", c.scale);
         o.put("autoPlayed", c.autoPlayed);
+        o.put("superseded", c.superseded);
         return o;
     }
 
@@ -245,6 +251,7 @@ public final class Ledger {
             c.fraction = Json.dbl(x, "fraction", 0);
             c.scale = Json.dbl(x, "scale", 1.0);
             c.autoPlayed = Json.bool(x, "autoPlayed", false);
+            c.superseded = Json.bool(x, "superseded", false);
             for (Object lo : Json.arr(x.get("legs"))) {
                 Map<String, Object> g = Json.obj(lo);
                 Leg l = new Leg();
@@ -444,9 +451,10 @@ public final class Ledger {
         return out;
     }
 
+    /** Sonuçlanmamış kuponlar (yenilenmiş plandan kalan oynanmamış kuponlar hariç). */
     public synchronized List<Coupon> openCoupons() {
         List<Coupon> out = new ArrayList<>();
-        for (Coupon c : coupons) if (c.result == null) out.add(c);
+        for (Coupon c : coupons) if (c.result == null && !c.superseded) out.add(c);
         return out;
     }
 
@@ -464,6 +472,7 @@ public final class Ledger {
         if (c.result != null) throw new LedgerException(couponId + " numaralı kupon zaten sonuçlanmış");
         if (stake <= 0) throw new LedgerException("Kupon tutarı pozitif olmalı");
         if (stake > balance()) throw new LedgerException("Kasada yeterli para yok (kasa: " + Fmt.tl(balance()) + ")");
+        c.superseded = false; // yenilenmiş plandan da olsa gerçekten oynandıysa açık kupondur
         if (legOdds != null) {
             if (legOdds.size() != c.legs.size()) {
                 throw new LedgerException(c.legs.size() + " oran bekleniyordu, " + legOdds.size() + " verildi");
@@ -508,6 +517,8 @@ public final class Ledger {
         c.autoPlayed = false;
         c.playedAt = null;
         c.stake = 0;
+        Run run = runs.get(c.day);
+        if (run == null || !run.ids().contains(c.id)) c.superseded = true; // günün geçerli planında değil
         save();
     }
 
@@ -606,6 +617,16 @@ public final class Ledger {
 
     public synchronized void recordRun(String day, String decision, String reason, List<Long> couponIds, String summary) {
         Long couponId = couponIds.isEmpty() ? null : couponIds.get(0);
+        Run prev = runs.get(day);
+        if (prev != null) {
+            // plan yenilendi: yeni planda olmayan, oynanmamış eski kuponlar artık geçersiz
+            for (Long id : prev.ids()) {
+                if (couponIds.contains(id)) continue;
+                for (Coupon c : coupons) {
+                    if (c.id == id && !c.played && c.result == null) c.superseded = true;
+                }
+            }
+        }
         Run r = new Run();
         r.couponIds = new ArrayList<>(couponIds);
         r.day = day;

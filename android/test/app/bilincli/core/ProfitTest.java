@@ -128,6 +128,92 @@ public class ProfitTest {
         assertTrue(exposure <= cfg.maxDailyExposure + 1e-9);
     }
 
+    static Daily.Sources sources(final List<BookEvent> book, final List<SharpEvent> sharp) {
+        return new Daily.Sources() {
+            public List<BookEvent> book() { return book; }
+            public List<SharpEvent> sharp() { return sharp; }
+            public Map<String, ScoreResult> scores(Set<String> k) { return new LinkedHashMap<>(); }
+        };
+    }
+
+    @Test
+    public void forcedRegenerationKeepsPlayedCoupons() {
+        Ledger ledger = new Ledger(new Ledger.MemoryStorage(null), new CoreTest.TestClock());
+        ledger.deposit(1000000, "");
+        String day = Fmt.dayKey(NOW);
+        Daily.Result first = Daily.generate(ledger, sources(Collections.singletonList(FeatureTest.book(1, 2.30, 1, 8)),
+                Collections.singletonList(FeatureTest.sharp(1, 0.50, 8))), false, false);
+        long played = first.couponId;
+        ledger.markPlayed(played, ledger.coupon(played).suggestedStake, null);
+        // yeniden üret: maç 1 hâlâ değerli, maç 2 yeni. Oynanmış kupon durur, maç 1 tekrar oynanmaz.
+        List<BookEvent> book = Arrays.asList(FeatureTest.book(1, 2.30, 1, 8), FeatureTest.book(2, 2.40, 1, 9));
+        List<SharpEvent> sharp = Arrays.asList(FeatureTest.sharp(1, 0.50, 8), FeatureTest.sharp(2, 0.50, 9));
+        Daily.Result again = Daily.generate(ledger, sources(book, sharp), true, false);
+        assertTrue(again.besidePlayed);
+        assertEquals(1, again.couponIds.size());
+        Ledger.Run run = ledger.runFor(day);
+        assertEquals(Arrays.asList(played, again.couponId), run.ids());
+        for (Ledger.Leg l : ledger.coupon(again.couponId).legs) assertEquals("b2", l.bookRef);
+        Settings cfg = ledger.settings();
+        Ledger.Coupon p1 = ledger.coupon(played), p2 = ledger.coupon(again.couponId);
+        assertTrue(p1.fraction * p1.scale + p2.fraction * p2.scale <= cfg.maxDailyExposure + 1e-9);
+        // pas sonucu oynanmış koşuyu silmez
+        Daily.Result none = Daily.generate(ledger, sources(new ArrayList<BookEvent>(), new ArrayList<SharpEvent>()), true, false);
+        assertTrue(none.besidePlayed);
+        assertEquals("kupon", ledger.runFor(day).decision);
+        assertEquals(2, ledger.runFor(day).ids().size());
+        assertFalse(ledger.coupon(again.couponId).superseded);
+    }
+
+    @Test
+    public void lateCouponIsCheckedImmediately() {
+        CoreTest.TestClock clock = new CoreTest.TestClock();
+        Ledger ledger = new Ledger(new Ledger.MemoryStorage(null), clock);
+        ledger.deposit(1000000, "");
+        // maça 60 dk kala kurulan kupon: kontrol zamanı (90 dk önce) geçmiş ama kontrol edilmemiş
+        BookEvent b = new BookEvent("b1", "Ev 1", "Dep 1", NOW.plusSeconds(3600), "Lig", 1, CoreTest.ms(2.3, 3.4, 4.0), "1");
+        SharpEvent sh = new SharpEvent("s1", "lig", "Ev 1", "Dep 1", NOW.plusSeconds(3600), CoreTest.ms(0.5, 0.25, 0.25), "pinnacle");
+        long id = ledger.addCoupon(new Models.Proposal(Collections.singletonList(new Candidate(b, sh, "MS", "1", 2.3, 0.5)),
+                2.3, 0.5, 0.02, 0.001), Fmt.dayKey(NOW), 10000);
+        assertEquals(1, Recheck.allDueForPrecheck(ledger, NOW).size());
+        assertEquals(NOW, Recheck.nextPrecheckTime(ledger, NOW));
+        Map<String, Object> check = new LinkedHashMap<>();
+        check.put("at", NOW.toString());
+        ledger.saveCheck(id, check);
+        assertNull(Recheck.nextPrecheckTime(ledger, NOW)); // kontrol edildi: tekrar yok
+        // kapanış penceresinde (maça 30 dk) alınmamış kapanış: hemen
+        Instant t = NOW.plusSeconds(30 * 60);
+        assertEquals(t, Closing.nextCaptureTime(ledger, t));
+        Closing.capture(ledger, Collections.singletonList(sh), t);
+        assertNull(Closing.nextCaptureTime(ledger, t));
+    }
+
+    static Instant tr(int day, int h, int m) {
+        return java.time.LocalDate.of(2026, 10, day).atTime(h, m).atZone(Fmt.TR).toInstant();
+    }
+
+    @Test
+    public void radarScansFollowKickoffs() {
+        java.time.LocalDate day = java.time.LocalDate.of(2026, 10, 3);
+        // cumartesi: 14:00, 16:00, 19:00, 19:00, 21:45, 21:45 (+ yarının maçı, dikkate alınmaz)
+        List<Instant> ko = Arrays.asList(tr(3, 21, 45), tr(3, 14, 0), tr(3, 19, 0), tr(3, 16, 0), tr(3, 19, 0),
+                tr(3, 21, 45), tr(4, 13, 0));
+        assertEquals(Collections.singletonList(tr(3, 11, 30)), ScanPlan.times(ko, 1, day));
+        assertEquals(Arrays.asList(tr(3, 11, 30), tr(3, 16, 30)), ScanPlan.times(ko, 2, day));
+        // 4 tarama: 11:30, 13:30, 16:30 (19:00 grubu), 19:15 (21:45 grubu); 90 dk'dan yakınlar birleşir
+        assertEquals(Arrays.asList(tr(3, 11, 30), tr(3, 13, 30), tr(3, 16, 30), tr(3, 19, 15)), ScanPlan.times(ko, 4, day));
+        // sabah maçı: en erken 09:00
+        assertEquals(Collections.singletonList(tr(3, 9, 0)), ScanPlan.times(Collections.singletonList(tr(3, 10, 30)), 2, day));
+        assertNull(ScanPlan.times(ko, 0, day));
+        assertNull(ScanPlan.times(Collections.singletonList(tr(4, 13, 0)), 2, day));
+        assertEquals(tr(3, 16, 30), ScanPlan.next(ScanPlan.times(ko, 2, day), tr(3, 12, 0)));
+        assertNull(ScanPlan.next(ScanPlan.times(ko, 2, day), tr(3, 17, 0)));
+        // karar, penceredeki maç saatlerini taşır
+        Engine.Decision d = Engine.decide(Collections.singletonList(FeatureTest.book(1, 2.30, 1, 8)),
+                Collections.singletonList(FeatureTest.sharp(1, 0.50, 8)), NOW, new Settings());
+        assertEquals(Collections.singletonList(NOW.plusSeconds(8 * 3600)), d.kickoffs);
+    }
+
     // ---- kanıt koruması ----
 
     static List<EdgeCalibration.Obs> obs(String market, int n, double pred, double real) {

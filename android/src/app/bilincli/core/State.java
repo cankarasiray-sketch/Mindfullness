@@ -41,7 +41,7 @@ public final class State {
         for (Coupon c : ledger.coupons()) {
             if (coupons.size() >= 80) break;
             Map<String, Object> cm = Ledger.couponMap(c);
-            if (!c.played && c.result == null) cm.put("stakeNow", Daily.stakeNow(ledger, c, cfg));
+            if (!c.played && c.result == null && !c.superseded) cm.put("stakeNow", Daily.stakeNow(ledger, c, cfg));
             coupons.add(cm);
         }
         m.put("coupons", coupons);

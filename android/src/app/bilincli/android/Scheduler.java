@@ -9,9 +9,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import app.bilincli.core.Fmt;
+import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
 import java.time.Instant;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * Zamanlama: her gün ayarlanan saatte (varsayılan 06:00 TR) tam zamanlı alarm,
@@ -92,6 +94,19 @@ final class Scheduler {
 
     /** Bir sonraki radar taraması (ayarlardaki saatlerden en yakını, Türkiye saati). */
     static Instant nextRadar(Settings s, Instant now) {
+        return nextRadar(s, now, null);
+    }
+
+    /**
+     * adaptive: bugünün maç saatlerine göre tarama saatleri (ScanPlan). Bugün için kalan varsa o,
+     * yoksa sabit saatlerden yarının ilki (yarının planı sabah kararından sonra yeniden kurulur).
+     */
+    static Instant nextRadar(Settings s, Instant now, List<Instant> adaptive) {
+        if (adaptive != null) {
+            Instant t = ScanPlan.next(adaptive, now);
+            if (t != null) return t;
+            now = now.atOffset(Fmt.TR).toLocalDate().plusDays(1).atStartOfDay(Fmt.TR).toInstant();
+        }
         Instant best = null;
         OffsetDateTime local = now.atOffset(Fmt.TR);
         for (int h : s.radarHours()) {
@@ -107,7 +122,9 @@ final class Scheduler {
         Intent i = new Intent(ctx, AlarmReceiver.class).setAction(ACTION_RADAR);
         PendingIntent pi = PendingIntent.getBroadcast(ctx, 2, i,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
-        Instant next = nextRadar(Repo.get(ctx).effective(), Instant.now()); // kredi planına göre
+        Repo repo = Repo.get(ctx);
+        Instant now = Instant.now();
+        Instant next = nextRadar(repo.effective(), now, repo.radarTimes(now)); // kredi planı ve maç saatlerine göre
         if (next == null) {
             am.cancel(pi);
             return;

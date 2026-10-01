@@ -432,6 +432,17 @@ test("Çifte Şans etiketi", async () => {
   assert.match(t.text(), /ÇŞ X-2/);
 });
 
+test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {
+  const s = clone(baseState);
+  const old = s.coupons.find((x) => x.id !== s.todayRun.couponId);
+  Object.assign(old, { played: false, stake: 0, result: null, superseded: true });
+  old.legs.forEach((l) => (l.kickoff = new Date(Date.parse(s.now) + 7200000).toISOString()));
+  const t = boot(s);
+  assert.equal(t.$$(".card").filter((x) => /Açık kupon · #/.test(x.textContent)).length, 0);
+  t.w.show("gecmis");
+  assert.ok(t.$$(".item").some((x) => x.textContent.includes("#" + old.id) && x.textContent.includes("Yenilendi")));
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

@@ -60,6 +60,7 @@ public final class Closing {
 
     /** Bir sonraki kapanış alarmı zamanı (yoksa null). */
     public static Instant nextCaptureTime(Ledger ledger, Instant now) {
+        if (!dueLeagues(ledger, now).isEmpty()) return now; // kapanış penceresinde, henüz alınmamış
         Instant best = null;
         for (Coupon c : ledger.openCoupons()) {
             for (Leg l : c.legs) {

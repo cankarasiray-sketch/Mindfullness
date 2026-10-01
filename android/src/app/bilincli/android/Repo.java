@@ -14,6 +14,7 @@ import app.bilincli.core.Ledger;
 import app.bilincli.core.Models;
 import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
+import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
 import java.io.File;
 import java.time.Instant;
@@ -234,6 +235,7 @@ final class Repo {
             if (dailyTrigger || due) {
                 Daily.Result r = Daily.generate(ledger, src, false, false, radar);
                 if (!r.skipped) out.daily = r;
+                storeKickoffs(r);
                 scanned = !r.skipped && r.error == null && r.blocked == null;
             }
             if (scanned) afterScan(src);
@@ -300,6 +302,7 @@ final class Repo {
         synchronized (LOCK) {
             if (ledger.settings().oddsApiKey.isEmpty()) return out;
             Instant now = Instant.now();
+            lastEventRun = now;
             Set<String> due = Closing.dueLeagues(ledger, now);
             if (!due.isEmpty()) {
                 try {
@@ -307,7 +310,7 @@ final class Repo {
                     Closing.capture(ledger, cs.sharp(due), now);
                     after(cs);
                 } catch (Http.ProviderException ignored) {
-                    // kapanış alınamadı; CLV o bacak için boş kalır
+                    // kapanış alınamadı; pencere içinde 10 dk sonra yeniden denenir
                 }
             }
             // Aynı anda vadesi gelen tüm kuponlar tek çekimle kontrol edilir
@@ -348,10 +351,40 @@ final class Repo {
     Instant nextEventTime() {
         Instant now = Instant.now();
         Instant a = Closing.nextCaptureTime(ledger, now), b = Recheck.nextPrecheckTime(ledger, now);
-        if (a == null) return b;
-        if (b == null) return a;
-        return a.isBefore(b) ? a : b;
+        Instant next = a == null ? b : b == null ? a : a.isBefore(b) ? a : b;
+        if (next != null && !next.isAfter(now)) {
+            // vadesi gelmiş iş: hemen. Son 10 dk içinde zaten denendiyse (ağ hatası, kapanış oranı
+            // yayında yok) 10 dk sonra; böylece döngüye girip kredi harcamaz.
+            Instant last = lastEventRun;
+            next = last != null && last.isAfter(now.minusSeconds(600)) ? last.plusSeconds(600) : now.plusSeconds(30);
+        }
+        return next;
     }
+
+    /** Günün karar penceresindeki maç saatleri (radar zamanlaması için) saklanır. */
+    void storeKickoffs(Daily.Result r) {
+        if (r == null || r.decision == null || r.decision.kickoffs.isEmpty()) return;
+        StringBuilder b = new StringBuilder();
+        for (Instant k : r.decision.kickoffs) b.append(b.length() == 0 ? "" : ",").append(k.getEpochSecond());
+        prefs.edit().putString("kickoffs", b.toString()).apply();
+    }
+
+    /** Bugünün radar saatleri: maç saatlerine göre; bilgi yoksa null (sabit saatler). */
+    List<Instant> radarTimes(Instant now) {
+        String raw = prefs.getString("kickoffs", "");
+        List<Instant> kos = new ArrayList<>();
+        for (String p : raw.split(",")) {
+            try {
+                if (!p.isEmpty()) kos.add(Instant.ofEpochSecond(Long.parseLong(p)));
+            } catch (NumberFormatException ignored) {
+                // bozuk kayıt: atla
+            }
+        }
+        return ScanPlan.times(kos, effective().radarScans, now.atOffset(Fmt.TR).toLocalDate());
+    }
+
+    /** Son events() çalışması (yeniden deneme aralığı için). */
+    private volatile Instant lastEventRun;
 
     static final class BackgroundResult {
         List<String> settleMessages = new ArrayList<>();

@@ -308,7 +308,7 @@ function legsHtml(c, interactive) {
 }
 function couponCard(c, title, extra) {
   var ev = c.winProb * c.totalOdds - 1, stake = c.played ? c.stake : (c.stakeNow != null ? c.stakeNow : c.suggestedStake);
-  var status = c.result ? pill(c.result) : '<span class="pill bek">' + (c.played ? (c.autoPlayed ? "Oynandı (otomatik)" : "Oynandı") : "Öneri") + "</span>";
+  var status = c.result ? pill(c.result) : '<span class="pill bek">' + (c.played ? (c.autoPlayed ? "Oynandı (otomatik)" : "Oynandı") : c.superseded ? "Yenilendi (eski plan)" : "Öneri") + "</span>";
   var actions = "", panel = "", fresh = "";
   var first = Math.min.apply(null, c.legs.map(function (l) { return Date.parse(l.kickoff); }));
   var playable = !c.played && !c.result && first > Date.parse(S.now);
@@ -405,7 +405,7 @@ function viewToday() {
   S.coupons.forEach(function (c) {
     if (ids.indexOf(c.id) >= 0 || c.result) return;
     var first = Math.min.apply(null, c.legs.map(function (l) { return Date.parse(l.kickoff); }));
-    if (c.played || first > Date.parse(S.now)) html += couponCard(c, "Açık kupon");
+    if (c.played || (!c.superseded && first > Date.parse(S.now))) html += couponCard(c, "Açık kupon");
   });
   if (!S.demo) html += '<div class="btns"><button class="b ghost" onclick="act(\'settle\')">Sonuç kontrolü</button>'
     + '<button class="b ghost" onclick="regenerate()">Güncel oranlarla yeni kupon</button></div>';
@@ -425,7 +425,7 @@ function outlookCard() {
   return html + '<p class="small muted" style="margin-top:8px">Garanti değil, olasılık: kısa vadede gerçekleşen, beklenenden çok sapabilir.</p></div>';
 }
 function regenerate() {
-  openSheet('<h3>Güncel oranlarla yeni kupon</h3><p class="muted">Bülten ve Pinnacle oranları şimdi yeniden çekilir, kupon baştan kurulur. Önceki öneri oynanmadıysa takipte kalır.</p>'
+  openSheet('<h3>Güncel oranlarla yeni kupon</h3><p class="muted">Bülten ve Pinnacle oranları şimdi yeniden çekilir. Bugün oynanmış kupon yoksa plan baştan kurulur; eski öneriler geçersiz olur ve otomatik oynanmaz. Oynanmış kupon varsa ona dokunulmaz; yeni kuponlar kalan günlük sınır içinde başka maçlardan kurulur.</p>'
     + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="closeSheet();act(\'generate\',{force:true})">Üret</button></div>');
 }
 function playSheet(id) {
@@ -533,7 +533,7 @@ function viewHistory() {
     var pl = c.played && c.result ? (c.payout || 0) - c.stake : null;
     return '<div class="item" onclick="detail(' + c.id + ')"><div><b>#' + c.id + "</b> " + '<span class="small muted">' + esc(dayLabel(c.day)) + " · " + c.legs.length + " maç · oran " + odds(c.totalOdds)
       + '</span><div class="small">' + c.legs.map(function (l) { return esc(l.home) + " – " + esc(l.away) + ' <span class="muted">' + esc(label(l.market, l.outcome)) + "</span>"; }).join("<br>")
-      + '</div></div><div style="text-align:right">' + pill(c.result) + '<div class="small ' + (pl == null ? "muted" : cls(pl)) + '">'
+      + '</div></div><div style="text-align:right">' + (!c.result && c.superseded ? '<span class="pill bek">Yenilendi</span>' : pill(c.result)) + '<div class="small ' + (pl == null ? "muted" : cls(pl)) + '">'
       + (pl == null ? (c.played ? tl(c.stake) : "oynanmadı") : tl(pl)) + "</div></div></div>";
   }).join("") : '<p class="muted">Henüz kupon yok.</p>') + "</div></div>";
   html += '<div class="card"><h2>Son kararlar</h2><div class="list">' + (S.runs.length ? S.runs.map(function (r) {
@@ -649,9 +649,9 @@ function viewSettings() {
   }).join("") + '<p class="small muted">Her lig günde 1 kredi harcar.</p></div>';
   html += '<div class="card"><h2>Düşen oran radarı</h2><p class="small muted">Gün içinde piyasayı yeniden tarar: Pinnacle\'da oranı hızla düşen sonuçları ve '
     + "sabah olmayan yeni değer fırsatlarını bulur. Bugün oynanmış kupon yoksa güncel oranlarla yeni kupon önerir ve bildirir.</p>"
-    + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1 (17:00)"], [2, "Günde 2 (13:00, 18:00)"], [4, "Günde 4 (10, 13, 16, 19)"]].map(function (o) {
+    + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"]].map(function (o) {
       return '<option value="' + o[0] + '"' + (st.radarScans === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
-    }).join("") + '</select><p class="small muted">Tahmini aylık kredi: ~' + st.estimatedCredits + " (ücretsiz plan 500). "
+    }).join("") + '</select><p class="small muted">Taramalar günün maç saatlerine göre, maç gruplarından ~2,5 saat önceye yerleştirilir (o saatte Pinnacle fiyatı olgun, iddaa çoğu zaman henüz güncellenmemiş); maç bilgisi yoksa 10–19 arası sabit saatler. Tahmini aylık kredi: ~' + st.estimatedCredits + " (ücretsiz plan 500). "
     + (st.estimatedCredits > 500 ? "<b>Ücretsiz planı aşar:</b> lig sayısını azalt ya da ücretli plana geç." : "Ücretsiz plana sığar.") + "</p></div>";
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
