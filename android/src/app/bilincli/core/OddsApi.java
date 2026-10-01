@@ -25,6 +25,14 @@ public final class OddsApi {
     public final List<String> warnings = new ArrayList<>();
     /** Son taramada pencerede maçı olmadığı için (kredi harcamadan) atlanan ligler. */
     public final List<String> idle = new ArrayList<>();
+    /** Lig bazında ayrıntı ("Kaynakları test et" için). */
+    public final List<String> report = new ArrayList<>();
+    /** true: maçı olmayan lig için sıradaki maç tarihi de sorulur (ücretsiz maç listesi). */
+    public boolean diagnose;
+    /** Bu nesneyle yapılan sorguların toplam kredi maliyeti (x-requests-last). */
+    public int spent;
+    /** Son parseOdds: {yanıttaki maç, bahis sitesi olmayan, kullanılamayan, Pinnacle-borsa ayrışması, bayat}. */
+    int[] lastParse = new int[5];
 
     /** Bahis borsaları: komisyonlu ama marjsız piyasa; likitse keskin bir ikinci görüş. */
     static final String[] EXCHANGES = {"betfair_ex_eu", "betfair_ex_uk", "matchbook", "smarkets"};
@@ -118,11 +126,15 @@ public final class OddsApi {
 
     public List<SharpEvent> parseOdds(Object payload, String sportKey) {
         List<SharpEvent> events = new ArrayList<>();
+        lastParse = new int[5];
+        List<Object> all = Json.arr(payload);
+        lastParse[0] = all == null ? 0 : all.size();
         for (Object o : Json.arr(payload)) {
             Map<String, Object> ev = Json.obj(o);
             String home = Json.str(ev, "home_team"), away = Json.str(ev, "away_team");
             String commence = Json.str(ev, "commence_time");
             if (home == null || away == null || commence == null) continue;
+            if (Json.arr(ev.get("bookmakers")) == null || Json.arr(ev.get("bookmakers")).isEmpty()) lastParse[1]++;
             Map<String, Map<String, Map<String, Double>>> perMarket = new LinkedHashMap<>();
             Map<String, Map<String, Double>> liquid = new LinkedHashMap<>(); // pazar -> borsa -> ima toplamı
             Map<String, Map<String, Instant>> updated = new LinkedHashMap<>(); // pazar -> site -> son güncelleme
@@ -160,6 +172,7 @@ public final class OddsApi {
                     books = new LinkedHashMap<>(books);
                     books.remove(cfg.preferredBook);
                     sources.add(e.getKey() + ":" + cfg.preferredBook + " bayat");
+                    lastParse[4]++;
                 }
                 if (books.containsKey(cfg.preferredBook)) {
                     Map<String, Double> pin = books.get(cfg.preferredBook);
@@ -169,6 +182,7 @@ public final class OddsApi {
                         sources.add(e.getKey() + ":" + cfg.preferredBook);
                     } else if (maxDiff(pin, ex) > MAX_DISAGREE) {
                         sources.add(e.getKey() + ":ayrışma"); // Pinnacle ile borsa uyuşmuyor: kullanılmaz
+                        lastParse[3]++;
                     } else {
                         Map<String, Double> mix = new LinkedHashMap<>();
                         double total = 0;
@@ -197,6 +211,7 @@ public final class OddsApi {
             }
             Map<String, Double> cs = doubleChance(fair.get("MS"));
             if (cs != null) fair.put("CS", cs);
+            if (fair.isEmpty()) lastParse[2]++;
             if (!fair.isEmpty()) {
                 events.add(new SharpEvent(Json.str(ev, "id"), sportKey, home, away, Instant.parse(commence),
                         fair, String.join(", ", sources)));
@@ -294,6 +309,14 @@ public final class OddsApi {
         if (rem != null) remaining = rem;
         String u = r.headers.get("x-requests-used");
         if (u != null) used = u;
+        String last = r.headers.get("x-requests-last");
+        if (last != null) {
+            try {
+                spent += (int) Double.parseDouble(last.trim());
+            } catch (NumberFormatException ignored) {
+                // başlık okunamadı: maliyet bilinmiyor
+            }
+        }
         try {
             return Json.parse(r.body);
         } catch (IllegalArgumentException e) {
@@ -320,17 +343,42 @@ public final class OddsApi {
      * harcamaz. Hata olursa temkinli davranılır: var sayılır ve oranlar her zamanki gibi çekilir.
      */
     boolean hasEvents(String league, Instant from, Instant to) {
+        return eventsInWindow(league, from, to) != 0;
+    }
+
+    /** Pencerdeki maç sayısı; liste alınamazsa -1 (temkinli: oran çekilir). */
+    int eventsInWindow(String league, Instant from, Instant to) {
         Map<String, String> params = new LinkedHashMap<>();
         params.put("dateFormat", "iso");
         params.put("commenceTimeFrom", iso(from));
         params.put("commenceTimeTo", iso(to));
         try {
             Object payload = get("/sports/" + league + "/events", params);
-            return !(payload instanceof List) || !((List<?>) payload).isEmpty();
+            if (!(payload instanceof List)) return -1;
+            return ((List<?>) payload).size();
         } catch (Http.ProviderException | RuntimeException e) {
-            return true;
+            report.add(CreditPlan.leagueName(league) + ": maç listesi alınamadı (" + e.getMessage() + ")");
+            return -1;
         }
     }
+
+    /** Ligin sıradaki maçı (ücretsiz maç listesinden); yoksa null. */
+    Instant nextEvent(String league, Instant now) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("dateFormat", "iso");
+        try {
+            Instant best = null;
+            for (Object o : Json.arr(get("/sports/" + league + "/events", params))) {
+                Instant t = instant(Json.str(Json.obj(o), "commence_time"));
+                if (t != null && t.isAfter(now) && (best == null || t.isBefore(best))) best = t;
+            }
+            return best;
+        } catch (Http.ProviderException | RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static final java.time.format.DateTimeFormatter DM = java.time.format.DateTimeFormatter.ofPattern("dd.MM HH:mm", java.util.Locale.ROOT);
 
     /** now verilirse karar penceresinde maçı olmayan ligler atlanır. */
     List<SharpEvent> fetchEvents(java.util.Collection<String> leagues, Instant now) throws Http.ProviderException {
@@ -338,11 +386,19 @@ public final class OddsApi {
         Http.ProviderException last = null;
         int ok = 0;
         idle.clear();
+        report.clear();
         for (String league : leagues) {
-            if (now != null && !hasEvents(league, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
-                    now.plusSeconds(Math.round(cfg.windowHours * 3600)))) {
+            String name = CreditPlan.leagueName(league);
+            int inWindow = now == null ? -1 : eventsInWindow(league, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
+                    now.plusSeconds(Math.round(cfg.windowHours * 3600)));
+            if (inWindow == 0) {
                 idle.add(league);
                 ok++;
+                if (diagnose) {
+                    Instant next = nextEvent(league, now);
+                    report.add(name + ": 24 saatte maç yok" + (next == null ? " (listede maç yok)"
+                            : ", sıradaki " + next.atOffset(Fmt.TR).format(DM)));
+                }
                 continue;
             }
             Map<String, String> params = new LinkedHashMap<>();
@@ -351,8 +407,16 @@ public final class OddsApi {
             params.put("oddsFormat", "decimal");
             params.put("dateFormat", "iso");
             try {
-                events.addAll(parseOdds(get("/sports/" + league + "/odds", params), league));
+                List<SharpEvent> parsed = parseOdds(get("/sports/" + league + "/odds", params), league);
+                events.addAll(parsed);
                 ok++;
+                int[] s = lastParse;
+                report.add(name + ": " + (inWindow >= 0 ? "24 saatte " + inWindow + " maç; " : "")
+                        + "oran yanıtı " + s[0] + " maç, kullanılabilir " + parsed.size()
+                        + (s[1] > 0 ? ", bahis sitesi olmayan " + s[1] : "")
+                        + (s[3] > 0 ? ", Pinnacle-borsa ayrışması " + s[3] : "")
+                        + (s[4] > 0 ? ", bayat Pinnacle " + s[4] : "")
+                        + (s[2] > s[1] ? ", adil oran kurulamayan " + (s[2] - s[1]) : ""));
             } catch (Http.ProviderException e) {
                 last = e;
                 warnings.add(league + " atlandı: " + e.getMessage());

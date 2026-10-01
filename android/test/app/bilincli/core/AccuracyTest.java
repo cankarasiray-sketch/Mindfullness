@@ -113,6 +113,43 @@ public class AccuracyTest {
     }
 
     @Test
+    public void diagnosticReportExplainsEmptyResults() throws Exception {
+        final List<String> calls = new ArrayList<>();
+        Http http = new Http() {
+            public Response get(String url, Map<String, String> headers) {
+                calls.add(url);
+                Map<String, String> h = new LinkedHashMap<>();
+                h.put("x-requests-remaining", "499");
+                if (url.contains("/events?") && url.contains("commenceTimeFrom")) {
+                    // Süper Lig'in 24 saatte maçı yok; Premier Lig'in var
+                    return new Response(200, url.contains("soccer_epl") ? "[{\"id\":\"e\"}]" : "[]", h);
+                }
+                if (url.contains("/events?")) {
+                    return new Response(200, "[{\"id\":\"n\",\"commence_time\":\"2026-10-03T17:00:00Z\"}]", h);
+                }
+                h.put("x-requests-last", "1");
+                return new Response(200, "[{\"id\":\"e\",\"commence_time\":\"2026-10-01T19:00:00Z\",\"home_team\":\"A\","
+                        + "\"away_team\":\"B\",\"bookmakers\":[]}]", h);
+            }
+        };
+        Settings cfg = new Settings();
+        cfg.oddsApiKey = "k";
+        OddsApi api = new OddsApi(http, cfg);
+        api.diagnose = true;
+        assertTrue(api.fetchEvents(Arrays.asList("soccer_turkey_super_league", "soccer_epl"), NOW).isEmpty());
+        assertEquals(Collections.singletonList("soccer_turkey_super_league"), api.idle);
+        assertEquals("Türkiye Süper Lig: 24 saatte maç yok, sıradaki 03.10 20:00", api.report.get(0));
+        assertEquals("İngiltere Premier Lig: 24 saatte 1 maç; oran yanıtı 1 maç, kullanılabilir 0, bahis sitesi olmayan 1",
+                api.report.get(1));
+        assertEquals(1, api.spent);
+        // tanı kapalıyken sıradaki maç sorulmaz
+        calls.clear();
+        api.diagnose = false;
+        api.fetchEvents(Collections.singletonList("soccer_turkey_super_league"), NOW);
+        assertEquals(1, calls.size());
+    }
+
+    @Test
     public void forecastLogScoresAccuracy() {
         Ledger.MemoryStorage store = new Ledger.MemoryStorage(null);
         Forecasts f = new Forecasts(store);

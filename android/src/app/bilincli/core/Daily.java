@@ -81,6 +81,19 @@ public final class Daily {
             return api == null ? new ArrayList<String>() : api.idle;
         }
 
+        /** "Kaynakları test et" için lig bazında ayrıntılı rapor üret. */
+        public void diagnose() throws Http.ProviderException {
+            api().diagnose = true;
+        }
+
+        public List<String> report() {
+            return api == null ? new ArrayList<String>() : api.report;
+        }
+
+        public int spent() {
+            return api == null ? 0 : api.spent;
+        }
+
         /** Atlanan ligler ve hatalar (ör. bilinmeyen lig kodu). */
         public List<String> warnings() {
             return api == null ? new ArrayList<String>() : api.warnings;

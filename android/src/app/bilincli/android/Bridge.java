@@ -345,16 +345,12 @@ public final class Bridge {
     }
 
     /** Veri kaynaklarını dener, doğrulama raporunu ve pazar envanterini gösterir. */
-    private static String leagueName(String key) {
-        for (String[] l : Settings.KNOWN_LEAGUES) if (l[0].equals(key)) return l[1];
-        return key;
-    }
-
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
         Daily.LiveSources src = repo.live();
         Daily.Fetch f;
         try {
+            src.diagnose();
             f = Daily.fetch(src, Instant.now());
         } catch (Exception e) {
             b.append("Veri alınamadı: ").append(e.getMessage()).append('\n');
@@ -365,11 +361,9 @@ public final class Bridge {
         b.append("iddaa bülteni (Nesine): ").append(f.book.size()).append(" maç\n");
         b.append("Keskin piyasa (Pinnacle): ").append(f.sharp.size()).append(" maç · kalan API kredisi: ")
                 .append(src.remainingCredits()).append('\n');
-        if (!src.idleLeagues().isEmpty()) {
-            List<String> names = new ArrayList<>();
-            for (String l : src.idleLeagues()) names.add(leagueName(l));
-            b.append("Önümüzdeki 24 saatte maçı olmayan ligler (kredi harcanmadı): ").append(String.join(", ", names)).append('\n');
-        }
+        b.append("Bu test ").append(src.spent()).append(" kredi harcadı (maç listesi ücretsiz).\n");
+        b.append("\nLig ayrıntısı\n");
+        for (String line : src.report()) b.append("  ").append(line).append('\n');
         for (String w : src.warnings()) b.append("Uyarı: ").append(w).append('\n');
         List<Models.Pair> pairs = Matching.match(f.book, f.sharp);
         b.append("Eşleşen maç: ").append(pairs.size()).append('\n');
