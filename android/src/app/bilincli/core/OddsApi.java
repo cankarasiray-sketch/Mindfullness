@@ -49,6 +49,21 @@ public final class OddsApi {
             out.put("MS", m);
             return out;
         }
+        if ("btts".equals(key)) {
+            for (Object o : Json.arr(market.get("outcomes"))) {
+                Map<String, Object> oc = Json.obj(o);
+                Double price = Json.num(oc, "price");
+                if (price != null) byName.put(Json.str(oc, "name"), price);
+            }
+            Double y = byName.get("Yes"), n = byName.get("No");
+            if (y == null || n == null || y <= 1 || n <= 1) return null;
+            double[] p = OddsMath.devigPower(new double[] {y, n});
+            Map<String, Double> m = new LinkedHashMap<>();
+            m.put("VAR", p[0]);
+            m.put("YOK", p[1]);
+            out.put("KG", m);
+            return out;
+        }
         if ("totals".equals(key)) {
             for (Object o : Json.arr(market.get("outcomes"))) {
                 Map<String, Object> oc = Json.obj(o);
@@ -166,7 +181,7 @@ public final class OddsApi {
         for (String league : leagues) {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("regions", cfg.regions);
-            params.put("markets", "h2h");
+            params.put("markets", cfg.totals ? "h2h,totals" : "h2h");
             params.put("oddsFormat", "decimal");
             params.put("dateFormat", "iso");
             try {
@@ -179,6 +194,25 @@ public final class OddsApi {
         }
         if (ok == 0 && last != null) throw last;
         return events;
+    }
+
+    /**
+     * Ek pazar (ör. btts) tek maç için çekilir; ek pazarlar yalnızca maç bazında sunulur ve
+     * maç başına kredi harcar. Bulunan adil olasılıklar SharpEvent'e eklenir.
+     */
+    public void enrichEvent(SharpEvent ev, String markets) throws Http.ProviderException {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("regions", cfg.regions);
+        params.put("markets", markets);
+        params.put("oddsFormat", "decimal");
+        params.put("dateFormat", "iso");
+        Object payload = get("/sports/" + ev.sportKey + "/events/" + ev.ref + "/odds", params);
+        List<Object> one = new ArrayList<>();
+        one.add(payload);
+        List<SharpEvent> parsed = parseOdds(one, ev.sportKey);
+        if (!parsed.isEmpty()) {
+            for (Map.Entry<String, Map<String, Double>> e : parsed.get(0).fair.entrySet()) ev.fair.put(e.getKey(), e.getValue());
+        }
     }
 
     public Map<String, ScoreResult> fetchScores(Set<String> sportKeys) throws Http.ProviderException {

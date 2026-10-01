@@ -16,6 +16,7 @@ public final class Models {
     public static String outcomeLabel(String market, String outcome) {
         if ("MS".equals(market)) return "MS " + outcome;
         if ("AU25".equals(market)) return "ALT".equals(outcome) ? "2,5 Alt" : "2,5 Üst";
+        if ("KG".equals(market)) return "VAR".equals(outcome) ? "KG Var" : "KG Yok";
         return market + " " + outcome;
     }
 

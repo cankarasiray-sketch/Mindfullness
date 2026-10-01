@@ -81,6 +81,7 @@ public final class Nesine {
         Map<String, Object> sg = Json.obj(root.get("sg"));
         if (sg != null) root = sg;
         List<BookEvent> events = new ArrayList<>();
+        Inventory inv = new Inventory();
         for (Object o : Json.arr(root.get("EA"))) {
             Map<String, Object> ev = Json.obj(o);
             if (ev == null) continue;
@@ -90,25 +91,42 @@ public final class Nesine {
             Instant ko = kickoff(ev);
             if (home == null || away == null || ko == null) continue;
             Map<String, Map<String, Double>> odds = new LinkedHashMap<>();
+            Map<String, Integer> rawMbs = new LinkedHashMap<>();
             Integer marketMbs = null;
             for (Object mo : Json.arr(ev.get("MA"))) {
                 Map<String, Object> market = Json.obj(mo);
                 if (market == null) continue;
                 Long mtid = integer(market.get("MTID"));
-                if (mtid == null || mtid != 1L) continue; // 1 = Maç Sonucu
-                Map<String, Double> outcomes = new LinkedHashMap<>();
+                if (mtid == null) continue;
+                Map<String, Double> raw = new LinkedHashMap<>();
                 for (Object oo : Json.arr(market.get("OCA"))) {
                     Map<String, Object> oc = Json.obj(oo);
                     if (oc == null) continue;
                     Long n = integer(oc.get("N"));
                     Double price = odds(oc.get("O"));
-                    String key = n == null ? null : n == 1 ? "1" : n == 2 ? "X" : n == 3 ? "2" : null;
-                    if (key != null && price != null) outcomes.put(key, price);
+                    if (n != null && price != null) raw.put(String.valueOf(n), price);
                 }
-                if (outcomes.size() == 3) {
-                    odds.put("MS", outcomes);
-                    Long mm = integer(market.get("MBS"));
-                    if (mm != null && mm > 0) marketMbs = mm.intValue();
+                Double sov = number(market.get("SOV"));
+                inv.add(mtid, raw.size(), sov, market, home + " - " + away);
+                Long mm = integer(market.get("MBS"));
+                if (mtid == 1L) { // Maç Sonucu: N 1 = ev, 2 = beraberlik, 3 = deplasman (Calibration doğrular)
+                    Map<String, Double> outcomes = new LinkedHashMap<>();
+                    if (raw.containsKey("1")) outcomes.put("1", raw.get("1"));
+                    if (raw.containsKey("2")) outcomes.put("X", raw.get("2"));
+                    if (raw.containsKey("3")) outcomes.put("2", raw.get("3"));
+                    if (outcomes.size() == 3) {
+                        odds.put("MS", outcomes);
+                        if (mm != null && mm > 0) marketMbs = mm.intValue();
+                    }
+                } else if (raw.size() == 2 && raw.containsKey("1") && raw.containsKey("2")) {
+                    // İki seçenekli aday pazarlar; hangisinin 2,5 Alt/Üst ya da Karşılıklı Gol olduğunu
+                    // Calibration, Pinnacle oranlarıyla karşılaştırarak bulur.
+                    String key = sov != null ? (Math.abs(sov - 2.5) < 1e-9 ? Calibration.RAW_AU25 + mtid : null)
+                            : Calibration.RAW_KG + mtid;
+                    if (key != null) {
+                        odds.put(key, raw);
+                        if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
+                    }
                 }
             }
             if (odds.isEmpty()) continue;
@@ -119,9 +137,53 @@ public final class Nesine {
             BookEvent be = new BookEvent("nesine:" + (code != null ? code : home + "-" + away), home, away, ko,
                     text(first(ev, "LN", "LC")), mbs, odds, code);
             if (marketMbs != null) be.marketMbs.put("MS", marketMbs);
+            be.marketMbs.putAll(rawMbs);
             events.add(be);
         }
+        lastInventory = inv.render();
         return events;
+    }
+
+    /** Son okunan bültendeki pazarların özeti (pazar kodu, maç sayısı, seçenek sayısı, özel değerler). */
+    public static volatile String lastInventory = "";
+
+    private static Double number(Object v) {
+        if (v == null) return null;
+        try {
+            return Double.parseDouble(String.valueOf(v).replace(',', '.'));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Pazar envanteri: yeni pazarları (korner vb.) doğru eşleyebilmek için gerçek veriden özet. */
+    static final class Inventory {
+        private final Map<Long, Object[]> rows = new java.util.TreeMap<>(); // mtid -> {sayı, seçenekler, SOV'lar, alanlar, örnek}
+
+        @SuppressWarnings("unchecked")
+        void add(long mtid, int outcomes, Double sov, Map<String, Object> market, String sample) {
+            Object[] r = rows.get(mtid);
+            if (r == null) {
+                r = new Object[] {0, new java.util.TreeSet<Integer>(), new java.util.TreeSet<Double>(),
+                    new java.util.TreeSet<String>(market.keySet()), sample};
+                rows.put(mtid, r);
+            }
+            r[0] = (Integer) r[0] + 1;
+            ((java.util.Set<Integer>) r[1]).add(outcomes);
+            java.util.Set<Double> sovs = (java.util.Set<Double>) r[2];
+            if (sov != null && sovs.size() < 6) sovs.add(sov);
+        }
+
+        String render() {
+            StringBuilder b = new StringBuilder();
+            for (Map.Entry<Long, Object[]> e : rows.entrySet()) {
+                Object[] r = e.getValue();
+                b.append("MTID ").append(e.getKey()).append(": ").append(r[0]).append(" maç, seçenek ").append(r[1])
+                        .append(((java.util.Set<?>) r[2]).isEmpty() ? "" : ", değer " + r[2])
+                        .append(", alanlar ").append(r[3]).append(", örnek ").append(r[4]).append('\n');
+            }
+            return b.toString();
+        }
     }
 
     public static List<BookEvent> fetch(Http http) throws Http.ProviderException {

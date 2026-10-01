@@ -100,7 +100,7 @@ public class RadarTest {
     @Test
     public void intradayCreatesCouponOnlyWhenNothingPlayed() {
         // sabah: avantaj yok -> pas
-        ledger.recordRun(Fmt.dayKey(NOW), "pas", "avantaj yok", null, "");
+        ledger.recordRun(Fmt.dayKey(NOW), "pas", "avantaj yok", (Long) null, "");
         List<BookEvent> book = Collections.singletonList(book(1, 2.30));
         List<SharpEvent> sharp = Collections.singletonList(sharp(1, 0.50));
         Daily.Intraday r = Daily.intraday(ledger, book, sharp, radar);

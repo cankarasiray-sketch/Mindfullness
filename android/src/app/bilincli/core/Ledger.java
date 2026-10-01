@@ -74,6 +74,15 @@ public final class Ledger {
     public static final class Run {
         public String day, ts, decision, reason, summary;
         public Long couponId;
+        /** Günün tüm kuponları (ilki couponId). */
+        public List<Long> couponIds = new ArrayList<>();
+
+        public List<Long> ids() {
+            if (!couponIds.isEmpty()) return couponIds;
+            List<Long> one = new ArrayList<>();
+            if (couponId != null) one.add(couponId);
+            return one;
+        }
     }
 
     public static final class Stats {
@@ -146,6 +155,7 @@ public final class Ledger {
             o.put("reason", r.reason);
             o.put("couponId", r.couponId);
             o.put("summary", r.summary);
+            o.put("couponIds", new ArrayList<Object>(r.couponIds));
             rs.add(o);
         }
         m.put("runs", rs);
@@ -262,6 +272,7 @@ public final class Ledger {
             r.reason = Json.str(x, "reason");
             r.summary = Json.str(x, "summary");
             r.couponId = x.get("couponId") == null ? null : Json.lng(x, "couponId", 0);
+            for (Object id : Json.arr(x.get("couponIds"))) r.couponIds.add(((Number) id).longValue());
             runs.put(r.day, r);
         }
     }
@@ -550,7 +561,15 @@ public final class Ledger {
 
     // ---- günlük çalıştırma kayıtları -----------------------------------------
     public synchronized void recordRun(String day, String decision, String reason, Long couponId, String summary) {
+        List<Long> ids = new ArrayList<>();
+        if (couponId != null) ids.add(couponId);
+        recordRun(day, decision, reason, ids, summary);
+    }
+
+    public synchronized void recordRun(String day, String decision, String reason, List<Long> couponIds, String summary) {
+        Long couponId = couponIds.isEmpty() ? null : couponIds.get(0);
         Run r = new Run();
+        r.couponIds = new ArrayList<>(couponIds);
         r.day = day;
         r.ts = ts();
         r.decision = decision;

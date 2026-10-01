@@ -2,11 +2,13 @@ package app.bilincli.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import app.bilincli.core.Calibration;
 import app.bilincli.core.Closing;
 import app.bilincli.core.Daily;
 import app.bilincli.core.DemoSim;
 import app.bilincli.core.Fmt;
 import app.bilincli.core.Http;
+import app.bilincli.core.Json;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Models;
 import app.bilincli.core.Radar;
@@ -33,6 +35,9 @@ final class Repo {
     private final SharedPreferences prefs;
     private final Ledger ledger;
     final Radar radar;
+    /** Veri doğrulamanın son güvenilir pazar eşlemeleri (dogrulama.json). */
+    private final FileStorage memoryStore;
+    private final Map<String, Object> memory;
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
 
@@ -48,6 +53,38 @@ final class Repo {
         prefs = app.getSharedPreferences("bilincli", Context.MODE_PRIVATE);
         ledger = new Ledger(new FileStorage(new File(app.getFilesDir(), "kasa.json")), SYSTEM);
         radar = new Radar(new FileStorage(new File(app.getFilesDir(), "piyasa.json")));
+        memoryStore = new FileStorage(new File(app.getFilesDir(), "dogrulama.json"));
+        String m = memoryStore.read();
+        memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
+    }
+
+    /** Canlı çağrıdan sonra: doğrulama hafızasını ve kalan API kredisini sakla. */
+    void after(Daily.LiveSources src) {
+        memoryStore.write(Json.write(memory));
+        String rem = src.remainingCredits();
+        if (rem != null) prefs.edit().putString("credits", rem).putLong("creditsAt", System.currentTimeMillis()).apply();
+    }
+
+    /** Son bilinen kalan kredi ve zamanı (bilinmiyorsa null). */
+    Map<String, Object> credits() {
+        String c = prefs.getString("credits", null);
+        if (c == null) return null;
+        Map<String, Object> m = new java.util.LinkedHashMap<>();
+        try {
+            m.put("remaining", (long) Double.parseDouble(c));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+        m.put("at", Instant.ofEpochMilli(prefs.getLong("creditsAt", 0)).toString());
+        return m;
+    }
+
+    /** Kredi bu sayının altına inince radar gibi isteğe bağlı çekimler durur; günlük karar korunur. */
+    static final long LOW_CREDITS = 40;
+
+    boolean creditsLow() {
+        Map<String, Object> c = credits();
+        return c != null && (Long) c.get("remaining") < LOW_CREDITS;
     }
 
     /** Arayüzdeki "Fırsatlar" verisi: demo modunda demo özeti, değilse radar durumu. */
@@ -63,8 +100,17 @@ final class Repo {
     Daily.Intraday radarScan() throws Http.ProviderException {
         synchronized (LOCK) {
             if (ledger.settings().oddsApiKey.isEmpty()) throw new Http.ProviderException("The Odds API anahtarı yok.");
+            if (creditsLow()) {
+                throw new Http.ProviderException("API kredisi az kaldı (" + credits().get("remaining")
+                        + "); günlük karar için saklanıyor, radar bekliyor.");
+            }
             Daily.LiveSources src = live();
-            return Daily.intraday(ledger, src.book(), src.sharp(), radar);
+            try {
+                Daily.Fetch f = Daily.fetch(src, Instant.now());
+                return Daily.intraday(ledger, f.book, f.sharp, radar);
+            } finally {
+                after(src);
+            }
         }
     }
 
@@ -123,7 +169,9 @@ final class Repo {
     }
 
     Daily.LiveSources live() {
-        return new Daily.LiveSources(new Http.UrlHttp(), ledger.settings());
+        Daily.LiveSources src = new Daily.LiveSources(new Http.UrlHttp(), ledger.settings());
+        src.memory = memory;
+        return src;
     }
 
     /** Bugünün planlanan çalışma anı (Türkiye saati). */
@@ -149,6 +197,7 @@ final class Repo {
                 Daily.Result r = Daily.generate(ledger, src, false, false, radar);
                 if (!r.skipped) out.daily = r;
             }
+            after(src);
         }
         return out;
     }
@@ -162,6 +211,21 @@ final class Repo {
             for (Ledger.Leg l : c.legs) if (l.sportKey != null) leagues.add(l.sportKey);
             List<Models.BookEvent> book = src.book();
             List<Models.SharpEvent> sharp = src.sharp(leagues);
+            // Karşılıklı Gol bacakları: Pinnacle oranı maç bazında çekilir
+            for (Ledger.Leg l : c.legs) {
+                if (!"KG".equals(l.market)) continue;
+                for (Models.SharpEvent ev : sharp) {
+                    if (ev.ref.equals(l.sharpRef)) {
+                        try {
+                            src.enrich(ev, "btts");
+                        } catch (Http.ProviderException ignored) {
+                            // adil oran alınamazsa bacak "adil oran yok" olarak raporlanır
+                        }
+                    }
+                }
+            }
+            Calibration.apply(book, sharp, memory);
+            after(src);
             Instant now = Instant.now();
             Map<String, Object> r = Recheck.run(c, book, sharp, now, ledger.settings(), ledger.balance());
             ledger.saveCheck(couponId, r);

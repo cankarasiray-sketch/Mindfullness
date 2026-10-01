@@ -106,6 +106,9 @@ public final class State {
         o.put("reason", r.reason);
         o.put("summary", r.summary);
         o.put("couponId", r.couponId);
+        List<Object> ids = new ArrayList<>();
+        for (Long id : r.ids()) ids.add(id);
+        o.put("couponIds", ids);
         return o;
     }
 }

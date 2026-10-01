@@ -20,6 +20,9 @@ public final class Texts {
         parts.add("eşleşen " + stats.get("eslesen"));
         parts.add("karşılaştırılan " + stats.get("karsilastirilan_secim") + " seçim");
         parts.add("avantajlı " + stats.get("avantajli_secim"));
+        if (stats.get("dogrulama") != null && !String.valueOf(stats.get("dogrulama")).isEmpty()) {
+            parts.add(String.valueOf(stats.get("dogrulama")));
+        }
         Object m = stats.get("marjlar");
         if (m instanceof Map) {
             for (Map.Entry<String, Object> e : ((Map<String, Object>) m).entrySet()) {
@@ -77,9 +80,18 @@ public final class Texts {
             return new String[] {"Bugün pas · " + when, r.decision.reason + "\n" + statsLine(r.decision.stats)};
         }
         Coupon c = ledger.coupon(r.couponId);
-        String title = "Günün kuponu · " + c.legs.size() + " maç · oran " + Fmt.odds(c.totalOdds)
-                + (c.suggestedStake > 0 ? " · " + Fmt.tl(c.suggestedStake) : "");
-        String body = couponText(c) + (r.stakeNote != null ? "\n" + r.stakeNote : "")
+        List<Long> ids = r.couponIds.isEmpty() ? java.util.Collections.singletonList(r.couponId) : r.couponIds;
+        String title = ids.size() > 1
+                ? "Günün kuponları · " + ids.size() + " kupon"
+                : "Günün kuponu · " + c.legs.size() + " maç · oran " + Fmt.odds(c.totalOdds)
+                        + (c.suggestedStake > 0 ? " · " + Fmt.tl(c.suggestedStake) : "");
+        StringBuilder all = new StringBuilder();
+        for (Long id : ids) {
+            if (all.length() > 0) all.append("\n\n");
+            if (ids.size() > 1) all.append("Kupon #").append(id).append('\n');
+            all.append(couponText(ledger.coupon(id)));
+        }
+        String body = all + (r.stakeNote != null ? "\n" + r.stakeNote : "")
                 + "\nOranlar gün içinde değişir: oynamadan önce uygulamada \"Oynamadan önce kontrol et\"e bas."
                 + " İlk maçtan 90 dk önce otomatik kontrol bildirimi de gelir.";
         return new String[] {title, body};

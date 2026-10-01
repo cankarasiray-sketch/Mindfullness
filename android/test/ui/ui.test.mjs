@@ -277,6 +277,45 @@ test("radar sıklığı ayarı ve kredi tahmini", async () => {
   assert.equal(t.calls.at(-1).payload.settings.radarScans, 2);
 });
 
+test("günde birden fazla kupon gösterilir", async () => {
+  const s = clone(baseState);
+  const ids = s.coupons.slice(0, 3).map((c) => c.id);
+  s.coupons.slice(0, 3).forEach((c) => Object.assign(c, { result: null, played: true }));
+  s.todayRun = { day: s.today, decision: "kupon", reason: "", summary: "özet", couponId: ids[0], couponIds: ids };
+  const t = boot(s);
+  assert.match(t.text(), /Günün kuponu 1\/3/);
+  assert.match(t.text(), /Günün kuponu 3\/3/);
+  assert.equal(t.text().match(/Açık kupon · #/g), null); // günün kuponları ayrıca "açık" diye tekrar edilmez
+});
+
+test("pazarlar, KG ve günlük kupon ayarları kaydedilir; kredi uyarısı", async () => {
+  const s = clone(baseState);
+  s.credits = { remaining: 25, at: s.now };
+  const t = boot(s, "#ayarlar");
+  assert.match(t.text(), /Kalan API kredisi: 25/);
+  t.$("#sTotals").checked = true;
+  t.$("#sKg").value = "8";
+  t.$("#f_maxCouponsPerDay").value = "2";
+  t.$("#f_maxDailyExposure").value = "12";
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  const st = t.calls.at(-1).payload.settings;
+  assert.equal(st.totals, true);
+  assert.equal(st.kgEvents, 8);
+  assert.equal(st.maxCouponsPerDay, 2);
+  assert.ok(Math.abs(st.maxDailyExposure - 0.12) < 1e-12);
+  t.w.show("bugun");
+  assert.match(t.text(), /API kredisi az: 25/);
+});
+
+test("KG ve Alt/Üst etiketleri", async () => {
+  const s = clone(baseState);
+  const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
+  c.legs[0].market = "KG"; c.legs[0].outcome = "VAR";
+  const t = boot(s);
+  assert.match(t.text(), /KG Var/);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

@@ -26,6 +26,8 @@ public final class Daily {
         public String day;
         public Decision decision;
         public Long couponId;
+        public List<Long> couponIds = new ArrayList<>();
+        public Map<String, Object> calibration;
         public long stake;
         public String stakeNote, blocked, error;
         public boolean skipped;
@@ -43,6 +45,8 @@ public final class Daily {
         private final Http http;
         private final Settings cfg;
         private OddsApi api;
+        /** Calibration'ın son güvenilir pazar eşlemeleri (kalıcı saklamak çağıranın işi). */
+        public Map<String, Object> memory = new java.util.LinkedHashMap<>();
 
         public LiveSources(Http http, Settings cfg) {
             this.http = http;
@@ -58,6 +62,43 @@ public final class Daily {
             return api == null ? null : api.remaining;
         }
 
+        /**
+         * Karşılıklı Gol için Pinnacle oranı maç bazında çekilir (maç başına 1 kredi). Yalnızca
+         * iddaa'da aday KG pazarı olan, zaman penceresindeki ilk cfg.kgEvents maç için.
+         */
+        public int enrichKg(List<BookEvent> book, List<SharpEvent> sharp, Instant now) throws Http.ProviderException {
+            if (cfg.kgEvents <= 0) return 0;
+            List<Models.Pair> pairs = Matching.match(book, sharp);
+            List<Models.Pair> due = new ArrayList<>();
+            Instant from = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)), to = now.plusSeconds(Math.round(cfg.windowHours * 3600));
+            for (Models.Pair p : pairs) {
+                if (p.book.kickoff.isBefore(from) || p.book.kickoff.isAfter(to) || p.sharp.fair.containsKey("KG")) continue;
+                for (String k : p.book.odds.keySet()) {
+                    if (k.startsWith(Calibration.RAW_KG)) {
+                        due.add(p);
+                        break;
+                    }
+                }
+            }
+            java.util.Collections.sort(due, new java.util.Comparator<Models.Pair>() {
+                @Override
+                public int compare(Models.Pair a, Models.Pair b) {
+                    return a.book.kickoff.compareTo(b.book.kickoff);
+                }
+            });
+            int n = 0;
+            for (Models.Pair p : due) {
+                if (n >= cfg.kgEvents) break;
+                try {
+                    api().enrichEvent(p.sharp, "btts");
+                    n++;
+                } catch (Http.ProviderException e) {
+                    break; // bu pazar desteklenmiyor ya da kredi bitti; ana akışı durdurma
+                }
+            }
+            return n;
+        }
+
         @Override
         public List<BookEvent> book() throws Http.ProviderException {
             return Nesine.fetch(http);
@@ -70,6 +111,11 @@ public final class Daily {
 
         public List<SharpEvent> sharp(java.util.Collection<String> leagues) throws Http.ProviderException {
             return api().fetchEvents(leagues);
+        }
+
+        /** Belirli maçlar için ek pazar (ör. KG) adil olasılığı. */
+        public void enrich(SharpEvent ev, String markets) throws Http.ProviderException {
+            api().enrichEvent(ev, markets);
         }
 
         @Override
@@ -102,6 +148,54 @@ public final class Daily {
     }
 
     private Daily() {}
+
+    /** Doğrulanmış piyasa verisi. */
+    public static final class Fetch {
+        public List<BookEvent> book;
+        public List<SharpEvent> sharp;
+        public Map<String, Object> calibration;
+    }
+
+    /** Bülten + keskin piyasa çekilir, gerekirse KG eklenir ve Calibration'dan geçirilir. */
+    public static Fetch fetch(Sources src, Instant now) throws Http.ProviderException {
+        Fetch f = new Fetch();
+        f.book = src.book();
+        f.sharp = src.sharp();
+        if (src instanceof LiveSources) ((LiveSources) src).enrichKg(f.book, f.sharp, now);
+        f.calibration = Calibration.apply(f.book, f.sharp,
+                src instanceof LiveSources ? ((LiveSources) src).memory : new java.util.LinkedHashMap<String, Object>());
+        return f;
+    }
+
+    /**
+     * Kararın ana kuponu ve maç paylaşmayan alternatiflerinden günlük kupon sayısı kadarını kaydeder.
+     * Tutarlar Kelly'ye göre; toplamı günlük üst sınırı aşarsa orantılı küçültülür.
+     */
+    static List<Long> createCoupons(Ledger ledger, Decision d, String day, Settings cfg, boolean autoPlay,
+                                    String reasonPrefix, String summary, String[] noteOut) {
+        List<Proposal> props = new ArrayList<>();
+        props.add(d.proposal);
+        props.addAll(d.alternatives);
+        props = props.subList(0, Math.min(cfg.maxCouponsPerDay, props.size()));
+        double total = 0;
+        for (Proposal p : props) total += p.stakeFraction;
+        double scale = total > cfg.maxDailyExposure ? cfg.maxDailyExposure / total : 1.0;
+        long balance = ledger.balance();
+        List<Long> ids = new ArrayList<>();
+        String note = null;
+        for (Proposal p : props) {
+            String[] n = new String[1];
+            long stake = computeStake(balance, p.stakeFraction * scale, cfg, n)[0];
+            if (note == null) note = n[0];
+            long id = ledger.addCoupon(p, day, stake);
+            if (autoPlay && stake > 0 && stake <= ledger.balance()) ledger.markPlayed(id, stake, null);
+            ids.add(id);
+        }
+        noteOut[0] = note;
+        String reason = (reasonPrefix == null ? "" : reasonPrefix) + (note == null ? "" : (reasonPrefix == null ? "" : " ") + note);
+        ledger.recordRun(day, "kupon", reason.trim(), ids, summary);
+        return ids;
+    }
 
     public static long[] computeStake(long balance, Proposal p, Settings cfg, String[] noteOut) {
         return computeStake(balance, p.stakeFraction, cfg, noteOut);
@@ -161,40 +255,38 @@ public final class Daily {
         String blocked = Guard.check(ledger, cfg, now);
         if (blocked != null) {
             r.blocked = blocked;
-            ledger.recordRun(r.day, "koruma", blocked, null, "");
+            ledger.recordRun(r.day, "koruma", blocked, (Long) null, "");
             return r;
         }
-        List<BookEvent> book;
-        List<SharpEvent> sharp;
+        Fetch f;
         try {
-            book = src.book();
-            sharp = src.sharp();
+            f = fetch(src, now);
         } catch (Http.ProviderException e) {
             r.error = e.getMessage();
             return r; // hata günü kaydedilmez; sonraki çalıştırma yeniden dener
         }
-        if (radar != null) radar.update(book, sharp, now, cfg, true);
-        Decision d = Engine.decide(book, sharp, now, cfg);
+        if (radar != null) radar.update(f.book, f.sharp, now, cfg, true);
+        Decision d = Engine.decide(f.book, f.sharp, now, cfg);
+        d.stats.put("dogrulama", Calibration.summary(f.calibration));
         r.decision = d;
+        r.calibration = f.calibration;
         String summary = Texts.statsLine(d.stats);
         if (d.isPass()) {
-            ledger.recordRun(r.day, "pas", d.reason, null, summary);
+            ledger.recordRun(r.day, "pas", d.reason, (Long) null, summary);
             return r;
         }
         String[] note = new String[1];
-        long stake = computeStake(ledger.balance(), d.proposal, cfg, note)[0];
-        long cid = ledger.addCoupon(d.proposal, r.day, stake);
-        r.couponId = cid;
-        r.stake = stake;
+        r.couponIds = createCoupons(ledger, d, r.day, cfg, autoPlay, null, summary, note);
+        r.couponId = r.couponIds.get(0);
+        r.stake = ledger.coupon(r.couponId).suggestedStake;
         r.stakeNote = note[0];
-        if (autoPlay && stake > 0) ledger.markPlayed(cid, stake, null);
-        ledger.recordRun(r.day, "kupon", note[0] == null ? "" : note[0], cid, summary);
         return r;
     }
 
     /** Gün içi tarama sonucu. */
     public static final class Intraday {
         public Long newCouponId;
+        public List<Long> newCouponIds = new ArrayList<>();
         public String blocked;
         public List<java.util.Map<String, Object>> moves = new ArrayList<>();
     }
@@ -212,7 +304,12 @@ public final class Daily {
         String day = Fmt.dayKey(now);
         Ledger.Run run = ledger.runFor(day);
         Ledger.Coupon today = run == null || run.couponId == null ? null : ledger.coupon(run.couponId);
-        if (today != null && (today.played || today.result != null)) return out; // oynanmış kuponu değiştirme
+        if (run != null) {
+            for (Long id : run.ids()) {
+                Ledger.Coupon c = ledger.coupon(id);
+                if (c.played || c.result != null) return out; // oynanmış kuponları değiştirme
+            }
+        }
         String blocked = Guard.check(ledger, cfg, now);
         if (blocked != null) {
             out.blocked = blocked;
@@ -222,11 +319,10 @@ public final class Daily {
         if (d.isPass()) return out;
         if (today != null && sameSelections(today, d.proposal)) return out;
         String[] note = new String[1];
-        long stake = computeStake(ledger.balance(), d.proposal, cfg, note)[0];
-        long cid = ledger.addCoupon(d.proposal, day, stake);
-        ledger.recordRun(day, "kupon", "Gün içi taramada güncel oranlarla bulundu."
-                + (note[0] == null ? "" : " " + note[0]), cid, Texts.statsLine(d.stats));
-        out.newCouponId = cid;
+        List<Long> ids = createCoupons(ledger, d, day, cfg, false, "Gün içi taramada güncel oranlarla bulundu.",
+                Texts.statsLine(d.stats), note);
+        out.newCouponId = ids.get(0);
+        out.newCouponIds = ids;
         return out;
     }
 

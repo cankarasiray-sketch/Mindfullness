@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -45,6 +45,26 @@ bildirim olarak gelir.
   *En yüksek getiri* (yarım Kelly, en fazla %10). Demo simülasyonunda (200 ay) en yüksek tipik
   aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
   katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
+
+## Daha çok fırsat: pazarlar, günde 3 kupon, veri doğrulama (1.3)
+
+- **Günde en fazla 3 bağımsız kupon:** Motor, maç paylaşmayan en iyi kuponları seçer; tutarlar
+  Kelly'ye göre, toplamı günlük üst sınırı (Temkinli %9, En yüksek getiri %20) aşarsa orantılı
+  küçültülür. Demo simülasyonunda (200 ay) ortanca ayı Temkinli'de +%1,7 → +%2,3, En yüksek
+  getiri'de +%3,2 → +%4,1 yükseltti; en kötü ay biraz derinleşti.
+- **2,5 Alt/Üst** (Ayarlar → Pazarlar): Pinnacle "totals" ile karşılaştırılır; lig başına kredi ×2.
+- **Karşılıklı Gol:** Pinnacle KG oranı maç bazında çekilir (maç başına 1 kredi), günde en fazla
+  4/8/12 maç.
+- **Veri doğrulama:** Nesine'nin pazar kodları ve seçenek sıraları Pinnacle'la karşılaştırılarak
+  otomatik bulunur. Maç Sonucu sırası tutarsızsa düzeltilir ya da kapatılır, Alt/Üst ve KG için
+  eşleşme belirsizse pazar kullanılmaz, %25'ten büyük "avantajlar" veri hatası sayılıp ayıklanır.
+  Son güvenilir eşleme hatırlanır (kontrol anında az veri olsa da çalışır).
+- **Kredi takibi:** Kalan The Odds API kredisi Ayarlar'da görünür; 40'ın altına inince radar
+  durur, kalan kredi günlük karar için saklanır.
+- **Korner:** Bilinçli olarak eklenmedi. Değer hesabı keskin bir referans fiyat gerektirir; korner
+  için bu verinin kaynağı ve Nesine'deki pazar biçimi doğrulanamadı. "Kaynakları test et"
+  çıktısındaki **pazar envanteri** (pazar kodları, çizgi değerleri, örnek maç) paylaşılırsa
+  gerçek veriyle eşlenebilir.
 
 ## Fırsatlar sekmesi: değerli oranlar ve düşen oran radarı
 
@@ -86,7 +106,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.2.apk
+./build.sh          # testler + build/BilincliKupon-1.3.apk
 ./build.sh test     # yalnızca testler
 ```
 

@@ -183,6 +183,7 @@ function dayLabel(day) { var p = day.split("-"); return p[2] + "." + p[1] + "." 
 function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
   if (market === "AU25") return outcome === "ALT" ? "2,5 Alt" : "2,5 Üst";
+  if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
   return market + " " + outcome;
 }
 var RESULT = {kazandi: "Tuttu", kaybetti: "Yattı", iade: "İade"};
@@ -259,6 +260,8 @@ function banners() {
     + '<div class="btns"><button class="b" onclick="show(\'ayarlar\')">Anahtarı gir</button><button class="b ghost" onclick="act(\'demoStart\')">Önce demoyu gör</button></div></div>');
   if (S.stats.balance <= 0) out.push('<div class="banner">Kasan boş. Önerilen tutarlar kasana göre hesaplanır.'
     + '<div class="btns"><button class="b ghost" onclick="show(\'kasa\')">Kasaya para yatır</button></div></div>');
+  if (S.credits && S.credits.remaining < 40) out.push('<div class="banner"><b>API kredisi az: ' + S.credits.remaining + ".</b> "
+    + "Radar durdu, kalan kredi günlük karar için saklanıyor. Lig sayısını azalt, Alt/Üst ve KG'yi kapat ya da planını yükselt.</div>");
   if (S.clv.playedN >= 30 && S.clv.played < 0) out.push('<div class="banner"><b>Avantaj görünmüyor.</b> Oynadığın ' + S.clv.playedN
     + " seçim kapanış oranını ortalama " + pct(S.clv.played, true) + " ile yenemedi. Bu, piyasada avantaj olmadığının en güvenilir işaretidir; "
     + "bahsi durdurmayı ya da eşikleri yükseltmeyi düşün.</div>");
@@ -338,9 +341,14 @@ function viewToday() {
       + esc(hm(S.nextRun)) + "'da otomatik üretilir ve bildirim olarak gelir.</p>"
       + (S.demo ? "" : '<div class="btns"><button class="b" onclick="act(\'generate\',{force:false})">Şimdi üret</button></div>') + "</div>";
   } else if (run.decision === "kupon" && run.couponId) {
-    var c = couponById(run.couponId);
-    if (c) html += couponCard(c, "Günün kuponu", (run.reason ? '<p class="small muted">' + esc(run.reason) + "</p>" : "")
-      + '<p class="small muted">' + esc(run.summary || "") + "</p>");
+    var ids = run.couponIds && run.couponIds.length ? run.couponIds : [run.couponId];
+    ids.forEach(function (id, i) {
+      var c = couponById(id);
+      if (!c) return;
+      var title = ids.length > 1 ? "Günün kuponu " + (i + 1) + "/" + ids.length : "Günün kuponu";
+      html += couponCard(c, title, i === ids.length - 1 ? (run.reason ? '<p class="small muted">' + esc(run.reason) + "</p>" : "")
+        + '<p class="small muted">' + esc(run.summary || "") + "</p>" : "");
+    });
   } else {
     var pass = run.decision === "pas";
     html += '<div class="card"><div class="kicker">' + (pass ? "BUGÜN" : "KORUMA DEVREDE") + '</div><div class="big">' + (pass ? "Pas" : "Kupon yok")
@@ -348,9 +356,9 @@ function viewToday() {
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
   html += outlookCard();
-  var todayId = run ? run.couponId : null;
+  var todayIds = run && run.couponIds ? run.couponIds : run && run.couponId ? [run.couponId] : [];
   S.coupons.forEach(function (c) {
-    if (c.id === todayId || c.result) return;
+    if (todayIds.indexOf(c.id) >= 0 || c.result) return;
     var first = Math.min.apply(null, c.legs.map(function (l) { return Date.parse(l.kickoff); }));
     if (c.played || first > Date.parse(S.now)) html += couponCard(c, "Açık kupon");
   });
@@ -549,6 +557,7 @@ var FIELDS = [
   ["maxLegOdds", "En yüksek maç oranı", false], ["minCouponOdds", "En düşük kupon oranı", false],
   ["maxLegs", "Kupondaki en fazla maç", false], ["kellyMultiplier", "Kelly çarpanı", false],
   ["maxStakeFraction", "Kupon başına en fazla kasa (%)", true], ["minCouponAmount", "Asgari kupon tutarı (TL)", false],
+  ["maxCouponsPerDay", "Günde en fazla kupon (1-3)", false], ["maxDailyExposure", "Günlük toplam en fazla kasa (%)", true],
   ["weeklyLossLimit", "Haftalık kayıp limiti (%)", true], ["chaseCooldownHours", "Kovalama beklemesi (saat)", false]
 ];
 function viewSettings() {
@@ -558,7 +567,16 @@ function viewSettings() {
     + '<label>The Odds API anahtarı</label><input id="sKey" type="password" autocomplete="off" value="' + esc(st.oddsApiKey) + '">'
     + '<div class="btns"><button class="b ghost" onclick="var k=document.getElementById(\'sKey\');k.type=k.type===\'password\'?\'text\':\'password\'">Göster</button>'
     + '<button class="b ghost" onclick="act(\'openUrl\',{url:\'https://the-odds-api.com/#get-access\'},true)">Anahtar al</button></div>'
+    + (S.credits ? '<p class="small muted">Kalan API kredisi: <b>' + S.credits.remaining + "</b> (" + esc(dm(S.credits.at)) + " " + esc(hm(S.credits.at)) + ")</p>" : "")
     + '<div class="btns"><button class="b" onclick="checkSources()">Kaynakları test et</button></div><pre class="out" id="checkOut" style="display:none"></pre></div>';
+  html += '<div class="card"><h2>Pazarlar</h2><p class="small muted">Daha çok pazar, daha çok değerli fırsat demektir. Her pazar, iddaa bülteniyle Pinnacle '
+    + "karşılaştırılarak otomatik doğrulanır; eşleşme belirsizse kullanılmaz.</p>"
+    + '<label class="check"><input type="checkbox" checked disabled>Maç Sonucu (1-X-2)</label>'
+    + '<label class="check"><input type="checkbox" id="sTotals"' + (st.totals ? " checked" : "") + '>2,5 Alt/Üst <span class="small muted">(lig başına kredi ×2)</span></label>'
+    + '<label>Karşılıklı Gol: günde en fazla kaç maç</label><select id="sKg">' + [[0, "Kapalı"], [4, "4 maç"], [8, "8 maç"], [12, "12 maç"]].map(function (o) {
+      return '<option value="' + o[0] + '"' + (st.kgEvents === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+    }).join("") + '</select><p class="small muted">KG oranı Pinnacle\'dan maç bazında çekilir (maç başına 1 kredi). '
+    + 'Korner gibi pazarlar için güvenilir keskin fiyat kaynağı doğrulanamadığından eklenmedi; "Kaynakları test et" çıktısındaki pazar envanterini paylaşırsan eşlenebilir.</p></div>';
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.map(function (l) {
     return '<label class="check"><input type="checkbox" class="lg" value="' + esc(l[0]) + '"' + (st.leagues.indexOf(l[0]) >= 0 ? " checked" : "") + ">" + esc(l[1]) + "</label>";
   }).join("") + '<p class="small muted">Her lig günde 1 kredi harcar.</p></div>';
@@ -590,8 +608,10 @@ function viewSettings() {
   return html;
 }
 var PROFILE_TEXT = {
-  temkinli: "Kupon başına kasanın en fazla %3'ü (çeyrek Kelly). Dalgalanma en düşük. Demo simülasyonunda (200 ay) tipik ay +%0,9 ile +%1,6, en kötü ay −%12 ile −%15.",
-  yuksek: "Kupon başına kasanın en fazla %10'u (yarım Kelly). Demo simülasyonunda en yüksek tipik aylık getiriyi verdi: +%1,1 ile +%2,6; en kötü ay −%25 ile −%28. "
+  temkinli: "Günde en fazla 3 bağımsız kupon; her biri kasanın en fazla %3'ü (çeyrek Kelly), günlük toplam en fazla %9. "
+    + "Demo simülasyonunda (200 ay) tipik ay +%2,3 ile +%2,8; en kötü ay −%18 ile −%19.",
+  yuksek: "Günde en fazla 3 bağımsız kupon; her biri kasanın en fazla %10'u (yarım Kelly), günlük toplam en fazla %20. "
+    + "Demo simülasyonunda en yüksek tipik aylık getiri: +%4,1 ile +%5,0; en kötü ay −%32 ile −%36. "
     + "Daha büyük bahis getiriyi artırmaz, düşürür (tam Kelly'de tipik ay geriledi, 2 katında zarara döndü)."
 };
 function profilesCard(st) {
@@ -619,8 +639,12 @@ function collectSettings() {
   var t = val("sTime").split(":");
   st.runHour = parseInt(t[0], 10); st.runMinute = parseInt(t[1], 10);
   st.radarScans = parseInt(val("sRadar") || "0", 10);
+  var tot = document.getElementById("sTotals");
+  st.totals = !!(tot && tot.checked);
+  st.kgEvents = parseInt(val("sKg") || "0", 10);
   FIELDS.forEach(function (f) { st[f[0]] = readNum("f_" + f[0], f[2]); });
   st.maxLegs = Math.round(st.maxLegs);
+  st.maxCouponsPerDay = Math.round(st.maxCouponsPerDay);
   return st;
 }
 function saveSettings() {

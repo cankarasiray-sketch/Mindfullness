@@ -25,6 +25,7 @@ public final class Settlement {
         String actual;
         if ("MS".equals(market)) actual = home > away ? "1" : away > home ? "2" : "X";
         else if ("AU25".equals(market)) actual = home + away >= 3 ? "UST" : "ALT";
+        else if ("KG".equals(market)) actual = home > 0 && away > 0 ? "VAR" : "YOK";
         else throw new IllegalArgumentException("bilinmeyen pazar: " + market);
         return outcome.equals(actual) ? Models.WON : Models.LOST;
     }

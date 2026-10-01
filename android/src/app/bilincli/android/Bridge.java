@@ -55,6 +55,7 @@ public final class Bridge {
         extra.put("nextRun", Scheduler.nextRun(repo.real().settings(), Instant.now()).toString());
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
         extra.put("radar", repo.radarView());
+        extra.put("credits", repo.credits());
         String version = "?";
         try {
             version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
@@ -210,7 +211,9 @@ public final class Bridge {
                 requireReal(repo);
                 Daily.Result r;
                 synchronized (Repo.LOCK) {
-                    r = Daily.generate(repo.real(), repo.live(), Json.bool(p, "force", false), false, repo.radar);
+                    Daily.LiveSources src = repo.live();
+                    r = Daily.generate(repo.real(), src, Json.bool(p, "force", false), false, repo.radar);
+                    repo.after(src);
                 }
                 Scheduler.scheduleNextEvent(activity);
                 if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error);
@@ -323,35 +326,41 @@ public final class Bridge {
         return Models.WON.equals(result) ? "TUTTU" : Models.LOST.equals(result) ? "yattı" : "iade";
     }
 
-    /** Veri kaynaklarını dener ve eşleştirmeyi özetler (Python: `bilincli kontrol`). */
+    /** Veri kaynaklarını dener, doğrulama raporunu ve pazar envanterini gösterir. */
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
         Daily.LiveSources src = repo.live();
-        List<Models.BookEvent> book = new ArrayList<>();
-        List<Models.SharpEvent> sharp = new ArrayList<>();
+        Daily.Fetch f;
         try {
-            book = src.book();
-            b.append("iddaa bülteni (Nesine): ").append(book.size()).append(" maç okundu\n");
+            f = Daily.fetch(src, Instant.now());
         } catch (Exception e) {
-            b.append("iddaa bülteni okunamadı: ").append(e.getMessage()).append('\n');
+            b.append("Veri alınamadı: ").append(e.getMessage()).append('\n');
+            return b.toString().trim();
+        } finally {
+            repo.after(src);
         }
-        try {
-            sharp = src.sharp();
-            b.append("Keskin piyasa: ").append(sharp.size()).append(" maç (kalan API kredisi: ")
-                    .append(src.remainingCredits()).append(")\n");
-        } catch (Exception e) {
-            b.append("Keskin piyasa okunamadı: ").append(e.getMessage()).append('\n');
+        b.append("iddaa bülteni (Nesine): ").append(f.book.size()).append(" maç\n");
+        b.append("Keskin piyasa (Pinnacle): ").append(f.sharp.size()).append(" maç · kalan API kredisi: ")
+                .append(src.remainingCredits()).append('\n');
+        List<Models.Pair> pairs = Matching.match(f.book, f.sharp);
+        b.append("Eşleşen maç: ").append(pairs.size()).append('\n');
+        for (int i = 0; i < Math.min(5, pairs.size()); i++) {
+            Models.Pair x = pairs.get(i);
+            b.append("  ").append(x.book.home).append(" - ").append(x.book.away).append(" ⇄ ")
+                    .append(x.sharp.home).append(" - ").append(x.sharp.away).append('\n');
         }
-        if (!book.isEmpty() && !sharp.isEmpty()) {
-            List<Models.Pair> pairs = Matching.match(book, sharp);
-            b.append("Eşleşen maç: ").append(pairs.size()).append('\n');
-            for (int i = 0; i < Math.min(6, pairs.size()); i++) {
-                Models.Pair x = pairs.get(i);
-                b.append("  ").append(x.book.home).append(" - ").append(x.book.away).append(" ⇄ ")
-                        .append(x.sharp.home).append(" - ").append(x.sharp.away).append('\n');
-            }
-            Engine.Decision d = Engine.decide(book, sharp, Instant.now(), repo.real().settings());
-            b.append(Texts.statsLine(d.stats));
+        Map<String, Object> cal = f.calibration;
+        b.append("\nVeri doğrulama\n");
+        b.append("  Maç Sonucu: ").append(cal.get("MS")).append('\n');
+        b.append("  2,5 Alt/Üst: ").append(cal.get("AU25")).append('\n');
+        b.append("  Karşılıklı Gol: ").append(cal.get("KG")).append('\n');
+        b.append("  Ayıklanan şüpheli oran: ").append(cal.get("suspicious")).append('\n');
+        for (Object n : Json.arr(cal.get("notes"))) b.append("  · ").append(n).append('\n');
+        Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), repo.real().settings());
+        b.append('\n').append(Texts.statsLine(d.stats)).append('\n');
+        String inv = app.bilincli.core.Nesine.lastInventory;
+        if (inv != null && !inv.isEmpty()) {
+            b.append("\nPazar envanteri (korner gibi yeni pazarları eşlemek için bu bölümü paylaş)\n").append(inv);
         }
         return b.toString().trim();
     }
