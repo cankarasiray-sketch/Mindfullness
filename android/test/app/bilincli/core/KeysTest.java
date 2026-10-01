@@ -49,8 +49,10 @@ public class KeysTest {
         assertEquals(A + "\n" + B + "\n" + C, s.oddsApiKey);
         assertEquals("…1111", Settings.keyLabel(A));
         assertNull(s.validate());
-        s.oddsApiKey = "k1 k2 k3 k4 k5 k6";
-        assertTrue(s.validate().contains("En fazla 5"));
+        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7";
+        assertNull(s.validate()); // 7 anahtar kabul
+        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8";
+        assertTrue(s.validate().contains("En fazla 7"));
         assertEquals(Collections.singletonList("abc123"), cfg(" abc123 ").apiKeys()); // tek anahtar eskisi gibi
     }
 
@@ -163,7 +165,7 @@ public class KeysTest {
         assertTrue(!CreditPlan.plan(s, 2455L, 45L, LocalDate.of(2026, 10, 1), yield).activeKnown);
         assertEquals(Arrays.asList("soccer_greece_super_league", "soccer_efl_champ"), p.expanded); // Belçika sığmadı
         assertTrue(p.cost <= CreditPlan.EXPAND_SHARE * p.budget);
-        assertEquals(57, p.cost, 1e-9); // 4 oynayan lig x 2 pazar x 5 tarama + 12 KG + 5 gider
+        assertEquals(65, p.cost, 1e-9); // 4 oynayan lig x 2 pazar x 6 tarama (sabah + 4 radar + kadro) + 12 KG + 5 gider
         assertTrue(CreditPlan.effective(s, p).leagues.contains("soccer_efl_champ"));
         assertTrue(p.notes.contains("Kredi bol: 2 ek lig tarandı"));
         // tek ücretsiz anahtar: genişleme yok (daraltma var)

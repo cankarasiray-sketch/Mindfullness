@@ -487,7 +487,7 @@ test("birden fazla API anahtarı: alanlar, kayıt ve anahtar başına kredi", as
   const t = boot(s, "#ayarlar");
   assert.equal(t.$("#sKey0").value, "anahtar-bir-1111");
   assert.equal(t.$("#sKey1").value, "anahtar-iki-2222");
-  assert.equal(t.$$(".apikey").length, 5);
+  assert.equal(t.$$(".apikey").length, 7);
   assert.match(t.text(), /Kalan API kredisi: 780/);
   assert.match(t.text(), /…1111: 480 · …2222: 300 · …3333: henüz kullanılmadı/);
   t.$("#sKey2").value = " anahtar-uc-3333 ";
@@ -538,6 +538,27 @@ test("bugünkü maçlar bilinmiyorsa açıklama ve ücretsiz sorgu düğmesi", a
   const card = t2.$$(".card").find((x) => x.querySelector("h2") && x.querySelector("h2").textContent === "Kredi planı");
   assert.doesNotMatch(card.textContent, /henüz sorulmadı/);
   assert.ok(!t2.$$("button").some((b) => b.textContent.includes("Bugünün maçlarını sor")));
+});
+
+test("kadro saati taraması ve gece sessizliği ayarları kaydedilir", async () => {
+  const s = clone(baseState);
+  s.settings.lineupScans = true;
+  s.settings.quietNights = true;
+  const t = boot(s, "#ayarlar");
+  assert.equal(t.$("#sLineup").checked, true);
+  assert.equal(t.$("#sQuiet").checked, true);
+  assert.match(t.text(), /Kadro saati taraması/);
+  t.$("#sLineup").checked = false;
+  t.$("#sQuiet").checked = false;
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  const st = t.calls.at(-1).payload.settings;
+  assert.equal(st.lineupScans, false);
+  assert.equal(st.quietNights, false);
+  s.creditPlan = { leagues: ["soccer_epl"], expanded: [], activeKnown: true, totals: true, kgEvents: 0, radarScans: 2, lineupScans: true,
+    daysLeft: 20, budget: 50, cost: 20, remaining: 1000, quota: 3500, coupons: 5, narrowed: false, notes: [] };
+  const t2 = boot(s, "#ayarlar");
+  assert.match(t2.text(), /günde 2 \+ kadro saati/);
 });
 
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {

@@ -503,10 +503,20 @@ public final class Daily {
     }
 
     public static Intraday intraday(Ledger ledger, List<BookEvent> book, List<SharpEvent> sharp, Radar radar, Sources src) {
+        return intraday(ledger, book, sharp, radar, src, false);
+    }
+
+    /**
+     * partial: yalnızca bazı ligler çekildi (kadro saati taraması). Değer listesi yenilenmez ve
+     * günün planı baştan kurulmaz (diğer liglerdeki kuponlar silinmesin): bugünkü kuponlarda
+     * olmayan maçlardan, kalan günlük sınır içinde ek kupon eklenir.
+     */
+    public static Intraday intraday(Ledger ledger, List<BookEvent> book, List<SharpEvent> sharp, Radar radar, Sources src,
+                                    boolean partial) {
         Instant now = ledger.now();
         Settings cfg = decisionSettings(ledger, src);
         Intraday out = new Intraday();
-        out.moves = radar.update(book, sharp, now, cfg, true);
+        out.moves = radar.update(book, sharp, now, cfg, !partial);
         Closing.capture(ledger, sharp, now);
         String day = Fmt.dayKey(now);
         Ledger.Run run = ledger.runFor(day);
@@ -519,7 +529,7 @@ public final class Daily {
         if (d.isPass()) return out;
         List<Long> todayIds = run == null ? new ArrayList<Long>() : run.ids();
         String[] note = new String[1];
-        if (run == null || !anyPlayed(ledger, run)) {
+        if (run == null || (!partial && !anyPlayed(ledger, run))) {
             Portfolio.Result plan = Portfolio.optimize(d.candidates, cfg, cfg.maxCouponsPerDay, cfg.maxDailyExposure, null);
             java.util.Set<String> fresh = new java.util.HashSet<>(), current = new java.util.HashSet<>();
             if (plan.picks.isEmpty()) fresh.add(signature(d.proposal));

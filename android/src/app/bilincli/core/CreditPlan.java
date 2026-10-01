@@ -14,7 +14,7 @@ import java.util.Map;
  *
  * Günlük bütçe = (kalan kredi - yedek) / yenilenmeye kalan gün. Tahmini günlük maliyet bütçeyi
  * aşarsa, kredi başına en az fırsat getiren kalemden başlayarak kısılır:
- * Karşılıklı Gol (maç başına 1 kredi) → radar taramaları → günlük kupon 5→3 (her kupon maç öncesi
+ * Karşılıklı Gol (maç başına 1 kredi) → kadro saati taraması → radar taramaları → günlük kupon 5→3 (her kupon maç öncesi
  * kontrol ve kapanış oranı için kredi harcar; simülasyonda 3 kupon 5'in getirisinin çoğunu verdi)
  * → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig → son çare kupon 3→1.
  *
@@ -32,6 +32,8 @@ public final class CreditPlan {
         public List<String> leagues = new ArrayList<>();
         public boolean totals;
         public int kgEvents, radarScans, coupons, daysLeft;
+        /** Kadro saati taraması (her lig günde bir tarama daha). */
+        public boolean lineupScans;
         public double budget, cost;
         public Long remaining;
         /** Aylık kota (kalan + kullanılan; bilinmiyorsa ücretsiz plan varsayımı). */
@@ -50,6 +52,7 @@ public final class CreditPlan {
             m.put("totals", totals);
             m.put("kgEvents", (long) kgEvents);
             m.put("radarScans", (long) radarScans);
+            m.put("lineupScans", lineupScans);
             m.put("coupons", (long) coupons);
             m.put("daysLeft", (long) daysLeft);
             m.put("budget", budget);
@@ -101,7 +104,7 @@ public final class CreditPlan {
             }
         }
         int kg = known ? Math.min(p.kgEvents, matches) : p.kgEvents; // KG yalnızca penceredeki maçlar için
-        return w * (1 + p.radarScans) + kg + overhead(p.coupons, avgCoupons);
+        return w * (1 + p.radarScans + (p.lineupScans ? 1 : 0)) + kg + overhead(p.coupons, avgCoupons);
     }
 
     /** Seçili liglerin yalnızca o gün oynayanları kredi harcar (Settings.ACTIVE_SHARE). */
@@ -136,6 +139,7 @@ public final class CreditPlan {
         p.totals = cfg.totals;
         p.kgEvents = cfg.kgEvents;
         p.radarScans = cfg.radarScans;
+        p.lineupScans = cfg.lineupScans;
         p.coupons = cfg.maxCouponsPerDay;
         p.leagues.addAll(cfg.leagues);
         p.daysLeft = daysLeft(today, cfg.creditResetDay);
@@ -173,6 +177,9 @@ public final class CreditPlan {
             if (p.kgEvents > 0) {
                 p.kgEvents = next(kgSteps, p.kgEvents);
                 note(p, "kg", p.kgEvents > 0 ? "Karşılıklı Gol en fazla " + p.kgEvents + " maç" : "Karşılıklı Gol bugünlük kapatıldı");
+            } else if (p.lineupScans) {
+                p.lineupScans = false;
+                note(p, "kadro", "Kadro saati taraması bugünlük kapatıldı");
             } else if (p.radarScans > 0) {
                 p.radarScans = next(radarSteps, p.radarScans);
                 note(p, "radar", p.radarScans > 0 ? "Radar günde en fazla " + p.radarScans + " tarama" : "Radar bugünlük kapatıldı");
@@ -265,6 +272,7 @@ public final class CreditPlan {
         s.totals = p.totals;
         s.kgEvents = p.kgEvents;
         s.radarScans = p.radarScans;
+        s.lineupScans = p.lineupScans;
         s.maxCouponsPerDay = p.coupons;
         return s;
     }

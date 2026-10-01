@@ -275,10 +275,13 @@ public class MarketsTest {
         assertEquals(5, s.maxCouponsPerDay);
         int base = s.estimatedMonthlyCredits();
         assertEquals(13, s.leagues.size()); // büyük 6 + Avrupa kupaları + Hollanda, Portekiz + EuroLeague, NBA
-        assertEquals(Math.round(30 * 13 * Settings.ACTIVE_SHARE) + 240, base);
+        assertEquals(Math.round(30 * 13 * Settings.ACTIVE_SHARE * 2) + 240, base); // sabah + kadro saati taraması
         s.totals = true;
         int totals = s.estimatedMonthlyCredits();
-        assertEquals(Math.round(30 * 13 * 2 * Settings.ACTIVE_SHARE) + 240, totals); // basketbolda da toplam sayı
+        assertEquals(Math.round(30 * 13 * 2 * Settings.ACTIVE_SHARE * 2) + 240, totals); // basketbolda da toplam sayı
+        s.lineupScans = false;
+        assertEquals(Math.round(30 * 13 * 2 * Settings.ACTIVE_SHARE) + 240, s.estimatedMonthlyCredits());
+        s.lineupScans = true;
         s.kgEvents = 6;
         assertEquals(totals + 180, s.estimatedMonthlyCredits());
         // 1.7.2'ye taşıma: eski varsayılan 6 lig değiştirilmemişse yeni varsayılana geçer, özel seçim korunur

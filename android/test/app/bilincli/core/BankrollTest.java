@@ -112,9 +112,11 @@ public class BankrollTest {
         assertTrue(p.leagues.contains("soccer_epl"));
         assertEquals(7, p.leagues.size()); // günde 15 kredi: 12 gider + 7 lig x 0,4
         // her kalem için yalnızca son durum, okunur lig adıyla
-        assertEquals(Arrays.asList("Karşılıklı Gol bugünlük kapatıldı", "Radar bugünlük kapatıldı", "Günde en fazla 3 kupon",
-                "2,5 Alt/Üst bugünlük kapatıldı", "Fransa Ligue 1 bugünlük çıkarıldı (en az fırsat çıkaran lig)"),
-                p.notes.subList(0, 5));
+        assertEquals(Arrays.asList("Karşılıklı Gol bugünlük kapatıldı", "Kadro saati taraması bugünlük kapatıldı",
+                "Radar bugünlük kapatıldı", "Günde en fazla 3 kupon", "2,5 Alt/Üst bugünlük kapatıldı",
+                "Fransa Ligue 1 bugünlük çıkarıldı (en az fırsat çıkaran lig)"), p.notes.subList(0, 6));
+        assertFalse(p.lineupScans);
+        assertFalse(CreditPlan.effective(s, p).lineupScans);
         Settings eff = CreditPlan.effective(s, p);
         assertEquals(p.leagues, eff.leagues);
         assertFalse(eff.totals);
@@ -142,7 +144,8 @@ public class BankrollTest {
         assertFalse(light.notes.toString(), light.narrowed);
         assertTrue(light.totals);
         assertEquals(4, light.kgEvents);
-        assertEquals(1 * 2 + 4 + 5, light.cost, 1e-9); // Uluslar Ligi x2 (Alt/Üst) + 4 KG + gider (3 + 2x1)
+        assertTrue(light.lineupScans);
+        assertEquals(1 * 2 * 2 + 4 + 5, light.cost, 1e-9); // Uluslar Ligi x2 (Alt/Üst) x2 (sabah + kadro saati) + 4 KG + gider (3 + 2x1)
         // eski tahminle (her lig %40, her gün 5 kupon) aynı gün Alt/Üst ve KG kapanıyordu
         CreditPlan.Plan old = CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null);
         assertTrue(old.narrowed);
@@ -160,7 +163,7 @@ public class BankrollTest {
         // KG maliyeti penceredeki maç sayısını aşmaz
         for (String l : s.leagues) active.put(l, 0);
         active.put("soccer_uefa_nations_league", 2);
-        assertEquals(1 * 2 + 2 + 5, CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null, active, 1.0).cost, 1e-9);
+        assertEquals(1 * 2 * 2 + 2 + 5, CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null, active, 1.0).cost, 1e-9);
     }
 
     @Test

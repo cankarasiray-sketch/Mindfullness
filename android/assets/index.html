@@ -671,7 +671,7 @@ var FIELDS = [
   ["maxCouponsPerDay", "Günde en fazla kupon (1-5)", false], ["maxDailyExposure", "Günlük toplam en fazla kasa (%)", true],
   ["weeklyLossLimit", "Haftalık kayıp limiti (%)", true], ["chaseCooldownHours", "Kovalama beklemesi (saat)", false]
 ];
-var MAX_KEYS = 5;
+var MAX_KEYS = 7;
 function keyInputs(joined) {
   var keys = (joined || "").split(/[\s,;]+/).filter(function (k) { return k; }), html = "";
   for (var i = 0; i < MAX_KEYS; i++) {
@@ -718,10 +718,15 @@ function viewSettings() {
     + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"]].map(function (o) {
       return '<option value="' + o[0] + '"' + (st.radarScans === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + '</select><p class="small muted">Taramalar günün maç saatlerine göre, maç gruplarından ~2,5 saat önceye yerleştirilir (o saatte Pinnacle fiyatı olgun, iddaa çoğu zaman henüz güncellenmemiş); maç bilgisi yoksa 10–19 arası sabit saatler. Tahmini aylık kredi: ~' + st.estimatedCredits + " (ücretsiz plan 500). "
-    + (st.estimatedCredits > 500 ? "<b>Ücretsiz planı aşar:</b> lig sayısını azalt ya da ücretli plana geç." : "Ücretsiz plana sığar.") + "</p></div>";
+    + (st.estimatedCredits > 500 ? "<b>Ücretsiz planı aşar:</b> birden fazla anahtar ekle, lig sayısını azalt ya da ücretli plana geç." : "Ücretsiz plana sığar.") + "</p>"
+    + '<label class="check"><input type="checkbox" id="sLineup"' + (st.lineupScans ? " checked" : "") + ">Kadro saati taraması</label>"
+    + '<p class="small muted">İlk 11\'ler maçtan ~60 dk önce açıklanır; Pinnacle hemen tepki verir, iddaa çoğu zaman gecikir. Her maç grubundan ~45 dk önce yalnızca o saatte oynayan ligler taranır; '
+    + "avantaj çıkarsa bugünkü kuponlara dokunmadan ek kupon önerilir ve bildirilir. Kredi: her lig günde bir tarama daha; kredi yetmezse plan bunu Karşılıklı Gol'den sonra kapatır.</p></div>";
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
-    + esc(dm(S.nextRun)) + " " + esc(hm(S.nextRun)) + ". Biten maçlar 3 saatte bir kontrol edilir.</p></div>";
+    + esc(dm(S.nextRun)) + " " + esc(hm(S.nextRun)) + ". Biten maçlar 3 saatte bir kontrol edilir.</p>"
+    + '<label class="check"><input type="checkbox" id="sQuiet"' + (st.quietNights ? " checked" : "") + ">Gece (00:00–08:00) bildirimleri sessiz</label>"
+    + '<p class="small muted">Gece maçlarının (ör. NBA) maç öncesi kontrolleri sesli uyandırmaz; bildirim sabah bildirim alanında durur.</p></div>';
   html += profilesCard(st);
   html += '<div class="card"><h2>Kasa takibi</h2><label class="check"><input type="checkbox" id="sAuto"' + (st.autoTrack ? " checked" : "") + ">Otomatik</label>"
     + '<p class="small muted">Açıkken: ilk maçtan 90 dk önce kupon güncel iddaa ve Pinnacle oranlarıyla kontrol edilir; hâlâ avantajlıysa o anki oranlar ve güncel kasaya göre '
@@ -785,7 +790,8 @@ function creditCard(st) {
       + item("Günlük bütçe / tahmini gider", "~" + num(p.budget, 1) + " / ~" + num(p.cost, 0) + " kredi")
       + item("Bugün taranan ligler", esc(p.leagues.filter(function (l) { return (p.expanded || []).indexOf(l) < 0; }).map(leagueName).join(", ")))
       + (p.expanded && p.expanded.length ? item("Kredi bol, ek ligler", esc(p.expanded.map(leagueName).join(", "))) : "")
-      + item("Alt/Üst · KG · radar", (p.totals ? "açık" : "kapalı") + " · " + (p.kgEvents ? p.kgEvents + " maç" : "kapalı") + " · " + (p.radarScans ? "günde " + p.radarScans : "kapalı"))
+      + item("Alt/Üst · KG · radar", (p.totals ? "açık" : "kapalı") + " · " + (p.kgEvents ? p.kgEvents + " maç" : "kapalı") + " · " + (p.radarScans ? "günde " + p.radarScans : "kapalı")
+        + (p.lineupScans ? " + kadro saati" : ""))
       + item("Günlük kupon", "en fazla " + p.coupons)
       + "</div>" + (p.notes.length ? '<p class="small muted">' + esc(p.notes.join("; ")) + ".</p>" : "")
       + (p.activeKnown === false && st.oddsApiKey ? '<p class="small muted">Bugün hangi liglerin oynadığı henüz sorulmadı (ör. güncellemeden sonra): '
@@ -814,6 +820,9 @@ function collectSettings() {
   var t = val("sTime").split(":");
   st.runHour = parseInt(t[0], 10); st.runMinute = parseInt(t[1], 10);
   st.radarScans = parseInt(val("sRadar") || "0", 10);
+  var lu = document.getElementById("sLineup"), qn = document.getElementById("sQuiet");
+  st.lineupScans = !!(lu && lu.checked);
+  st.quietNights = !!(qn && qn.checked);
   var tot = document.getElementById("sTotals");
   st.totals = !!(tot && tot.checked);
   st.kgEvents = parseInt(val("sKg") || "0", 10);

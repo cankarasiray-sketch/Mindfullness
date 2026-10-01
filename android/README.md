@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.9.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.0.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,22 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Kadro saati taraması, gece sessizliği, 7 anahtar (2.0)
+
+- **Kadro saati taraması:** İlk 11'ler maçtan ~60 dk önce açıklanır; Pinnacle hemen tepki verir,
+  iddaa çoğu zaman gecikir. Sabahki kararın maç saatlerinden gruplar çıkarılır (30 dk içinde
+  başlayanlar bir grup) ve her grubun ilk maçından 45 dk önce yalnızca o grupta oynayan ligler
+  taranır. Avantaj çıkarsa bugünkü kuponlara dokunulmaz, yenileri kalan günlük sınır içinde
+  eklenir ve bildirilir; Fırsatlar'daki değer listesi tam taramaya ait kalır. Normal radar
+  taraması 10 dk içindeyse onunla birleşir. Kredi: her lig günde bir tarama daha; kredi yetmezse
+  plan bunu Karşılıklı Gol'den hemen sonra kapatır. Ayarlar → Düşen oran radarı'ndan kapatılabilir.
+- **Gece maçları:** Sabah 09:00'dan önce başlayan maçlar (ör. NBA 02:00) radar planına girmez;
+  önceden bunlar için 09:00'a, maç bittikten sonraya tarama konuyordu.
+- **Gece sessizliği:** 00:00–08:00 arası bildirimler sessiz kanaldan gelir (ses, titreşim, ekran
+  yok; sabah bildirim alanında durur). Ayarlar → Zamanlama'dan kapatılabilir.
+- **7 anahtar:** Veri kaynağı'na en fazla 7 The Odds API anahtarı girilebilir (7 × 500 = ayda
+  3.500 kredi).
 
 ## Basketbol (1.9)
 
@@ -197,7 +213,7 @@ kısmaz. Ücretsiz anahtarda daraltma, kredinin ay ortasında bitip uygulamanın
 içindir. İstersen Ayarlar → Kredi planı'ndan kapatabilirsin; kredi biterse oranlar alınamaz ve yenilenene kadar
 kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
 
-**Birden fazla anahtar (1.9.1):** Ayarlar → Veri kaynağı'na en fazla 5 anahtar girilebilir (ör.
+**Birden fazla anahtar (1.9.1, 2.0'dan beri 7):** Ayarlar → Veri kaynağı'na en fazla 7 anahtar girilebilir (ör.
 arkadaşlarının kendi hesaplarından, kendi rızalarıyla verdikleri). Her sorguda önce hiç ölçülmemiş,
 sonra kalan kredisi en çok olan anahtar kullanılır; böylece yük anahtarlara yayılır. Kredisi biten
 ya da geçersiz anahtar (HTTP 401) ve istek sınırına takılan anahtar (429) o çalışmada atlanır,
@@ -317,7 +333,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.9.5.apk
+./build.sh          # testler + build/BilincliKupon-2.0.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

@@ -32,6 +32,8 @@ public final class Engine {
         public List<Candidate> candidates = new ArrayList<>();
         /** Karar penceresindeki eşleşen maçların başlama saatleri (radar zamanlaması için). */
         public List<Instant> kickoffs = new ArrayList<>();
+        /** kickoffs ile paralel: maçın The Odds API lig kodu (kadro saati taraması için). */
+        public List<String> kickoffLeagues = new ArrayList<>();
 
         Decision(Proposal proposal, List<Proposal> alternatives, String reason, Map<String, Object> stats) {
             this.proposal = proposal;
@@ -184,8 +186,13 @@ public final class Engine {
     public static Decision decide(List<BookEvent> book, List<SharpEvent> sharp, Instant now, Settings cfg) {
         List<Pair> pairs = Matching.match(book, sharp);
         List<Instant> kos = new ArrayList<>();
+        List<String> kls = new ArrayList<>();
         Instant from = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)), to = now.plusSeconds(Math.round(cfg.windowHours * 3600));
-        for (Pair p : pairs) if (!p.book.kickoff.isBefore(from) && !p.book.kickoff.isAfter(to)) kos.add(p.book.kickoff);
+        for (Pair p : pairs) {
+            if (p.book.kickoff.isBefore(from) || p.book.kickoff.isAfter(to)) continue;
+            kos.add(p.book.kickoff);
+            kls.add(p.sharp.sportKey);
+        }
         List<List<Candidate>> built = buildCandidates(pairs, now, cfg);
         List<Candidate> cands = built.get(0), all = built.get(1);
         Map<String, Object> stats = new LinkedHashMap<>();
@@ -199,29 +206,30 @@ public final class Engine {
         stats.put("marjlar", margins);
         List<Proposal> none = new ArrayList<>();
         if (sharp.isEmpty()) {
-            return withKickoffs(kos, new Decision(null, none, "Seçili liglerde karar penceresinde maç yok (keskin piyasada 0 maç). "
+            return withKickoffs(kos, kls, new Decision(null, none, "Seçili liglerde karar penceresinde maç yok (keskin piyasada 0 maç). "
                     + "O gün oynayan ligleri, ör. Avrupa kupalarını, Ayarlar'dan ekleyebilirsin.", stats));
         }
         if (pairs.isEmpty()) {
-            return withKickoffs(kos, new Decision(null, none, "iddaa bülteni ile keskin piyasa eşleştirilemedi; "
+            return withKickoffs(kos, kls, new Decision(null, none, "iddaa bülteni ile keskin piyasa eşleştirilemedi; "
                     + "veri kaynaklarını kontrol et.", stats));
         }
         if (cands.isEmpty()) {
-            return withKickoffs(kos, new Decision(null, none, all.size() + " seçim karşılaştırıldı, hiçbirinde iddaa oranı "
+            return withKickoffs(kos, kls, new Decision(null, none, all.size() + " seçim karşılaştırıldı, hiçbirinde iddaa oranı "
                     + "adil oranı yeterince geçmiyor. Bugün pas.", stats));
         }
         List<Proposal> proposals = bestProposals(cands, cfg, 3);
         if (proposals.isEmpty()) {
-            return withKickoffs(kos, new Decision(null, none, cands.size() + " avantajlı seçim var ama MBS ve risk "
+            return withKickoffs(kos, kls, new Decision(null, none, cands.size() + " avantajlı seçim var ama MBS ve risk "
                     + "eşiklerini birlikte sağlayan kupon kurulamadı. Bugün pas.", stats));
         }
         Decision d = new Decision(proposals.get(0), new ArrayList<>(proposals.subList(1, proposals.size())), "", stats);
         d.candidates = cands;
-        return withKickoffs(kos, d);
+        return withKickoffs(kos, kls, d);
     }
 
-    private static Decision withKickoffs(List<Instant> kos, Decision d) {
+    private static Decision withKickoffs(List<Instant> kos, List<String> leagues, Decision d) {
         d.kickoffs = kos;
+        d.kickoffLeagues = leagues;
         return d;
     }
 }

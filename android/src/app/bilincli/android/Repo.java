@@ -275,24 +275,78 @@ final class Repo {
         return radar.view();
     }
 
-    /** Gün içi radar taraması: tüm ligler + iddaa bülteni; gerekirse güncel kupon önerir. */
+    /** Elle tarama ("Şimdi tara"): tüm ligler. */
     Daily.Intraday radarScan() throws Http.ProviderException {
+        return radarScan(false);
+    }
+
+    /**
+     * Gün içi radar taraması: tüm ligler + iddaa bülteni; gerekirse güncel kupon önerir.
+     * scheduled: zamanlanmış alarmdan. O an bir kadro saati taraması vadesindeyse ve yakında normal
+     * tarama yoksa yalnızca o saatte oynayan ligler çekilir (kısmi tarama).
+     */
+    Daily.Intraday radarScan(boolean scheduled) throws Http.ProviderException {
         synchronized (LOCK) {
             if (ledger.settings().oddsApiKey.isEmpty()) throw new Http.ProviderException("The Odds API anahtarı yok.");
             if (creditsLow()) {
                 throw new Http.ProviderException("API kredisi az kaldı (" + credits().get("remaining")
                         + "); günlük karar için saklanıyor, radar bekliyor.");
             }
-            probeActive();
-            Daily.LiveSources src = live();
+            Instant now = Instant.now();
+            ScanPlan.Slot slot = scheduled ? dueLineupSlot(now) : null;
+            if (scheduled && slot == null && effective().radarScans == 0) return new Daily.Intraday(); // radar kapalı
+            boolean partial = slot != null && !normalScanNear(now);
+            if (slot != null) markLineupDone(slot);
+            Daily.LiveSources src;
+            if (partial) {
+                Settings s = effective();
+                s.leagues = new ArrayList<>(slot.leagues);
+                src = live(s);
+            } else {
+                probeActive();
+                src = live();
+            }
             try {
-                Daily.Fetch f = Daily.fetch(src, Instant.now());
-                forecasts.record(Matching.match(f.book, f.sharp), Instant.now());
-                return Daily.intraday(ledger, f.book, f.sharp, radar, src);
+                Daily.Fetch f = Daily.fetch(src, now);
+                forecasts.record(Matching.match(f.book, f.sharp), now);
+                return Daily.intraday(ledger, f.book, f.sharp, radar, src, partial);
             } finally {
-                afterScan(src);
+                if (partial) after(src); // kısmi tarama lig verimini (tam tarama ölçüsü) değiştirmez
+                else afterScan(src);
             }
         }
+    }
+
+    /** Vadesi gelmiş (alarm gecikmesine pay bırakarak) ve henüz yapılmamış kadro saati taraması. */
+    private ScanPlan.Slot dueLineupSlot(Instant now) {
+        if (!effective().lineupScans) return null;
+        Set<String> done = lineupDone();
+        for (ScanPlan.Slot s : lineupSlots(now)) {
+            if (done.contains(String.valueOf(s.at.getEpochSecond()))) continue;
+            if (!now.isBefore(s.at.minusSeconds(10 * 60)) && !now.isAfter(s.at.plusSeconds(30 * 60))) return s;
+        }
+        return null;
+    }
+
+    /** Şu ana ±10 dk yakın normal radar taraması var mı (varsa tam tarama yapılır, kadro ligleri de içinde). */
+    private boolean normalScanNear(Instant now) {
+        List<Instant> times = ScanPlan.times(storedKickoffs()[0], effective().radarScans, now.atOffset(Fmt.TR).toLocalDate());
+        if (times == null) return false;
+        for (Instant t : times) if (Math.abs(t.getEpochSecond() - now.getEpochSecond()) <= 10 * 60) return true;
+        return false;
+    }
+
+    private Set<String> lineupDone() {
+        Set<String> out = new LinkedHashSet<>();
+        for (String p : prefs.getString("lineupDone", "").split(",")) if (!p.isEmpty()) out.add(p);
+        return out;
+    }
+
+    private void markLineupDone(ScanPlan.Slot s) {
+        List<String> done = new ArrayList<>(lineupDone());
+        done.add(String.valueOf(s.at.getEpochSecond()));
+        while (done.size() > 24) done.remove(0);
+        prefs.edit().putString("lineupDone", String.join(",", done)).apply();
     }
 
     /**
@@ -350,7 +404,12 @@ final class Repo {
     }
 
     Daily.LiveSources live() {
-        Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), effective());
+        return live(effective());
+    }
+
+    /** Verilen kapsamla canlı kaynak (ör. kadro saati taramasında yalnızca birkaç lig). */
+    Daily.LiveSources live(Settings scope) {
+        Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), scope);
         src.memory = memory;
         src.knownActive = active(); // pencere maç sayıları zaten biliniyorsa tekrar sorulmaz
         src.knownKeyCredits = keyCredits(); // birden fazla anahtar: kredisi en çok kalan seçilir
@@ -522,22 +581,58 @@ final class Repo {
     void storeKickoffs(Daily.Result r) {
         if (r == null || r.decision == null || r.decision.kickoffs.isEmpty()) return;
         StringBuilder b = new StringBuilder();
-        for (Instant k : r.decision.kickoffs) b.append(b.length() == 0 ? "" : ",").append(k.getEpochSecond());
+        List<Instant> kos = r.decision.kickoffs;
+        List<String> leagues = r.decision.kickoffLeagues;
+        for (int i = 0; i < kos.size(); i++) {
+            b.append(b.length() == 0 ? "" : ",").append(kos.get(i).getEpochSecond());
+            if (leagues != null && i < leagues.size() && leagues.get(i) != null) b.append(':').append(leagues.get(i));
+        }
         prefs.edit().putString("kickoffs", b.toString()).apply();
     }
 
-    /** Bugünün radar saatleri: maç saatlerine göre; bilgi yoksa null (sabit saatler). */
-    List<Instant> radarTimes(Instant now) {
-        String raw = prefs.getString("kickoffs", "");
+    /** Kayıtlı maç saatleri ve (paralel) lig kodları; eski kayıtta lig kodu yoktur (null). */
+    @SuppressWarnings("unchecked")
+    private List[] storedKickoffs() {
         List<Instant> kos = new ArrayList<>();
-        for (String p : raw.split(",")) {
+        List<String> leagues = new ArrayList<>();
+        for (String p : prefs.getString("kickoffs", "").split(",")) {
+            if (p.isEmpty()) continue;
+            int c = p.indexOf(':');
             try {
-                if (!p.isEmpty()) kos.add(Instant.ofEpochSecond(Long.parseLong(p)));
+                kos.add(Instant.ofEpochSecond(Long.parseLong(c < 0 ? p : p.substring(0, c))));
+                leagues.add(c < 0 ? null : p.substring(c + 1));
             } catch (NumberFormatException ignored) {
                 // bozuk kayıt: atla
             }
         }
-        return ScanPlan.times(kos, effective().radarScans, now.atOffset(Fmt.TR).toLocalDate());
+        return new List[] {kos, leagues};
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ScanPlan.Slot> lineupSlots(Instant now) {
+        List[] k = storedKickoffs();
+        return ScanPlan.lineupSlots(k[0], k[1], now.atOffset(Fmt.TR).toLocalDate());
+    }
+
+    /**
+     * Bugünün radar saatleri: maç saatlerine göre normal taramalar ve (açıksa) kadro saati
+     * taramaları; 10 dk'dan yakın saatler birleştirilir. Bilgi yoksa null (sabit saatler).
+     */
+    @SuppressWarnings("unchecked")
+    List<Instant> radarTimes(Instant now) {
+        Settings s = effective();
+        List<Instant> normal = ScanPlan.times(storedKickoffs()[0], s.radarScans, now.atOffset(Fmt.TR).toLocalDate());
+        if (!s.lineupScans) return normal;
+        List<Instant> all = new ArrayList<>();
+        if (normal != null) all.addAll(normal);
+        for (ScanPlan.Slot slot : lineupSlots(now)) all.add(slot.at);
+        if (all.isEmpty()) return normal;
+        java.util.Collections.sort(all);
+        List<Instant> out = new ArrayList<>();
+        for (Instant t : all) {
+            if (out.isEmpty() || t.getEpochSecond() - out.get(out.size() - 1).getEpochSecond() > 10 * 60) out.add(t);
+        }
+        return out;
     }
 
     /** Son events() çalışması (yeniden deneme aralığı için). */

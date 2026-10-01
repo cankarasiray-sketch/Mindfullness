@@ -22,7 +22,7 @@ public final class DailyJob extends JobService {
                     Repo repo = Repo.get(DailyJob.this);
                     if (radar) {
                         try {
-                            Daily.Intraday r = repo.radarScan();
+                            Daily.Intraday r = repo.radarScan(true); // vadesi gelen kadro saati taraması kısmi yapılır
                             if (r.newCouponId != null) {
                                 Ledger.Coupon c = repo.real().coupon(r.newCouponId);
                                 Notifier.show(DailyJob.this, "kupon", 14, "Yeni fırsat · " + c.legs.size() + " maç · oran "

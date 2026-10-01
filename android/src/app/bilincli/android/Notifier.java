@@ -19,6 +19,8 @@ import java.util.List;
 final class Notifier {
     private static final String CH_DAILY = "kupon";
     private static final String CH_RESULT = "sonuc";
+    /** Gece (00:00–08:00) gelen bildirimler: ses ve titreşim yok, ekranı açmaz. */
+    private static final String CH_QUIET = "gece";
     private static final int ID_DAILY = 10;
     private static final int ID_RESULT = 11;
 
@@ -38,14 +40,18 @@ final class Notifier {
         d.setDescription("Her sabah üretilen kupon ya da pas kararı");
         NotificationChannel r = new NotificationChannel(CH_RESULT, "Kupon sonuçları", NotificationManager.IMPORTANCE_DEFAULT);
         r.setDescription("Kupon tuttu / yattı bildirimleri");
+        NotificationChannel q = new NotificationChannel(CH_QUIET, "Gece (sessiz)", NotificationManager.IMPORTANCE_LOW);
+        q.setDescription("00:00–08:00 arası gelen bildirimler (gece maçlarının kontrolleri); sabah bildirim alanında durur");
         nm.createNotificationChannel(d);
         nm.createNotificationChannel(r);
+        nm.createNotificationChannel(q);
         return nm;
     }
 
     static void show(Context ctx, String channel, int id, String title, String body) {
         if (!allowed(ctx)) return;
         NotificationManager nm = channels(ctx);
+        if (quiet(ctx, java.time.Instant.now())) channel = CH_QUIET;
         Intent open = new Intent(ctx, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pi = PendingIntent.getActivity(ctx, id, open,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
@@ -59,6 +65,12 @@ final class Notifier {
                 .setAutoCancel(true)
                 .build();
         nm.notify(id, n);
+    }
+
+    /** Gece sessizliği: ayar açık ve Türkiye saatiyle 00:00–08:00 arası. */
+    static boolean quiet(Context ctx, java.time.Instant now) {
+        int hour = now.atOffset(app.bilincli.core.Fmt.TR).getHour();
+        return hour < 8 && Repo.get(ctx).real().settings().quietNights;
     }
 
     static void daily(Context ctx, Ledger ledger, Daily.Result r, boolean notifyErrors) {

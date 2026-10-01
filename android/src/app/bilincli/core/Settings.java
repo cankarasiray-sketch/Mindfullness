@@ -81,7 +81,7 @@ public final class Settings {
     public String oddsApiKey = "";
 
     /** En fazla bu kadar anahtar. */
-    public static final int MAX_KEYS = 5;
+    public static final int MAX_KEYS = 7;
 
     /** Girilen anahtarlar (boşluk, satır, virgül ya da noktalı virgülle ayrılmış; tekrarlar atılır). */
     public List<String> apiKeys() {
@@ -185,6 +185,14 @@ public final class Settings {
 
     /** Gün içi radar taraması sayısı: 0 (kapalı), 1 (17:00), 2 (13:00, 18:00), 4 (10, 13, 16, 19). */
     public int radarScans = 0;
+    /**
+     * Kadro saati taraması: her maç grubundan ~45 dk önce yalnızca o grupta oynayan ligler taranır
+     * (ilk 11'ler açıklanınca Pinnacle hemen tepki verir, iddaa gecikir). Kredi: her lig günde bir
+     * tarama daha; kredi yetmezse plan Karşılıklı Gol'den sonra bunu kapatır.
+     */
+    public boolean lineupScans = true;
+    /** 00:00–08:00 arası bildirimler sessiz gelir (gece maçlarının kontrolleri uyandırmasın). */
+    public boolean quietNights = true;
 
     public int[] radarHours() {
         switch (radarScans) {
@@ -200,7 +208,7 @@ public final class Settings {
         // lig başına günlük çekim x pazar sayısı + KG maç başına + sonuç, kontrol ve kapanış için yaklaşık pay
         int perScan = 0;
         for (String l : leagues) perScan += scanCost(l, totals);
-        return (int) Math.round(30 * perScan * ACTIVE_SHARE * (1 + radarScans)) + 30 * kgEvents + 240;
+        return (int) Math.round(30 * perScan * ACTIVE_SHARE * (1 + radarScans + (lineupScans ? 1 : 0))) + 30 * kgEvents + 240;
     }
 
     /** "temkinli", "yuksek" ya da "ozel" (kullanıcı Kelly/üst sınırı elle değiştirdi). */
@@ -279,6 +287,8 @@ public final class Settings {
         m.put("profile", detectProfile());
         m.put("v", 4L);
         m.put("radarScans", (long) radarScans);
+        m.put("lineupScans", lineupScans);
+        m.put("quietNights", quietNights);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
     }
@@ -323,6 +333,8 @@ public final class Settings {
         s.runHour = (int) Json.lng(m, "runHour", s.runHour);
         s.runMinute = (int) Json.lng(m, "runMinute", s.runMinute);
         s.radarScans = (int) Json.lng(m, "radarScans", s.radarScans);
+        s.lineupScans = Json.bool(m, "lineupScans", s.lineupScans);
+        s.quietNights = Json.bool(m, "quietNights", s.quietNights);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
         s.internationals = Json.bool(m, "internationals", s.internationals);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {
