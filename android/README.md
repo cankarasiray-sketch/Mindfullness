@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.8.8.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.8.9.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -159,6 +159,11 @@ kısmaz. Ücretsiz anahtarda daraltma, kredinin ay ortasında bitip uygulamanın
 içindir. İstersen Ayarlar → Kredi planı'ndan kapatabilirsin; kredi biterse oranlar alınamaz ve yenilenene kadar
 kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
 
+Bir çalıştırmanın maliyeti: maçı olan her lig 1 kredi (2,5 Alt/Üst açıkken 2; Maç Sonucu ve
+Alt/Üst aynı sorguda gelir), sorulan her Karşılıklı Gol maçı 1 kredi. Maçı olmayan lig ve maç
+listesi sorguları ücretsizdir. Ör. 3 aktif lig + 4 KG maçı = 3×2 + 4 = 10 kredi. 1.8.9'dan beri
+"Güncel oranlarla yeni kupon" ve elle radar taraması sonucu harcanan ve kalan krediyi yazar.
+
 ## Ana paraya göre oyun planı, otomatik kasa, kredi planı (1.4)
 
 - **Bugünün oyun planı** (Bugün sekmesinin en üstü): bugünkü her kupon için ne kadar
@@ -196,6 +201,13 @@ kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
   varsa (1.8.8), Maç Sonucu ve 2,5 Alt/Üst'ten Poisson gol modeliyle hesaplanan KG olasılığı
   kullanılır ve eşleme hatırlanır. Model yalnızca eşleme içindir; bahis kararı her zaman
   Pinnacle'ın gerçek KG fiyatıyla verilir.
+  1.8.9'dan beri aynı model kredi harcamadan **ön eleme** yapar: modelin KG olasılığı 8 puan
+  iyimser alınsa bile iddaa'nın KG oranı en az %3 avantaj veremiyorsa o maç Pinnacle'a sorulmaz.
+  Kalan maçlar en umutludan başlayarak sorulur. Payın dayanağı: bağımsız Poisson modelinin KG
+  hatası, beraberlik düzeltmeli ve aşırı yayılımlı skor dağılımlarına karşı ortalama 2,8, en kötü
+  6,8 puandı. iddaa'nın KG marjı ~%22 olduğundan maçların çoğu elenir. "Kaynakları test et"
+  çıktısı kaç maçın elendiğini ve modelin sorulan maçlarda Pinnacle'dan gerçekte ne kadar
+  saptığını gösterir.
 - **Veri doğrulama:** Nesine'nin pazar kodları ve seçenek sıraları Pinnacle'la karşılaştırılarak
   otomatik bulunur. Maç Sonucu sırası tutarsızsa düzeltilir ya da kapatılır, Alt/Üst ve KG için
   eşleşme belirsizse pazar kullanılmaz, %25'ten büyük "avantajlar" veri hatası sayılıp ayıklanır.
@@ -247,7 +259,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.8.8.apk
+./build.sh          # testler + build/BilincliKupon-1.8.9.apk
 ./build.sh test     # yalnızca testler
 ```
 

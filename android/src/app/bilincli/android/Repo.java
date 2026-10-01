@@ -68,9 +68,15 @@ final class Repo {
     }
 
     /** Canlı çağrıdan sonra: doğrulama hafızasını ve kalan API kredisini sakla. */
+    /** Son çalışmanın harcadığı kredi (x-requests-last toplamı) ve kalan kredi; mesajlar için. */
+    volatile int lastSpent;
+    volatile String lastRemaining;
+
     void after(Daily.LiveSources src) {
         memoryStore.write(Json.write(memory));
         String rem = src.remainingCredits(), used = src.usedCredits();
+        lastSpent = src.spent();
+        lastRemaining = rem;
         if (rem != null) {
             prefs.edit().putString("credits", rem).putString("creditsUsed", used).putLong("creditsAt", System.currentTimeMillis()).apply();
         }

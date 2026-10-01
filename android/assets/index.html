@@ -682,7 +682,7 @@ function viewSettings() {
     + '<label class="check"><input type="checkbox" id="sTotals"' + (st.totals ? " checked" : "") + '>2,5 Alt/Üst <span class="small muted">(lig başına kredi ×2)</span></label>'
     + '<label>Karşılıklı Gol: günde en fazla kaç maç</label><select id="sKg">' + [[0, "Kapalı"], [4, "4 maç"], [8, "8 maç"], [12, "12 maç"]].map(function (o) {
       return '<option value="' + o[0] + '"' + (st.kgEvents === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
-    }).join("") + '</select><p class="small muted">KG oranı Pinnacle\'dan maç bazında çekilir (maç başına 1 kredi). '
+    }).join("") + '</select><p class="small muted">KG oranı Pinnacle\'dan maç bazında çekilir (maç başına 1 kredi). Önce ücretsiz model ön elemesi yapılır: iddaa\'nın KG oranı avantaj veremeyecek kadar düşükse o maç sorulmaz, kredi harcanmaz. '
     + 'Korner gibi pazarlar için güvenilir keskin fiyat kaynağı doğrulanamadığından eklenmedi; "Kaynakları test et" çıktısındaki pazar envanterini paylaşırsan eşlenebilir.</p></div>';
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.map(function (l) {
     return '<label class="check"><input type="checkbox" class="lg" value="' + esc(l[0]) + '"' + (st.leagues.indexOf(l[0]) >= 0 ? " checked" : "") + ">" + esc(l[1]) + "</label>";

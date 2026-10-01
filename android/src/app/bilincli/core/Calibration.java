@@ -207,6 +207,39 @@ public final class Calibration {
         return m;
     }
 
+    /**
+     * KG ön elemesinde model olasılığına eklenen güvenlik payı. Bağımsız Poisson modelinin KG
+     * hatası, beraberlik düzeltmeli (Dixon-Coles) ve aşırı yayılımlı skor dağılımlarına karşı
+     * ölçüldüğünde ortalama 2,8, en kötü 6,8 puandı; pay bunun üstünde tutuldu.
+     */
+    static final double KG_SCREEN_MARGIN = 0.08;
+
+    /**
+     * Pinnacle'ın KG fiyatı maç başına kredi harcar. Sormadan önce: iddaa'nın KG oranı (son
+     * güvenilir eşlemeyle okunur), model olasılığı güvenlik payı kadar iyimser alınsa bile en iyi
+     * tarafta en fazla ne kadar beklenen kazanç verebilir? Eşleme ya da model verisi (Maç Sonucu
+     * ve 2,5 Alt/Üst) yoksa NaN: bilinmiyor, eskisi gibi sorulur. Bahis kararı yine yalnızca
+     * Pinnacle'ın KG fiyatıyla verilir; bu yalnızca hangi maçın sorulacağını seçer.
+     */
+    static double kgUpside(Pair p, Map<String, Object> memory, Settings cfg) {
+        String mapping = memory == null ? null : Json.str(memory, "KG");
+        if (mapping == null || mapping.indexOf('|') < 0) return Double.NaN;
+        Map<String, Double> raw = p.book.odds.get(mapping.substring(0, mapping.indexOf('|')));
+        Map<String, Double> model = modelKg(p);
+        if (raw == null || model == null || raw.get("1") == null || raw.get("2") == null) return Double.NaN;
+        boolean dir0 = mapping.endsWith("|0"); // twoWay: yön 0'da bültenin 1. seçeneği VAR
+        double var = dir0 ? raw.get("1") : raw.get("2"), yok = dir0 ? raw.get("2") : raw.get("1");
+        return Math.max(upside(var, model.get("VAR"), cfg), upside(yok, model.get("YOK"), cfg));
+    }
+
+    private static double upside(double odds, double p, Settings cfg) {
+        double optimistic = Math.min(1, p + KG_SCREEN_MARGIN);
+        if (odds < cfg.minLegOdds || odds > cfg.maxLegOdds || optimistic < cfg.minWinProb) {
+            return Double.NEGATIVE_INFINITY; // bu taraf zaten kupona giremez
+        }
+        return optimistic * odds - 1;
+    }
+
     static String twoWay(List<BookEvent> book, List<Pair> pairs, String prefix, String target, String[] keys,
                          List<String> notes, Map<String, Object> memory) {
         String result = twoWay(book, pairs, prefix, target, keys, notes, memory, false);

@@ -132,29 +132,42 @@ public final class Daily {
 
         /**
          * Karşılıklı Gol için Pinnacle oranı maç bazında çekilir (maç başına 1 kredi). Yalnızca
-         * iddaa'da aday KG pazarı olan, zaman penceresindeki ilk cfg.kgEvents maç için.
+         * iddaa'da aday KG pazarı olan, zaman penceresindeki maçlar için, en fazla cfg.kgEvents
+         * maç. Önce ücretsiz model ön elemesi: modele göre güvenlik payıyla bile avantaj
+         * veremeyecek maçlar sorulmaz (Calibration.kgUpside); kalanlar en umutludan sorulur.
          */
         public int enrichKg(List<BookEvent> book, List<SharpEvent> sharp, Instant now) throws Http.ProviderException {
             if (cfg.kgEvents <= 0) return 0;
             List<Models.Pair> pairs = Matching.match(book, sharp);
             List<Models.Pair> due = new ArrayList<>();
+            final Map<Models.Pair, Double> upside = new java.util.IdentityHashMap<>();
+            int screened = 0;
             Instant from = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)), to = now.plusSeconds(Math.round(cfg.windowHours * 3600));
             for (Models.Pair p : pairs) {
                 if (p.book.kickoff.isBefore(from) || p.book.kickoff.isAfter(to) || p.sharp.fair.containsKey("KG")) continue;
-                for (String k : p.book.odds.keySet()) {
-                    if (k.startsWith(Calibration.RAW_KG)) {
-                        due.add(p);
-                        break;
-                    }
+                boolean hasRaw = false;
+                for (String k : p.book.odds.keySet()) hasRaw |= k.startsWith(Calibration.RAW_KG);
+                if (!hasRaw) continue;
+                double u = Calibration.kgUpside(p, memory, cfg);
+                if (!Double.isNaN(u) && u < cfg.minLegEv) {
+                    screened++; // iyimser modelle bile avantaj yok: kredi harcanmaz
+                    continue;
                 }
+                upside.put(p, u);
+                due.add(p);
             }
             java.util.Collections.sort(due, new java.util.Comparator<Models.Pair>() {
                 @Override
                 public int compare(Models.Pair a, Models.Pair b) {
+                    double ua = upside.get(a), ub = upside.get(b);
+                    boolean ka = !Double.isNaN(ua), kb = !Double.isNaN(ub);
+                    if (ka && kb && ua != ub) return Double.compare(ub, ua); // en umutlu önce
+                    if (ka != kb) return ka ? -1 : 1; // modelin umut gördüğü, bilinmeyenden önce
                     return a.book.kickoff.compareTo(b.book.kickoff);
                 }
             });
-            int n = 0, withData = 0;
+            int n = 0, withData = 0, devN = 0;
+            double devSum = 0, devMax = 0;
             int total = Math.min(cfg.kgEvents, due.size());
             for (Models.Pair p : due) {
                 if (n >= cfg.kgEvents) break;
@@ -162,13 +175,26 @@ public final class Daily {
                     step("Karşılıklı Gol oranı " + (n + 1) + "/" + total + ": " + p.book.home + " - " + p.book.away);
                     api().enrichEvent(p.sharp, "btts");
                     n++;
-                    if (p.sharp.fair.containsKey("KG")) withData++;
+                    Map<String, Double> kg = p.sharp.fair.get("KG");
+                    if (kg != null) {
+                        withData++;
+                        Map<String, Double> model = Calibration.modelKg(p);
+                        if (model != null) { // ön elemenin güvenlik payı yerinde mi: modelin gerçek sapması
+                            double d = Math.abs(model.get("VAR") - kg.get("VAR"));
+                            devSum += d;
+                            devMax = Math.max(devMax, d);
+                            devN++;
+                        }
+                    }
                 } catch (Http.ProviderException e) {
                     break; // bu pazar desteklenmiyor ya da kredi bitti; ana akışı durdurma
                 }
             }
             api().report.add("Karşılıklı Gol: " + n + " maç soruldu (" + n + " kredi), " + withData + " maçta oran geldi"
-                    + (due.size() == 0 ? " (iddaa'da KG pazarı olan maç yok)" : ""));
+                    + (screened > 0 ? "; " + screened + " maç model ön elemesiyle sorulmadı (avantaj ihtimali yok, kredi harcanmadı)" : "")
+                    + (devN > 0 ? "; model sapması ort. " + Fmt.pct(devSum / devN, false) + ", en çok " + Fmt.pct(devMax, false)
+                    + (devMax > Calibration.KG_SCREEN_MARGIN ? " (güvenlik payını aştı)" : "") : "")
+                    + (due.size() == 0 && screened == 0 ? " (iddaa'da KG pazarı olan maç yok)" : ""));
             return n;
         }
 

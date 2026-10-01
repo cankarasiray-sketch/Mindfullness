@@ -109,6 +109,12 @@ public final class Bridge {
         });
     }
 
+    /** " (10 kredi harcandı, kalan 462)" ya da kredi harcanmadıysa boş. */
+    static String creditNote(int spent, String remaining) {
+        if (spent <= 0) return "";
+        return " (" + spent + " kredi harcandı" + (remaining != null ? ", kalan " + remaining : "") + ")";
+    }
+
     private static void requireReal(Repo repo) {
         if (repo.isDemo()) throw new Ledger.LedgerException("Demo modunda işlem yapılamaz. Önce demodan çık.");
     }
@@ -157,15 +163,17 @@ public final class Bridge {
             case "radarScan": {
                 requireReal(repo);
                 Daily.Intraday r;
+                repo.lastSpent = 0;
                 try {
                     r = repo.radarScan();
                 } catch (app.bilincli.core.Http.ProviderException e) {
                     throw new IllegalStateException("Tarama yapılamadı: " + e.getMessage());
                 }
                 Scheduler.scheduleNextEvent(activity);
-                if (r.newCouponId != null) return "Güncel oranlarla yeni kupon bulundu: #" + r.newCouponId + ".";
-                if (r.blocked != null) return "Tarama tamam. Yeni kupon yok: " + r.blocked;
-                return "Tarama tamam. " + r.moves.size() + " yeni düşen oran fırsatı.";
+                String credit = creditNote(repo.lastSpent, repo.lastRemaining);
+                if (r.newCouponId != null) return "Güncel oranlarla yeni kupon bulundu: #" + r.newCouponId + "." + credit;
+                if (r.blocked != null) return "Tarama tamam. Yeni kupon yok: " + r.blocked + credit;
+                return "Tarama tamam. " + r.moves.size() + " yeni düşen oran fırsatı." + credit;
             }
             case "recheck": {
                 requireReal(repo);
@@ -232,6 +240,7 @@ public final class Bridge {
             case "generate": {
                 requireReal(repo);
                 Daily.Result r;
+                String credit;
                 synchronized (Repo.LOCK) {
                     repo.probeActive();
                     Daily.LiveSources src = repo.live();
@@ -240,18 +249,19 @@ public final class Bridge {
                     repo.recordForecasts(r);
                     if (r.error == null && r.blocked == null && !r.skipped) repo.afterScan(src);
                     else repo.after(src);
+                    credit = creditNote(src.spent(), src.remainingCredits());
                 }
                 Scheduler.scheduleNextEvent(activity);
                 Scheduler.scheduleNextRadar(activity);
-                if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error);
+                if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error + credit);
                 if (r.skipped) return "Bugünün kararı zaten verilmiş.";
-                if (r.blocked != null) return r.blocked;
+                if (r.blocked != null) return r.blocked + credit;
                 if (r.besidePlayed && r.couponIds.isEmpty()) {
-                    return "Oynanmış kuponlar duruyor; kalan günlük sınır içinde başka maçta yeni fırsat çıkmadı.";
+                    return "Oynanmış kuponlar duruyor; kalan günlük sınır içinde başka maçta yeni fırsat çıkmadı." + credit;
                 }
-                if (r.besidePlayed) return r.couponIds.size() + " ek kupon üretildi (oynanmış kuponlara dokunulmadı).";
-                if (r.decision.isPass()) return "Bugün pas: " + r.decision.reason;
-                return r.couponIds.size() > 1 ? r.couponIds.size() + " yeni kupon üretildi." : "Yeni kupon #" + r.couponId + " üretildi.";
+                if (r.besidePlayed) return r.couponIds.size() + " ek kupon üretildi (oynanmış kuponlara dokunulmadı)." + credit;
+                if (r.decision.isPass()) return "Bugün pas: " + r.decision.reason + credit;
+                return (r.couponIds.size() > 1 ? r.couponIds.size() + " yeni kupon üretildi." : "Yeni kupon #" + r.couponId + " üretildi.") + credit;
             }
             case "saveSettings": {
                 Settings s = Settings.fromMap(Json.obj(p.get("settings")));

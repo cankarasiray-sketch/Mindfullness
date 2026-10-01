@@ -262,6 +262,60 @@ public class AccuracyTest {
         assertNull(sharp.get(0).fair.get("KG"));
     }
 
+    /** iddaa KG oranı: VAR olasılığı b, marj m (oransal), VAR değeri v (1 = adil). */
+    static Map<String, Double> kgOdds(double b, double m, double v) {
+        Map<String, Double> kg = new LinkedHashMap<>(); // bültende N1 = Yok, N2 = Var
+        kg.put("1", 1 / ((1 - b) * m));
+        kg.put("2", v / (b * m));
+        return kg;
+    }
+
+    @Test
+    public void kgPreScreenSkipsHopelessMatchesWithoutSpendingCredits() throws Exception {
+        double[][] lam = {{1.6, 1.0}, {1.1, 1.3}, {2.1, 0.7}, {1.3, 1.2}, {0.9, 1.5}};
+        List<BookEvent> book = new ArrayList<>();
+        List<SharpEvent> sharp = new ArrayList<>();
+        for (int i = 0; i < lam.length; i++) {
+            double[] o = GoalModel.outcomes(lam[i][0], lam[i][1]);
+            Map<String, Map<String, Double>> fair = CoreTest.ms(o[0], o[1], o[2]);
+            if (i != 4) { // 4: Alt/Üst yok, model kurulamaz -> bilinmiyor, eskisi gibi sorulur
+                Map<String, Double> au = new LinkedHashMap<>();
+                au.put("ALT", 1 - o[3]);
+                au.put("UST", o[3]);
+                fair.put("AU25", au);
+            }
+            sharp.add(new SharpEvent("s" + i, "lig", "Ev " + i, "Dep " + i, KO.plusSeconds(60 * i), fair, "pinnacle"));
+            Map<String, Map<String, Double>> odds = CoreTest.ms(1 / (o[0] * 1.2), 1 / (o[1] * 1.2), 1 / (o[2] * 1.2));
+            // 0-2: iddaa'nın olağan %21,8 marjı; 3: VAR adil oranın %10 üstünde (gerçek fırsat adayı)
+            odds.put(Calibration.RAW_KG + "38", kgOdds(o[4], 1.218, i == 3 ? 1.10 * 1.218 : 1));
+            book.add(new BookEvent("b" + i, "Ev " + i, "Dep " + i, KO.plusSeconds(60 * i), "Lig", 1, odds, String.valueOf(i)));
+        }
+        final List<String> calls = new ArrayList<>();
+        Http http = new Http() {
+            public Response get(String url, Map<String, String> headers) {
+                calls.add(url.substring(url.indexOf("/events/") + 8, url.indexOf("/odds")));
+                Map<String, String> h = new LinkedHashMap<>();
+                h.put("x-requests-last", "1");
+                return new Response(200, "{\"id\":\"x\",\"commence_time\":\"" + KO + "\",\"home_team\":\"A\","
+                        + "\"away_team\":\"B\",\"bookmakers\":[]}", h);
+            }
+        };
+        Settings cfg = new Settings();
+        cfg.oddsApiKey = "k";
+        cfg.kgEvents = 4;
+        Daily.LiveSources src = new Daily.LiveSources(http, cfg);
+        src.memory.put("KG", "KG#38|1"); // son güvenilir eşleme
+        assertTrue(Double.isNaN(Calibration.kgUpside(Matching.match(book, sharp).get(0), new LinkedHashMap<String, Object>(), cfg)));
+        assertEquals(2, src.enrichKg(book, sharp, NOW));
+        assertEquals(Arrays.asList("s3", "s4"), calls); // umutlu olan önce, bilinmeyen sonra; 3 maç sorulmadı
+        String rep = src.report().get(src.report().size() - 1);
+        assertTrue(rep, rep.contains("2 maç soruldu (2 kredi)") && rep.contains("3 maç model ön elemesiyle sorulmadı"));
+        // eşleme bilinmiyorsa eski davranış: sınır kadar maç sorulur
+        calls.clear();
+        assertEquals(4, new Daily.LiveSources(http, cfg).enrichKg(book, sharp, NOW));
+        assertEquals(4, calls.size());
+    }
+
     @Test
     public void forecastLogScoresAccuracy() {
         Ledger.MemoryStorage store = new Ledger.MemoryStorage(null);
