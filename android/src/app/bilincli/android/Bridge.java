@@ -368,6 +368,13 @@ public final class Bridge {
         });
     }
 
+    /** Doğrulama sonucu: başında ✓ ya da ✗. */
+    private static String mark(Object status) {
+        String t = String.valueOf(status);
+        boolean ok = t.startsWith("doğrulandı") || t.startsWith("sıra düzeltildi") || t.startsWith("önceki eşleme");
+        return (ok ? "✓ " : "✗ ") + t;
+    }
+
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
         repo.refreshInternationals(new Daily.LiveSources(new AndroidHttp(activity), repo.real().settings()), true);
@@ -388,34 +395,40 @@ public final class Bridge {
         } finally {
             repo.after(src);
         }
-        b.append("iddaa bülteni (Nesine): ").append(f.book.size()).append(" maç\n");
-        b.append("Keskin piyasa (Pinnacle): ").append(f.sharp.size()).append(" maç · kalan API kredisi: ")
-                .append(src.remainingCredits()).append('\n');
-        b.append("Bu test ").append(src.spent()).append(" kredi harcadı (maç listesi ücretsiz).\n");
+        List<Models.Pair> pairs = Matching.match(f.book, f.sharp);
+        Map<String, Object> cal = f.calibration;
+        Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), Daily.decisionSettings(repo.real()));
+        // Özet en üstte: kaynaklar, pazar doğrulamaları, karar
+        b.append("ÖZET\n");
+        b.append("  Nesine: ").append(f.book.size()).append(" maç · Pinnacle: ").append(f.sharp.size())
+                .append(" maç · eşleşen: ").append(pairs.size()).append('\n');
+        b.append("  Kredi: bu test ").append(src.spent()).append(" · kalan ").append(src.remainingCredits()).append('\n');
+        b.append("  Maç Sonucu: ").append(mark(cal.get("MS"))).append('\n');
+        b.append("  Çifte Şans: ").append(mark(cal.get("CS"))).append('\n');
+        b.append("  2,5 Alt/Üst: ").append(mark(cal.get("AU25"))).append('\n');
+        b.append("  Karşılıklı Gol: ").append(mark(cal.get("KG"))).append('\n');
+        b.append("  Karar: ").append(Texts.statsLine(d.stats)).append('\n');
+        if (d.isPass()) b.append("  ").append(d.reason).append('\n');
+
         b.append("\nLig ayrıntısı\n");
         for (String line : src.report()) b.append("  ").append(line).append('\n');
         for (String w : src.warnings()) b.append("Uyarı: ").append(w).append('\n');
-        List<Models.Pair> pairs = Matching.match(f.book, f.sharp);
-        b.append("Eşleşen maç: ").append(pairs.size()).append('\n');
+        b.append("\nEşleşen maçlar (ilk 5)\n");
         for (int i = 0; i < Math.min(5, pairs.size()); i++) {
             Models.Pair x = pairs.get(i);
             b.append("  ").append(x.book.home).append(" - ").append(x.book.away).append(" ⇄ ")
                     .append(x.sharp.home).append(" - ").append(x.sharp.away).append('\n');
         }
-        Map<String, Object> cal = f.calibration;
-        b.append("\nVeri doğrulama\n");
-        b.append("  Maç Sonucu: ").append(cal.get("MS")).append('\n');
-        b.append("  2,5 Alt/Üst: ").append(cal.get("AU25")).append('\n');
-        b.append("  Karşılıklı Gol: ").append(cal.get("KG")).append('\n');
-        b.append("  Çifte Şans: ").append(cal.get("CS")).append('\n');
+        b.append("\nVeri doğrulama ayrıntısı\n");
         b.append("  Uyumsuz eşleşme (ayıklanan maç): ").append(cal.get("mismatched")).append('\n');
         b.append("  Ayıklanan şüpheli oran: ").append(cal.get("suspicious")).append('\n');
         for (Object n : Json.arr(cal.get("notes"))) b.append("  · ").append(n).append('\n');
-        Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), Daily.decisionSettings(repo.real()));
-        b.append('\n').append(Texts.statsLine(d.stats)).append('\n');
         String inv = app.bilincli.core.Nesine.lastInventory;
         if (inv != null && !inv.isEmpty()) {
-            b.append("\nPazar envanteri (korner gibi yeni pazarları eşlemek için bu bölümü paylaş)\n").append(inv);
+            String[] lines = inv.split("\n");
+            b.append("\nPazar envanteri (korner gibi yeni pazarları eşlemek için; ilk 12)\n");
+            for (int i = 0; i < Math.min(12, lines.length); i++) b.append(lines[i]).append('\n');
+            if (lines.length > 12) b.append("(+").append(lines.length - 12).append(" pazar kodu daha)\n");
         }
         return b.toString().trim();
     }

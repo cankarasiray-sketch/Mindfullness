@@ -492,6 +492,9 @@ test("uzun sonuç balonu kaplamaz, ayrıntı kutuda; dokununca kapanır", async 
   assert.equal(t.$("#checkOut").textContent, long);
   toast.click();
   assert.equal(toast.className, "");
+  // başlıklı çıktı: ilk anlamlı satır
+  assert.equal(t.w.shortMessage("ÖZET\n  Nesine: 639 maç · Pinnacle: 35 maç\n" + "x\n".repeat(200)),
+    "Nesine: 639 maç · Pinnacle: 35 maç (ayrıntı ekranda)");
 });
 
 let failed = 0;

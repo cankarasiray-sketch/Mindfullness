@@ -208,7 +208,8 @@ var toastTimer;
 /** Uzun sonuçlar (ör. kaynak testi) balonu kaplamasın: ilk satır, ayrıntı ekranda. */
 function shortMessage(m) {
   if (m.length <= 280) return m;
-  var first = m.split("\n")[0];
+  var lines = m.split("\n"), first = lines[0];
+  if (first.indexOf(":") < 0 && lines.length > 1) first = lines[1].trim(); // başlık satırını ("ÖZET") atla
   return (first.length > 200 ? first.slice(0, 200) + "…" : first) + " (ayrıntı ekranda)";
 }
 function toast(msg, err) {
