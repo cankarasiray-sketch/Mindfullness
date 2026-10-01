@@ -63,7 +63,9 @@ public final class Texts {
         Coupon c = ledger.coupon(r.couponId);
         String title = "Günün kuponu · " + c.legs.size() + " maç · oran " + Fmt.odds(c.totalOdds)
                 + (c.suggestedStake > 0 ? " · " + Fmt.tl(c.suggestedStake) : "");
-        String body = couponText(c) + (r.stakeNote != null ? "\n" + r.stakeNote : "");
+        String body = couponText(c) + (r.stakeNote != null ? "\n" + r.stakeNote : "")
+                + "\nOranlar gün içinde değişir: oynamadan önce uygulamada \"Oynamadan önce kontrol et\"e bas."
+                + " İlk maçtan 90 dk önce otomatik kontrol bildirimi de gelir.";
         return new String[] {title, body};
     }
 }

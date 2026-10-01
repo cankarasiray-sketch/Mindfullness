@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -15,6 +15,36 @@ telefonda tutar.
 5. Hazır. Karar her sabah gelir; istersen **Bugün** sekmesinden **Şimdi üret** diyebilirsin.
 
 Anahtar girmeden denemek için **Önce demoyu gör**: hayali takımlarla 60 günlük simülasyon.
+
+## Bilyoner'de oynarken: bayat oranla oynama
+
+iddaa oranları tüm bayilerde (Bilyoner, Nesine, Misli) aynıdır; uygulama bülteni Nesine'den
+okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzden:
+
+1. **Oynamadan önce kontrol et:** Kupondaki butona bas. Güncel iddaa ve Pinnacle oranları
+   yeniden çekilir, her maç için "güncel, hâlâ avantajlı" ya da "avantaj kayboldu / başladı /
+   bültende yok / MBS değişti" yazar.
+2. **OYNANABİLİR** çıkarsa: **Güncel oranlarla oynadım**. Bilyoner'de aynı oranları gördüğünden
+   emin ol; farklıysa "Oynadım (oranları ben gireyim)" ile gerçek oranları gir. Kontrol 30 dakika
+   sonra bayatlar ve yeniden ister.
+3. **OYNAMA** çıkarsa: o kuponu oynama. **Güncel oranlarla yeni kupon** o anki oranlardan
+   baştan kupon kurar.
+
+Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
+bildirim olarak gelir.
+
+## Daha fazla ölçüm, daha az tahmin
+
+- **Kapanış oranı testi (CLV):** Her maçtan 10 dk önce Pinnacle'ın son oranı kaydedilir.
+  Seçimlerin kapanış oranını yenip yenmediği, avantajın gerçek olup olmadığının kâr/zarardan
+  çok daha hızlı ve güvenilir göstergesidir. 30+ maçtan sonra ortalama negatifse uygulama
+  "avantaj görünmüyor" uyarısı verir.
+- **Bu ay kutusu:** Bu ayın gerçekleşen kâr/zararı, modelin beklediği kâr/zarar ve açık
+  kuponlarla ay sonu için kötü / olası / iyi senaryo (%10 / %50 / %90).
+- **Strateji profili:** *Temkinli* (çeyrek Kelly, kupon başına en fazla %3) ya da
+  *En yüksek getiri* (yarım Kelly, en fazla %10). Demo simülasyonunda (200 ay) en yüksek tipik
+  aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
+  katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
 
 ## Telefonda nasıl çalışır
 
@@ -36,7 +66,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.0.apk
+./build.sh          # testler + build/BilincliKupon-1.1.apk
 ./build.sh test     # yalnızca testler
 ```
 

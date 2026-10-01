@@ -65,7 +65,7 @@ test("oynadım: tutar ve değişen oranlar köprüye gider", async () => {
   const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
   c.played = false; c.stake = 0; c.suggestedStake = 15000; c.result = null;
   const t = boot(s);
-  t.button("Oynadım").click();
+  t.button("Oynadım (oranları ben gireyim)").click();
   assert.equal(t.$("#pAmount").value, "150");
   t.$("#pAmount").value = "200";
   t.$("#pOdds").value = "2,70";
@@ -150,8 +150,96 @@ test("demo modunda işlem butonları gizli", async () => {
   c.played = false; c.result = null;
   const t = boot(s);
   assert.match(t.text(), /Demo modu/);
-  assert.ok(!t.$$("button").some((b) => b.textContent.trim() === "Oynadım"));
+  assert.ok(!t.$$("button").some((b) => /Oynadım|kontrol et/.test(b.textContent)));
   assert.ok(!t.$$("button").some((b) => b.textContent.trim() === "Sonuç kontrolü"));
+});
+
+function unplayed(s) {
+  const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
+  Object.assign(c, { played: false, stake: 0, suggestedStake: 15000, result: null, lastCheck: null });
+  return c;
+}
+function checkFor(c, at, playable) {
+  return {
+    at, playable, odds: 2.9, prob: 0.38, ev: 0.10, stake: 18000,
+    verdict: playable ? "Güncel oranlarla hâlâ avantajlı" : "1. maç: avantaj kayboldu. Bu kuponu oynama",
+    legs: c.legs.map((l) => ({ position: l.position, status: playable ? "ok" : "edge_lost", oddsThen: l.odds,
+      oddsNow: playable ? 2.9 : 2.3, fairNow: 0.38, evNow: playable ? 0.10 : -0.13 })),
+  };
+}
+const minus = (iso, min) => new Date(Date.parse(iso) - min * 60000).toISOString();
+
+test("bayat oran: önce kontrol et, kontrol isteği köprüye gider", async () => {
+  const s = clone(baseState);
+  const c = unplayed(s);
+  c.createdAt = minus(s.now, 150);
+  const t = boot(s);
+  assert.match(t.text(), /oynamadan önce kontrol et/);
+  t.button("Oynamadan önce kontrol et").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "recheck", payload: { coupon: c.id } });
+});
+
+test("taze ve oynanabilir kontrol: güncel oranlarla oyna", async () => {
+  const s = clone(baseState);
+  const c = unplayed(s);
+  c.lastCheck = checkFor(c, minus(s.now, 5), true);
+  const t = boot(s);
+  assert.match(t.text(), /OYNANABİLİR/);
+  assert.match(t.text(), /Şimdi 2,90/);
+  t.button("Güncel oranlarla oynadım").click();
+  assert.equal(t.$("#pAmount").value, "180");
+  assert.match(t.$("#sheet").textContent, /2,90/);
+  t.button("Kaydet").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "playChecked", payload: { coupon: c.id, amount: "180" } });
+});
+
+test("avantaj kaybolduysa: oynama ve yeni kupon öner", async () => {
+  const s = clone(baseState);
+  const c = unplayed(s);
+  c.lastCheck = checkFor(c, minus(s.now, 5), false);
+  const t = boot(s);
+  assert.match(t.text(), /OYNAMA/);
+  assert.match(t.text(), /avantaj kayboldu/);
+  assert.ok(!t.$$("button").some((b) => b.textContent.trim() === "Güncel oranlarla oynadım"));
+  t.$$("button").find((b) => b.textContent.trim() === "Güncel oranlarla yeni kupon").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "generate", payload: { force: true } });
+});
+
+test("eski kontrol yeniden kontrol ister", async () => {
+  const s = clone(baseState);
+  const c = unplayed(s);
+  c.lastCheck = checkFor(c, minus(s.now, 120), true);
+  const t = boot(s);
+  assert.match(t.text(), /KONTROL ESKİ/);
+  assert.ok(!t.$$("button").some((b) => b.textContent.trim() === "Güncel oranlarla oynadım"));
+  t.button("Tekrar kontrol et").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).action, "recheck");
+});
+
+test("aylık beklenti ve CLV uyarısı", async () => {
+  const s = clone(baseState);
+  s.outlook = { month: "2026-10", played: 4, settled: 3, won: 1, realized: -12000, expected: 3400, openStake: 10000, p10: -22000, p50: -22000, p90: 9000 };
+  s.clv = { played: -0.031, playedN: 42, all: -0.02, allN: 60 };
+  const t = boot(s);
+  assert.match(t.text(), /BU AY · 4 kupon/);
+  assert.match(t.text(), /Kötü \(%10\)-220,00 TL/);
+  assert.match(t.text(), /Avantaj görünmüyor/);
+  t.w.show("gecmis");
+  assert.match(t.text(), /Kapanış oranı testi/);
+  assert.match(t.text(), /−%3,1 \(42 maç\)/);
+});
+
+test("risk profili seçimi", async () => {
+  const t = boot(clone(baseState), "#ayarlar");
+  assert.match(t.text(), /Temkinli/);
+  assert.match(t.text(), /En yüksek getiri/);
+  t.button("Bu profili kullan").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "profile", payload: { name: "yuksek" } });
 });
 
 let failed = 0;

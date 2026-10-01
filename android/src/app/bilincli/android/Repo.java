@@ -2,18 +2,23 @@ package app.bilincli.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import app.bilincli.core.Closing;
 import app.bilincli.core.Daily;
 import app.bilincli.core.DemoSim;
 import app.bilincli.core.Fmt;
 import app.bilincli.core.Http;
 import app.bilincli.core.Ledger;
+import app.bilincli.core.Models;
+import app.bilincli.core.Recheck;
 import app.bilincli.core.Settings;
 import java.io.File;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Uygulama genelinde tek veri deposu. Arka plan işi ve arayüz aynı süreçte
@@ -125,6 +130,65 @@ final class Repo {
             }
         }
         return out;
+    }
+
+    /** Kuponu güncel iddaa + Pinnacle oranlarıyla yeniden değerlendirir ve sonucu kaydeder. */
+    Map<String, Object> recheck(long couponId) throws Http.ProviderException {
+        synchronized (LOCK) {
+            Ledger.Coupon c = ledger.coupon(couponId);
+            Daily.LiveSources src = live();
+            Set<String> leagues = new LinkedHashSet<>();
+            for (Ledger.Leg l : c.legs) if (l.sportKey != null) leagues.add(l.sportKey);
+            List<Models.BookEvent> book = src.book();
+            List<Models.SharpEvent> sharp = src.sharp(leagues);
+            Instant now = Instant.now();
+            Map<String, Object> r = Recheck.run(c, book, sharp, now, ledger.settings(), ledger.balance());
+            ledger.saveCheck(couponId, r);
+            Closing.capture(ledger, sharp, now);
+            return r;
+        }
+    }
+
+    /**
+     * Zamanlanmış olaylar: maçtan 10 dk önce kapanış oranı, ilk maçtan 90 dk önce oynanmamış
+     * önerinin otomatik kontrolü. Gösterilecek bildirimleri [başlık, metin] olarak döndürür.
+     */
+    List<String[]> events() {
+        List<String[]> out = new ArrayList<>();
+        synchronized (LOCK) {
+            if (ledger.settings().oddsApiKey.isEmpty()) return out;
+            Instant now = Instant.now();
+            Set<String> due = Closing.dueLeagues(ledger, now);
+            if (!due.isEmpty()) {
+                try {
+                    Closing.capture(ledger, live().sharp(due), now);
+                } catch (Http.ProviderException ignored) {
+                    // kapanış alınamadı; CLV o bacak için boş kalır
+                }
+            }
+            Ledger.Coupon c = Recheck.dueForPrecheck(ledger, now);
+            if (c != null) {
+                try {
+                    Map<String, Object> r = recheck(c.id);
+                    boolean ok = Boolean.TRUE.equals(r.get("playable"));
+                    out.add(new String[] {ok ? "Kupon #" + c.id + " hâlâ oynanabilir" : "Kupon #" + c.id + ": oynama",
+                            String.valueOf(r.get("verdict"))});
+                } catch (Http.ProviderException e) {
+                    out.add(new String[] {"Kupon #" + c.id + " kontrol edilemedi",
+                            "Oynamadan önce uygulamada elle kontrol et. (" + e.getMessage() + ")"});
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Sonraki olay zamanı: kapanış ya da maç öncesi kontrol (yoksa null). */
+    Instant nextEventTime() {
+        Instant now = Instant.now();
+        Instant a = Closing.nextCaptureTime(ledger, now), b = Recheck.nextPrecheckTime(ledger, now);
+        if (a == null) return b;
+        if (b == null) return a;
+        return a.isBefore(b) ? a : b;
     }
 
     static final class BackgroundResult {

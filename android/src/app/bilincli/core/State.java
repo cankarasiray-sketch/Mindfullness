@@ -66,6 +66,25 @@ public final class State {
         }
         m.put("transactions", txs);
         m.put("settings", ledger.settings().toMap());
+        double[] clv = ledger.clvSummary();
+        Map<String, Object> clvMap = new LinkedHashMap<>();
+        clvMap.put("played", clv[0]);
+        clvMap.put("playedN", (long) clv[1]);
+        clvMap.put("all", clv[2]);
+        clvMap.put("allN", (long) clv[3]);
+        m.put("clv", clvMap);
+        m.put("outlook", Outlook.month(ledger, ledger.now()));
+        List<Object> profiles = new ArrayList<>();
+        for (Object[] p : Settings.PROFILES) {
+            Map<String, Object> pm = new LinkedHashMap<>();
+            pm.put("name", p[0]);
+            pm.put("title", p[1]);
+            pm.put("kelly", p[2]);
+            pm.put("cap", p[3]);
+            profiles.add(pm);
+        }
+        m.put("profiles", profiles);
+        m.put("freshSeconds", Recheck.FRESH_S);
         List<Object> leagues = new ArrayList<>();
         for (String[] l : Settings.KNOWN_LEAGUES) {
             List<Object> pair = new ArrayList<>();

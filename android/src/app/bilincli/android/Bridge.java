@@ -15,6 +15,7 @@ import app.bilincli.core.Json;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Matching;
 import app.bilincli.core.Models;
+import app.bilincli.core.Recheck;
 import app.bilincli.core.Settings;
 import app.bilincli.core.State;
 import app.bilincli.core.Texts;
@@ -53,7 +54,13 @@ public final class Bridge {
         extra.put("exactAlarm", Scheduler.canExact(activity));
         extra.put("nextRun", Scheduler.nextRun(repo.real().settings(), Instant.now()).toString());
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
-        extra.put("version", "1.0");
+        String version = "?";
+        try {
+            version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
+        } catch (PackageManager.NameNotFoundException ignored) {
+            // kendi paketimiz her zaman bulunur
+        }
+        extra.put("version", version);
         return Json.write(State.build(repo.visible(), repo.isDemo(), extra));
     }
 
@@ -128,7 +135,45 @@ public final class Bridge {
                 synchronized (Repo.LOCK) {
                     repo.real().markPlayed(id, stake, odds);
                 }
+                Scheduler.scheduleNextEvent(activity);
                 return "Kupon #" + id + " oynandı: " + Fmt.tl(stake) + ".";
+            }
+            case "recheck": {
+                requireReal(repo);
+                Map<String, Object> r;
+                try {
+                    r = repo.recheck(Json.lng(p, "coupon", -1));
+                } catch (app.bilincli.core.Http.ProviderException e) {
+                    throw new IllegalStateException("Güncel oranlar alınamadı: " + e.getMessage());
+                }
+                Scheduler.scheduleNextEvent(activity);
+                return String.valueOf(r.get("verdict"));
+            }
+            case "playChecked": {
+                requireReal(repo);
+                long id = Json.lng(p, "coupon", -1);
+                long stake = Ledger.parseTl(Json.str(p, "amount"));
+                synchronized (Repo.LOCK) {
+                    Ledger.Coupon c = repo.real().coupon(id);
+                    if (!Recheck.isFresh(c.lastCheck, Instant.now())) {
+                        throw new Ledger.LedgerException("Kontrol bayatladı (30 dk'dan eski). Önce tekrar kontrol et.");
+                    }
+                    if (!Boolean.TRUE.equals(c.lastCheck.get("playable"))) {
+                        throw new Ledger.LedgerException("Son kontrole göre bu kupon oynanmamalı.");
+                    }
+                    List<List<Double>> v = Recheck.checkedValues(c.lastCheck);
+                    repo.real().markPlayed(id, stake, v.get(0), v.get(1));
+                }
+                Scheduler.scheduleNextEvent(activity);
+                return "Kupon #" + id + " güncel oranlarla oynandı: " + Fmt.tl(stake) + ".";
+            }
+            case "profile": {
+                synchronized (Repo.LOCK) {
+                    Settings s = repo.real().settings();
+                    s.applyProfile(Json.str(p, "name"));
+                    repo.real().saveSettings(s);
+                }
+                return "Strateji profili kaydedildi.";
             }
             case "legResult": {
                 requireReal(repo);
@@ -153,6 +198,7 @@ public final class Bridge {
                 synchronized (Repo.LOCK) {
                     r = Daily.generate(repo.real(), repo.live(), Json.bool(p, "force", false), false);
                 }
+                Scheduler.scheduleNextEvent(activity);
                 if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error);
                 if (r.skipped) return "Bugünün kararı zaten verilmiş.";
                 if (r.blocked != null) return r.blocked;

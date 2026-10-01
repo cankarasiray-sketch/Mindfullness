@@ -8,11 +8,17 @@ public final class DailyJob extends JobService {
     @Override
     public boolean onStartJob(final JobParameters params) {
         final boolean daily = params.getExtras().getBoolean(Scheduler.EXTRA_DAILY, false);
+        final boolean event = params.getExtras().getBoolean(Scheduler.EXTRA_EVENT, false);
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    Repo.BackgroundResult r = Repo.get(DailyJob.this).background(daily);
+                    Repo repo = Repo.get(DailyJob.this);
+                    if (event || !daily) {
+                        for (String[] n : repo.events()) Notifier.show(DailyJob.this, "kupon", 13, n[0], n[1]);
+                    }
+                    if (event) return;
+                    Repo.BackgroundResult r = repo.background(daily);
                     if (r.setupNeeded && daily) {
                         Notifier.show(DailyJob.this, "kupon", 12, "Kurulumu tamamla",
                                 "Günün kararını üretmek için Ayarlar'dan The Odds API anahtarını gir.");
@@ -24,6 +30,7 @@ public final class DailyJob extends JobService {
                 } catch (RuntimeException e) {
                     if (daily) Notifier.show(DailyJob.this, "kupon", 12, "Günlük çalışma başarısız", String.valueOf(e.getMessage()));
                 } finally {
+                    Scheduler.scheduleNextEvent(DailyJob.this);
                     // Yeniden deneme yok: veri alınamadıysa gün kaydedilmez ve 3 saatlik periyodik iş tamamlar.
                     jobFinished(params, false);
                 }

@@ -155,10 +155,15 @@ public final class OddsApi {
     }
 
     public List<SharpEvent> fetchEvents() throws Http.ProviderException {
+        return fetchEvents(cfg.leagues);
+    }
+
+    /** Yalnızca verilen ligler (kontrol ve kapanış için; kredi tasarrufu). */
+    public List<SharpEvent> fetchEvents(java.util.Collection<String> leagues) throws Http.ProviderException {
         List<SharpEvent> events = new ArrayList<>();
         Http.ProviderException last = null;
         int ok = 0;
-        for (String league : cfg.leagues) {
+        for (String league : leagues) {
             Map<String, String> params = new LinkedHashMap<>();
             params.put("regions", cfg.regions);
             params.put("markets", "h2h");

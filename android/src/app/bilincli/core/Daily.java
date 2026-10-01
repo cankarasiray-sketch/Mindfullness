@@ -68,6 +68,10 @@ public final class Daily {
             return api().fetchEvents();
         }
 
+        public List<SharpEvent> sharp(java.util.Collection<String> leagues) throws Http.ProviderException {
+            return api().fetchEvents(leagues);
+        }
+
         @Override
         public Map<String, ScoreResult> scores(Set<String> sportKeys) throws Http.ProviderException {
             return api().fetchScores(sportKeys);
@@ -100,11 +104,15 @@ public final class Daily {
     private Daily() {}
 
     public static long[] computeStake(long balance, Proposal p, Settings cfg, String[] noteOut) {
+        return computeStake(balance, p.stakeFraction, cfg, noteOut);
+    }
+
+    public static long[] computeStake(long balance, double fraction, Settings cfg, String[] noteOut) {
         if (balance <= 0) {
             noteOut[0] = "Kasa boş: önce Kasa sekmesinden para yatır.";
             return new long[] {0};
         }
-        long stake = (long) (balance * p.stakeFraction) / 100 * 100; // tam TL
+        long stake = (long) (balance * fraction) / 100 * 100; // tam TL
         long minimum = Math.round(cfg.minCouponAmount * 100);
         if (stake < minimum) {
             if (minimum <= balance * cfg.maxStakeFraction) {

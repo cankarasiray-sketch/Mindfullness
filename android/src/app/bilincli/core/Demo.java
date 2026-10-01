@@ -41,6 +41,8 @@ public final class Demo {
     private final double margin = 0.08, priceNoise = 0.07, sharpNoise = 0.02;
     private final int perDay = 16;
     private final Map<String, List<Match>> days = new HashMap<>();
+    /** sharpRef -> gerçek olasılıklar (kapanış oranı yerine; demo'da kapanış = gerçek). */
+    private final Map<String, Map<String, Double>> truth = new HashMap<>();
     public Instant now = Instant.now();
 
     public Demo(long seed) {
@@ -94,6 +96,11 @@ public final class Demo {
             m.sharp = new SharpEvent("sharp:" + ref, SPORT_KEY, Matching.normalize(home), Matching.normalize(away),
                     ko, fo, "demo");
             matches.add(m);
+            Map<String, Double> t = new LinkedHashMap<>();
+            t.put("1", truth[0]);
+            t.put("X", truth[1]);
+            t.put("2", truth[2]);
+            this.truth.put(m.sharp.ref, t);
         }
         days.put(key, matches);
         return matches;
@@ -106,6 +113,11 @@ public final class Demo {
             for (Match m : day(today.plusDays(d))) if (!m.book.kickoff.isBefore(now)) out.add(m);
         }
         return out;
+    }
+
+    public Double truth(String sharpRef, String outcome) {
+        Map<String, Double> t = truth.get(sharpRef);
+        return t == null ? null : t.get(outcome);
     }
 
     public List<BookEvent> book() {

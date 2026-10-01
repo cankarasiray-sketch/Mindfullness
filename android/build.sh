@@ -15,8 +15,8 @@ TOOLS="$ROOT/.tools"
 OUT="$ROOT/build"
 MIN_SDK=26
 TARGET_SDK=34
-VERSION_CODE=1
-VERSION_NAME=1.0
+VERSION_CODE=2
+VERSION_NAME=1.1
 MAVEN=https://repo1.maven.org/maven2
 
 mkdir -p "$TOOLS" "$OUT"
@@ -73,7 +73,7 @@ rm -rf "$OUT/test" && mkdir -p "$OUT/test"
 JAVA_OPTS_QUIET javac --release 8 -nowarn -encoding UTF-8 -cp "$TOOLS/junit.jar" -d "$OUT/test" \
     src/app/bilincli/core/*.java test/app/bilincli/core/*.java
 java -cp "$OUT/test:$TOOLS/junit.jar:$TOOLS/hamcrest.jar" -Dparity=test/fixtures/parity.json \
-    org.junit.runner.JUnitCore app.bilincli.core.ParityTest app.bilincli.core.CoreTest 2>&1 \
+    org.junit.runner.JUnitCore app.bilincli.core.ParityTest app.bilincli.core.CoreTest app.bilincli.core.FeatureTest 2>&1 \
     | grep -v "Picked up JAVA_TOOL_OPTIONS" | tee "$OUT/test.log" | tail -3
 grep -q "^OK (" "$OUT/test.log" || { echo "TESTLER BAŞARISIZ" >&2; exit 1; }
 
@@ -95,7 +95,7 @@ mkdir -p "$OUT/gen" "$OUT/classes"
 "$AAPT2" compile --dir res -o "$OUT/res.zip"
 "$AAPT2" link -I "$TOOLS/android-framework.jar" --manifest AndroidManifest.xml -A assets \
     --min-sdk-version $MIN_SDK --target-sdk-version $TARGET_SDK \
-    --version-code $VERSION_CODE --version-name $VERSION_NAME \
+    --version-code $VERSION_CODE --version-name $VERSION_NAME --replace-version \
     --java "$OUT/gen" -o "$OUT/base.apk" "$OUT/res.zip"
 
 # ---- kod ----------------------------------------------------------------------

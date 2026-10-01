@@ -49,6 +49,14 @@ public final class Ledger {
         public String bookRef, bookCode, sharpRef, sportKey, home, away, kickoff, league, market, outcome;
         public double odds, fairProb;
         public String result, score;
+        /** Maç başlamadan hemen önce Pinnacle'ın adil olasılığı (kapanış). CLV ölçümü için. */
+        public Double closingFair;
+        public String closingAt;
+
+        /** Kapanış avantajı: alınan oranın kapanıştaki adil orana göre değeri. null = kapanış yok. */
+        public Double clv() {
+            return closingFair == null ? null : odds * closingFair - 1.0;
+        }
     }
 
     public static final class Coupon {
@@ -59,6 +67,8 @@ public final class Ledger {
         public double totalOdds, winProb;
         public Long payout;
         public List<Leg> legs = new ArrayList<>();
+        /** Son "oynamadan önce kontrol" sonucu (Recheck.run çıktısı). */
+        public Map<String, Object> lastCheck;
     }
 
     public static final class Run {
@@ -176,9 +186,12 @@ public final class Ledger {
             g.put("mbs", (long) l.mbs);
             g.put("result", l.result);
             g.put("score", l.score);
+            g.put("closingFair", l.closingFair);
+            g.put("closingAt", l.closingAt);
             legs.add(g);
         }
         o.put("legs", legs);
+        o.put("lastCheck", c.lastCheck);
         return o;
     }
 
@@ -211,6 +224,7 @@ public final class Ledger {
             c.result = Json.str(x, "result");
             c.payout = x.get("payout") == null ? null : Json.lng(x, "payout", 0);
             c.settledAt = Json.str(x, "settledAt");
+            c.lastCheck = Json.obj(x.get("lastCheck"));
             for (Object lo : Json.arr(x.get("legs"))) {
                 Map<String, Object> g = Json.obj(lo);
                 Leg l = new Leg();
@@ -231,6 +245,8 @@ public final class Ledger {
                 l.mbs = (int) Json.lng(g, "mbs", 1);
                 l.result = Json.str(g, "result");
                 l.score = Json.str(g, "score");
+                l.closingFair = Json.num(g, "closingFair");
+                l.closingAt = Json.str(g, "closingAt");
                 c.legs.add(l);
             }
             coupons.add(c);
@@ -408,6 +424,14 @@ public final class Ledger {
     }
 
     public synchronized void markPlayed(long couponId, long stake, List<Double> legOdds) {
+        markPlayed(couponId, stake, legOdds, null);
+    }
+
+    /**
+     * Oynandı kaydı. legFairs verilirse (güncel kontrolden) bacakların adil olasılığı ve
+     * kuponun tutma olasılığı oynama anındaki değerlerle güncellenir.
+     */
+    public synchronized void markPlayed(long couponId, long stake, List<Double> legOdds, List<Double> legFairs) {
         Coupon c = coupon(couponId);
         if (c.played) throw new LedgerException(couponId + " numaralı kupon zaten oynandı olarak işaretli");
         if (c.result != null) throw new LedgerException(couponId + " numaralı kupon zaten sonuçlanmış");
@@ -424,6 +448,17 @@ public final class Ledger {
             }
             for (int i = 0; i < legOdds.size(); i++) c.legs.get(i).odds = legOdds.get(i);
             c.totalOdds = total;
+        }
+        if (legFairs != null) {
+            if (legFairs.size() != c.legs.size()) throw new LedgerException("Olasılık sayısı maç sayısıyla aynı olmalı");
+            double prob = 1;
+            for (int i = 0; i < legFairs.size(); i++) {
+                double f = legFairs.get(i);
+                if (!(f > 0 && f < 1)) throw new LedgerException("Geçersiz olasılık");
+                c.legs.get(i).fairProb = f;
+                prob *= f;
+            }
+            c.winProb = prob;
         }
         c.played = true;
         c.playedAt = ts();
@@ -475,6 +510,42 @@ public final class Ledger {
         if (c.played && payout > 0) addTx("payout", payout, c.id, "Kupon #" + c.id + " ödeme");
         save();
         return outcome;
+    }
+
+    public synchronized void setClosing(long couponId, int position, double fair) {
+        for (Leg l : coupon(couponId).legs) {
+            if (l.position == position) {
+                l.closingFair = fair;
+                l.closingAt = ts();
+                save();
+                return;
+            }
+        }
+        throw new LedgerException("Kupon #" + couponId + " içinde " + position + ". maç yok");
+    }
+
+    public synchronized void saveCheck(long couponId, Map<String, Object> check) {
+        coupon(couponId).lastCheck = check;
+        save();
+    }
+
+    /** CLV özeti: [oynanan bacak ortalaması, sayısı, tüm önerilen bacak ortalaması, sayısı]. */
+    public synchronized double[] clvSummary() {
+        double playedSum = 0, allSum = 0;
+        int playedN = 0, allN = 0;
+        for (Coupon c : coupons) {
+            for (Leg l : c.legs) {
+                Double v = l.clv();
+                if (v == null) continue;
+                allSum += v;
+                allN++;
+                if (c.played) {
+                    playedSum += v;
+                    playedN++;
+                }
+            }
+        }
+        return new double[] {playedN == 0 ? 0 : playedSum / playedN, playedN, allN == 0 ? 0 : allSum / allN, allN};
     }
 
     // ---- günlük çalıştırma kayıtları -----------------------------------------

@@ -53,6 +53,41 @@ public final class Settings {
     public int runHour = 6;
     public int runMinute = 0;
 
+    /** "temkinli", "yuksek" ya da "ozel" (kullanıcı Kelly/üst sınırı elle değiştirdi). */
+    public String profile = "temkinli";
+
+    /**
+     * Risk profilleri: {ad, başlık, Kelly çarpanı, kupon başına en fazla kasa}.
+     * "yuksek", simülasyonda (README) en yüksek tipik aylık getiriyi veren ayardır; daha büyük
+     * bahis tipik getiriyi artırmaz, düşürür.
+     */
+    public static final Object[][] PROFILES = {
+        {"temkinli", "Temkinli", 0.25, 0.03},
+        {"yuksek", "En yüksek getiri", 0.50, 0.10},
+    };
+
+    public void applyProfile(String name) {
+        for (Object[] p : PROFILES) {
+            if (p[0].equals(name)) {
+                profile = name;
+                kellyMultiplier = (Double) p[2];
+                maxStakeFraction = (Double) p[3];
+                return;
+            }
+        }
+        throw new IllegalArgumentException("Bilinmeyen profil: " + name);
+    }
+
+    /** Kelly/üst sınır bir profile birebir uyuyorsa onun adı, yoksa "ozel". */
+    public String detectProfile() {
+        for (Object[] p : PROFILES) {
+            if (Math.abs(kellyMultiplier - (Double) p[2]) < 1e-9 && Math.abs(maxStakeFraction - (Double) p[3]) < 1e-9) {
+                return (String) p[0];
+            }
+        }
+        return "ozel";
+    }
+
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("oddsApiKey", oddsApiKey);
@@ -77,6 +112,7 @@ public final class Settings {
         m.put("chaseCooldownHours", chaseCooldownHours);
         m.put("runHour", (long) runHour);
         m.put("runMinute", (long) runMinute);
+        m.put("profile", detectProfile());
         return m;
     }
 
@@ -110,6 +146,7 @@ public final class Settings {
         s.chaseCooldownHours = Json.dbl(m, "chaseCooldownHours", s.chaseCooldownHours);
         s.runHour = (int) Json.lng(m, "runHour", s.runHour);
         s.runMinute = (int) Json.lng(m, "runMinute", s.runMinute);
+        s.profile = s.detectProfile();
         return s;
     }
 

@@ -28,9 +28,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class CoreTest {
-    static final Instant NOW = Instant.parse("2026-10-01T03:00:00Z"); // 06:00 Türkiye
+    public static final Instant NOW = Instant.parse("2026-10-01T03:00:00Z"); // 06:00 Türkiye
 
-    static final class TestClock implements Ledger.Clock {
+    public static final class TestClock implements Ledger.Clock {
         Instant now = NOW;
 
         @Override

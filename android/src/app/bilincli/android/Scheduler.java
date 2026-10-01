@@ -21,7 +21,10 @@ import java.time.OffsetDateTime;
 final class Scheduler {
     static final int JOB_DAILY = 1;
     static final int JOB_PERIODIC = 2;
+    static final int JOB_EVENT = 3;
     static final String EXTRA_DAILY = "daily";
+    static final String EXTRA_EVENT = "event";
+    static final String ACTION_EVENT = "app.bilincli.EVENT";
 
     private Scheduler() {}
 
@@ -59,17 +62,39 @@ final class Scheduler {
                     .setPersisted(true)
                     .build());
         }
+        scheduleNextEvent(ctx);
         return next;
     }
 
-    /** Günlük kararı şimdi (ağ varsa hemen) üret. */
-    static void runDailyNow(Context ctx) {
-        JobScheduler js = ctx.getSystemService(JobScheduler.class);
+    /** Maç öncesi kontrol / kapanış oranı alarmını en yakın olaya kurar. */
+    static void scheduleNextEvent(Context ctx) {
+        AlarmManager am = ctx.getSystemService(AlarmManager.class);
+        Intent i = new Intent(ctx, AlarmReceiver.class).setAction(ACTION_EVENT);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, 1, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Instant next = Repo.get(ctx).nextEventTime();
+        if (next == null) {
+            am.cancel(pi);
+            return;
+        }
+        long at = next.toEpochMilli();
+        try {
+            if (canExact(ctx)) am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+            else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+        } catch (SecurityException e) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
+        }
+    }
+
+    static void runEventNow(Context ctx) {
         android.os.PersistableBundle extras = new android.os.PersistableBundle();
-        extras.putBoolean(EXTRA_DAILY, true);
-        JobInfo.Builder b = new JobInfo.Builder(JOB_DAILY, new ComponentName(ctx, DailyJob.class))
-                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
-                .setExtras(extras);
+        extras.putBoolean(EXTRA_EVENT, true);
+        schedule(ctx, new JobInfo.Builder(JOB_EVENT, new ComponentName(ctx, DailyJob.class))
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras));
+    }
+
+    private static void schedule(Context ctx, JobInfo.Builder b) {
+        JobScheduler js = ctx.getSystemService(JobScheduler.class);
         if (Build.VERSION.SDK_INT >= 31) {
             try {
                 if (js.schedule(b.setExpedited(true).build()) == JobScheduler.RESULT_SUCCESS) return;
@@ -79,5 +104,13 @@ final class Scheduler {
             b.setExpedited(false);
         }
         js.schedule(b.build());
+    }
+
+    /** Günlük kararı şimdi (ağ varsa hemen) üret. */
+    static void runDailyNow(Context ctx) {
+        android.os.PersistableBundle extras = new android.os.PersistableBundle();
+        extras.putBoolean(EXTRA_DAILY, true);
+        schedule(ctx, new JobInfo.Builder(JOB_DAILY, new ComponentName(ctx, DailyJob.class))
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras));
     }
 }

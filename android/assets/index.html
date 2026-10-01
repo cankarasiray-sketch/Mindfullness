@@ -82,6 +82,21 @@ font-size:14px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:2
 .spinner{width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:26px 10px}
+.verdict{border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13.5px}
+.verdict.ok{background:var(--accent-soft);color:var(--accent)}
+.verdict.no{background:var(--bad-soft);color:var(--bad)}
+.verdict.old{background:var(--chip);color:var(--muted)}
+.now{font-size:12.5px;margin-top:4px}
+.st{display:inline-block;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:650;background:var(--chip);color:var(--muted)}
+.st.ok{background:var(--accent-soft);color:var(--accent)}.st.bad{background:var(--bad-soft);color:var(--bad)}
+.fresh{font-size:12px;color:var(--muted);margin-top:2px}
+.fresh.stale{color:var(--warn);font-weight:600}
+.prof{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0}
+.prof.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+.prof h4{margin:0 0 4px;font-size:15px}
+.range{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
+.range div{background:var(--bg);border-radius:10px;padding:8px}.range span{display:block;font-size:11.5px;color:var(--muted)}
+.range b{font-variant-numeric:tabular-nums}
 .empty .big{font-size:20px}
 p{margin:6px 0}
 </style>
@@ -162,6 +177,11 @@ function label(market, outcome) {
 var RESULT = {kazandi: "Tuttu", kaybetti: "Yattı", iade: "İade"};
 function pill(r) { return r ? '<span class="pill ' + esc(r) + '">' + RESULT[r] + "</span>" : '<span class="pill bek">Bekliyor</span>'; }
 function cls(v) { return v > 0 ? "pos" : v < 0 ? "neg" : ""; }
+function minsSince(iso) { return Math.max(0, Math.round((Date.parse(S.now) - Date.parse(iso)) / 60000)); }
+function ago(iso) { var m = minsSince(iso); return m < 1 ? "az önce" : m < 60 ? m + " dk önce" : Math.floor(m / 60) + " sa " + (m % 60) + " dk önce"; }
+function checkFresh(ch) { return !!ch && (Date.parse(S.now) - Date.parse(ch.at)) / 1000 <= S.freshSeconds; }
+var STATUS = {ok: ["güncel, hâlâ avantajlı", "ok"], edge_lost: ["avantaj kayboldu", "bad"], started: ["başladı", "bad"],
+  not_found: ["bültende yok", "bad"], no_fair: ["adil oran yok", "bad"], mbs: ["MBS değişti", "bad"]};
 
 // ---- arayüz yardımcıları ------------------------------------------------------
 var toastTimer;
@@ -226,6 +246,9 @@ function banners() {
     + '<div class="btns"><button class="b" onclick="show(\'ayarlar\')">Anahtarı gir</button><button class="b ghost" onclick="act(\'demoStart\')">Önce demoyu gör</button></div></div>');
   if (S.stats.balance <= 0) out.push('<div class="banner">Kasan boş. Önerilen tutarlar kasana göre hesaplanır.'
     + '<div class="btns"><button class="b ghost" onclick="show(\'kasa\')">Kasaya para yatır</button></div></div>');
+  if (S.clv.playedN >= 30 && S.clv.played < 0) out.push('<div class="banner"><b>Avantaj görünmüyor.</b> Oynadığın ' + S.clv.playedN
+    + " seçim kapanış oranını ortalama " + pct(S.clv.played, true) + " ile yenemedi. Bu, piyasada avantaj olmadığının en güvenilir işaretidir; "
+    + "bahsi durdurmayı ya da eşikleri yükseltmeyi düşün.</div>");
   if (!S.notifications) out.push('<div class="banner">Bildirim izni kapalı; sabah kuponu telefonuna düşmez.'
     + '<div class="btns"><button class="b ghost" onclick="act(\'askNotifications\',{},true)">İzin ver</button></div></div>');
   if (!S.exactAlarm) out.push('<div class="banner">Tam saatli alarm izni kapalı; günlük karar birkaç dakika gecikebilir.'
@@ -233,8 +256,19 @@ function banners() {
   return out.join("");
 }
 function legsHtml(c, interactive) {
-  return c.legs.map(function (l) {
+  var ch = !c.played && !c.result && c.lastCheck ? c.lastCheck : null;
+  return c.legs.map(function (l, i) {
     var ev = l.fairProb * l.odds - 1;
+    var now = "";
+    if (ch && ch.legs[i]) {
+      var r = ch.legs[i], st = STATUS[r.status] || [r.status, ""];
+      now = '<div class="now">' + (r.oddsNow ? "Şimdi <b>" + odds(r.oddsNow) + "</b> · adil " + odds(1 / r.fairNow) + ' · <span class="' + cls(r.evNow) + '">avantaj '
+        + pct(r.evNow, true) + "</span> " : "") + '<span class="st ' + st[1] + '">' + esc(st[0]) + "</span></div>";
+    }
+    if (l.closingFair != null) {
+      var clv = l.odds * l.closingFair - 1;
+      now += '<div class="now muted">Kapanış: adil ' + odds(1 / l.closingFair) + ' · <span class="' + cls(clv) + '">CLV ' + pct(clv, true) + "</span></div>";
+    }
     var manual = interactive && !l.result && Date.parse(l.kickoff) + 3 * 3600 * 1000 < Date.parse(S.now)
       ? ' <button class="b ghost" style="flex:none;min-width:0;padding:4px 10px;font-size:12px" onclick="manualSheet(' + c.id + "," + l.position + ')">Sonuç gir</button>' : "";
     return '<div class="leg"><div class="top"><span>' + esc(dm(l.kickoff)) + " · " + esc(hm(l.kickoff)) + (l.league ? " · " + esc(l.league) : "")
@@ -242,24 +276,47 @@ function legsHtml(c, interactive) {
       + '<div class="teams">' + esc(l.home) + " – " + esc(l.away) + "</div>"
       + '<div class="pick"><span class="chip main">' + esc(label(l.market, l.outcome)) + '</span><span class="odds">' + odds(l.odds)
       + '</span><span class="small muted">adil ' + odds(1 / l.fairProb) + ' · <span class="' + cls(ev) + '">avantaj ' + pct(ev, true) + "</span></span>"
-      + '<span style="margin-left:auto">' + (l.result ? pill(l.result) + (l.score ? ' <span class="small muted">' + esc(l.score) + "</span>" : "") : "") + manual + "</span></div></div>";
+      + '<span style="margin-left:auto">' + (l.result ? pill(l.result) + (l.score ? ' <span class="small muted">' + esc(l.score) + "</span>" : "") : "") + manual + "</span></div>" + now + "</div>";
   }).join("");
 }
 function couponCard(c, title, extra) {
   var ev = c.winProb * c.totalOdds - 1, stake = c.played ? c.stake : c.suggestedStake;
   var status = c.result ? pill(c.result) : '<span class="pill bek">' + (c.played ? "Oynandı" : "Öneri") + "</span>";
-  var actions = "";
-  if (!S.demo && !c.played && !c.result) {
-    actions = '<div class="btns"><button class="b" onclick="playSheet(' + c.id + ')">Oynadım</button></div>';
+  var actions = "", panel = "", fresh = "";
+  var first = Math.min.apply(null, c.legs.map(function (l) { return Date.parse(l.kickoff); }));
+  var playable = !c.played && !c.result && first > Date.parse(S.now);
+  if (playable) {
+    var ch = c.lastCheck, isFresh = checkFresh(ch), stale = minsSince(c.createdAt) > 60;
+    fresh = '<div class="fresh' + (stale && !isFresh ? " stale" : "") + '">Oranlar ' + esc(hm(c.createdAt)) + "'de alındı (" + esc(ago(c.createdAt)) + ")"
+      + (stale && !isFresh ? " · oynamadan önce kontrol et" : "") + "</div>";
+    if (ch) {
+      var kind = !isFresh ? "old" : ch.playable ? "ok" : "no";
+      panel = '<div class="verdict ' + kind + '"><b>' + (kind === "ok" ? "OYNANABİLİR" : kind === "no" ? "OYNAMA" : "KONTROL ESKİ")
+        + "</b> · kontrol " + esc(hm(ch.at)) + " (" + esc(ago(ch.at)) + ")<br>" + esc(ch.verdict)
+        + (kind === "old" ? "<br>Oranlar değişmiş olabilir; tekrar kontrol et." : "") + "</div>";
+    }
+    if (!S.demo) {
+      var bily = '<button class="b ghost" onclick="act(\'openUrl\',{url:\'https://www.bilyoner.com/\'},true)">Bilyoner\'i aç</button>';
+      var recheck = '<button class="b' + (isFresh ? " ghost" : "") + '" onclick="act(\'recheck\',{coupon:' + c.id + '})">'
+        + (ch ? "Tekrar kontrol et" : "Oynamadan önce kontrol et") + "</button>";
+      if (isFresh && ch.playable) {
+        actions = '<div class="btns"><button class="b" onclick="playCheckedSheet(' + c.id + ')">Güncel oranlarla oynadım</button>' + recheck + "</div>";
+      } else if (isFresh && !ch.playable) {
+        actions = '<div class="btns"><button class="b" onclick="act(\'generate\',{force:true})">Güncel oranlarla yeni kupon</button>' + recheck + "</div>";
+      } else {
+        actions = '<div class="btns">' + recheck + '<button class="b ghost" onclick="playSheet(' + c.id + ')">Oynadım (oranları ben gireyim)</button></div>';
+      }
+      actions += '<div class="btns">' + bily + "</div>";
+    }
   }
   return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center"><div class="kicker">'
-    + esc(title) + " · #" + c.id + "</div>" + status + "</div>" + legsHtml(c, !S.demo)
+    + esc(title) + " · #" + c.id + "</div>" + status + "</div>" + fresh + legsHtml(c, !S.demo)
     + '<div class="sum"><div><span>Toplam oran</span><b>' + odds(c.totalOdds) + "</b></div><div><span>Tutma olasılığı</span><b>" + pct(c.winProb)
     + '</b></div><div><span>Beklenen değer</span><b class="' + cls(ev) + '">' + pct(ev, true) + "</b></div><div><span>"
     + (c.played ? "Oynanan" : "Önerilen") + "</span><b>" + (stake ? tl(stake) : "-") + "</b></div><div><span>Tutarsa</span><b>"
     + (stake ? tl(Math.round(stake * c.totalOdds)) : "-") + "</b></div><div><span>Sonuç</span><b>"
     + (c.result && c.played ? '<span class="' + cls((c.payout || 0) - c.stake) + '">' + tl((c.payout || 0) - c.stake) + "</span>" : "-")
-    + "</b></div></div>" + (extra || "") + actions + "</div>";
+    + "</b></div></div>" + panel + (extra || "") + actions + "</div>";
 }
 function viewToday() {
   var html = banners() + tiles(), run = S.todayRun;
@@ -277,6 +334,7 @@ function viewToday() {
       + "</div><p>" + esc(run.reason) + '</p><p class="small muted">' + esc(run.summary || "") + "</p>"
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
+  html += outlookCard();
   var todayId = run ? run.couponId : null;
   S.coupons.forEach(function (c) {
     if (c.id === todayId || c.result) return;
@@ -284,12 +342,25 @@ function viewToday() {
     if (c.played || first > Date.parse(S.now)) html += couponCard(c, "Açık kupon");
   });
   if (!S.demo) html += '<div class="btns"><button class="b ghost" onclick="act(\'settle\')">Sonuç kontrolü</button>'
-    + '<button class="b ghost" onclick="regenerate()">Yeniden üret</button></div>';
+    + '<button class="b ghost" onclick="regenerate()">Güncel oranlarla yeni kupon</button></div>';
   return html;
 }
+function outlookCard() {
+  var o = S.outlook;
+  if (!o || !o.played) return '<div class="card"><div class="kicker">BU AY</div><p class="small muted">Bu ay henüz oynanan kupon yok.</p></div>';
+  var html = '<div class="card"><div class="kicker">BU AY · ' + o.played + " kupon</div>"
+    + '<div class="two" style="margin-top:6px"><div><span class="small muted">Gerçekleşen K/Z</span><div class="odds ' + cls(o.realized) + '">' + tl(o.realized)
+    + '</div></div><div><span class="small muted">Modelin beklediği</span><div class="odds ' + cls(o.expected) + '">' + tl(o.expected) + "</div></div></div>";
+  if (o.openStake > 0) {
+    html += '<p class="small muted" style="margin-top:8px">Açık kuponlarla (' + tl(o.openStake) + ") ay sonu:</p>"
+      + '<div class="range"><div><span>Kötü (%10)</span><b class="' + cls(o.p10) + '">' + tl(o.p10) + '</b></div><div><span>Olası (%50)</span><b class="'
+      + cls(o.p50) + '">' + tl(o.p50) + '</b></div><div><span>İyi (%90)</span><b class="' + cls(o.p90) + '">' + tl(o.p90) + "</b></div></div>";
+  }
+  return html + '<p class="small muted" style="margin-top:8px">Garanti değil, olasılık: kısa vadede gerçekleşen, beklenenden çok sapabilir.</p></div>';
+}
 function regenerate() {
-  openSheet('<h3>Bugünün kararını yeniden üret</h3><p class="muted">Güncel oranlarla yeniden hesaplanır. Önceki öneri oynanmadıysa takipte kalır.</p>'
-    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="closeSheet();act(\'generate\',{force:true})">Yeniden üret</button></div>');
+  openSheet('<h3>Güncel oranlarla yeni kupon</h3><p class="muted">Bülten ve Pinnacle oranları şimdi yeniden çekilir, kupon baştan kurulur. Önceki öneri oynanmadıysa takipte kalır.</p>'
+    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="closeSheet();act(\'generate\',{force:true})">Üret</button></div>');
 }
 function playSheet(id) {
   var c = couponById(id), stake = c.suggestedStake ? String(c.suggestedStake / 100) : "";
@@ -297,6 +368,15 @@ function playSheet(id) {
     + '<label>Oynadığın tutar (TL)</label><input id="pAmount" inputmode="decimal" value="' + esc(stake) + '">'
     + '<label>Oranlar değiştiyse, maç sırasıyla (isteğe bağlı)</label><input id="pOdds" placeholder="' + esc(c.legs.map(function (l) { return odds(l.odds); }).join(" ")) + '">'
     + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="submitPlay(' + id + ')">Kaydet</button></div>');
+}
+function playCheckedSheet(id) {
+  var c = couponById(id), ch = c.lastCheck, stake = ch.stake ? String(ch.stake / 100) : "";
+  openSheet("<h3>Kupon #" + id + " · güncel oranlarla</h3><p class=\"muted small\">Bilyoner'de bu oranları gör: <b>"
+    + esc(ch.legs.map(function (l) { return odds(l.oddsNow); }).join(" · ")) + "</b> (toplam " + odds(ch.odds) + "). Farklıysa vazgeç ve "
+    + "'Oynadım (oranları ben gireyim)' ile gerçek oranları gir.</p>"
+    + '<label>Oynadığın tutar (TL)</label><input id="pAmount" inputmode="decimal" value="' + esc(stake) + '">'
+    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="closeSheet();act(\'playChecked\',{coupon:' + id
+    + ',amount:val(\'pAmount\')})">Kaydet</button></div>');
 }
 function submitPlay(id) { closeSheet(); act("played", {coupon: id, amount: val("pAmount"), odds: val("pOdds")}); }
 function manualSheet(id, pos) {
@@ -334,6 +414,12 @@ function viewHistory() {
     + item("ROI", pct(s.roi, true))
     + item("Tüm öneriler (oynanmasa da)", s.suggestedSettled + " sonuçlandı, " + s.suggestedWon + " tuttu")
     + '</div><p class="small muted">100–200 kupondan önce sonuç çıkarma; varyans çok yüksek. Beklenen ile gerçekleşen uzun vadede yakınsamıyorsa piyasada avantaj yok demektir.</p></div>';
+  var v = S.clv;
+  html += '<div class="card"><h2>Kapanış oranı testi (CLV)</h2><p class="small muted">Her maçtan 10 dk önce Pinnacle\'ın son oranı kaydedilir. '
+    + "Seçimlerin kapanış oranını düzenli olarak yeniyorsa avantaj gerçektir; yenemiyorsa değildir. Kâr/zarardan çok daha hızlı ve güvenilir sinyal verir.</p><div class=\"list\">"
+    + item("Oynanan seçimler", v.playedN ? '<span class="' + cls(v.played) + '">' + pct(v.played, true) + "</span> (" + v.playedN + " maç)" : "henüz yok")
+    + item("Tüm öneriler", v.allN ? '<span class="' + cls(v.all) + '">' + pct(v.all, true) + "</span> (" + v.allN + " maç)" : "henüz yok")
+    + "</div>" + (v.playedN < 30 ? '<p class="small muted">Güvenilir yorum için en az 30 maç gerekir.</p>' : "") + "</div>";
   html += '<div class="card"><h2>Kuponlar</h2><div class="list">' + (S.coupons.length ? S.coupons.map(function (c) {
     var pl = c.played && c.result ? (c.payout || 0) - c.stake : null;
     return '<div class="item" onclick="detail(' + c.id + ')"><div><b>#' + c.id + "</b> " + '<span class="small muted">' + esc(dayLabel(c.day)) + " · " + c.legs.length + " maç · oran " + odds(c.totalOdds)
@@ -387,7 +473,7 @@ var FIELDS = [
 function viewSettings() {
   var st = S.settings, html = "";
   if (S.demo) html += banners();
-  html += '<div class="card"><h2>Veri kaynağı</h2><p class="small muted">Adil olasılıklar Pinnacle oranlarından hesaplanır (The Odds API, ücretsiz plan ayda 500 kredi; bu ayarlarla günde ~6-10 kredi). iddaa oranları Nesine bülteninden okunur.</p>'
+  html += '<div class="card"><h2>Veri kaynağı</h2><p class="small muted">Adil olasılıklar Pinnacle oranlarından hesaplanır (The Odds API, ücretsiz plan ayda 500 kredi; bu ayarlarla maç öncesi kontrol ve kapanış dahil günde ~10-15 kredi, biterse lig sayısını azalt). iddaa oranları Nesine bülteninden okunur; iddaa oranları tüm bayilerde (Bilyoner, Nesine, Misli) aynıdır. Oynarken Bilyoner\'deki oranla karşılaştır.</p>'
     + '<label>The Odds API anahtarı</label><input id="sKey" type="password" autocomplete="off" value="' + esc(st.oddsApiKey) + '">'
     + '<div class="btns"><button class="b ghost" onclick="var k=document.getElementById(\'sKey\');k.type=k.type===\'password\'?\'text\':\'password\'">Göster</button>'
     + '<button class="b ghost" onclick="act(\'openUrl\',{url:\'https://the-odds-api.com/#get-access\'},true)">Anahtar al</button></div>'
@@ -398,6 +484,7 @@ function viewSettings() {
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
     + esc(dm(S.nextRun)) + " " + esc(hm(S.nextRun)) + ". Biten maçlar 3 saatte bir kontrol edilir.</p></div>";
+  html += profilesCard(st);
   html += '<div class="card"><h2>Strateji ve kasa koruması</h2><div class="two">' + FIELDS.map(function (f) {
     var v = st[f[0]], shown = f[2] ? +(v * 100).toFixed(2) : v;
     return '<div><label>' + f[1] + '</label><input id="f_' + f[0] + '" inputmode="decimal" value="' + esc(String(shown).replace(".", ",")) + '"></div>';
@@ -414,6 +501,20 @@ function viewSettings() {
     + "Tutar çeyrek Kelly ile, kasanın en fazla %" + num(st.maxStakeFraction * 100, 0) + "'ü olacak şekilde hesaplanır.</p>"
     + '<p class="small muted">Nesine bülteni resmi bir API değildir; biçimi değişirse "Kaynakları test et" sıfır maç gösterir. Kumar kontrolünü zorlaştırmaya başladıysa YEDAM 115 ücretsiz destek verir. Sürüm ' + esc(S.version || "") + "</p></div>";
   return html;
+}
+var PROFILE_TEXT = {
+  temkinli: "Kupon başına kasanın en fazla %3'ü (çeyrek Kelly). Dalgalanma en düşük. Demo simülasyonunda (200 ay) tipik ay +%0,9 ile +%1,6, en kötü ay −%12 ile −%15.",
+  yuksek: "Kupon başına kasanın en fazla %10'u (yarım Kelly). Demo simülasyonunda en yüksek tipik aylık getiriyi verdi: +%1,1 ile +%2,6; en kötü ay −%25 ile −%28. "
+    + "Daha büyük bahis getiriyi artırmaz, düşürür (tam Kelly'de tipik ay geriledi, 2 katında zarara döndü)."
+};
+function profilesCard(st) {
+  return '<div class="card"><h2>Strateji profili</h2>' + S.profiles.map(function (p) {
+    var on = st.profile === p.name;
+    return '<div class="prof' + (on ? " on" : "") + '"><h4>' + esc(p.title) + (on ? ' <span class="st ok">seçili</span>' : "") + "</h4>"
+      + '<p class="small muted">' + esc(PROFILE_TEXT[p.name] || "") + "</p>"
+      + (on || S.demo ? "" : '<div class="btns"><button class="b ghost" onclick="act(\'profile\',{name:\'' + esc(p.name) + '\'})">Bu profili kullan</button></div>') + "</div>";
+  }).join("") + (st.profile === "ozel" ? '<p class="small muted">Şu an özel Kelly / üst sınır değerleri kullanılıyor.</p>' : "")
+    + '<p class="small muted">Hiçbir profil kazanç garantisi vermez; ayların yaklaşık yarısı her profilde zararla kapanabilir.</p></div>';
 }
 function readNum(id, isPct) {
   // Türkçe yazım: "1.000" bin, "2,5" iki buçuk (Python ve Java tarafındaki parse_tl ile aynı kural)

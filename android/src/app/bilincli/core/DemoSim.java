@@ -27,6 +27,13 @@ public final class DemoSim {
         for (int d = 0; d <= days; d++) {
             world.now = start.plusSeconds(d * 86400L);
             Daily.Result r = Daily.runDaily(ledger, src, false, true);
+            if (r.couponId != null) {
+                // Kapanış oranı: demo dünyasında piyasa maça doğru gerçeğe yaklaşır.
+                for (Ledger.Leg l : ledger.coupon(r.couponId).legs) {
+                    Double t = world.truth(l.sharpRef, l.outcome);
+                    if (t != null) ledger.setClosing(r.couponId, l.position, t);
+                }
+            }
             String h = r.headline();
             if ("KUPON".equals(h)) coupon++;
             else if ("PAS".equals(h)) pass++;
