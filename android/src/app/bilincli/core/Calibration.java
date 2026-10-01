@@ -192,11 +192,44 @@ public final class Calibration {
     }
 
     /** Bir hedef pazar için en iyi örtüşen (pazar kodu, yön) bulunur ve bültene işlenir. */
+    /**
+     * Karşılıklı Gol için Pinnacle KG fiyatı az maçta olduğunda (maç başına kredi), eşleme Maç
+     * Sonucu ve 2,5 Alt/Üst'ten Poisson modeliyle hesaplanan KG olasılığıyla yapılır. Bu yalnızca
+     * "hangi pazar KG" sorusu içindir; bahis kararı yine yalnızca Pinnacle'ın KG fiyatıyla verilir.
+     */
+    static Map<String, Double> modelKg(Pair p) {
+        Map<String, Double> ms = p.sharp.fair.get("MS"), au = p.sharp.fair.get("AU25");
+        if (ms == null || au == null || ms.get("1") == null || ms.get("2") == null || au.get("UST") == null) return null;
+        double b = GoalModel.btts(ms.get("1"), ms.get("2"), au.get("UST"));
+        Map<String, Double> m = new LinkedHashMap<>();
+        m.put("VAR", b);
+        m.put("YOK", 1 - b);
+        return m;
+    }
+
     static String twoWay(List<BookEvent> book, List<Pair> pairs, String prefix, String target, String[] keys,
                          List<String> notes, Map<String, Object> memory) {
+        String result = twoWay(book, pairs, prefix, target, keys, notes, memory, false);
+        if ("KG".equals(target) && result.startsWith("Pinnacle verisi yok")) {
+            String viaModel = twoWay(book, pairs, prefix, target, keys, notes, memory, true);
+            return viaModel.startsWith("doğrulandı") ? viaModel + ", model destekli eşleme" : result;
+        }
+        return result;
+    }
+
+    static String twoWay(List<BookEvent> book, List<Pair> pairs, String prefix, String target, String[] keys,
+                         List<String> notes, Map<String, Object> memory, boolean useModel) {
         Map<String, double[]> fit = new LinkedHashMap<>(); // rawKey|yön -> {toplam fark, n}
+        int modelled = 0;
         for (Pair p : pairs) {
             Map<String, Double> f = p.sharp.fair.get(target);
+            if (f == null && useModel) {
+                boolean hasRaw = false;
+                for (String k : p.book.odds.keySet()) hasRaw |= k.startsWith(prefix);
+                if (!hasRaw || modelled >= 40) continue; // model hesabı yalnızca gereken maçlarda
+                f = modelKg(p);
+                modelled++;
+            }
             if (f == null) continue;
             for (Map.Entry<String, Map<String, Double>> m : p.book.odds.entrySet()) {
                 if (!m.getKey().startsWith(prefix)) continue;

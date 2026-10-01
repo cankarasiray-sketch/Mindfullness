@@ -154,7 +154,7 @@ public final class Daily {
                     return a.book.kickoff.compareTo(b.book.kickoff);
                 }
             });
-            int n = 0;
+            int n = 0, withData = 0;
             int total = Math.min(cfg.kgEvents, due.size());
             for (Models.Pair p : due) {
                 if (n >= cfg.kgEvents) break;
@@ -162,10 +162,13 @@ public final class Daily {
                     step("Karşılıklı Gol oranı " + (n + 1) + "/" + total + ": " + p.book.home + " - " + p.book.away);
                     api().enrichEvent(p.sharp, "btts");
                     n++;
+                    if (p.sharp.fair.containsKey("KG")) withData++;
                 } catch (Http.ProviderException e) {
                     break; // bu pazar desteklenmiyor ya da kredi bitti; ana akışı durdurma
                 }
             }
+            api().report.add("Karşılıklı Gol: " + n + " maç soruldu (" + n + " kredi), " + withData + " maçta oran geldi"
+                    + (due.size() == 0 ? " (iddaa'da KG pazarı olan maç yok)" : ""));
             return n;
         }
 

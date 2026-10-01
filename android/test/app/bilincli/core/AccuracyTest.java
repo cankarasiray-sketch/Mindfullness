@@ -220,6 +220,49 @@ public class AccuracyTest {
     }
 
     @Test
+    public void goalModelRecoversExpectedGoals() {
+        double[] o = GoalModel.outcomes(1.6, 1.0);
+        double[] l = GoalModel.fit(o[0], o[2], o[3]);
+        assertEquals(1.6, l[0], 0.01);
+        assertEquals(1.0, l[1], 0.01);
+        assertEquals((1 - Math.exp(-1.6)) * (1 - Math.exp(-1.0)), GoalModel.btts(o[0], o[2], o[3]), 0.005);
+    }
+
+    @Test
+    public void kgMarketDiscoveredWithModelWhenPinnacleKgIsScarce() {
+        double[][] lam = {{1.6, 1.0}, {1.1, 1.3}, {2.1, 0.7}, {1.3, 1.2}, {0.9, 1.5}, {1.8, 1.1}};
+        List<BookEvent> book = new ArrayList<>();
+        List<SharpEvent> sharp = new ArrayList<>();
+        for (int i = 0; i < lam.length; i++) {
+            double[] o = GoalModel.outcomes(lam[i][0], lam[i][1]);
+            Map<String, Map<String, Double>> fair = CoreTest.ms(o[0], o[1], o[2]);
+            Map<String, Double> au = new LinkedHashMap<>();
+            au.put("ALT", 1 - o[3]);
+            au.put("UST", o[3]);
+            fair.put("AU25", au);
+            sharp.add(new SharpEvent("s" + i, "lig", "Ev " + i, "Dep " + i, KO, fair, "pinnacle")); // Pinnacle KG yok
+            Map<String, Map<String, Double>> odds = CoreTest.ms(1 / (o[0] * 1.08), 1 / (o[1] * 1.08), 1 / (o[2] * 1.08));
+            Map<String, Double> kg = new LinkedHashMap<>(); // bültende N1 = Yok, N2 = Var
+            kg.put("1", 1 / ((1 - o[4]) * 1.07));
+            kg.put("2", 1 / (o[4] * 1.07));
+            odds.put(Calibration.RAW_KG + "38", kg);
+            Map<String, Double> oddEven = new LinkedHashMap<>(); // yanıltıcı: tek/çift
+            oddEven.put("1", 1.87);
+            oddEven.put("2", 1.87);
+            odds.put(Calibration.RAW_KG + "41", oddEven);
+            book.add(new BookEvent("b" + i, "Ev " + i, "Dep " + i, KO, "Lig", 1, odds, String.valueOf(i)));
+        }
+        Map<String, Object> memory = new LinkedHashMap<>();
+        Map<String, Object> r = Calibration.apply(book, sharp, memory);
+        String kg = String.valueOf(r.get("KG"));
+        assertTrue(kg, kg.startsWith("doğrulandı (pazar 38") && kg.contains("model destekli"));
+        assertEquals(1 / (0.0 + GoalModel.outcomes(1.6, 1.0)[4] * 1.07), book.get(0).odds.get("KG").get("VAR"), 1e-9);
+        assertEquals("KG#38|1", memory.get("KG")); // eşleme hatırlanır
+        // bahis yine yalnızca Pinnacle KG fiyatıyla: modelden adil olasılık eklenmez
+        assertNull(sharp.get(0).fair.get("KG"));
+    }
+
+    @Test
     public void forecastLogScoresAccuracy() {
         Ledger.MemoryStorage store = new Ledger.MemoryStorage(null);
         Forecasts f = new Forecasts(store);
