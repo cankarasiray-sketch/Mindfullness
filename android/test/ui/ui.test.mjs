@@ -479,6 +479,21 @@ test("uzun işlemde ilerleme metni görünür, bitince temizlenir", async () => 
   assert.equal(t.$("#progress").textContent, "");
 });
 
+test("uzun sonuç balonu kaplamaz, ayrıntı kutuda; dokununca kapanır", async () => {
+  const s = clone(baseState);
+  const t = boot(s, "#ayarlar");
+  const long = "iddaa bülteni (Nesine): 639 maç\n" + "MTID 805: 6 maç, seçenek [10, 12]\n".repeat(40);
+  t.w.MockAndroid.act = (action, payload, id) => setTimeout(() => t.w.onActResult(id, { ok: true, message: action === "check" ? long : "tamam" }), 0);
+  t.w.checkSources();
+  await t.tick();
+  await t.tick();
+  const toast = t.$("#toast");
+  assert.equal(toast.textContent, "iddaa bülteni (Nesine): 639 maç (ayrıntı ekranda)");
+  assert.equal(t.$("#checkOut").textContent, long);
+  toast.click();
+  assert.equal(toast.className, "");
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {
