@@ -108,6 +108,8 @@ public final class Nesine {
                 }
                 Double sov = number(market.get("SOV"));
                 inv.add(mtid, raw.size(), sov, market, home + " - " + away);
+                // Nesine "özel değer yok"u boş değil 0,0 olarak gönderir (gerçek bültende görüldü)
+                boolean special = sov != null && Math.abs(sov) > 1e-9;
                 Long mm = integer(market.get("MBS"));
                 if (mtid == 1L) { // Maç Sonucu: N 1 = ev, 2 = beraberlik, 3 = deplasman (Calibration doğrular)
                     Map<String, Double> outcomes = new LinkedHashMap<>();
@@ -118,7 +120,7 @@ public final class Nesine {
                         odds.put("MS", outcomes);
                         if (mm != null && mm > 0) marketMbs = mm.intValue();
                     }
-                } else if (raw.size() == 3 && sov == null && raw.containsKey("1") && raw.containsKey("2") && raw.containsKey("3")) {
+                } else if (raw.size() == 3 && !special && raw.containsKey("1") && raw.containsKey("2") && raw.containsKey("3")) {
                     // Üç seçenekli aday pazar (Çifte Şans olabilir; İlk Yarı Sonucu da üç seçeneklidir).
                     // Hangisi olduğunu Calibration, Pinnacle'dan türetilen olasılıklarla bulur.
                     String key = Calibration.RAW_CS + mtid;
@@ -127,7 +129,7 @@ public final class Nesine {
                 } else if (raw.size() == 2 && raw.containsKey("1") && raw.containsKey("2")) {
                     // İki seçenekli aday pazarlar; hangisinin 2,5 Alt/Üst ya da Karşılıklı Gol olduğunu
                     // Calibration, Pinnacle oranlarıyla karşılaştırarak bulur.
-                    String key = sov != null ? (Math.abs(sov - 2.5) < 1e-9 ? Calibration.RAW_AU25 + mtid : null)
+                    String key = special ? (Math.abs(sov - 2.5) < 1e-9 ? Calibration.RAW_AU25 + mtid : null)
                             : Calibration.RAW_KG + mtid;
                     if (key != null) {
                         odds.put(key, raw);

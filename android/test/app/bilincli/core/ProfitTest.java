@@ -325,6 +325,17 @@ public class ProfitTest {
         assertNotNull(b.odds.get(Calibration.RAW_CS + "7"));
         assertEquals(2, b.mbsFor(Calibration.RAW_CS + "7"));
         assertNull(b.odds.get(Calibration.RAW_CS + "11")); // handikaplı (SOV) pazar aday değil
+        // gerçek bülten: özel değeri olmayan pazarlarda SOV 0,0 gelir (Çifte Şans ve KG yine aday olmalı)
+        String real = "{\"sg\":{\"EA\":[{\"TYPE\":1,\"HN\":\"A\",\"AN\":\"B\",\"D\":\"03.10.2026\",\"T\":\"20:00\",\"C\":124,\"MBS\":1,"
+                + "\"MA\":[{\"MTID\":1,\"SOV\":0.0,\"OCA\":[{\"N\":1,\"O\":2.1},{\"N\":2,\"O\":3.3},{\"N\":3,\"O\":3.4}]},"
+                + "{\"MTID\":3,\"SOV\":0.0,\"OCA\":[{\"N\":1,\"O\":1.3},{\"N\":2,\"O\":1.32},{\"N\":3,\"O\":1.65}]},"
+                + "{\"MTID\":38,\"SOV\":0.0,\"OCA\":[{\"N\":1,\"O\":1.8},{\"N\":2,\"O\":1.9}]},"
+                + "{\"MTID\":14,\"SOV\":2.5,\"OCA\":[{\"N\":1,\"O\":1.9},{\"N\":2,\"O\":1.8}]}]}]}}";
+        BookEvent r = Nesine.parse(Json.parse(real)).get(0);
+        assertNotNull(r.odds.get("MS"));
+        assertNotNull(r.odds.get(Calibration.RAW_CS + "3"));
+        assertNotNull(r.odds.get(Calibration.RAW_KG + "38"));
+        assertNotNull(r.odds.get(Calibration.RAW_AU25 + "14"));
     }
 
     // ---- Pinnacle + borsa ----
