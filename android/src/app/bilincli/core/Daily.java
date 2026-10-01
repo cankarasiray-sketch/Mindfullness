@@ -144,6 +144,10 @@ public final class Daily {
     }
 
     public static Result generate(Ledger ledger, Sources src, boolean force, boolean autoPlay) {
+        return generate(ledger, src, force, autoPlay, null);
+    }
+
+    public static Result generate(Ledger ledger, Sources src, boolean force, boolean autoPlay, Radar radar) {
         Instant now = ledger.now();
         Settings cfg = ledger.settings();
         Result r = new Result();
@@ -169,6 +173,7 @@ public final class Daily {
             r.error = e.getMessage();
             return r; // hata günü kaydedilmez; sonraki çalıştırma yeniden dener
         }
+        if (radar != null) radar.update(book, sharp, now, cfg, true);
         Decision d = Engine.decide(book, sharp, now, cfg);
         r.decision = d;
         String summary = Texts.statsLine(d.stats);
@@ -185,6 +190,52 @@ public final class Daily {
         if (autoPlay && stake > 0) ledger.markPlayed(cid, stake, null);
         ledger.recordRun(r.day, "kupon", note[0] == null ? "" : note[0], cid, summary);
         return r;
+    }
+
+    /** Gün içi tarama sonucu. */
+    public static final class Intraday {
+        public Long newCouponId;
+        public String blocked;
+        public List<java.util.Map<String, Object>> moves = new ArrayList<>();
+    }
+
+    /**
+     * Radar taraması: piyasa verisini işler; bugün oynanmış kupon yoksa ve güncel oranlarla
+     * sabahkinden farklı bir kupon kurulabiliyorsa onu bugünün kuponu yapar.
+     */
+    public static Intraday intraday(Ledger ledger, List<BookEvent> book, List<SharpEvent> sharp, Radar radar) {
+        Instant now = ledger.now();
+        Settings cfg = ledger.settings();
+        Intraday out = new Intraday();
+        out.moves = radar.update(book, sharp, now, cfg, true);
+        Closing.capture(ledger, sharp, now);
+        String day = Fmt.dayKey(now);
+        Ledger.Run run = ledger.runFor(day);
+        Ledger.Coupon today = run == null || run.couponId == null ? null : ledger.coupon(run.couponId);
+        if (today != null && (today.played || today.result != null)) return out; // oynanmış kuponu değiştirme
+        String blocked = Guard.check(ledger, cfg, now);
+        if (blocked != null) {
+            out.blocked = blocked;
+            return out;
+        }
+        Decision d = Engine.decide(book, sharp, now, cfg);
+        if (d.isPass()) return out;
+        if (today != null && sameSelections(today, d.proposal)) return out;
+        String[] note = new String[1];
+        long stake = computeStake(ledger.balance(), d.proposal, cfg, note)[0];
+        long cid = ledger.addCoupon(d.proposal, day, stake);
+        ledger.recordRun(day, "kupon", "Gün içi taramada güncel oranlarla bulundu."
+                + (note[0] == null ? "" : " " + note[0]), cid, Texts.statsLine(d.stats));
+        out.newCouponId = cid;
+        return out;
+    }
+
+    static boolean sameSelections(Ledger.Coupon c, Proposal p) {
+        if (c.legs.size() != p.legs.size()) return false;
+        java.util.Set<String> a = new java.util.HashSet<>(), b = new java.util.HashSet<>();
+        for (Ledger.Leg l : c.legs) a.add(l.bookRef + "|" + l.market + "|" + l.outcome);
+        for (Models.Candidate l : p.legs) b.add(l.book.ref + "|" + l.market + "|" + l.outcome);
+        return a.equals(b);
     }
 
     public static Result runDaily(Ledger ledger, Sources src, boolean force, boolean autoPlay) {

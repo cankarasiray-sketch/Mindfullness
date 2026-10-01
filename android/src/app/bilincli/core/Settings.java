@@ -53,6 +53,23 @@ public final class Settings {
     public int runHour = 6;
     public int runMinute = 0;
 
+    /** Gün içi radar taraması sayısı: 0 (kapalı), 1 (17:00), 2 (13:00, 18:00), 4 (10, 13, 16, 19). */
+    public int radarScans = 0;
+
+    public int[] radarHours() {
+        switch (radarScans) {
+            case 1: return new int[] {17};
+            case 2: return new int[] {13, 18};
+            case 4: return new int[] {10, 13, 16, 19};
+            default: return new int[0];
+        }
+    }
+
+    /** Aylık tahmini The Odds API kredisi (ücretsiz plan 500). */
+    public int estimatedMonthlyCredits() {
+        return 30 * leagues.size() * (1 + radarScans) + 240; // + sonuç, kontrol ve kapanış için yaklaşık pay
+    }
+
     /** "temkinli", "yuksek" ya da "ozel" (kullanıcı Kelly/üst sınırı elle değiştirdi). */
     public String profile = "temkinli";
 
@@ -113,6 +130,8 @@ public final class Settings {
         m.put("runHour", (long) runHour);
         m.put("runMinute", (long) runMinute);
         m.put("profile", detectProfile());
+        m.put("radarScans", (long) radarScans);
+        m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
     }
 
@@ -146,6 +165,7 @@ public final class Settings {
         s.chaseCooldownHours = Json.dbl(m, "chaseCooldownHours", s.chaseCooldownHours);
         s.runHour = (int) Json.lng(m, "runHour", s.runHour);
         s.runMinute = (int) Json.lng(m, "runMinute", s.runMinute);
+        s.radarScans = (int) Json.lng(m, "radarScans", s.radarScans);
         s.profile = s.detectProfile();
         return s;
     }
@@ -164,6 +184,7 @@ public final class Settings {
         if (chaseCooldownHours < 0 || chaseCooldownHours > 24 * 14) return "Kovalama beklemesi 0-336 saat olmalı";
         if (runHour < 0 || runHour > 23 || runMinute < 0 || runMinute > 59) return "Saat geçersiz";
         if (leagues.isEmpty()) return "En az bir lig seçilmeli";
+        if (radarScans != 0 && radarScans != 1 && radarScans != 2 && radarScans != 4) return "Radar sıklığı 0, 1, 2 ya da 4 olmalı";
         return null;
     }
 }

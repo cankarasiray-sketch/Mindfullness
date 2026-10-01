@@ -54,6 +54,7 @@ public final class Bridge {
         extra.put("exactAlarm", Scheduler.canExact(activity));
         extra.put("nextRun", Scheduler.nextRun(repo.real().settings(), Instant.now()).toString());
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
+        extra.put("radar", repo.radarView());
         String version = "?";
         try {
             version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
@@ -138,6 +139,19 @@ public final class Bridge {
                 Scheduler.scheduleNextEvent(activity);
                 return "Kupon #" + id + " oynandı: " + Fmt.tl(stake) + ".";
             }
+            case "radarScan": {
+                requireReal(repo);
+                Daily.Intraday r;
+                try {
+                    r = repo.radarScan();
+                } catch (app.bilincli.core.Http.ProviderException e) {
+                    throw new IllegalStateException("Tarama yapılamadı: " + e.getMessage());
+                }
+                Scheduler.scheduleNextEvent(activity);
+                if (r.newCouponId != null) return "Güncel oranlarla yeni kupon bulundu: #" + r.newCouponId + ".";
+                if (r.blocked != null) return "Tarama tamam. Yeni kupon yok: " + r.blocked;
+                return "Tarama tamam. " + r.moves.size() + " yeni düşen oran fırsatı.";
+            }
             case "recheck": {
                 requireReal(repo);
                 Map<String, Object> r;
@@ -196,7 +210,7 @@ public final class Bridge {
                 requireReal(repo);
                 Daily.Result r;
                 synchronized (Repo.LOCK) {
-                    r = Daily.generate(repo.real(), repo.live(), Json.bool(p, "force", false), false);
+                    r = Daily.generate(repo.real(), repo.live(), Json.bool(p, "force", false), false, repo.radar);
                 }
                 Scheduler.scheduleNextEvent(activity);
                 if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error);

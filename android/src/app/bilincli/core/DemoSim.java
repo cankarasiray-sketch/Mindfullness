@@ -50,8 +50,11 @@ public final class DemoSim {
             }
             baseline += all ? Math.round(stake * odds) - stake : -stake;
         }
+        Radar radar = new Radar(new Ledger.MemoryStorage(null));
+        radar.update(world.book(), world.sharp(), world.now, ledger.settings(), true);
         Ledger.Stats s = ledger.stats();
         Map<String, Object> out = new LinkedHashMap<>();
+        out.put("radar", radar.view());
         out.put("days", (long) days);
         out.put("couponDays", (long) coupon);
         out.put("passDays", (long) pass);

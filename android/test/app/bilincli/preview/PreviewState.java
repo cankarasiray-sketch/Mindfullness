@@ -25,6 +25,7 @@ public final class PreviewState {
         extra.put("exactAlarm", true);
         extra.put("nextRun", today.plusSeconds(86400).toString());
         extra.put("demoSummary", summary);
+        extra.put("radar", summary.get("radar"));
         extra.put("version", "1.0");
         System.out.print(Json.write(State.build(ledger, args.length > 1, extra)));
     }

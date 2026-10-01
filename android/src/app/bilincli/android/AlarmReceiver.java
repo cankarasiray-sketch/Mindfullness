@@ -8,6 +8,11 @@ import android.content.Intent;
 public final class AlarmReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context ctx, Intent intent) {
+        if (Scheduler.ACTION_RADAR.equals(intent.getAction())) {
+            Scheduler.runRadarNow(ctx); // gün içi düşen oran / değer taraması
+            Scheduler.scheduleNextRadar(ctx);
+            return;
+        }
         if (Scheduler.ACTION_EVENT.equals(intent.getAction())) {
             Scheduler.runEventNow(ctx); // maç öncesi kontrol / kapanış oranı
             return;

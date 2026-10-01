@@ -22,6 +22,9 @@ final class Scheduler {
     static final int JOB_DAILY = 1;
     static final int JOB_PERIODIC = 2;
     static final int JOB_EVENT = 3;
+    static final int JOB_RADAR = 4;
+    static final String EXTRA_RADAR = "radar";
+    static final String ACTION_RADAR = "app.bilincli.RADAR";
     static final String EXTRA_DAILY = "daily";
     static final String EXTRA_EVENT = "event";
     static final String ACTION_EVENT = "app.bilincli.EVENT";
@@ -63,6 +66,7 @@ final class Scheduler {
                     .build());
         }
         scheduleNextEvent(ctx);
+        scheduleNextRadar(ctx);
         return next;
     }
 
@@ -84,6 +88,39 @@ final class Scheduler {
         } catch (SecurityException e) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi);
         }
+    }
+
+    /** Bir sonraki radar taraması (ayarlardaki saatlerden en yakını, Türkiye saati). */
+    static Instant nextRadar(Settings s, Instant now) {
+        Instant best = null;
+        OffsetDateTime local = now.atOffset(Fmt.TR);
+        for (int h : s.radarHours()) {
+            OffsetDateTime t = local.withHour(h).withMinute(0).withSecond(0).withNano(0);
+            if (!t.isAfter(local)) t = t.plusDays(1);
+            if (best == null || t.toInstant().isBefore(best)) best = t.toInstant();
+        }
+        return best;
+    }
+
+    static void scheduleNextRadar(Context ctx) {
+        AlarmManager am = ctx.getSystemService(AlarmManager.class);
+        Intent i = new Intent(ctx, AlarmReceiver.class).setAction(ACTION_RADAR);
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, 2, i,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        Instant next = nextRadar(Repo.get(ctx).real().settings(), Instant.now());
+        if (next == null) {
+            am.cancel(pi);
+            return;
+        }
+        // Radar tam dakikada olmak zorunda değil: pil dostu, gecikmesi küçük alarm.
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, next.toEpochMilli(), pi);
+    }
+
+    static void runRadarNow(Context ctx) {
+        android.os.PersistableBundle extras = new android.os.PersistableBundle();
+        extras.putBoolean(EXTRA_RADAR, true);
+        schedule(ctx, new JobInfo.Builder(JOB_RADAR, new ComponentName(ctx, DailyJob.class))
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setExtras(extras));
     }
 
     static void runEventNow(Context ctx) {

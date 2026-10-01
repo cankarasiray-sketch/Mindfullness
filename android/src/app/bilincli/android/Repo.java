@@ -9,6 +9,7 @@ import app.bilincli.core.Fmt;
 import app.bilincli.core.Http;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Models;
+import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
 import app.bilincli.core.Settings;
 import java.io.File;
@@ -31,6 +32,7 @@ final class Repo {
     private final Context app;
     private final SharedPreferences prefs;
     private final Ledger ledger;
+    final Radar radar;
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
 
@@ -45,6 +47,25 @@ final class Repo {
         app = ctx.getApplicationContext();
         prefs = app.getSharedPreferences("bilincli", Context.MODE_PRIVATE);
         ledger = new Ledger(new FileStorage(new File(app.getFilesDir(), "kasa.json")), SYSTEM);
+        radar = new Radar(new FileStorage(new File(app.getFilesDir(), "piyasa.json")));
+    }
+
+    /** Arayüzdeki "Fırsatlar" verisi: demo modunda demo özeti, değilse radar durumu. */
+    @SuppressWarnings("unchecked")
+    Map<String, Object> radarView() {
+        if (isDemo() && demoSummary != null && demoSummary.get("radar") instanceof Map) {
+            return (Map<String, Object>) demoSummary.get("radar");
+        }
+        return radar.view();
+    }
+
+    /** Gün içi radar taraması: tüm ligler + iddaa bülteni; gerekirse güncel kupon önerir. */
+    Daily.Intraday radarScan() throws Http.ProviderException {
+        synchronized (LOCK) {
+            if (ledger.settings().oddsApiKey.isEmpty()) throw new Http.ProviderException("The Odds API anahtarı yok.");
+            Daily.LiveSources src = live();
+            return Daily.intraday(ledger, src.book(), src.sharp(), radar);
+        }
     }
 
     /**
@@ -125,7 +146,7 @@ final class Repo {
             String today = Fmt.dayKey(Instant.now());
             boolean due = !Instant.now().isBefore(todaysRunTime()) && ledger.runFor(today) == null;
             if (dailyTrigger || due) {
-                Daily.Result r = Daily.generate(ledger, src, false, false);
+                Daily.Result r = Daily.generate(ledger, src, false, false, radar);
                 if (!r.skipped) out.daily = r;
             }
         }
@@ -144,6 +165,7 @@ final class Repo {
             Instant now = Instant.now();
             Map<String, Object> r = Recheck.run(c, book, sharp, now, ledger.settings(), ledger.balance());
             ledger.saveCheck(couponId, r);
+            radar.update(book, sharp, now, ledger.settings(), false); // düşen oran radarına ek ölçüm
             Closing.capture(ledger, sharp, now);
             return r;
         }

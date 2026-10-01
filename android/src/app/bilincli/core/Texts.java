@@ -51,6 +51,22 @@ public final class Texts {
         return b.toString();
     }
 
+    /** Düşen oran bildirimi; değer taşıyan en fazla 3 hareket. */
+    public static String[] moves(List<Map<String, Object>> moves) {
+        if (moves.isEmpty()) return null;
+        StringBuilder b = new StringBuilder();
+        int n = 0;
+        for (Map<String, Object> m : moves) {
+            if (n++ == 3) break;
+            double from = Json.dbl(m, "from", 0), to = Json.dbl(m, "to", 0);
+            b.append(m.get("home")).append(" - ").append(m.get("away")).append(" MS ").append(m.get("outcome"))
+                    .append(": Pinnacle ").append(Fmt.odds(1 / from)).append(" → ").append(Fmt.odds(1 / to))
+                    .append(", iddaa hâlâ ").append(Fmt.odds(Json.dbl(m, "iddaa", 0)))
+                    .append(" (avantaj ").append(Fmt.pct(Json.dbl(m, "ev", 0), true)).append(")\n");
+        }
+        return new String[] {"Düşen oran: " + moves.size() + " fırsat", b.toString().trim()};
+    }
+
     /** [başlık, metin] */
     public static String[] notification(Ledger ledger, Daily.Result r) {
         String when = LocalDate.parse(r.day).format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT));

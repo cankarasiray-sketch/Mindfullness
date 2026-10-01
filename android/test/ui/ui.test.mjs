@@ -46,7 +46,7 @@ test("günün kuponu ve özet görünür", async () => {
   const t = boot(clone(baseState));
   assert.match(t.text(), /Günün kuponu/);
   assert.match(t.$("#hdrBal").textContent, /TL$/);
-  assert.equal(t.$$("nav button").length, 4);
+  assert.equal(t.$$("nav button").length, 5);
   assert.deepEqual(t.errors, []);
 });
 
@@ -240,6 +240,41 @@ test("risk profili seçimi", async () => {
   t.button("Bu profili kullan").click();
   await t.tick();
   assert.deepEqual(t.calls.at(-1), { action: "profile", payload: { name: "yuksek" } });
+});
+
+test("fırsatlar: değer listesi, düşen oranlar ve elle tarama", async () => {
+  const s = clone(baseState);
+  assert.ok(s.radar.values.length > 0, "demo durumunda değer listesi olmalı");
+  s.radar.moves = [{ key: "s1:1", home: "Ev <b>", away: "Dep", kickoff: s.now, outcome: "1", from: 0.48, to: 0.55,
+    since: s.now, iddaa: 2.0, ev: 0.1 }];
+  const t = boot(s, "#firsat");
+  assert.match(t.text(), /Değerli oranlar/);
+  assert.match(t.text(), /Pinnacle 2,08 → 1,82/);
+  assert.match(t.text(), /\+7,0 puan/);
+  assert.match(t.text(), /Ev <b>/);
+  assert.equal(t.$$("main b").filter((b) => b.textContent === "Ev ").length, 0);
+  t.button("Şimdi tara").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).action, "radarScan");
+});
+
+test("ROI analizi grafikleri ve düşüş", async () => {
+  const t = boot(clone(baseState), "#gecmis");
+  assert.match(t.text(), /ROI analizi/);
+  assert.match(t.text(), /MAÇ SAYISINA GÖRE/);
+  assert.match(t.text(), /En büyük düşüş/);
+  assert.ok(t.$$(".bars .fill").length > 0);
+});
+
+test("radar sıklığı ayarı ve kredi tahmini", async () => {
+  const s = clone(baseState);
+  s.settings.estimatedCredits = 780;
+  const t = boot(s, "#ayarlar");
+  assert.match(t.text(), /Ücretsiz planı aşar/);
+  t.$("#sRadar").value = "2";
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).payload.settings.radarScans, 2);
 });
 
 let failed = 0;

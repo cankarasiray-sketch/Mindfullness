@@ -85,6 +85,7 @@ public final class State {
         }
         m.put("profiles", profiles);
         m.put("freshSeconds", Recheck.FRESH_S);
+        m.put("analysis", Analysis.build(ledger));
         List<Object> leagues = new ArrayList<>();
         for (String[] l : Settings.KNOWN_LEAGUES) {
             List<Object> pair = new ArrayList<>();

@@ -97,6 +97,17 @@ font-size:14px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:2
 .range{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px}
 .range div{background:var(--bg);border-radius:10px;padding:8px}.range span{display:block;font-size:11.5px;color:var(--muted)}
 .range b{font-variant-numeric:tabular-nums}
+.vrow{border-top:1px solid var(--line);padding:9px 0}.vrow:first-child{border-top:0}
+.vrow .l1{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.vrow .l2{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:2px}
+.bars .bar{display:grid;grid-template-columns:96px 1fr 92px;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:12.5px}
+.bars .bar:first-child{border-top:0}
+.bars .track{height:10px;background:var(--chip);border-radius:6px;position:relative;overflow:hidden}
+.bars .fill{position:absolute;top:0;bottom:0;border-radius:6px}
+.bars .fill.pos{background:var(--accent)}.bars .fill.neg{background:var(--bad)}
+.bars .r{text-align:right;font-variant-numeric:tabular-nums}
+details.info summary{cursor:pointer;font-weight:600}
+nav button{font-size:11px}
 .empty .big{font-size:20px}
 p{margin:6px 0}
 </style>
@@ -204,9 +215,10 @@ var ICONS = {
   bugun: '<path d="M4 18h4v-4h4v-4h4V6h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   gecmis: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v4l3 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   kasa: '<rect x="3" y="6" width="18" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 12.5h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6 6l8-3 2 3" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+  firsat: '<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 12l6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   ayarlar: '<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
 };
-var TABS = [["bugun", "Bugün"], ["gecmis", "Geçmiş"], ["kasa", "Kasa"], ["ayarlar", "Ayarlar"]];
+var TABS = [["bugun", "Bugün"], ["firsat", "Fırsatlar"], ["gecmis", "Geçmiş"], ["kasa", "Kasa"], ["ayarlar", "Ayarlar"]];
 function show(t) { tab = t; render(); window.scrollTo(0, 0); }
 
 function render() {
@@ -218,7 +230,8 @@ function render() {
       + ICONS[t[0]] + "</svg>" + t[1] + "</button>";
   }).join("");
   var v = document.getElementById("view");
-  v.innerHTML = tab === "bugun" ? viewToday() : tab === "gecmis" ? viewHistory() : tab === "kasa" ? viewMoney() : viewSettings();
+  v.innerHTML = tab === "bugun" ? viewToday() : tab === "firsat" ? viewOpportunities() : tab === "gecmis" ? viewHistory()
+    : tab === "kasa" ? viewMoney() : viewSettings();
 }
 
 // ---- Bugün ----------------------------------------------------------------
@@ -388,6 +401,47 @@ function manualSheet(id, pos) {
     }).join("") + "</div>");
 }
 
+// ---- Fırsatlar ----------------------------------------------------------------
+function viewOpportunities() {
+  var R = S.radar || {values: [], moves: []}, html = "";
+  var inCoupon = {};
+  var run = S.todayRun, tc = run && run.couponId ? couponById(run.couponId) : null;
+  if (tc) tc.legs.forEach(function (l) { inCoupon[l.bookRef + "|" + l.outcome] = true; });
+  html += '<div class="card"><div class="kicker">PİYASA TARAMASI</div><p class="small muted">'
+    + (R.scannedAt ? "Son tarama " + esc(dm(R.scannedAt)) + " " + esc(hm(R.scannedAt)) + " (" + esc(ago(R.scannedAt)) + ")." : "Henüz tarama yok.")
+    + " Otomatik radar: " + (S.settings.radarScans ? "günde " + S.settings.radarScans + " kez" : "kapalı") + ".</p>"
+    + (S.demo ? "" : '<div class="btns"><button class="b" onclick="act(\'radarScan\')">Şimdi tara</button><button class="b ghost" onclick="show(\'ayarlar\')">Radar ayarı</button></div>')
+    + "</div>";
+  html += '<div class="card"><h2>Değerli oranlar</h2><p class="small muted">iddaa oranının, Pinnacle\'ın marjı arındırılmış adil oranından yüksek olduğu seçimler. '
+    + "Örnek: gerçek olasılığı %50 olan sonuca 2,20 oran → 0,50 × 2,20 − 1 = +%10 avantaj. Kupon motoru bunların arasından MBS ve risk kurallarına uyan en iyi kombinasyonu seçer.</p>"
+    + (R.values.length ? R.values.map(function (v) {
+      return '<div class="vrow"><div class="l1"><span>' + esc(dm(v.kickoff)) + " " + esc(hm(v.kickoff)) + (v.league ? " · " + esc(v.league) : "") + "</span><span>"
+        + (v.code ? "kod " + esc(v.code) + " · " : "") + "MBS " + v.mbs + "</span></div>"
+        + '<div class="teams" style="font-weight:600">' + esc(v.home) + " – " + esc(v.away) + "</div>"
+        + '<div class="l2"><span><span class="chip main">' + esc(label(v.market, v.outcome)) + '</span> <span class="odds">' + odds(v.odds) + "</span> "
+        + '<span class="small muted">adil ' + odds(1 / v.fair) + "</span></span><span><b class=\"pos\">" + pct(v.ev, true) + "</b>"
+        + (inCoupon[v.bookRef + "|" + v.outcome] ? ' <span class="st ok">kuponda</span>' : "")
+        + (v.inRange ? "" : ' <span class="st">oran aralığı dışında</span>') + "</span></div></div>";
+    }).join("") : '<p class="muted">Son taramada değer taşıyan seçim yok. Bu normaldir: iddaa çoğu maçta marjlıdır.</p>') + "</div>";
+  html += '<div class="card"><h2>Düşen oranlar (Pinnacle)</h2><p class="small muted">Gün içinde Pinnacle\'da olasılığı en az 3 puan artan (oranı düşen) sonuçlar. '
+    + "Keskin piyasada hızlı düşüş genellikle profesyonel paranın o yöne girdiğini gösterir; iddaa oranı henüz düşmediyse fırsattır.</p>"
+    + (R.moves.length ? R.moves.map(function (m) {
+      var hasIddaa = m.iddaa != null;
+      return '<div class="vrow"><div class="l1"><span>' + esc(dm(m.kickoff)) + " " + esc(hm(m.kickoff)) + "</span><span>" + esc(hm(m.since)) + "'dan beri</span></div>"
+        + '<div class="teams" style="font-weight:600">' + esc(m.home) + " – " + esc(m.away) + "</div>"
+        + '<div class="l2"><span><span class="chip">MS ' + esc(m.outcome) + "</span> Pinnacle " + odds(1 / m.from) + " → <b>" + odds(1 / m.to) + "</b> "
+        + '<span class="small muted">(+' + num((m.to - m.from) * 100, 1) + " puan)</span></span><span>"
+        + (hasIddaa ? 'iddaa ' + odds(m.iddaa) + ' <b class="' + cls(m.ev) + '">' + pct(m.ev, true) + "</b>" : '<span class="small muted">iddaa\'da yok</span>')
+        + "</span></div></div>";
+    }).join("") : '<p class="muted">Henüz hareket yok. Radar en az iki ölçüm yapınca (sabah + gün içi tarama ya da kontrol) görünür.</p>') + "</div>";
+  html += '<div class="card"><details class="info"><summary>Arbitraj ve "derin veri" neden yok?</summary>'
+    + '<p class="small">Arbitraj: tüm iddaa bayileri (Bilyoner, Nesine, Misli) aynı oranı verir ve her maçta marj vardır; tek kaynakta risksiz kâr matematiksel olarak imkânsızdır. '
+    + "Yabancı sitelerle arbitraj Türkiye'de yasa dışıdır ve bu siteler arbitrajcı hesapları kısıtlar.</p>"
+    + "<p class=\"small\">Derin veri (xG, sakatlık, hakem, hava): Pinnacle'ın fiyatı bu bilgileri profesyonel modeller ve milyonlarca liralık bahisle zaten içerir. "
+    + "Kamuya açık verilerle kurulan ek bir model bu fiyatı yenmekten çok gürültü ekler; sahte \"değer\" üretip zarar ettirir. Bu yüzden uygulama piyasanın en iyi tahminini kullanır, kendi tahminini değil.</p></details></div>";
+  return html;
+}
+
 // ---- Geçmiş -----------------------------------------------------------------
 function chart() {
   var s = S.series;
@@ -420,6 +474,7 @@ function viewHistory() {
     + item("Oynanan seçimler", v.playedN ? '<span class="' + cls(v.played) + '">' + pct(v.played, true) + "</span> (" + v.playedN + " maç)" : "henüz yok")
     + item("Tüm öneriler", v.allN ? '<span class="' + cls(v.all) + '">' + pct(v.all, true) + "</span> (" + v.allN + " maç)" : "henüz yok")
     + "</div>" + (v.playedN < 30 ? '<p class="small muted">Güvenilir yorum için en az 30 maç gerekir.</p>' : "") + "</div>";
+  html += analysisCard();
   html += '<div class="card"><h2>Kuponlar</h2><div class="list">' + (S.coupons.length ? S.coupons.map(function (c) {
     var pl = c.played && c.result ? (c.payout || 0) - c.stake : null;
     return '<div class="item" onclick="detail(' + c.id + ')"><div><b>#' + c.id + "</b> " + '<span class="small muted">' + esc(dayLabel(c.day)) + " · " + c.legs.length + " maç · oran " + odds(c.totalOdds)
@@ -432,6 +487,32 @@ function viewHistory() {
       + esc(r.decision === "kupon" ? "KUPON" : r.decision === "pas" ? "PAS" : "KORUMA") + "</div></div>";
   }).join("") : '<p class="muted">Henüz karar yok.</p>') + "</div></div>";
   return html;
+}
+var MONTHS = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+function bars(rows) {
+  rows = rows.filter(function (r) { return r.n > 0; });
+  if (!rows.length) return '<p class="small muted">Henüz sonuçlanmış oynanan kupon yok.</p>';
+  var max = Math.max.apply(null, rows.map(function (r) { return Math.abs(r.pl); })) || 1;
+  return '<div class="bars">' + rows.map(function (r) {
+    var w = Math.abs(r.pl) / max * 50;
+    var fill = '<div class="fill ' + (r.pl >= 0 ? "pos" : "neg") + '" style="' + (r.pl >= 0 ? "left:50%" : "right:50%") + ";width:" + w.toFixed(1) + '%"></div>';
+    var key = /^\d{4}-\d{2}$/.test(r.key) ? MONTHS[+r.key.slice(5) - 1] + " " + r.key.slice(0, 4) : r.key;
+    return '<div class="bar"><span>' + esc(key) + '<br><span class="muted">' + r.won + "/" + r.n + (r.clv != null ? " · CLV " + pct(r.clv, true) : "")
+      + '</span></span><div class="track">' + fill + '</div><span class="r ' + cls(r.pl) + '">' + tl(r.pl) + "<br>" + '<span class="muted">ROI ' + pct(r.roi, true) + "</span></span></div>";
+  }).join("") + "</div>";
+}
+function analysisCard() {
+  var a = S.analysis;
+  if (!a) return "";
+  var dd = a.drawdown;
+  return '<div class="card"><h2>ROI analizi</h2><p class="small muted">Nerede kazandığını, nerede kaybettiğini gösterir. Küçük örneklemde (birkaç kupon) sonuçlar şanstır; '
+    + "karar vermeden önce sayıların büyümesini bekle. Çok maçlı kuponlarda lig/pazar K/Z'si maçlara eşit bölünür.</p>"
+    + '<div class="list">' + item("En büyük düşüş (zirveden)", pct(dd.max) + " · " + tl(dd.maxAmount)) + item("Şu anki düşüş", pct(dd.current)) + "</div>"
+    + '<p class="kicker" style="margin-top:12px">MAÇ SAYISINA GÖRE</p>' + bars(a.byLegs)
+    + '<p class="kicker" style="margin-top:12px">KUPON ORANINA GÖRE</p>' + bars(a.byOdds)
+    + '<p class="kicker" style="margin-top:12px">LİGE GÖRE</p>' + bars(a.byLeague)
+    + '<p class="kicker" style="margin-top:12px">PAZARA GÖRE</p>' + bars(a.byMarket)
+    + '<p class="kicker" style="margin-top:12px">AYLARA GÖRE</p>' + bars(a.byMonth) + "</div>";
 }
 function item(k, v) { return '<div class="item"><span class="muted">' + k + "</span><span>" + v + "</span></div>"; }
 function detail(id) {
@@ -481,6 +562,12 @@ function viewSettings() {
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.map(function (l) {
     return '<label class="check"><input type="checkbox" class="lg" value="' + esc(l[0]) + '"' + (st.leagues.indexOf(l[0]) >= 0 ? " checked" : "") + ">" + esc(l[1]) + "</label>";
   }).join("") + '<p class="small muted">Her lig günde 1 kredi harcar.</p></div>';
+  html += '<div class="card"><h2>Düşen oran radarı</h2><p class="small muted">Gün içinde piyasayı yeniden tarar: Pinnacle\'da oranı hızla düşen sonuçları ve '
+    + "sabah olmayan yeni değer fırsatlarını bulur. Bugün oynanmış kupon yoksa güncel oranlarla yeni kupon önerir ve bildirir.</p>"
+    + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1 (17:00)"], [2, "Günde 2 (13:00, 18:00)"], [4, "Günde 4 (10, 13, 16, 19)"]].map(function (o) {
+      return '<option value="' + o[0] + '"' + (st.radarScans === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+    }).join("") + '</select><p class="small muted">Tahmini aylık kredi: ~' + st.estimatedCredits + " (ücretsiz plan 500). "
+    + (st.estimatedCredits > 500 ? "<b>Ücretsiz planı aşar:</b> lig sayısını azalt ya da ücretli plana geç." : "Ücretsiz plana sığar.") + "</p></div>";
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
     + esc(dm(S.nextRun)) + " " + esc(hm(S.nextRun)) + ". Biten maçlar 3 saatte bir kontrol edilir.</p></div>";
@@ -531,6 +618,7 @@ function collectSettings() {
   st.leagues = Array.prototype.slice.call(document.querySelectorAll(".lg:checked")).map(function (x) { return x.value; });
   var t = val("sTime").split(":");
   st.runHour = parseInt(t[0], 10); st.runMinute = parseInt(t[1], 10);
+  st.radarScans = parseInt(val("sRadar") || "0", 10);
   FIELDS.forEach(function (f) { st[f[0]] = readNum("f_" + f[0], f[2]); });
   st.maxLegs = Math.round(st.maxLegs);
   return st;
@@ -558,7 +646,7 @@ function importData() {
   document.getElementById("doImport").onclick = function () { closeSheet(); act("import", {data: data}); };
 }
 
-if (/^#(bugun|gecmis|kasa|ayarlar)$/.test(location.hash)) tab = location.hash.slice(1);
+if (/^#(bugun|firsat|gecmis|kasa|ayarlar)$/.test(location.hash)) tab = location.hash.slice(1);
 refresh();
 </script>
 </body>

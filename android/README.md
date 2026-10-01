@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -46,6 +46,26 @@ bildirim olarak gelir.
   aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
   katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
 
+## Fırsatlar sekmesi: değerli oranlar ve düşen oran radarı
+
+- **Değerli oranlar:** Son taramada iddaa oranının, Pinnacle'ın marjı arındırılmış adil
+  oranından yüksek olduğu tüm seçimler, avantaja göre sıralı. Örnek: gerçek olasılığı %50 olan
+  sonuca 2,20 oran → 0,50 × 2,20 − 1 = +%10.
+- **Düşen oranlar:** Gün içinde Pinnacle'da olasılığı en az 3 puan artan (oranı düşen)
+  sonuçlar. iddaa oranı henüz düşmediyse değer fırsatıdır ve bildirim gelir.
+- **Otomatik radar** (Ayarlar → Düşen oran radarı): günde 1, 2 ya da 4 tarama. Bugün oynanmış
+  kupon yoksa ve güncel oranlarla daha iyi bir kupon kurulabiliyorsa onu önerir. Her tarama lig
+  sayısı kadar kredi harcar; ayarlar ekranı aylık tahmini gösterir.
+
+**ROI analizi** (Geçmiş sekmesi): maç sayısı, kupon oranı, lig, pazar ve aya göre kâr/zarar,
+ROI ve kapanış avantajı; ayrıca kasanın zirveden en büyük düşüşü.
+
+**Bilinçli olarak eklenmeyenler:**
+- *Arbitraj:* tüm iddaa bayileri aynı oranı verir ve her maçta marj vardır; tek kaynakta risksiz
+  kâr imkânsızdır. Yabancı sitelerle arbitraj Türkiye'de yasa dışıdır.
+- *Kendi "derin veri" modeli:* Pinnacle'ın fiyatı xG, sakatlık, hakem ve hava bilgisini zaten
+  içerir. Kamuya açık veriyle kurulan bir model bu fiyatı yenmekten çok gürültü ekler.
+
 ## Telefonda nasıl çalışır
 
 - **06:00 alarmı:** Tam saatli alarm, ağ bağlantısı olduğunda hemen çalışan bir arka plan işi
@@ -66,7 +86,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.1.apk
+./build.sh          # testler + build/BilincliKupon-1.2.apk
 ./build.sh test     # yalnızca testler
 ```
 
