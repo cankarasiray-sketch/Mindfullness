@@ -53,10 +53,23 @@ public interface Http {
      * adreslerde tipik görüntüdür; kullanıcıya ne yapabileceğini söyleyen açıklama.
      */
     static String blockedHint(Exception e) {
+        return blockedHint(e, "");
+    }
+
+    static boolean isReset(Exception e) {
         String m = String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT);
-        boolean reset = e instanceof java.net.SocketException || e instanceof javax.net.ssl.SSLException
+        return e instanceof java.net.SocketException || e instanceof javax.net.ssl.SSLException
                 || m.contains("reset") || m.contains("handshake") || m.contains("closed by peer");
-        if (!reset) return "";
+    }
+
+    /** Kaynağa göre: Nesine VPN'siz (Türkiye) açılır, The Odds API Türkiye'den VPN ister. */
+    static String blockedHint(Exception e, String url) {
+        if (!isReset(e)) return "";
+        if (url.contains("nesine.com")) {
+            return ". Bağlantı Nesine tarafından kesildi: VPN açıksa, VPN'in çıktığı sunucu Nesine tarafından"
+                    + " engelleniyor olabilir. VPN'de Türkiye'ye yakın başka bir sunucu seç ya da VPN uygulamasında"
+                    + " bu uygulamanın VPN'i atlamasına (bypass) izin veren bir ayar varsa aç.";
+        }
         return ". Bağlantı karşı taraftan kesildi: bu adrese bulunduğun ağdan erişim engelleniyor olabilir."
                 + " VPN açıkken dene; uygulamanın sabah kararı ve maç öncesi kontrolleri için VPN'i"
                 + " 'Her zaman açık' yap (Android: Ayarlar > Ağ > VPN).";
@@ -67,12 +80,48 @@ public interface Http {
         return url.replaceAll("(?i)(apiKey|token)=[^&]*", "$1=***");
     }
 
-    final class UrlHttp implements Http {
+    class UrlHttp implements Http {
+        /** Bağlantı denemesi: attempt 0 ilk yol; Android sürümü Nesine için VPN dışı ağı dener. */
+        protected HttpURLConnection open(URL u, int attempt) throws IOException {
+            return (HttpURLConnection) u.openConnection();
+        }
+
+        /** Kopan bağlantı (sıfırlanma) kaç kez denensin. */
+        protected int attempts(URL u) {
+            return 2;
+        }
+
         @Override
         public Response get(String url, Map<String, String> headers) throws ProviderException {
+            URL u;
+            try {
+                u = new URL(url);
+            } catch (IOException e) {
+                throw new ProviderException(safe(url) + " -> geçersiz adres");
+            }
+            IOException last = null;
+            int n = attempts(u);
+            for (int attempt = 0; attempt < n; attempt++) {
+                try {
+                    return once(u, url, headers, attempt);
+                } catch (IOException e) {
+                    last = e;
+                    if (!isReset(e)) break; // zaman aşımı vb.: yeniden deneme anlamsız
+                    try {
+                        Thread.sleep(1500L * (attempt + 1));
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+            throw new ProviderException(safe(url) + " -> bağlantı hatası: " + last.getMessage() + blockedHint(last, url));
+        }
+
+        private Response once(URL u, String url, Map<String, String> headers, int attempt) throws IOException, ProviderException {
             HttpURLConnection c = null;
             try {
-                c = (HttpURLConnection) new URL(url).openConnection();
+                c = open(u, attempt);
                 c.setConnectTimeout(20000);
                 c.setReadTimeout(45000);
                 c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android) BilincliKupon/1.0");
@@ -95,8 +144,6 @@ public interface Http {
                     throw new ProviderException(safe(url) + " -> HTTP " + status + ": " + detail);
                 }
                 return new Response(status, body, hs);
-            } catch (IOException e) {
-                throw new ProviderException(safe(url) + " -> bağlantı hatası: " + e.getMessage() + blockedHint(e));
             } finally {
                 if (c != null) c.disconnect();
             }

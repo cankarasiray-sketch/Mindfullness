@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.8.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.8.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -27,6 +27,11 @@ bile uygulamanın bağlantısı engele takılabilir (tarayıcı site adını şi
 standart Android bağlantısı bunu yapmıyor). Bu durumda uygulama ancak VPN açıkken veri alır;
 sabah kararı ve maç öncesi kontroller için VPN'i "Her zaman açık" yap (Android: Ayarlar → Ağ →
 VPN → uygulamanın yanındaki dişli → Her zaman açık).
+
+**VPN açıkken Nesine "bağlantı sıfırlandı" derse (1.8.1):** Nesine bazı VPN sunucularını
+engeller. Uygulama Nesine'yi önce VPN dışındaki ağdan (mobil veri / Wi-Fi) çekmeyi dener; bu,
+VPN uygulaması atlamaya (bypass) izin veriyorsa çalışır. İzin vermiyorsa VPN'de Türkiye'ye yakın
+başka bir sunucu seç. Kopan bağlantılar kısa aralıkla yeniden denenir.
 
 **Milli maçlar (1.8):** Milli maç arasında lig maçı olmaz. Ayarlar → Milli maçlar açıkken
 (varsayılan) The Odds API'de o an aktif milli turnuvalar (Uluslar Ligi, Dünya Kupası elemeleri,
@@ -236,7 +241,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.8.apk
+./build.sh          # testler + build/BilincliKupon-1.8.1.apk
 ./build.sh test     # yalnızca testler
 ```
 

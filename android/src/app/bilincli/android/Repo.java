@@ -251,7 +251,7 @@ final class Repo {
     }
 
     Daily.LiveSources live() {
-        Daily.LiveSources src = new Daily.LiveSources(new Http.UrlHttp(), effective());
+        Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), effective());
         src.memory = memory;
         return src;
     }
@@ -271,7 +271,7 @@ final class Repo {
                 out.setupNeeded = true; // anahtar yokken ağ isteği yapma
                 return out;
             }
-            refreshInternationals(new Daily.LiveSources(new Http.UrlHttp(), ledger.settings()), false);
+            refreshInternationals(new Daily.LiveSources(new AndroidHttp(app), ledger.settings()), false);
             Daily.LiveSources src = live();
             out.settleMessages = Daily.settle(ledger, src, forecasts);
             String today = Fmt.dayKey(Instant.now());

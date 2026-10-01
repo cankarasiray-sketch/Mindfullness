@@ -356,7 +356,7 @@ public final class Bridge {
     /** Veri kaynaklarını dener, doğrulama raporunu ve pazar envanterini gösterir. */
     private String check(Repo repo) {
         StringBuilder b = new StringBuilder();
-        repo.refreshInternationals(new Daily.LiveSources(new Http.UrlHttp(), repo.real().settings()), true);
+        repo.refreshInternationals(new Daily.LiveSources(new AndroidHttp(activity), repo.real().settings()), true);
         Daily.LiveSources src = repo.live();
         Daily.Fetch f;
         try {
