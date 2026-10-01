@@ -81,12 +81,15 @@ public final class Nesine {
         Map<String, Object> sg = Json.obj(root.get("sg"));
         if (sg != null) root = sg;
         List<BookEvent> events = new ArrayList<>();
-        Inventory inv = new Inventory();
+        Inventory inv = new Inventory(), basketInv = new Inventory();
+        Map<Long, Integer> types = new java.util.TreeMap<>();
         for (Object o : Json.arr(root.get("EA"))) {
             Map<String, Object> ev = Json.obj(o);
             if (ev == null) continue;
             Long type = integer(ev.get("TYPE"));
-            if (type != null && type != 1L) continue; // 1 = futbol
+            if (type != null) types.put(type, types.containsKey(type) ? types.get(type) + 1 : 1);
+            boolean basket = type != null && type == BASKETBALL_TYPE;
+            if (type != null && type != 1L && !basket) continue; // 1 = futbol, 2 = basketbol
             String home = text(first(ev, "HN")), away = text(first(ev, "AN"));
             Instant ko = kickoff(ev);
             if (home == null || away == null || ko == null) continue;
@@ -107,10 +110,27 @@ public final class Nesine {
                     if (n != null && price != null) raw.put(String.valueOf(n), price);
                 }
                 Double sov = number(market.get("SOV"));
-                inv.add(mtid, raw.size(), sov, market, home + " - " + away);
+                (basket ? basketInv : inv).add(mtid, raw.size(), sov, market, home + " - " + away);
                 // Nesine "özel değer yok"u boş değil 0,0 olarak gönderir (gerçek bültende görüldü)
                 boolean special = sov != null && Math.abs(sov) > 1e-9;
                 Long mm = integer(market.get("MBS"));
+                if (basket) {
+                    // Basketbolda beraberlik yok: özel değersiz iki seçenekli pazarlar maç sonucu
+                    // adayıdır (uzatmalar dahil). Hangisi olduğunu Calibration, Pinnacle'la bulur.
+                    // Handikap ve toplam sayı pazarları (özel değerli) şimdilik kullanılmaz.
+                    if (raw.size() == 2 && !special) {
+                        List<Long> ns = new ArrayList<>();
+                        for (String k : raw.keySet()) ns.add(Long.parseLong(k));
+                        java.util.Collections.sort(ns);
+                        Map<String, Double> two = new LinkedHashMap<>();
+                        two.put("1", raw.get(String.valueOf(ns.get(0))));
+                        two.put("2", raw.get(String.valueOf(ns.get(1))));
+                        String key = Calibration.RAW_BS + mtid;
+                        odds.put(key, two);
+                        if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
+                    }
+                    continue;
+                }
                 if (mtid == 1L) { // Maç Sonucu: N 1 = ev, 2 = beraberlik, 3 = deplasman (Calibration doğrular)
                     Map<String, Double> outcomes = new LinkedHashMap<>();
                     if (raw.containsKey("1")) outcomes.put("1", raw.get("1"));
@@ -146,14 +166,30 @@ public final class Nesine {
                     text(first(ev, "LN", "LC")), mbs, odds, code);
             if (marketMbs != null) be.marketMbs.put("MS", marketMbs);
             be.marketMbs.putAll(rawMbs);
+            if (basket) be.sport = Models.BASKETBALL;
             events.add(be);
         }
         lastInventory = inv.render();
+        lastBasketInventory = basketInv.render();
+        StringBuilder t = new StringBuilder();
+        for (Map.Entry<Long, Integer> e : types.entrySet()) {
+            if (t.length() > 0) t.append(", ");
+            t.append(e.getKey() == 1L ? "futbol" : e.getKey() == BASKETBALL_TYPE ? "basketbol" : "tür " + e.getKey())
+                    .append(' ').append(e.getValue());
+        }
+        lastTypes = t.toString();
         return events;
     }
 
+    /** Bültende basketbol maçlarının TYPE değeri. */
+    static final long BASKETBALL_TYPE = 2L;
+
     /** Son okunan bültendeki pazarların özeti (pazar kodu, maç sayısı, seçenek sayısı, özel değerler). */
     public static volatile String lastInventory = "";
+    /** Aynı özet, basketbol maçları için. */
+    public static volatile String lastBasketInventory = "";
+    /** Bültendeki maçların spor türüne göre sayısı ("futbol 655, basketbol 80, tür 3 40"). */
+    public static volatile String lastTypes = "";
 
     private static Double number(Object v) {
         if (v == null) return null;

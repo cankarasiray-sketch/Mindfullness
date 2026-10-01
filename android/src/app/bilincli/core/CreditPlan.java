@@ -84,15 +84,15 @@ public final class CreditPlan {
         int matches = 0;
         boolean known = active != null;
         for (String l : p.leagues) {
-            w += weight(l, active);
-            if (known) {
+            w += weight(l, active) * Settings.scanCost(l, p.totals); // basketbol: yalnızca maç sonucu
+            if (known && !Settings.isBasketball(l)) { // KG yalnızca futbolda
                 Integer n = active.get(l);
                 if (n == null || n < 0) known = false;
                 else matches += n;
             }
         }
         int kg = known ? Math.min(p.kgEvents, matches) : p.kgEvents; // KG yalnızca penceredeki maçlar için
-        return w * (p.totals ? 2 : 1) * (1 + p.radarScans) + kg + overhead(p.coupons, avgCoupons);
+        return w * (1 + p.radarScans) + kg + overhead(p.coupons, avgCoupons);
     }
 
     /** Seçili liglerin yalnızca o gün oynayanları kredi harcar (Settings.ACTIVE_SHARE). */

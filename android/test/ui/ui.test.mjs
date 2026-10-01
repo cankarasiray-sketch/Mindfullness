@@ -432,6 +432,31 @@ test("Çifte Şans etiketi", async () => {
   assert.match(t.text(), /ÇŞ X-2/);
 });
 
+test("basketbol: kupon ve düşen oran etiketi, ayrı lig kartı, kaydedilir", async () => {
+  const s = clone(baseState);
+  const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
+  c.legs[0].market = "BS"; c.legs[0].outcome = "2";
+  s.radar = s.radar || { values: [], moves: [] };
+  s.radar.moves = [{ key: "e:1", home: "Fenerbahçe Beko", away: "Real Madrid", kickoff: s.now, outcome: "1", market: "BS", from: 0.5, to: 0.56, since: s.now }];
+  const t = boot(s);
+  assert.match(t.text(), /Basket MS 2/);
+  t.w.show("firsat");
+  assert.match(t.text(), /Basket MS 1 Pinnacle/);
+  t.w.show("ayarlar");
+  const card = t.$("#basketCard");
+  assert.match(card.textContent, /EuroLeague \(basketbol\)/);
+  assert.match(card.textContent, /NBA \(basketbol\)/);
+  const ligler = t.$$(".card").find((x) => x.querySelector("h2") && x.querySelector("h2").textContent === "Ligler");
+  assert.doesNotMatch(ligler.textContent, /basketbol/);
+  const nba = card.querySelector('input[value="basketball_nba"]');
+  nba.checked = !nba.checked;
+  const wanted = nba.checked;
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  const st = t.calls.at(-1).payload.settings;
+  assert.equal(st.leagues.includes("basketball_nba"), wanted);
+});
+
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {
   const s = clone(baseState);
   const old = s.coupons.find((x) => x.id !== s.todayRun.couponId);

@@ -13,12 +13,31 @@ public final class Models {
     public static final String LOST = "kaybetti";
     public static final String VOID = "iade";
 
+    public static final String FOOTBALL = "futbol";
+    public static final String BASKETBALL = "basketbol";
+
+    /** The Odds API spor kodundan spor ("basketball_nba" -> basketbol). */
+    public static String sportOf(String sportKey) {
+        return sportKey != null && sportKey.startsWith("basketball_") ? BASKETBALL : FOOTBALL;
+    }
+
     public static String outcomeLabel(String market, String outcome) {
         if ("MS".equals(market)) return "MS " + outcome;
+        if ("BS".equals(market)) return "Basket MS " + outcome;
         if ("AU25".equals(market)) return "ALT".equals(outcome) ? "2,5 Alt" : "2,5 Üst";
         if ("KG".equals(market)) return "VAR".equals(outcome) ? "KG Var" : "KG Yok";
         if ("CS".equals(market)) return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
         return market + " " + outcome;
+    }
+
+    /** Pazarın okunur adı (analiz ve özetler için). */
+    public static String marketName(String market) {
+        if ("MS".equals(market)) return "Maç Sonucu";
+        if ("AU25".equals(market)) return "2,5 Alt/Üst";
+        if ("KG".equals(market)) return "Karşılıklı Gol";
+        if ("CS".equals(market)) return "Çifte Şans";
+        if ("BS".equals(market)) return "Basketbol MS";
+        return market;
     }
 
     /** iddaa bülteninden bir maç. */
@@ -28,6 +47,8 @@ public final class Models {
         public final int mbs;
         public final Map<String, Map<String, Double>> odds;
         public final Map<String, Integer> marketMbs = new LinkedHashMap<>();
+        /** FOOTBALL ya da BASKETBALL; eşleştirme yalnızca aynı spordaki maçlar arasında yapılır. */
+        public String sport = FOOTBALL;
 
         public BookEvent(String ref, String home, String away, Instant kickoff, String league, int mbs,
                          Map<String, Map<String, Double>> odds, String code) {
@@ -62,6 +83,10 @@ public final class Models {
             this.kickoff = kickoff;
             this.fair = fair;
             this.source = source == null ? "" : source;
+        }
+
+        public String sport() {
+            return sportOf(sportKey);
         }
     }
 

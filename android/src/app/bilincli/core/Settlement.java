@@ -24,6 +24,11 @@ public final class Settlement {
     public static String legResult(String market, String outcome, int home, int away) {
         String actual;
         if ("MS".equals(market)) actual = home > away ? "1" : away > home ? "2" : "X";
+        else if ("BS".equals(market)) {
+            // basketbol maç sonucu uzatmalar dahildir; skor eşitse veri eksiktir, bacak iade sayılır
+            if (home == away) return Models.VOID;
+            actual = home > away ? "1" : "2";
+        }
         else if ("AU25".equals(market)) actual = home + away >= 3 ? "UST" : "ALT";
         else if ("KG".equals(market)) actual = home > 0 && away > 0 ? "VAR" : "YOK";
         else if ("CS".equals(market)) {

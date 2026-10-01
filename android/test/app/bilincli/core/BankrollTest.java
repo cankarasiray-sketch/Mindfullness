@@ -75,10 +75,10 @@ public class BankrollTest {
 
     @Test
     public void creditPlanKeepsEverythingWhenBudgetAllows() {
-        Settings s = new Settings(); // 11 lig (günde ~%40'ı oynar), yalnız MS, 5 kupon: günde ~4,4 + 16 kredi
+        Settings s = new Settings(); // 13 lig (günde ~%40'ı oynar), yalnız MS, 5 kupon: günde ~5,2 + 16 kredi
         CreditPlan.Plan p = CreditPlan.plan(s, 900L, 100L, LocalDate.of(2026, 10, 1), null);
         assertFalse(p.narrowed);
-        assertEquals(11, p.leagues.size());
+        assertEquals(13, p.leagues.size());
         assertEquals(5, p.coupons);
         assertEquals(31, p.daysLeft); // 1 Ekim yenilendi: sonraki 1 Kasım
         // ücretsiz plan (500): aynı ayarlar sığmaz, ligler daraltılır

@@ -144,6 +144,17 @@ _ALIASES = {
     "jamaika": "jamaica",
     "ozbekistan": "uzbekistan",
     "zambiya": "zambia",
+    # Basketbol (EuroLeague): bülten Türkçe ya da sponsorlu ad yazabilir
+    "kizilyildiz": "crvena zvezda",
+    "kizilyildiz meridianbet": "crvena zvezda",
+    "red star": "crvena zvezda",
+    "red star belgrade": "crvena zvezda",
+    "crvena zvezda meridianbet": "crvena zvezda",
+    "armani milano": "olimpia milano",
+    "emporio armani milano": "olimpia milano",
+    "ea7 emporio armani milan": "olimpia milano",
+    "ea7 emporio armani milano": "olimpia milano",
+    "olimpia milan": "olimpia milano",
 }
 
 # Kadın, genç ve rezerv takımları ana takımla aynı adı taşır ("Arsenal (K)", "Fenerbahçe U19",

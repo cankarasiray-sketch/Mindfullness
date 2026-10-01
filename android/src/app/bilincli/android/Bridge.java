@@ -415,22 +415,27 @@ public final class Bridge {
         b.append("ÖZET\n");
         b.append("  Nesine: ").append(f.book.size()).append(" maç · Pinnacle: ").append(f.sharp.size())
                 .append(" maç · eşleşen: ").append(pairs.size()).append('\n');
+        String types = app.bilincli.core.Nesine.lastTypes;
+        if (types != null && !types.isEmpty()) b.append("  Bülten: ").append(types).append('\n');
         b.append("  Kredi: bu test ").append(src.spent()).append(" · kalan ").append(src.remainingCredits()).append('\n');
         if (src.bookNote != null) b.append("  Not: ").append(src.bookNote).append('\n');
         b.append("  Maç Sonucu: ").append(mark(cal.get("MS"))).append('\n');
         b.append("  Çifte Şans: ").append(mark(cal.get("CS"))).append('\n');
         b.append("  2,5 Alt/Üst: ").append(mark(cal.get("AU25"))).append('\n');
         b.append("  Karşılıklı Gol: ").append(mark(cal.get("KG"))).append('\n');
+        b.append("  Basketbol MS: ").append(mark(cal.get("BS"))).append('\n');
         b.append("  Karar: ").append(Texts.statsLine(d.stats)).append('\n');
         if (d.isPass()) b.append("  ").append(d.reason).append('\n');
 
         b.append("\nLig ayrıntısı\n");
         for (String line : src.report()) b.append("  ").append(line).append('\n');
         for (String w : src.warnings()) b.append("Uyarı: ").append(w).append('\n');
-        b.append("\nEşleşen maçlar (ilk 5)\n");
-        for (int i = 0; i < Math.min(5, pairs.size()); i++) {
-            Models.Pair x = pairs.get(i);
-            b.append("  ").append(x.book.home).append(" - ").append(x.book.away).append(" ⇄ ")
+        b.append("\nEşleşen maçlar (ilk 5 futbol, ilk 5 basketbol)\n");
+        int football = 0, basket = 0;
+        for (Models.Pair x : pairs) {
+            boolean isBasket = Models.BASKETBALL.equals(x.book.sport);
+            if (isBasket ? basket++ >= 5 : football++ >= 5) continue;
+            b.append("  ").append(isBasket ? "🏀 " : "").append(x.book.home).append(" - ").append(x.book.away).append(" ⇄ ")
                     .append(x.sharp.home).append(" - ").append(x.sharp.away).append('\n');
         }
         b.append("\nVeri doğrulama ayrıntısı\n");
@@ -443,6 +448,13 @@ public final class Bridge {
             b.append("\nPazar envanteri (korner gibi yeni pazarları eşlemek için; ilk 12)\n");
             for (int i = 0; i < Math.min(12, lines.length); i++) b.append(lines[i]).append('\n');
             if (lines.length > 12) b.append("(+").append(lines.length - 12).append(" pazar kodu daha)\n");
+        }
+        String binv = app.bilincli.core.Nesine.lastBasketInventory;
+        if (binv != null && !binv.isEmpty()) {
+            String[] lines = binv.split("\n");
+            b.append("\nBasketbol pazar envanteri (ilk 10)\n");
+            for (int i = 0; i < Math.min(10, lines.length); i++) b.append(lines[i]).append('\n');
+            if (lines.length > 10) b.append("(+").append(lines.length - 10).append(" pazar kodu daha)\n");
         }
         return b.toString().trim();
     }

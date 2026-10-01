@@ -77,16 +77,33 @@ public final class OddsApi {
         return s;
     }
 
-    private Map<String, Map<String, Double>> marketProbs(Map<String, Object> market, String home, String away) {
-        return marketProbs(market, home, away, null);
-    }
-
-    /** overround: pazar -> fiyatların toplam ima olasılığı (borsanın likitliği için). */
+    /**
+     * overround: pazar -> fiyatların toplam ima olasılığı (borsanın likitliği için). basket: basketbol
+     * maç sonucu iki seçeneklidir (uzatmalar dahil, beraberlik yok) ve "BS" olarak döner.
+     */
     private Map<String, Map<String, Double>> marketProbs(Map<String, Object> market, String home, String away,
-                                                          Map<String, Double> overround) {
+                                                          Map<String, Double> overround, boolean basket) {
         String key = Json.str(market, "key");
         Map<String, Double> byName = new LinkedHashMap<>();
         Map<String, Map<String, Double>> out = new LinkedHashMap<>();
+        if ("h2h".equals(key) && basket) {
+            for (Object o : Json.arr(market.get("outcomes"))) {
+                Map<String, Object> oc = Json.obj(o);
+                Double price = Json.num(oc, "price");
+                if (price != null) byName.put(Json.str(oc, "name"), price);
+            }
+            Double h = byName.get(home), a = byName.get(away);
+            // beraberlik seçeneği olan bir fiyat (normal süre) uzatmalı maç sonucuyla karşılaştırılamaz
+            if (byName.size() != 2 || h == null || a == null || h <= 1 || a <= 1) return null;
+            double[] p = OddsMath.devigPower(new double[] {h, a});
+            if (overround != null) overround.put("BS", implied(h, a));
+            Map<String, Double> m = new LinkedHashMap<>();
+            m.put("1", p[0]);
+            m.put("2", p[1]);
+            out.put("BS", m);
+            return out;
+        }
+        if (basket) return null; // basketbolda şimdilik yalnızca maç sonucu
         if ("h2h".equals(key)) {
             for (Object o : Json.arr(market.get("outcomes"))) {
                 Map<String, Object> oc = Json.obj(o);
@@ -141,6 +158,7 @@ public final class OddsApi {
 
     public List<SharpEvent> parseOdds(Object payload, String sportKey) {
         List<SharpEvent> events = new ArrayList<>();
+        boolean basket = Models.BASKETBALL.equals(Models.sportOf(sportKey));
         lastParse = new int[5];
         List<Object> all = Json.arr(payload);
         lastParse[0] = all == null ? 0 : all.size();
@@ -161,7 +179,7 @@ public final class OddsApi {
                     Instant mu = instant(Json.str(Json.obj(mo), "last_update"));
                     if (mu == null) mu = bookUpdate;
                     Map<String, Double> over = new LinkedHashMap<>();
-                    Map<String, Map<String, Double>> parsed = marketProbs(Json.obj(mo), home, away, over);
+                    Map<String, Map<String, Double>> parsed = marketProbs(Json.obj(mo), home, away, over, basket);
                     if (parsed == null) continue;
                     for (Map.Entry<String, Map<String, Double>> e : parsed.entrySet()) {
                         Map<String, Map<String, Double>> books = perMarket.get(e.getKey());
@@ -447,7 +465,7 @@ public final class OddsApi {
             }
             Map<String, String> params = new LinkedHashMap<>();
             params.put("regions", cfg.regions);
-            params.put("markets", cfg.totals ? "h2h,totals" : "h2h");
+            params.put("markets", Settings.markets(league, cfg.totals));
             params.put("oddsFormat", "decimal");
             params.put("dateFormat", "iso");
             try {

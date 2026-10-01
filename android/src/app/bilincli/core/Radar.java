@@ -64,7 +64,8 @@ public final class Radar {
                                                          Settings cfg, boolean full) {
         Map<String, Object> snaps = snapshots();
         for (SharpEvent s : sharp) {
-            Map<String, Double> fair = s.fair.get("MS");
+            String market = s.fair.containsKey("MS") ? "MS" : "BS"; // basketbolda maç sonucu iki seçenekli
+            Map<String, Double> fair = s.fair.get(market);
             if (fair == null) continue;
             Map<String, Object> snap = Json.obj(snaps.get(s.ref));
             Map<String, Object> point = new LinkedHashMap<>();
@@ -76,6 +77,7 @@ public final class Radar {
                 snap.put("away", s.away);
                 snap.put("kickoff", s.kickoff.toString());
                 snap.put("first", point);
+                snap.put("market", market);
                 snaps.put(s.ref, snap);
             }
             snap.put("last", point);
@@ -147,8 +149,10 @@ public final class Radar {
                 m.put("to", b);
                 m.put("since", first.get("ts"));
                 Pair p = pairBySharp.get(e.getKey());
-                if (p != null && p.book.odds.get("MS") != null && p.book.odds.get("MS").get(o) != null) {
-                    double odds = p.book.odds.get("MS").get(o);
+                String market = Json.str(snap, "market") == null ? "MS" : Json.str(snap, "market");
+                m.put("market", market);
+                if (p != null && p.book.odds.get(market) != null && p.book.odds.get(market).get(o) != null) {
+                    double odds = p.book.odds.get(market).get(o);
                     m.put("iddaa", odds);
                     m.put("ev", b * odds - 1);
                     m.put("bookRef", p.book.ref);

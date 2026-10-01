@@ -274,21 +274,21 @@ public class MarketsTest {
         assertEquals("temkinli", s.detectProfile());
         assertEquals(5, s.maxCouponsPerDay);
         int base = s.estimatedMonthlyCredits();
-        assertEquals(11, s.leagues.size()); // büyük 6 + Avrupa kupaları + Hollanda, Portekiz
-        assertEquals(Math.round(30 * 11 * Settings.ACTIVE_SHARE) + 240, base);
+        assertEquals(13, s.leagues.size()); // büyük 6 + Avrupa kupaları + Hollanda, Portekiz + EuroLeague, NBA
+        assertEquals(Math.round(30 * 13 * Settings.ACTIVE_SHARE) + 240, base);
         s.totals = true;
         int totals = s.estimatedMonthlyCredits();
-        assertEquals(Math.round(30 * 11 * Settings.ACTIVE_SHARE * 2) + 240, totals);
+        assertEquals(Math.round(30 * (11 * 2 + 2) * Settings.ACTIVE_SHARE) + 240, totals); // basketbolda Alt/Üst yok
         s.kgEvents = 6;
         assertEquals(totals + 180, s.estimatedMonthlyCredits());
         // 1.7.2'ye taşıma: eski varsayılan 6 lig değiştirilmemişse yeni varsayılana geçer, özel seçim korunur
         Map<String, Object> v2 = new Settings().toMap();
         v2.put("v", 2L);
         v2.put("leagues", new ArrayList<Object>(Settings.OLD_DEFAULT_LEAGUES));
-        assertEquals(11, Settings.fromMap(v2).leagues.size());
+        assertEquals(13, Settings.fromMap(v2).leagues.size());
         List<Object> custom = new ArrayList<Object>(Settings.OLD_DEFAULT_LEAGUES.subList(0, 3));
         v2.put("leagues", custom);
-        assertEquals(3, Settings.fromMap(v2).leagues.size());
+        assertEquals(3 + 2, Settings.fromMap(v2).leagues.size()); // özel seçim korunur, 1.9'da basketbol eklenir
         s.maxDailyExposure = 0.02; // kupon başına sınırdan küçük olamaz
         assertTrue(s.validate() != null);
         Settings back = Settings.fromMap(Json.parseObject(Json.write(new Settings().toMap())));

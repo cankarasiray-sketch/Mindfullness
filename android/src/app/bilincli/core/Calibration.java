@@ -25,6 +25,8 @@ public final class Calibration {
     public static final String RAW_AU25 = "AU25#";
     public static final String RAW_KG = "KG#";
     public static final String RAW_CS = "CS#";
+    /** Basketbol maç sonucu adayı (özel değersiz iki seçenekli pazar; 1 = ev, 2 = deplasman). */
+    public static final String RAW_BS = "BS#";
     static final String[] CS_KEYS = {"1X", "12", "X2"};
     /** Doğru eşleşmede iddaa ile Pinnacle olasılıklarının ortalama farkı bunun altında kalır. */
     static final double MAX_MAD = 0.06;
@@ -133,11 +135,12 @@ public final class Calibration {
         report.put("AU25", twoWay(book, pairs, RAW_AU25, "AU25", new String[] {"ALT", "UST"}, notes, memory));
         report.put("KG", twoWay(book, pairs, RAW_KG, "KG", new String[] {"VAR", "YOK"}, notes, memory));
         report.put("CS", doubleChance(book, pairs, notes, memory));
+        report.put("BS", basketball(book, pairs, notes, memory));
         for (BookEvent b : book) {
             Iterator<String> it = b.odds.keySet().iterator();
             while (it.hasNext()) {
                 String k = it.next();
-                if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS)) it.remove();
+                if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS) || k.startsWith(RAW_BS)) it.remove();
             }
         }
 
@@ -164,6 +167,34 @@ public final class Calibration {
         report.put("suspicious", (long) suspicious);
         report.put("notes", new ArrayList<Object>(notes));
         return report;
+    }
+
+    /**
+     * Basketbol maç sonucu (uzatmalar dahil, iki seçenek): Nesine'deki pazar kodu ve seçenek yönü
+     * Pinnacle'la karşılaştırılarak bulunur (futboldaki Alt/Üst ve KG gibi). Ardından maç bazında
+     * tutarlılık: iddaa ve Pinnacle olasılıkları aynı maça ait olamayacak kadar farklıysa (yanlış
+     * eşleşme ya da ev/deplasman ters) o maçın oranı kullanılmaz.
+     */
+    static String basketball(List<BookEvent> book, List<Pair> pairs, List<String> notes, Map<String, Object> memory) {
+        boolean any = false;
+        for (BookEvent b : book) any |= Models.BASKETBALL.equals(b.sport);
+        if (!any) return "bültende basketbol yok";
+        String r = twoWay(book, pairs, RAW_BS, "BS", new String[] {"1", "2"}, notes, memory, false, true);
+        int dropped = 0;
+        for (Pair p : pairs) {
+            Map<String, Double> o = p.book.odds.get("BS"), f = p.sharp.fair.get("BS");
+            if (o == null || f == null || o.get("1") == null || o.get("2") == null || f.get("1") == null || f.get("2") == null) continue;
+            double q = devig(o.get("1"), o.get("2"))[0];
+            double d = Math.abs(q - f.get("1")), swapped = Math.abs(q - f.get("2"));
+            if (d > MAX_PAIR_DIFF || (d > 0.08 && swapped < d / 2)) {
+                p.book.odds.remove("BS");
+                if (dropped++ < 3) {
+                    notes.add(p.book.home + " - " + p.book.away + " (basketbol): iddaa ve Pinnacle oranları aynı maça ait olamayacak kadar farklı"
+                            + (swapped < d / 2 ? " (ev/deplasman ters görünüyor)" : "") + "; maç kullanılmadı.");
+                }
+            }
+        }
+        return dropped > 0 ? r + ", " + dropped + " uyumsuz maç ayıklandı" : r;
     }
 
     /** {en büyük olasılık farkı, ev/deplasman ters çevrilince en büyük fark}; MS yoksa null. */
@@ -252,7 +283,17 @@ public final class Calibration {
 
     static String twoWay(List<BookEvent> book, List<Pair> pairs, String prefix, String target, String[] keys,
                          List<String> notes, Map<String, Object> memory, boolean useModel) {
-        Map<String, double[]> fit = new LinkedHashMap<>(); // rawKey|yön -> {toplam fark, n}
+        return twoWay(book, pairs, prefix, target, keys, notes, memory, useModel, false);
+    }
+
+    /**
+     * robust: sapma, maç farklarının ortalaması yerine ortancasıyla ölçülür. Basketbolda Maç
+     * Sonucu'ndan önce yanlış eşleşen maçı ayıklayan bir adım yok; tek bir yanlış maç ortalamayı
+     * bozup doğru pazarı reddettirmesin diye.
+     */
+    static String twoWay(List<BookEvent> book, List<Pair> pairs, String prefix, String target, String[] keys,
+                         List<String> notes, Map<String, Object> memory, boolean useModel, boolean robust) {
+        Map<String, List<Double>> fit = new LinkedHashMap<>(); // rawKey|yön -> maç farkları
         int modelled = 0;
         for (Pair p : pairs) {
             Map<String, Double> f = p.sharp.fair.get(target);
@@ -269,18 +310,28 @@ public final class Calibration {
                 double[] pr = devig(m.getValue().get("1"), m.getValue().get("2"));
                 for (int dir = 0; dir < 2; dir++) {
                     String k = m.getKey() + "|" + dir;
-                    double[] a = fit.get(k);
-                    if (a == null) fit.put(k, a = new double[2]);
-                    a[0] += Math.abs(pr[0] - f.get(keys[dir])); // dir 0: N1 = keys[0]
-                    a[1]++;
+                    List<Double> a = fit.get(k);
+                    if (a == null) fit.put(k, a = new ArrayList<>());
+                    a.add(Math.abs(pr[0] - f.get(keys[dir]))); // dir 0: N1 = keys[0]
                 }
             }
         }
         String best = null, second = null;
         double bestMad = 9, secondMad = 9;
-        for (Map.Entry<String, double[]> e : fit.entrySet()) {
-            if (e.getValue()[1] < MIN_N) continue;
-            double mad = e.getValue()[0] / e.getValue()[1];
+        for (Map.Entry<String, List<Double>> e : fit.entrySet()) {
+            List<Double> d = e.getValue();
+            if (d.size() < MIN_N) continue;
+            double mad;
+            if (robust) {
+                List<Double> sorted = new ArrayList<>(d);
+                java.util.Collections.sort(sorted);
+                int n = sorted.size();
+                mad = n % 2 == 1 ? sorted.get(n / 2) : (sorted.get(n / 2 - 1) + sorted.get(n / 2)) / 2;
+            } else {
+                double sum = 0;
+                for (double x : d) sum += x;
+                mad = sum / d.size();
+            }
             if (mad < bestMad) {
                 second = best;
                 secondMad = bestMad;
@@ -291,7 +342,7 @@ public final class Calibration {
                 secondMad = mad;
             }
         }
-        String label = "KG".equals(target) ? "Karşılıklı Gol" : "2,5 Alt/Üst";
+        String label = Models.marketName(target);
         String remembered = Json.str(memory, target);
         if (best == null) {
             if (remembered == null) return "Pinnacle verisi yok ya da az maç";
@@ -413,6 +464,7 @@ public final class Calibration {
         if (String.valueOf(r.get("AU25")).startsWith("doğrulandı")) b.append(", 2,5 A/Ü ✓");
         if (String.valueOf(r.get("KG")).startsWith("doğrulandı")) b.append(", KG ✓");
         if (String.valueOf(r.get("CS")).startsWith("doğrulandı")) b.append(", ÇŞ ✓");
+        if (String.valueOf(r.get("BS")).startsWith("doğrulandı")) b.append(", Basket MS ✓");
         long mis = r.get("mismatched") instanceof Long ? (Long) r.get("mismatched") : 0;
         if (mis > 0) b.append(", ").append(mis).append(" uyumsuz eşleşme ayıklandı");
         long sus = r.get("suspicious") instanceof Long ? (Long) r.get("suspicious") : 0;

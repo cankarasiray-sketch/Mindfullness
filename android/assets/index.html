@@ -189,6 +189,7 @@ function dm(iso) { var d = trDate(iso); return String(d.getUTCDate()).padStart(2
 function dayLabel(day) { var p = day.split("-"); return p[2] + "." + p[1] + "." + p[0]; }
 function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
+  if (market === "BS") return "Basket MS " + outcome;
   if (market === "AU25") return outcome === "ALT" ? "2,5 Alt" : "2,5 Üst";
   if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
   if (market === "CS") return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
@@ -495,7 +496,7 @@ function viewOpportunities() {
       var hasIddaa = m.iddaa != null;
       return '<div class="vrow"><div class="l1"><span>' + esc(dm(m.kickoff)) + " " + esc(hm(m.kickoff)) + "</span><span>" + esc(hm(m.since)) + "'dan beri</span></div>"
         + '<div class="teams" style="font-weight:600">' + esc(m.home) + " – " + esc(m.away) + "</div>"
-        + '<div class="l2"><span><span class="chip">MS ' + esc(m.outcome) + "</span> Pinnacle " + odds(1 / m.from) + " → <b>" + odds(1 / m.to) + "</b> "
+        + '<div class="l2"><span><span class="chip">' + esc(label(m.market || "MS", m.outcome)) + "</span> Pinnacle " + odds(1 / m.from) + " → <b>" + odds(1 / m.to) + "</b> "
         + '<span class="small muted">(+' + num((m.to - m.from) * 100, 1) + " puan)</span></span><span>"
         + (hasIddaa ? 'iddaa ' + odds(m.iddaa) + ' <b class="' + cls(m.ev) + '">' + pct(m.ev, true) + "</b>" : '<span class="small muted">iddaa\'da yok</span>')
         + "</span></div></div>";
@@ -595,7 +596,7 @@ function accuracyCard() {
     + (bins ? '<p class="small muted" style="margin-top:8px">Kalibrasyon: tahmin edilen olasılık ile gerçekleşme sıklığı (en az 20 sonuçlu dilimler)</p><div class="list">' + bins + "</div>" : "")
     + foot;
 }
-var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans"};
+var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans", BS: "Basketbol MS"};
 function edgeCard() {
   var e = S.edge, all = e && e["*"];
   if (!all) return "";
@@ -684,9 +685,16 @@ function viewSettings() {
       return '<option value="' + o[0] + '"' + (st.kgEvents === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + '</select><p class="small muted">KG oranı Pinnacle\'dan maç bazında çekilir (maç başına 1 kredi). Önce ücretsiz model ön elemesi yapılır: iddaa\'nın KG oranı avantaj veremeyecek kadar düşükse o maç sorulmaz, kredi harcanmaz. '
     + 'Korner gibi pazarlar için güvenilir keskin fiyat kaynağı doğrulanamadığından eklenmedi; "Kaynakları test et" çıktısındaki pazar envanterini paylaşırsan eşlenebilir.</p></div>';
-  html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.map(function (l) {
+  var lgBox = function (l) {
     return '<label class="check"><input type="checkbox" class="lg" value="' + esc(l[0]) + '"' + (st.leagues.indexOf(l[0]) >= 0 ? " checked" : "") + ">" + esc(l[1]) + "</label>";
-  }).join("") + '<p class="small muted">Seçili lig yalnızca maçı olduğu gün kredi harcar (tarama başına 1, Alt/Üst açıkken 2). Maç listesi sorgusu ücretsizdir.</p></div>';
+  };
+  var isBasket = function (l) { return l[0].indexOf("basketball_") === 0; };
+  html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.filter(function (l) { return !isBasket(l); }).map(lgBox).join("")
+    + '<p class="small muted">Seçili lig yalnızca maçı olduğu gün kredi harcar (tarama başına 1, Alt/Üst açıkken 2). Maç listesi sorgusu ücretsizdir.</p></div>';
+  html += '<div class="card" id="basketCard"><h2>Basketbol</h2>' + S.knownLeagues.filter(isBasket).map(lgBox).join("")
+    + '<p class="small muted">Yalnızca maç sonucu (uzatmalar dahil, beraberlik yok), tarama başına 1 kredi. Pinnacle fiyatıyla karşılaştırılır; '
+    + 'avantajlı seçimler futbolla aynı günün kuponlarına girer ("Basket MS 1/2"). Bilyoner\'de basketbol → Maç Sonucu pazarından oyna. '
+    + 'iddaa\'nın hangi pazarının maç sonucu olduğu Pinnacle\'la karşılaştırılarak otomatik bulunur; "Kaynakları test et" çıktısında Basketbol MS ✓ görünmeli.</p></div>';
   html += '<div class="card"><h2>Düşen oran radarı</h2><p class="small muted">Gün içinde piyasayı yeniden tarar: Pinnacle\'da oranı hızla düşen sonuçları ve '
     + "sabah olmayan yeni değer fırsatlarını bulur. Bugün oynanmış kupon yoksa güncel oranlarla yeni kupon önerir ve bildirir.</p>"
     + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"]].map(function (o) {

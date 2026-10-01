@@ -153,6 +153,17 @@ public final class Matching {
             {"jamaika", "jamaica"},
             {"ozbekistan", "uzbekistan"},
             {"zambiya", "zambia"},
+            // Basketbol (EuroLeague): bülten Türkçe ya da sponsorlu ad yazabilir
+            {"kizilyildiz", "crvena zvezda"},
+            {"kizilyildiz meridianbet", "crvena zvezda"},
+            {"red star", "crvena zvezda"},
+            {"red star belgrade", "crvena zvezda"},
+            {"crvena zvezda meridianbet", "crvena zvezda"},
+            {"armani milano", "olimpia milano"},
+            {"emporio armani milano", "olimpia milano"},
+            {"ea7 emporio armani milan", "olimpia milano"},
+            {"ea7 emporio armani milano", "olimpia milano"},
+            {"olimpia milan", "olimpia milano"},
         };
         for (String[] p : a) ALIASES.put(p[0], p[1]);
     }
@@ -309,6 +320,7 @@ public final class Matching {
             BookEvent b = book.get(i);
             for (int j = 0; j < sharp.size(); j++) {
                 SharpEvent s = sharp.get(j);
+                if (!b.sport.equals(s.sport())) continue; // futbol ve basketbolda aynı adlı kulüpler var
                 long diff = Math.abs(b.kickoff.getEpochSecond() - s.kickoff.getEpochSecond());
                 if (diff > TIME_TOLERANCE_MIN * 60L) continue;
                 if (!variant(b.home).equals(variant(s.home)) || !variant(b.away).equals(variant(s.away))) continue;

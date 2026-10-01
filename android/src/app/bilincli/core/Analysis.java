@@ -85,8 +85,7 @@ public final class Analysis {
             int legs = c.legs.size();
             for (Leg l : c.legs) {
                 String league = l.league == null || l.league.isEmpty() ? "Diğer" : l.league;
-                for (Acc a : new Acc[] {acc(byLeague, league), acc(byMarket, Models.outcomeLabel(l.market, l.outcome).startsWith("MS")
-                        ? "Maç Sonucu" : "2,5 Alt/Üst")}) {
+                for (Acc a : new Acc[] {acc(byLeague, league), acc(byMarket, Models.marketName(l.market))}) {
                     a.n++;
                     if (Models.WON.equals(l.result)) a.won++;
                     a.staked += c.stake / legs;

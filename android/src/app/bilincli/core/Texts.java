@@ -26,7 +26,7 @@ public final class Texts {
         Object m = stats.get("marjlar");
         if (m instanceof Map) {
             for (Map.Entry<String, Object> e : ((Map<String, Object>) m).entrySet()) {
-                parts.add("iddaa " + e.getKey() + " marjı " + Fmt.pct(((Number) e.getValue()).doubleValue(), false));
+                parts.add("iddaa " + ("BS".equals(e.getKey()) ? "basket MS" : e.getKey()) + " marjı " + Fmt.pct(((Number) e.getValue()).doubleValue(), false));
             }
         }
         return String.join(" · ", parts);

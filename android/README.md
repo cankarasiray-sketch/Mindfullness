@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.8.9.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.9.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,33 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Basketbol (1.9)
+
+EuroLeague ve NBA maçlarının **maç sonucu** (uzatmalar dahil, beraberlik yok) Pinnacle'ın marjı
+arındırılmış fiyatıyla karşılaştırılır. Avantajlı seçimler futbolla aynı havuza girer; günün
+kuponlarında "Basket MS 1/2" olarak görünür, futbol maçlarıyla aynı kupona da girebilir. Bilyoner'de
+basketbol → Maç Sonucu pazarından oynanır.
+
+- **Kredi:** Basketbol ligi yalnızca maçı olduğu gün, tarama başına 1 kredi harcar (Alt/Üst
+  açıkken bile; basketbolda yalnızca maç sonucu sorulur). Kredi planı gerekirse en az fırsat
+  çıkaran ligi (basketbol dahil) o gün çıkarır. Ayarlar → Basketbol kartından kapatılabilir.
+- **Veri doğrulama:** Nesine'nin basketbol pazar kodu sabit kabul edilmez. Özel değersiz iki
+  seçenekli pazarlar arasından, seçenek yönü dahil, Pinnacle'la en iyi örtüşen bulunur; yanlış
+  eşleşen tek maç kararı bozmasın diye sapma ortancayla ölçülür. Ardından maç bazında tutarlılık:
+  iddaa ve Pinnacle olasılıkları 15 puandan fazla ayrışan (yanlış eşleşme ya da ev/deplasman
+  ters) maç kullanılmaz. Eşleme hatırlanır; az maçlı kontrollerde son güvenilir eşleme kullanılır.
+  "Kaynakları test et" özetinde **Basketbol MS ✓** görünmeli; çıktıda bültenin spor dağılımı ve
+  basketbol pazar envanteri de yer alır.
+- **Eşleştirme:** Futbol ve basketbol maçları birbiriyle asla eşlenmez (Fenerbahçe, Real Madrid
+  gibi iki sporda da oynayan kulüpler). Türkçe ve sponsorlu adlar (Kızılyıldız = Crvena Zvezda,
+  Armani Milano = Olimpia Milano) eşleştirme sözlüğünde.
+- **Sonuç:** Uzatmalar dahil skordan. Handikap ve toplam sayı pazarları kullanılmaz: çizgileri
+  maçtan maça değişir ve Pinnacle'ın ana çizgisiyle birebir aynı olmadıkça karşılaştırılamaz.
+- **Dikkat:** NBA maçları Türkiye saatiyle gece 02:00–05:00. Sabah bulunan avantaj, maç saatine
+  kadar sakatlık haberleriyle kaybolabilir; kanıt koruması (CLV) basketbolu ayrı ölçer ve
+  avantaj kapanışta tutmuyorsa basketbol seçimlerini küçültür. Tahmin isabeti kartı yalnızca
+  futbolu ölçer. Masaüstü (Python) sürümünde basketbol yok.
 
 ## Daha fazla ölçüm, daha az tahmin
 
@@ -259,7 +286,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.8.9.apk
+./build.sh          # testler + build/BilincliKupon-1.9.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

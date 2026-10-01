@@ -38,7 +38,26 @@ public final class Settings {
         {"soccer_argentina_primera_division", "Arjantin Primera División"},
         {"soccer_usa_mls", "ABD MLS"},
         {"soccer_japan_j_league", "Japonya J1 Lig"},
+        {"basketball_euroleague", "EuroLeague (basketbol)"},
+        {"basketball_nba", "NBA (basketbol)"},
     };
+
+    /** 1.9: basketbol ligleri (yalnızca maç sonucu; tarama başına 1 kredi). */
+    static final List<String> BASKETBALL_LEAGUES = Arrays.asList("basketball_euroleague", "basketball_nba");
+
+    public static boolean isBasketball(String league) {
+        return league != null && league.startsWith("basketball_");
+    }
+
+    /** Ligin oran sorgusundaki pazarlar: basketbolda yalnızca maç sonucu. */
+    public static String markets(String league, boolean totals) {
+        return isBasketball(league) || !totals ? "h2h" : "h2h,totals";
+    }
+
+    /** Ligin tarama başına kredi maliyeti (pazar sayısı; bölge "eu"). */
+    public static int scanCost(String league, boolean totals) {
+        return isBasketball(league) || !totals ? 1 : 2;
+    }
 
     /** 1.7.2 öncesi varsayılan ligler (taşıma için). */
     static final List<String> OLD_DEFAULT_LEAGUES = Arrays.asList(
@@ -62,7 +81,8 @@ public final class Settings {
             "soccer_turkey_super_league", "soccer_epl", "soccer_spain_la_liga",
             "soccer_italy_serie_a", "soccer_germany_bundesliga", "soccer_france_ligue_one",
             "soccer_uefa_champs_league", "soccer_uefa_europa_league", "soccer_uefa_europa_conference_league",
-            "soccer_netherlands_eredivisie", "soccer_portugal_primeira_liga"));
+            "soccer_netherlands_eredivisie", "soccer_portugal_primeira_liga",
+            "basketball_euroleague", "basketball_nba"));
     public String regions = "eu";
     public String preferredBook = "pinnacle";
     public int minBooks = 3;
@@ -145,7 +165,9 @@ public final class Settings {
     /** Aylık tahmini The Odds API kredisi (ücretsiz plan 500). */
     public int estimatedMonthlyCredits() {
         // lig başına günlük çekim x pazar sayısı + KG maç başına + sonuç, kontrol ve kapanış için yaklaşık pay
-        return (int) Math.round(30 * leagues.size() * ACTIVE_SHARE * (1 + radarScans) * (totals ? 2 : 1)) + 30 * kgEvents + 240;
+        int perScan = 0;
+        for (String l : leagues) perScan += scanCost(l, totals);
+        return (int) Math.round(30 * perScan * ACTIVE_SHARE * (1 + radarScans)) + 30 * kgEvents + 240;
     }
 
     /** "temkinli", "yuksek" ya da "ozel" (kullanıcı Kelly/üst sınırı elle değiştirdi). */
@@ -221,7 +243,7 @@ public final class Settings {
         m.put("edgeGuard", edgeGuard);
         m.put("internationals", internationals);
         m.put("profile", detectProfile());
-        m.put("v", 3L);
+        m.put("v", 4L);
         m.put("radarScans", (long) radarScans);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
@@ -275,6 +297,10 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 3 && new java.util.HashSet<>(s.leagues).equals(new java.util.HashSet<>(OLD_DEFAULT_LEAGUES))) {
             // 1.7.2: eski varsayılan lig listesi değiştirilmemişse yeni varsayılana (Avrupa kupaları dahil)
             s.leagues = new Settings().leagues;
+        }
+        if (Json.lng(m, "v", 1) < 4) {
+            // 1.9: basketbol (EuroLeague, NBA) eklendi; maçı olmayan gün kredi harcamaz
+            for (String l : BASKETBALL_LEAGUES) if (!s.leagues.contains(l)) s.leagues.add(l);
         }
         s.profile = s.detectProfile();
         return s;
