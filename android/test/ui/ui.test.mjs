@@ -258,6 +258,28 @@ test("fırsatlar: değer listesi, düşen oranlar ve elle tarama", async () => {
   assert.equal(t.calls.at(-1).action, "radarScan");
 });
 
+test("düşen oranlarda yalnızca fırsatlar; gizlenenler sayılır", async () => {
+  const s = clone(baseState);
+  s.settings.minLegEv = 0.03;
+  const base = { kickoff: s.now, since: s.now, outcome: "1", from: 0.56, to: 0.61 };
+  s.radar.moves = [
+    Object.assign({ key: "a:1", home: "England", away: "Czech Republic" }, base),                          // iddaa'da yok
+    Object.assign({ key: "b:1", home: "France", away: "Belgium", iddaa: 1.38, ev: -0.161 }, base),        // avantajsız
+    Object.assign({ key: "c:1", home: "Spain", away: "Italy", iddaa: 1.70, ev: 0.012 }, base),            // eşiğin altında
+    Object.assign({ key: "d:1", home: "Portugal", away: "Wales", iddaa: 1.80, ev: 0.098 }, base),         // fırsat
+  ];
+  const t = boot(s, "#firsat");
+  const card = t.$$(".card").find((x) => x.querySelector("h2") && x.querySelector("h2").textContent === "Düşen oranlar (Pinnacle)");
+  assert.match(card.textContent, /Portugal – Wales/);
+  assert.match(card.textContent, /iddaa 1,80 \+%9,8/);
+  assert.doesNotMatch(card.textContent, /England|France|Spain/);
+  assert.match(card.textContent, /3 hareket gizlendi/);
+  s.radar.moves = s.radar.moves.slice(0, 2);
+  const t2 = boot(s, "#firsat");
+  const card2 = t2.$$(".card").find((x) => x.querySelector("h2") && x.querySelector("h2").textContent === "Düşen oranlar (Pinnacle)");
+  assert.match(card2.textContent, /Şu an avantajlı düşen oran yok/);
+});
+
 test("ROI analizi grafikleri ve düşüş", async () => {
   const t = boot(clone(baseState), "#gecmis");
   assert.match(t.text(), /ROI analizi/);
@@ -437,7 +459,7 @@ test("basketbol: kupon ve düşen oran etiketi, ayrı lig kartı, kaydedilir", a
   const c = s.coupons.find((x) => x.id === s.todayRun.couponId);
   c.legs[0].market = "BS"; c.legs[0].outcome = "2";
   s.radar = s.radar || { values: [], moves: [] };
-  s.radar.moves = [{ key: "e:1", home: "Fenerbahçe Beko", away: "Real Madrid", kickoff: s.now, outcome: "1", market: "BS", from: 0.5, to: 0.56, since: s.now }];
+  s.radar.moves = [{ key: "e:1", home: "Fenerbahçe Beko", away: "Real Madrid", kickoff: s.now, outcome: "1", market: "BS", from: 0.5, to: 0.56, since: s.now, iddaa: 1.95, ev: 0.092 }];
   const t = boot(s);
   assert.match(t.text(), /Basket MS 2/);
   t.w.show("firsat");

@@ -491,17 +491,19 @@ function viewOpportunities() {
         + (inCoupon[v.bookRef + "|" + v.outcome] ? ' <span class="st ok">kuponda</span>' : "")
         + (v.inRange ? "" : ' <span class="st">oran aralığı dışında</span>') + "</span></div></div>";
     }).join("") : '<p class="muted">Son taramada değer taşıyan seçim yok. Bu normaldir: iddaa çoğu maçta marjlıdır.</p>') + "</div>";
+  var minEv = S.settings.minLegEv != null ? S.settings.minLegEv : 0.03;
+  var moves = R.moves.filter(function (m) { return m.iddaa != null && m.ev != null && m.ev >= minEv; });
+  var hidden = R.moves.length - moves.length;
   html += '<div class="card"><h2>Düşen oranlar (Pinnacle)</h2><p class="small muted">Gün içinde Pinnacle\'da olasılığı en az 3 puan artan (oranı düşen) sonuçlar. '
-    + "Keskin piyasada hızlı düşüş genellikle profesyonel paranın o yöne girdiğini gösterir; iddaa oranı henüz düşmediyse fırsattır.</p>"
-    + (R.moves.length ? R.moves.map(function (m) {
-      var hasIddaa = m.iddaa != null;
+    + "Keskin piyasada hızlı düşüş genellikle profesyonel paranın o yöne girdiğini gösterir. Yalnızca iddaa oranı henüz düşmemiş, hâlâ avantajlı olanlar gösterilir.</p>"
+    + (moves.length ? moves.map(function (m) {
       return '<div class="vrow"><div class="l1"><span>' + esc(dm(m.kickoff)) + " " + esc(hm(m.kickoff)) + "</span><span>" + esc(hm(m.since)) + "'dan beri</span></div>"
         + '<div class="teams" style="font-weight:600">' + esc(m.home) + " – " + esc(m.away) + "</div>"
         + '<div class="l2"><span><span class="chip">' + esc(label(m.market || "MS", m.outcome)) + "</span> Pinnacle " + odds(1 / m.from) + " → <b>" + odds(1 / m.to) + "</b> "
         + '<span class="small muted">(+' + num((m.to - m.from) * 100, 1) + " puan)</span></span><span>"
-        + (hasIddaa ? 'iddaa ' + odds(m.iddaa) + ' <b class="' + cls(m.ev) + '">' + pct(m.ev, true) + "</b>" : '<span class="small muted">iddaa\'da yok</span>')
-        + "</span></div></div>";
-    }).join("") : '<p class="muted">Henüz hareket yok. Radar en az iki ölçüm yapınca (sabah + gün içi tarama ya da kontrol) görünür.</p>') + "</div>";
+        + 'iddaa ' + odds(m.iddaa) + ' <b class="pos">' + pct(m.ev, true) + "</b></span></div></div>";
+    }).join("") : '<p class="muted">' + (R.moves.length ? "Şu an avantajlı düşen oran yok." : "Henüz hareket yok. Radar en az iki ölçüm yapınca (sabah + gün içi tarama ya da kontrol) görünür.") + "</p>")
+    + (hidden ? '<p class="small muted">' + hidden + " hareket gizlendi: iddaa'da yok ya da iddaa oranı avantajsız.</p>" : "") + "</div>";
   html += '<div class="card"><details class="info"><summary>Arbitraj ve "derin veri" neden yok?</summary>'
     + '<p class="small">Arbitraj: tüm iddaa bayileri (Bilyoner, Nesine, Misli) aynı oranı verir ve her maçta marj vardır; tek kaynakta risksiz kâr matematiksel olarak imkânsızdır. '
     + "Yabancı sitelerle arbitraj Türkiye'de yasa dışıdır ve bu siteler arbitrajcı hesapları kısıtlar.</p>"
