@@ -29,6 +29,11 @@ public final class Calibration {
     /** Doğru eşleşmede iddaa ile Pinnacle olasılıklarının ortalama farkı bunun altında kalır. */
     static final double MAX_MAD = 0.06;
     static final int MIN_N = 4;
+    /**
+     * Aynı maçta iddaa ile Pinnacle'ın marjsız olasılıkları arasında bundan büyük fark olmaz
+     * (%25 avantaj bile ~0,13 fark demektir); daha büyüğü yanlış eşleşmedir, maç kullanılmaz.
+     */
+    static final double MAX_PAIR_DIFF = 0.15;
     /** Bundan büyük "avantaj" gerçek olamayacak kadar iyidir; veri hatası sayılır. */
     public static final double MAX_PLAUSIBLE_EV = 0.25;
 
@@ -41,20 +46,27 @@ public final class Calibration {
         return new double[] {(1 / a) / s, (1 / b) / s};
     }
 
-    /** Maç Sonucu: okunan sıra perm[i] -> gerçek sonuç; ortalama mutlak olasılık farkı ve örnek sayısı. */
+    /**
+     * Maç Sonucu: okunan sıra perm[i] -> gerçek sonuç; maç başına ortalama mutlak olasılık farkının
+     * ortancası ve örnek sayısı. Ortanca, birkaç yanlış eşleşmiş maçın tüm bülteni "tutarsız"
+     * göstermesini engeller; sıra gerçekten farklıysa her maç etkilendiği için yine yakalanır.
+     */
     static double[] msFit(List<Pair> pairs, String[] perm) {
-        double sum = 0;
-        int n = 0;
+        List<Double> mads = new ArrayList<>();
         for (Pair p : pairs) {
             Map<String, Double> o = p.book.odds.get("MS"), f = p.sharp.fair.get("MS");
             if (o == null || f == null || o.size() != 3 || f.size() != 3) continue;
             String[] keys = {"1", "X", "2"};
-            double s = 0;
+            double s = 0, sum = 0;
             for (String k : keys) s += 1 / o.get(k);
             for (int i = 0; i < 3; i++) sum += Math.abs((1 / o.get(keys[i])) / s - f.get(perm[i]));
-            n++;
+            mads.add(sum / 3.0);
         }
-        return new double[] {n == 0 ? 1 : sum / (3.0 * n), n};
+        int n = mads.size();
+        if (n == 0) return new double[] {1, 0};
+        java.util.Collections.sort(mads);
+        double median = n % 2 == 1 ? mads.get(n / 2) : (mads.get(n / 2 - 1) + mads.get(n / 2)) / 2;
+        return new double[] {median, n};
     }
 
     public static Map<String, Object> apply(List<BookEvent> book, List<SharpEvent> sharp) {
@@ -102,6 +114,21 @@ public final class Calibration {
             }
         }
 
+        // 1b) Maç bazında tutarlılık: yanlış eşleşen (ya da ev/deplasmanı ters) maçı ele
+        int mismatched = 0;
+        for (Pair p : pairs) {
+            double[] d = pairDiff(p);
+            if (d == null) continue;
+            if (d[0] > MAX_PAIR_DIFF || (d[0] > 0.08 && d[1] < d[0] / 2)) {
+                p.book.odds.clear();
+                if (mismatched++ < 3) {
+                    notes.add(p.book.home + " - " + p.book.away + ": iddaa ve Pinnacle oranları aynı maça ait olamayacak kadar farklı"
+                            + (d[1] < d[0] / 2 ? " (ev/deplasman ters görünüyor)" : "") + "; maç kullanılmadı.");
+                }
+            }
+        }
+        report.put("mismatched", (long) mismatched);
+
         // 2) İki seçenekli pazarlar
         report.put("AU25", twoWay(book, pairs, RAW_AU25, "AU25", new String[] {"ALT", "UST"}, notes, memory));
         report.put("KG", twoWay(book, pairs, RAW_KG, "KG", new String[] {"VAR", "YOK"}, notes, memory));
@@ -137,6 +164,17 @@ public final class Calibration {
         report.put("suspicious", (long) suspicious);
         report.put("notes", new ArrayList<Object>(notes));
         return report;
+    }
+
+    /** {en büyük olasılık farkı, ev/deplasman ters çevrilince en büyük fark}; MS yoksa null. */
+    static double[] pairDiff(Pair p) {
+        Map<String, Double> o = p.book.odds.get("MS"), f = p.sharp.fair.get("MS");
+        if (o == null || f == null || o.size() != 3 || f.get("1") == null || f.get("X") == null || f.get("2") == null) return null;
+        double s = 1 / o.get("1") + 1 / o.get("X") + 1 / o.get("2");
+        double q1 = 1 / o.get("1") / s, qx = 1 / o.get("X") / s, q2 = 1 / o.get("2") / s;
+        double d = Math.max(Math.abs(q1 - f.get("1")), Math.max(Math.abs(qx - f.get("X")), Math.abs(q2 - f.get("2"))));
+        double sw = Math.max(Math.abs(q1 - f.get("2")), Math.max(Math.abs(qx - f.get("X")), Math.abs(q2 - f.get("1"))));
+        return new double[] {d, sw};
     }
 
     static void remapMs(List<BookEvent> book, String[] perm) {
@@ -309,6 +347,8 @@ public final class Calibration {
         if (String.valueOf(r.get("AU25")).startsWith("doğrulandı")) b.append(", 2,5 A/Ü ✓");
         if (String.valueOf(r.get("KG")).startsWith("doğrulandı")) b.append(", KG ✓");
         if (String.valueOf(r.get("CS")).startsWith("doğrulandı")) b.append(", ÇŞ ✓");
+        long mis = r.get("mismatched") instanceof Long ? (Long) r.get("mismatched") : 0;
+        if (mis > 0) b.append(", ").append(mis).append(" uyumsuz eşleşme ayıklandı");
         long sus = r.get("suspicious") instanceof Long ? (Long) r.get("suspicious") : 0;
         if (sus > 0) b.append(", ").append(sus).append(" şüpheli oran ayıklandı");
         return b.toString();

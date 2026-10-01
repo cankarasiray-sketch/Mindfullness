@@ -46,6 +46,13 @@ _ALIASES = {
     "nottingham": "nottingham forest",
 }
 
+# Kadın, genç ve rezerv takımları ana takımla aynı adı taşır ("Arsenal (K)", "Fenerbahçe U19",
+# "Barcelona B", "Jong Ajax"). İşaret iki tarafta farklıysa eşleşme yapılmaz: yanlış maçın
+# oranı sahte "avantaj" üretir.
+_WOMEN = {"k", "kadin", "kadinlar", "women", "w", "womens", "ladies", "fem", "femenino", "feminine", "frauen", "wfc"}
+_YOUTH = {"youth", "genc", "gencler", "academy", "akademi", "primavera", "juniors", "jong", "reserves", "res", "ii", "castilla"}
+_UNDER = re.compile(r"^u(1[5-9]|2[0-3])$")
+
 TIME_TOLERANCE_MIN = 15
 MIN_PAIR_SCORE = 0.62
 MIN_SIDE_SCORE = 0.45
@@ -56,9 +63,41 @@ def normalize(name: str) -> str:
     s = unicodedata.normalize("NFKD", s)
     s = "".join(ch for ch in s if not unicodedata.combining(ch))
     s = re.sub(r"[^a-z0-9 ]+", " ", s)
-    tokens = [t for t in s.split() if t not in _STOPWORDS and not t.isdigit()]
+    raw = s.split()
+    # kadın/genç/rezerv işaretleri ad benzerliğine girmez; onları variant() ayrıca karşılaştırır
+    tokens = [t for i, t in enumerate(raw)
+              if t not in _STOPWORDS and not t.isdigit() and not _is_marker(t, i, len(raw))]
     s = " ".join(tokens)
     return _ALIASES.get(s, s)
+
+
+def _is_marker(t: str, i: int, n: int) -> bool:
+    return t in _WOMEN or t in _YOUTH or bool(_UNDER.match(t)) or (t == "b" and n > 1 and i == n - 1)
+
+
+def _tokens(name: str) -> list[str]:
+    s = name.translate(_TR_MAP).lower()
+    s = unicodedata.normalize("NFKD", s)
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = re.sub(r"[^a-z0-9 ]+", " ", s)
+    return s.split()
+
+
+def variant(name: str) -> str:
+    """"kadin", "uNN", "genc" ya da "" (ana takım)."""
+    tokens = _tokens(name)
+    for t in tokens:
+        if t in _WOMEN:
+            return "kadin"
+    for t in tokens:
+        if _UNDER.match(t):
+            return t
+    for t in tokens:
+        if t in _YOUTH:
+            return "genc"
+    if len(tokens) > 1 and tokens[-1] == "b":
+        return "genc"
+    return ""
 
 
 def _token_score(a: str, b: str) -> float:
@@ -91,6 +130,8 @@ def match_events(
     for i, b in enumerate(book):
         for j, s in enumerate(sharp):
             if abs((b.kickoff - s.kickoff).total_seconds()) > TIME_TOLERANCE_MIN * 60:
+                continue
+            if variant(b.home) != variant(s.home) or variant(b.away) != variant(s.away):
                 continue
             h = name_similarity(b.home, s.home)
             a = name_similarity(b.away, s.away)

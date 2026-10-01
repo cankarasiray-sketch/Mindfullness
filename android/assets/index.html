@@ -528,6 +528,7 @@ function viewHistory() {
     + item("Tüm öneriler", v.allN ? '<span class="' + cls(v.all) + '">' + pct(v.all, true) + "</span> (" + v.allN + " maç)" : "henüz yok")
     + "</div>" + (v.playedN < 30 ? '<p class="small muted">Güvenilir yorum için en az 30 maç gerekir.</p>' : "") + "</div>";
   html += edgeCard();
+  html += accuracyCard();
   html += analysisCard();
   html += '<div class="card"><h2>Kuponlar</h2><div class="list">' + (S.coupons.length ? S.coupons.map(function (c) {
     var pl = c.played && c.result ? (c.payout || 0) - c.stake : null;
@@ -554,6 +555,32 @@ function bars(rows) {
     return '<div class="bar"><span>' + esc(key) + '<br><span class="muted">' + r.won + "/" + r.n + (r.clv != null ? " · CLV " + pct(r.clv, true) : "")
       + '</span></span><div class="track">' + fill + '</div><span class="r ' + cls(r.pl) + '">' + tl(r.pl) + "<br>" + '<span class="muted">ROI ' + pct(r.roi, true) + "</span></span></div>";
   }).join("") + "</div>";
+}
+function accuracyCard() {
+  var a = S.demo && S.demoSummary ? S.demoSummary.accuracy : S.accuracy;
+  if (!a) return "";
+  var head = '<div class="card"><h2>Tahmin isabeti</h2>';
+  var foot = '<p class="small muted">Eşleşen her maçın olasılıkları kaydedilir, maç bitince sonuçla karşılaştırılır (skorlar kupon sonuçlandırmasında zaten çekildiği için ek kredi yok). '
+    + "Log kayıp ve Brier: küçük olan daha isabetli. Uygulamanın kazanması için tahmininin, bahis oynadığın iddaa'nın kendi olasılıklarından isabetli olması gerekir. "
+    + "Bu fark sonuçlardan çok yavaş ölçülür (binlerce maç); avantajın daha hızlı ve güvenilir göstergesi yukarıdaki kapanış oranı testidir.</p></div>";
+  if (!a.n) return head + '<p class="muted">Henüz sonuçlanmış maç yok' + (a.pending ? " (" + a.pending + " maç bekliyor)" : "") + ".</p>" + foot;
+  var m = function (x) { return "log kayıp " + num(x.logLoss, 3) + " · Brier " + num(x.brier, 3); };
+  var rows = item("Değerlendirilen maç", a.n + (a.pending ? " · bekleyen " + a.pending : ""))
+    + item("Uygulama (maç öncesi son)", m(a.model))
+    + item("Uygulama (ilk tahmin)", m(a.first))
+    + item("iddaa'nın kendi olasılıkları", m(a.book))
+    + item("Yazı-tura (her sonuca 1/3)", "log kayıp 1,099 · Brier 0,667");
+  var verdict, se = a.diffSe || 0;
+  if (a.n < 100) verdict = "Yorum için en az 100 maç gerekir.";
+  else if (a.diff > 2 * se) verdict = "Uygulamanın tahmini iddaa'dan anlamlı ölçüde isabetli (fark " + num(a.diff, 3) + " ± " + num(se, 3) + "): avantajın ön şartı sağlanıyor.";
+  else if (a.diff < -2 * se) verdict = "iddaa'nın olasılıkları daha isabetli çıktı (fark " + num(a.diff, 3) + " ± " + num(se, 3) + "): önerilen avantajlar gerçek olmayabilir.";
+  else verdict = "Fark henüz anlamlı değil (" + num(a.diff, 3) + " ± " + num(se, 3) + "); daha çok maç gerekir.";
+  var bins = (a.bins || []).filter(function (b) { return b.n >= 20; }).map(function (b) {
+    return item("%" + Math.round(b.from * 100) + "–" + Math.round(b.to * 100), "tahmin " + pct(b.predicted) + " → gerçekleşen " + pct(b.actual) + " (" + b.n + ")");
+  }).join("");
+  return head + '<div class="list">' + rows + "</div><p><b>" + verdict + "</b></p>"
+    + (bins ? '<p class="small muted" style="margin-top:8px">Kalibrasyon: tahmin edilen olasılık ile gerçekleşme sıklığı (en az 20 sonuçlu dilimler)</p><div class="list">' + bins + "</div>" : "")
+    + foot;
 }
 var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans"};
 function edgeCard() {

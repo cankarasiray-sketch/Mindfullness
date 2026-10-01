@@ -58,6 +58,7 @@ public class ParityTest {
             Map<String, Object> c = Json.obj(o);
             String a = Json.str(c, "a"), b = Json.str(c, "b");
             assertEquals(a, c.get("na"), Matching.normalize(a));
+            assertEquals(a, c.get("va"), Matching.variant(a));
             assertEquals(a + " ~ " + b, Json.dbl(c, "sim", -1), Matching.similarity(a, b), EPS);
         }
     }

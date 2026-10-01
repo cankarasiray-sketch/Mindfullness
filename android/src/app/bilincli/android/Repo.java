@@ -8,9 +8,11 @@ import app.bilincli.core.CreditPlan;
 import app.bilincli.core.Daily;
 import app.bilincli.core.DemoSim;
 import app.bilincli.core.Fmt;
+import app.bilincli.core.Forecasts;
 import app.bilincli.core.Http;
 import app.bilincli.core.Json;
 import app.bilincli.core.Ledger;
+import app.bilincli.core.Matching;
 import app.bilincli.core.Models;
 import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
@@ -40,6 +42,8 @@ final class Repo {
     final Radar radar;
     /** Veri doğrulamanın son güvenilir pazar eşlemeleri (dogrulama.json). */
     private final FileStorage memoryStore;
+    /** Tahmin defteri: tahminlerin gerçek sonuçlarla isabeti. */
+    final Forecasts forecasts;
     private final Map<String, Object> memory;
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
@@ -57,6 +61,7 @@ final class Repo {
         ledger = new Ledger(new FileStorage(new File(app.getFilesDir(), "kasa.json")), SYSTEM);
         radar = new Radar(new FileStorage(new File(app.getFilesDir(), "piyasa.json")));
         memoryStore = new FileStorage(new File(app.getFilesDir(), "dogrulama.json"));
+        forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
     }
@@ -145,6 +150,7 @@ final class Repo {
             Daily.LiveSources src = live();
             try {
                 Daily.Fetch f = Daily.fetch(src, Instant.now());
+                forecasts.record(Matching.match(f.book, f.sharp), Instant.now());
                 return Daily.intraday(ledger, f.book, f.sharp, radar, src);
             } finally {
                 afterScan(src);
@@ -228,7 +234,7 @@ final class Repo {
                 return out;
             }
             Daily.LiveSources src = live();
-            out.settleMessages = Daily.settle(ledger, src);
+            out.settleMessages = Daily.settle(ledger, src, forecasts);
             String today = Fmt.dayKey(Instant.now());
             boolean due = !Instant.now().isBefore(todaysRunTime()) && ledger.runFor(today) == null;
             boolean scanned = false;
@@ -236,6 +242,7 @@ final class Repo {
                 Daily.Result r = Daily.generate(ledger, src, false, false, radar);
                 if (!r.skipped) out.daily = r;
                 storeKickoffs(r);
+                recordForecasts(r);
                 scanned = !r.skipped && r.error == null && r.blocked == null;
             }
             if (scanned) afterScan(src);
@@ -289,6 +296,7 @@ final class Repo {
             }
             radar.update(book, sharp, now, ledger.settings(), false); // düşen oran radarına ek ölçüm
             Closing.capture(ledger, sharp, now);
+            forecasts.record(Matching.match(book, sharp), now); // maç öncesi en güncel tahmin
             return out;
         }
     }
@@ -307,7 +315,9 @@ final class Repo {
             if (!due.isEmpty()) {
                 try {
                     Daily.LiveSources cs = live();
-                    Closing.capture(ledger, cs.sharp(due), now);
+                    List<Models.SharpEvent> closing = cs.sharp(due);
+                    Closing.capture(ledger, closing, now);
+                    forecasts.recordSharp(closing, now);
                     after(cs);
                 } catch (Http.ProviderException ignored) {
                     // kapanış alınamadı; pencere içinde 10 dk sonra yeniden denenir
@@ -359,6 +369,10 @@ final class Repo {
             next = last != null && last.isAfter(now.minusSeconds(600)) ? last.plusSeconds(600) : now.plusSeconds(30);
         }
         return next;
+    }
+
+    void recordForecasts(Daily.Result r) {
+        if (r != null && r.book != null && r.sharp != null) forecasts.record(Matching.match(r.book, r.sharp), Instant.now());
     }
 
     /** Günün karar penceresindeki maç saatleri (radar zamanlaması için) saklanır. */

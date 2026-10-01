@@ -24,9 +24,12 @@ public final class DemoSim {
         Daily.Sources src = new Daily.DemoSources(world);
         long baseline = bankroll;
         int coupon = 0, pass = 0, guard = 0;
+        Forecasts forecasts = new Forecasts(new Ledger.MemoryStorage(null));
         for (int d = 0; d <= days; d++) {
             world.now = start.plusSeconds(d * 86400L);
+            forecasts.resolve(world.scores());
             Daily.Result r = Daily.runDaily(ledger, src, false, true);
+            if (r.book != null) forecasts.record(Matching.match(r.book, r.sharp), world.now);
             if (r.couponId != null) {
                 // Kapanış oranı: demo dünyasında piyasa maça doğru gerçeğe yaklaşır.
                 for (Ledger.Leg l : ledger.coupon(r.couponId).legs) {
@@ -66,6 +69,7 @@ public final class DemoSim {
         out.put("played", (long) s.played);
         out.put("expectedWins", s.expectedWins);
         out.put("baselineEnd", baseline);
+        out.put("accuracy", forecasts.summary());
         return out;
     }
 }

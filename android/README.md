@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-1.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-1.7.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -45,6 +45,33 @@ bildirim olarak gelir.
   *En yüksek getiri* (yarım Kelly, en fazla %10). Demo simülasyonunda (200 ay) en yüksek tipik
   aylık getiriyi yarım Kelly verdi; daha büyük bahis tipik getiriyi düşürdü, Kelly'nin iki
   katında ortanca ay zarara döndü. Hiçbir profil kazanç garantisi vermez.
+
+## Tahmin doğruluğu (1.7)
+
+Uygulamanın "tahmini", Pinnacle'ın (ve likit bahis borsasının) marjı arındırılmış olasılığıdır.
+Bu fiyat sakatlık, kadro, hava, xG gibi her bilgiyi zaten içerir ve futbolda bilinen en isabetli
+tahminler arasındadır; kamuya açık veriyle kurulacak bir model onu yenmekten çok gürültü ekler.
+Bu yüzden 1.7, tahmini değiştirmek yerine onu bozan veri hatalarını ayıklar ve isabeti gerçek
+sonuçlarla ölçer:
+
+- **Kadın, genç ve rezerv takımları:** "Arsenal (K)", "Fenerbahçe U19", "Barcelona B", "Jong Ajax"
+  ana takımla eşleşmez. Yanlış maçın oranı sahte avantaj üretir. (Python ve Java aynı kuralı
+  uygular; eşdeğerlik testi 491 ad çiftinde doğrular.)
+- **Maç bazında oran tutarlılığı:** Aynı maçta iddaa ile Pinnacle'ın marjsız olasılıkları
+  0,15'ten fazla farklı olamaz (%25 avantaj bile ~0,13 farktır). Daha büyük fark yanlış eşleşme
+  demektir; ev/deplasman ters görünüyorsa da maç kullanılmaz.
+- **Maç Sonucu sıra doğrulaması ortancayla:** Birkaç yanlış eşleşme tüm bültenin Maç Sonucu'nu
+  kapatmaz; sıra gerçekten farklıysa her maç etkilendiği için yine yakalanır.
+- **Bayat Pinnacle çizgisi:** Maça 6 saatten az kala Pinnacle'ın son güncellemesi aynı pazardaki en
+  yeni güncellemeden 3 saatten eskiyse kullanılmaz (pazar askıda olabilir; haber anındaki sahte
+  avantajlar böyle ayıklanır).
+- **Tahmin defteri ve isabet kartı** (Geçmiş → Tahmin isabeti): Eşleşen her maçın olasılıkları
+  kaydedilir ve sonuçla karşılaştırılır; skorlar kupon sonuçlandırmasında zaten çekildiği için
+  ek kredi yok. Uygulamanın tahmini (ilk ve maç öncesi son) ile iddaa'nın kendi olasılıkları
+  log kayıp ve Brier skoruyla kıyaslanır; fark 2 standart hatadan büyük değilse "henüz anlamlı
+  değil" yazar. Olasılık dilimlerine göre kalibrasyon tablosu (tahmin %30 dediğinde gerçekte ne
+  sıklıkla oldu) en az 20 sonuçlu dilimleri gösterir. Demo dünyasında 480 maçta iki tahmin
+  arasındaki fark anlamlı çıkmadı: isabet farkını görmek yüzlerce, çoğu zaman binlerce maç ister.
 
 ## Para akışı düzeltmeleri ve maç saatine göre radar (1.6)
 
@@ -185,7 +212,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-1.6.apk
+./build.sh          # testler + build/BilincliKupon-1.7.apk
 ./build.sh test     # yalnızca testler
 ```
 
@@ -211,6 +238,8 @@ kaldırılmadan kurulamaz.
 - **Kâr (ProfitTest):** ortak Kelly'nin optimallik (KKT) koşulları, sınırlar ve MBS, kanıt
   koruması, Çifte Şans eşlemesi ve sonuçlandırma, Pinnacle + borsa uzlaşısı, boş lig atlama,
   yenilenen planın oynanmaması, geç kurulan kuponun hemen kontrolü, maç saatine göre radar.
+- **Doğruluk (AccuracyTest):** takım varyantları, tutarsız ve ters eşleşmeler, bayat çizgi, tahmin
+  defterinin Brier/log kayıp/standart hata hesapları, demo isabet raporu.
 - **Kasa ve kredi (BankrollTest):** güncel kasadan tutar, otomatik oynama ve geri alma,
   sonuçla kasanın güncellenmesi, kredi planının daraltma sırası ve yenilenme günü.
 - **Çekirdek (CoreTest):** kasa, iade kuralı, haftalık limit, kovalama beklemesi, sonuçlandırma,

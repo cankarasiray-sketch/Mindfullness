@@ -154,8 +154,10 @@ public class MarketsTest {
         double pa = (Double) w.get(2)[2];
         Map<String, Object> r = Calibration.apply(book, sharp(w, false, false));
         assertTrue(pa * 9.0 - 1 > Calibration.MAX_PLAUSIBLE_EV);
-        assertEquals(1L, r.get("suspicious"));
-        assertFalse(book.get(2).odds.get("MS").containsKey("2"));
+        // tek fiyat bu kadar sapınca maçın tamamı tutarsız sayılır (1.7: maç bazında kontrol)
+        assertEquals(1L, r.get("mismatched"));
+        assertTrue(book.get(2).odds.isEmpty());
+        assertFalse(book.get(1).odds.isEmpty());
     }
 
     @Test

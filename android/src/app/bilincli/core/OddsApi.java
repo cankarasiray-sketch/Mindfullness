@@ -33,6 +33,12 @@ public final class OddsApi {
     /** Pinnacle ile borsa arasında bundan büyük olasılık farkı: biri bayat, pazar kullanılmaz. */
     static final double MAX_DISAGREE = 0.05;
     static final double PINNACLE_WEIGHT = 0.6;
+    /**
+     * Bayat çizgi: maça 6 saatten az kala Pinnacle'ın son güncellemesi, aynı pazardaki en yeni
+     * güncellemeden 3 saatten eskiyse fiyat bayattır (pazar askıda ya da kapatılmış olabilir);
+     * kullanılmaz. Haber (sakatlık, kadro) anında oluşan sahte "avantajlar" böyle ayıklanır.
+     */
+    static final long STALE_GAP_S = 3 * 3600, STALE_WINDOW_S = 6 * 3600;
 
     public OddsApi(Http http, Settings cfg) throws Http.ProviderException {
         if (cfg.oddsApiKey == null || cfg.oddsApiKey.isEmpty()) {
@@ -119,10 +125,14 @@ public final class OddsApi {
             if (home == null || away == null || commence == null) continue;
             Map<String, Map<String, Map<String, Double>>> perMarket = new LinkedHashMap<>();
             Map<String, Map<String, Double>> liquid = new LinkedHashMap<>(); // pazar -> borsa -> ima toplamı
+            Map<String, Map<String, Instant>> updated = new LinkedHashMap<>(); // pazar -> site -> son güncelleme
             for (Object bo : Json.arr(ev.get("bookmakers"))) {
                 Map<String, Object> book = Json.obj(bo);
                 String bk = Json.str(book, "key");
+                Instant bookUpdate = instant(Json.str(book, "last_update"));
                 for (Object mo : Json.arr(book.get("markets"))) {
+                    Instant mu = instant(Json.str(Json.obj(mo), "last_update"));
+                    if (mu == null) mu = bookUpdate;
                     Map<String, Double> over = new LinkedHashMap<>();
                     Map<String, Map<String, Double>> parsed = marketProbs(Json.obj(mo), home, away, over);
                     if (parsed == null) continue;
@@ -133,13 +143,24 @@ public final class OddsApi {
                         Map<String, Double> l = liquid.get(e.getKey());
                         if (l == null) liquid.put(e.getKey(), l = new LinkedHashMap<>());
                         if (over.containsKey(e.getKey())) l.put(bk == null ? "?" : bk, over.get(e.getKey()));
+                        if (mu != null) {
+                            Map<String, Instant> u = updated.get(e.getKey());
+                            if (u == null) updated.put(e.getKey(), u = new LinkedHashMap<>());
+                            u.put(bk == null ? "?" : bk, mu);
+                        }
                     }
                 }
             }
             Map<String, Map<String, Double>> fair = new LinkedHashMap<>();
             List<String> sources = new ArrayList<>();
+            Instant start = instant(commence);
             for (Map.Entry<String, Map<String, Map<String, Double>>> e : perMarket.entrySet()) {
                 Map<String, Map<String, Double>> books = e.getValue();
+                if (stale(updated.get(e.getKey()), cfg.preferredBook, start)) {
+                    books = new LinkedHashMap<>(books);
+                    books.remove(cfg.preferredBook);
+                    sources.add(e.getKey() + ":" + cfg.preferredBook + " bayat");
+                }
                 if (books.containsKey(cfg.preferredBook)) {
                     Map<String, Double> pin = books.get(cfg.preferredBook);
                     Map<String, Double> ex = exchangeAverage(books, liquid.get(e.getKey()));
@@ -182,6 +203,29 @@ public final class OddsApi {
             }
         }
         return events;
+    }
+
+    static Instant instant(String iso) {
+        if (iso == null) return null;
+        try {
+            return Instant.parse(iso);
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /** Pinnacle'ın bu pazardaki fiyatı, diğer sitelerin en yenisine göre bayat mı? */
+    static boolean stale(Map<String, Instant> updates, String preferred, Instant start) {
+        if (updates == null || start == null) return false;
+        Instant pin = updates.get(preferred), newest = null;
+        if (pin == null) return false;
+        for (Map.Entry<String, Instant> u : updates.entrySet()) {
+            if (u.getKey().equals(preferred)) continue;
+            if (newest == null || u.getValue().isAfter(newest)) newest = u.getValue();
+        }
+        if (newest == null) return false;
+        return newest.getEpochSecond() - pin.getEpochSecond() > STALE_GAP_S
+                && start.getEpochSecond() - newest.getEpochSecond() < STALE_WINDOW_S;
     }
 
     /** Likit borsaların arındırılmış olasılık ortalaması (yoksa null). */

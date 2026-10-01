@@ -31,6 +31,9 @@ public final class Daily {
         public long stake;
         public String stakeNote, blocked, error;
         public boolean skipped;
+        /** Bu kararda kullanılan bülten ve keskin piyasa (tahmin defteri için). */
+        public List<BookEvent> book;
+        public List<SharpEvent> sharp;
         /** Bugün oynanmış kupon vardı: plan yenilenmedi, yalnızca kalan sınır içinde ek kupon denendi. */
         public boolean besidePlayed;
         public List<String> settleMessages = new ArrayList<>();
@@ -297,12 +300,19 @@ public final class Daily {
     }
 
     public static List<String> settle(Ledger ledger, final Sources src) {
+        return settle(ledger, src, null);
+    }
+
+    /** forecasts verilirse aynı skor yanıtıyla tahmin defteri de sonuçlandırılır (ek kredi yok). */
+    public static List<String> settle(Ledger ledger, final Sources src, final Forecasts forecasts) {
         if (ledger.openCoupons().isEmpty()) return new ArrayList<>();
         try {
             return Settlement.settleOpen(ledger, new Settlement.ScoreFetcher() {
                 @Override
                 public Map<String, ScoreResult> fetch(Set<String> sportKeys) throws Exception {
-                    return src.scores(sportKeys);
+                    Map<String, ScoreResult> scores = src.scores(sportKeys);
+                    if (forecasts != null) forecasts.resolve(scores);
+                    return scores;
                 }
             }, ledger.now());
         } catch (Exception e) {
@@ -342,6 +352,8 @@ public final class Daily {
             return r; // hata günü kaydedilmez; sonraki çalıştırma yeniden dener
         }
         if (radar != null) radar.update(f.book, f.sharp, now, cfg, true);
+        r.book = f.book;
+        r.sharp = f.sharp;
         Decision d = Engine.decide(f.book, f.sharp, now, cfg);
         d.stats.put("dogrulama", Calibration.summary(f.calibration));
         r.decision = d;

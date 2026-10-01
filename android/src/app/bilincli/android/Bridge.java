@@ -57,6 +57,7 @@ public final class Bridge {
         extra.put("radar", repo.radarView());
         extra.put("credits", repo.credits());
         extra.put("creditPlan", repo.plan().toMap());
+        extra.put("accuracy", repo.forecasts.summary());
         String version = "?";
         try {
             version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
@@ -223,6 +224,7 @@ public final class Bridge {
                     Daily.LiveSources src = repo.live();
                     r = Daily.generate(repo.real(), src, Json.bool(p, "force", false), false, repo.radar);
                     repo.storeKickoffs(r);
+                    repo.recordForecasts(r);
                     if (r.error == null && r.blocked == null && !r.skipped) repo.afterScan(src);
                     else repo.after(src);
                 }

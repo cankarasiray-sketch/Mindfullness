@@ -22,6 +22,16 @@ import java.util.Set;
 public final class Matching {
     private Matching() {}
 
+    /**
+     * Kadın, genç ve rezerv takımları ana takımla aynı adı taşır ("Arsenal (K)", "Fenerbahçe U19",
+     * "Barcelona B", "Jong Ajax"). İşaret iki tarafta farklıysa eşleşme yapılmaz: yanlış maçın
+     * oranı sahte "avantaj" üretir. (Python: matching.variant)
+     */
+    private static final Set<String> WOMEN = new HashSet<>(Arrays.asList(
+            "k", "kadin", "kadinlar", "women", "w", "womens", "ladies", "fem", "femenino", "feminine", "frauen", "wfc"));
+    private static final Set<String> YOUTH = new HashSet<>(Arrays.asList(
+            "youth", "genc", "gencler", "academy", "akademi", "primavera", "juniors", "jong", "reserves", "res", "ii", "castilla"));
+
     static final int TIME_TOLERANCE_MIN = 15;
     static final double MIN_PAIR_SCORE = 0.62;
     static final double MIN_SIDE_SCORE = 0.45;
@@ -47,6 +57,46 @@ public final class Matching {
         for (String[] p : a) ALIASES.put(p[0], p[1]);
     }
 
+    private static List<String> tokens(String name) {
+        String s = fold(name).replaceAll("[^a-z0-9 ]+", " ").trim();
+        List<String> out = new ArrayList<>();
+        if (s.isEmpty()) return out;
+        for (String tok : s.split(" +")) out.add(tok);
+        return out;
+    }
+
+    private static boolean isMarker(String t, int i, int n) {
+        return WOMEN.contains(t) || YOUTH.contains(t) || t.matches("u(1[5-9]|2[0-3])") || ("b".equals(t) && n > 1 && i == n - 1);
+    }
+
+    /** "kadin", "uNN", "genc" ya da "" (ana takım). */
+    public static String variant(String name) {
+        List<String> t = tokens(name);
+        for (String x : t) if (WOMEN.contains(x)) return "kadin";
+        for (String x : t) if (x.matches("u(1[5-9]|2[0-3])")) return x;
+        for (String x : t) if (YOUTH.contains(x)) return "genc";
+        if (t.size() > 1 && "b".equals(t.get(t.size() - 1))) return "genc";
+        return "";
+    }
+
+    /** Türkçe harfler, küçük harf (Locale.ROOT), aksan temizliği. */
+    private static String fold(String name) {
+        StringBuilder t = new StringBuilder();
+        for (char c : name.toCharArray()) {
+            switch (c) {
+                case 'ı': case 'İ': t.append('i'); break;
+                case 'ş': case 'Ş': t.append('s'); break;
+                case 'ğ': case 'Ğ': t.append('g'); break;
+                case 'ç': case 'Ç': t.append('c'); break;
+                case 'ö': case 'Ö': t.append('o'); break;
+                case 'ü': case 'Ü': t.append('u'); break;
+                default: t.append(c);
+            }
+        }
+        String s = Normalizer.normalize(t.toString().toLowerCase(Locale.ROOT), Normalizer.Form.NFKD);
+        return s.replaceAll("\\p{M}", "");
+    }
+
     public static String normalize(String name) {
         StringBuilder t = new StringBuilder();
         for (char c : name.toCharArray()) {
@@ -64,9 +114,14 @@ public final class Matching {
         String s = Normalizer.normalize(t.toString().toLowerCase(Locale.ROOT), Normalizer.Form.NFKD);
         s = s.replaceAll("\\p{M}", "");
         s = s.replaceAll("[^a-z0-9 ]+", " ");
+        String trimmed = s.trim();
+        String[] raw = trimmed.isEmpty() ? new String[0] : trimmed.split(" +");
         List<String> tokens = new ArrayList<>();
-        for (String tok : s.trim().split(" +")) {
+        for (int i = 0; i < raw.length; i++) {
+            String tok = raw[i];
             if (tok.isEmpty() || STOPWORDS.contains(tok) || tok.matches("[0-9]+")) continue;
+            // kadın/genç/rezerv işaretleri ad benzerliğine girmez; onları variant() ayrıca karşılaştırır
+            if (isMarker(tok, i, raw.length)) continue;
             tokens.add(tok);
         }
         String joined = String.join(" ", tokens);
@@ -156,6 +211,7 @@ public final class Matching {
                 SharpEvent s = sharp.get(j);
                 long diff = Math.abs(b.kickoff.getEpochSecond() - s.kickoff.getEpochSecond());
                 if (diff > TIME_TOLERANCE_MIN * 60L) continue;
+                if (!variant(b.home).equals(variant(s.home)) || !variant(b.away).equals(variant(s.away))) continue;
                 double h = similarity(b.home, s.home), a = similarity(b.away, s.away);
                 if (Math.min(h, a) < MIN_SIDE_SCORE) continue;
                 double score = (h + a) / 2.0;

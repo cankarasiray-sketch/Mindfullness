@@ -13,7 +13,7 @@ from bilincli import oddsmath
 from bilincli.config import StrategyConfig
 from bilincli.engine import decide
 from bilincli.ledger import parse_tl
-from bilincli.matching import name_similarity, normalize
+from bilincli.matching import name_similarity, normalize, variant
 from bilincli.models import TR
 from bilincli.providers.demo import TEAMS, DemoWorld
 
@@ -39,10 +39,12 @@ names = TEAMS + [
     "Wolves", "Wolverhampton Wanderers", "M.Gladbach", "Borussia Monchengladbach", "Sporting Lizbon",
     "Sporting Lisbon", "Nottingham", "Nottingham Forest", "Tottenham", "Real Sociedad",
     "IŞIK ÜNİVERSİTESİ", "Iğdır FK", "Ümraniyespor", "Şanlıurfaspor", "Ankaragücü", "MKE Ankaragücü",
+    "Galatasaray (K)", "Fenerbahçe Kadın", "Arsenal W", "Arsenal Women", "Fenerbahçe U19", "Besiktas U21",
+    "Barcelona B", "Jong Ajax", "Ajax", "Bayern Munich II", "Real Madrid Castilla", "B. Mönchengladbach",
 ]
 pairs = [(rng.choice(names), rng.choice(names)) for _ in range(400)]
 pairs += [(names[i], names[i + 1]) for i in range(len(names) - 1)]
-match_cases = [{"a": a, "b": b, "na": normalize(a), "sim": name_similarity(a, b)} for a, b in pairs]
+match_cases = [{"a": a, "b": b, "na": normalize(a), "va": variant(a), "sim": name_similarity(a, b)} for a, b in pairs]
 
 
 # ---- motor ----

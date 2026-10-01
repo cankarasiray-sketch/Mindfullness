@@ -2,7 +2,7 @@ from datetime import timedelta
 
 import pytest
 
-from bilincli.matching import match_events, name_similarity, normalize
+from bilincli.matching import match_events, name_similarity, normalize, variant
 from bilincli.models import BookEvent, SharpEvent
 
 from .helpers import NOW
@@ -47,6 +47,33 @@ def test_match_events_by_time_and_name():
              _ev(SharpEvent, "s3", "Kasimpasa", "Konyaspor", minutes=0)]  # saat tutmuyor
     pairs = {b.ref: s.ref for b, s, _ in match_events(book, sharp)}
     assert pairs == {"b1": "s1", "b2": "s2"}
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [("Galatasaray (K)", "Galatasaray"), ("Arsenal W", "Arsenal"), ("Fenerbahçe U19", "Fenerbahce"),
+     ("Barcelona B", "Barcelona"), ("Jong Ajax", "Ajax"), ("Bayern Munich II", "Bayern Munich"),
+     ("Besiktas U21", "Besiktas U19")],
+)
+def test_variant_teams_never_match_main_team(a, b):
+    assert variant(a) != variant(b)
+    book = [BookEvent(ref="b", home=a, away="Rakip", kickoff=NOW, league="", mbs=1, odds={})]
+    sharp = [SharpEvent(ref="s", sport_key="x", home=b, away="Rakip", kickoff=NOW, fair={})]
+    assert match_events(book, sharp) == []
+
+
+def test_variant_markers():
+    assert variant("Galatasaray") == ""
+    assert variant("B. Mönchengladbach") == ""  # baştaki "B" rezerv değil
+    assert variant("Fenerbahçe Kadın") == variant("Fenerbahce (K)") == "kadin"
+    assert variant("Besiktas U21") == "u21"
+    assert normalize("Galatasaray (K)") == "galatasaray"
+    assert normalize("Barcelona B") == "barcelona"
+    assert normalize("B. Mönchengladbach") == "borussia monchengladbach"
+    # aynı tür takımlar eşleşir
+    book = [BookEvent(ref="b", home="Arsenal (K)", away="Chelsea (K)", kickoff=NOW, league="", mbs=1, odds={})]
+    sharp = [SharpEvent(ref="s", sport_key="x", home="Arsenal W", away="Chelsea W", kickoff=NOW, fair={})]
+    assert len(match_events(book, sharp)) == 1
 
 
 def test_each_event_matched_once():

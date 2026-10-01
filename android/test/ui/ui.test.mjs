@@ -443,6 +443,31 @@ test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {
   assert.ok(t.$$(".item").some((x) => x.textContent.includes("#" + old.id) && x.textContent.includes("Yenilendi")));
 });
 
+test("tahmin isabeti: ölçüler, anlamlılık ve kalibrasyon", async () => {
+  const s = clone(baseState);
+  s.accuracy = {
+    n: 640, pending: 41, diff: 0.012, diffSe: 0.004,
+    model: { brier: 0.581, logLoss: 0.972 }, first: { brier: 0.586, logLoss: 0.981 }, book: { brier: 0.589, logLoss: 0.984 },
+    bins: [{ from: 0.2, to: 0.3, predicted: 0.254, actual: 0.262, n: 512 }, { from: 0.9, to: 1, predicted: 0.91, actual: 1, n: 3 }],
+  };
+  const t = boot(s);
+  t.w.show("gecmis");
+  const card = t.$$(".card").find((x) => /Tahmin isabeti/.test(x.textContent)).textContent;
+  assert.match(card, /Değerlendirilen maç640 · bekleyen 41/);
+  assert.match(card, /Uygulama \(maç öncesi son\)log kayıp 0,972 · Brier 0,581/);
+  assert.match(card, /anlamlı ölçüde isabetli \(fark 0,012 ± 0,004\)/);
+  assert.match(card, /%20–30tahmin %25,4 → gerçekleşen %26,2 \(512\)/);
+  assert.doesNotMatch(card, /%90–100/); // az örnekli dilim gösterilmez
+  s.accuracy = { n: 60, pending: 5, diff: -0.01, diffSe: 0.02, model: { brier: 0.6, logLoss: 1 }, first: { brier: 0.6, logLoss: 1 }, book: { brier: 0.6, logLoss: 1 }, bins: [] };
+  const t2 = boot(s);
+  t2.w.show("gecmis");
+  assert.ok(t2.$$(".card").some((x) => /en az 100 maç gerekir/.test(x.textContent)));
+  s.accuracy = { n: 0, pending: 12 };
+  const t3 = boot(s);
+  t3.w.show("gecmis");
+  assert.ok(t3.$$(".card").some((x) => /Henüz sonuçlanmış maç yok \(12 maç bekliyor\)/.test(x.textContent)));
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {
