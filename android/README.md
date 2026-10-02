@@ -62,6 +62,20 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Uzun işlemlerde bekleme ekranı (2.8.1)
+
+- "Güncel oranlarla yeni kupon" ve "Şimdi tara" kredi bolken dakikalarca sürebiliyordu: taramadan önce
+  bugün oynayan ligler (~40 lig, ücretsiz maç listesi) her seferinde tek tek, sırayla soruluyordu.
+  Artık bu liste 45 dakika boyunca yeniden kullanılır ve 4 lig aynı anda sorulur ("Kaynakları test et"
+  ve "Bugün oynayanları öğren" her zaman yeniden sorar).
+- Bekleme ekranı ne yapıldığını yazar (maç listesi 12/40, iddaa bülteni, Pinnacle oranları 5/18, maç
+  sonuçları, Zirve Oran) ve geçen süreyi gösterir. Arka planda bir tarama sürüyorsa önce onun bitmesi
+  beklenir; bekleme ekranında "Arka plandaki işlem sürüyor · …" diye görünür.
+- 10 saniyeden sonra "Arka planda sürsün" ile ekran kapatılabilir; sonuç bitince bildirim balonu
+  olarak gelir. Sırada başka işlem varsa "Sırada" yazar.
+- Ağ: yanıtın tamamı en fazla 90 sn (Nesine/Bilyoner 180 sn) sürebilir; çok yavaş akan bağlantıda
+  işlem sonsuza dek beklemez, hata mesajı VPN sunucusunu değiştirmeyi önerir.
+
 ## En yüksek kâr ayarları, günde 8 radar, saatlik Zirve (2.8)
 
 - **"En yüksek kazanç" profili güncellendi:** Kelly çarpanı 0,50 → **0,60**, maç oranı üst sınırı

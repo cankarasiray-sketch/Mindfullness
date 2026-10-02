@@ -229,26 +229,115 @@ final class Repo {
     private volatile Map<String, Integer> activeToday;
     private volatile Instant activeAt;
 
+    /**
+     * Pencere maç sayıları bu kadar yeniyse yeniden sorulmaz (2.8.1): kredi bolken sorgu ~40 ligi
+     * kapsar ve her "Kupon üret" / "Şimdi tara"dan önce yinelenmesi işlemi dakikalarca uzatıyordu.
+     */
+    static final long PROBE_FRESH_S = 45 * 60;
+    /** Maç listesi sorgusunda aynı anda en fazla bu kadar istek (ücretsiz uç). */
+    static final int PROBE_THREADS = 4;
+
     /** Taranacak liglerde karar penceresinde kaç maç var (kota harcamaz); planı doğru kurmak için. */
     void probeActive() {
-        Settings s = scanSettings();
+        probeActive(false);
+    }
+
+    /** force: son sorgu yeni olsa da yeniden sor ("Kaynakları test et", "Bugün oynayanları öğren"). */
+    void probeActive(boolean force) {
+        final Settings s = scanSettings();
         if (s.oddsApiKey.isEmpty()) return;
+        List<String> leagues = new ArrayList<>(s.leagues);
+        if (roomToExpand(s)) { // kredi bol: plan ek lig seçebilsin diye onlarınki de (ücretsiz)
+            for (String[] l : Settings.KNOWN_LEAGUES) if (!leagues.contains(l[0])) leagues.add(l[0]);
+        }
+        Map<String, Integer> known = activeToday;
+        Instant at = activeAt;
+        if (!force && known != null && at != null && at.isAfter(Instant.now().minusSeconds(PROBE_FRESH_S))
+                && known.keySet().containsAll(leagues)) return;
+        Map<String, Integer> counts = probeCounts(s, leagues);
+        if (counts == null) return; // bilinmiyor: plan ortalama payla kurulur
+        activeToday = counts;
+        activeAt = Instant.now();
+        Map<String, Object> raw = new LinkedHashMap<>();
+        for (Map.Entry<String, Integer> e : counts.entrySet()) raw.put(e.getKey(), (long) e.getValue());
+        prefs.edit().putString("active", Json.write(raw)).putLong("activeAt", activeAt.toEpochMilli()).apply();
+    }
+
+    /** Ligleri paralel sorar (her iş parçacığı kendi kaynağıyla); hiçbiri alınamadıysa null. */
+    private Map<String, Integer> probeCounts(final Settings s, final List<String> leagues) {
+        final Instant now = Instant.now();
+        final Thread owner = Thread.currentThread();
+        final int total = leagues.size();
+        final java.util.concurrent.atomic.AtomicInteger done = new java.util.concurrent.atomic.AtomicInteger();
+        step("Bugün oynayan ligler belirleniyor (ücretsiz, " + total + " lig)…");
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(Math.max(1, Math.min(PROBE_THREADS, total)));
         try {
-            Daily.LiveSources probe = new Daily.LiveSources(new AndroidHttp(app), s);
-            List<String> leagues = new ArrayList<>(s.leagues);
-            if (roomToExpand(s)) { // kredi bol: plan ek lig seçebilsin diye onlarınki de (ücretsiz)
-                for (String[] l : Settings.KNOWN_LEAGUES) if (!leagues.contains(l[0])) leagues.add(l[0]);
+            List<java.util.concurrent.Future<Map<String, Integer>>> parts = new ArrayList<>();
+            for (final String l : leagues) {
+                parts.add(pool.submit(new java.util.concurrent.Callable<Map<String, Integer>>() {
+                    @Override
+                    public Map<String, Integer> call() throws Exception {
+                        Map<String, Integer> m = new Daily.LiveSources(new AndroidHttp(app), s)
+                                .activeCounts(java.util.Collections.singletonList(l), now);
+                        step(owner, "Bugün oynayan ligler belirleniyor (ücretsiz): " + done.incrementAndGet() + "/" + total);
+                        return m;
+                    }
+                }));
             }
-            Map<String, Integer> counts = probe.activeCounts(leagues, Instant.now());
-            activeToday = counts;
-            activeAt = Instant.now();
-            Map<String, Object> raw = new LinkedHashMap<>();
-            for (Map.Entry<String, Integer> e : counts.entrySet()) raw.put(e.getKey(), (long) e.getValue());
-            prefs.edit().putString("active", Json.write(raw)).putLong("activeAt", activeAt.toEpochMilli()).apply();
-        } catch (Http.ProviderException ignored) {
-            // bilinmiyor: plan ortalama payla kurulur
+            Map<String, Integer> out = new LinkedHashMap<>();
+            boolean any = false;
+            for (int i = 0; i < parts.size(); i++) {
+                Integer n = -1;
+                try {
+                    Map<String, Integer> m = parts.get(i).get(90, java.util.concurrent.TimeUnit.SECONDS);
+                    if (m != null && m.get(leagues.get(i)) != null) n = m.get(leagues.get(i));
+                } catch (Exception e) {
+                    // bu lig bilinmiyor (-1): plan ortalama payla tahmin eder
+                }
+                if (n >= 0) any = true;
+                out.put(leagues.get(i), n);
+            }
+            return any ? out : null;
+        } finally {
+            pool.shutdownNow();
         }
     }
+
+    /** Arayüzün beklediği işlem (Bridge) için ilerleme; null: arayüz beklemiyor. */
+    private volatile Daily.Progress uiProgress;
+    private volatile Thread uiThread;
+
+    void beginUi(Daily.Progress p) {
+        uiThread = Thread.currentThread();
+        uiProgress = p;
+    }
+
+    void endUi() {
+        uiProgress = null;
+        uiThread = null;
+    }
+
+    /** Arayüzün beklediği işleme ilerleme metni (arayüz beklemiyorsa yok sayılır). */
+    void step(String text) {
+        step(Thread.currentThread(), text);
+    }
+
+    /**
+     * origin: adımı atan işin iş parçacığı. Arayüzün işlemi değilse (arka plan taraması kilidi tutuyor),
+     * kullanıcı neyin beklendiğini görsün diye öyle yazılır.
+     */
+    void step(Thread origin, String text) {
+        Daily.Progress p = uiProgress;
+        if (p == null || text == null) return;
+        p.step(origin == uiThread ? text : "Arka plandaki işlem sürüyor · " + text);
+    }
+
+    private final Daily.Progress stepper = new Daily.Progress() {
+        @Override
+        public void step(String text) {
+            Repo.this.step(text);
+        }
+    };
 
     /**
      * Genişletmeye yer var mı: günlük kredi (kalan / yenilenmeye kalan gün) seçili liglerin tipik
@@ -335,6 +424,12 @@ final class Repo {
     /** Zirve Oran en sık bu aralıkla indirilir (zorlanmadıkça): uygulama her açıldığında siteye gidilmesin. */
     static final long ZIRVE_MIN_GAP_S = 10 * 60;
 
+    /** Zirve işleminin ekrandaki durumu; arayüz bir işlemi bekliyorsa ilerleme olarak da gösterilir. */
+    private void zirveBusy(String text) {
+        zirveBusy = text;
+        step(text);
+    }
+
     /** Son yazılan Zirve durumu (arayüz her çizimde dosya okumasın). */
     private volatile String zirveRaw;
 
@@ -406,7 +501,7 @@ final class Repo {
             st.put("fetchedAt", now.toString());
             st.put("app", appVersion());
             String[] notice = null;
-            zirveBusy = "Bilyoner Zirve Oran okunuyor…";
+            zirveBusy("Bilyoner Zirve Oran okunuyor…");
             try {
                 List<Zirve.Offer> offers = Zirve.fetch(new AndroidHttp(app));
                 Map<String, Object> view = zirveEvaluate(offers, now);
@@ -519,7 +614,7 @@ final class Repo {
             if (at != null && Instant.parse(at).plusSeconds(ZIRVE_SCAN_GAP_S).isAfter(now)) need.remove(sref);
         }
         if (need.isEmpty()) return false;
-        zirveBusy = "Zirve maçlarının Karşılıklı Gol adil oranı çekiliyor (" + need.size() + " maç, maç başına 1 kredi)…";
+        zirveBusy("Zirve maçlarının Karşılıklı Gol adil oranı çekiliyor (" + need.size() + " maç, maç başına 1 kredi)…");
         boolean changed = false;
         synchronized (LOCK) {
             Daily.LiveSources src = live(effective());
@@ -604,7 +699,7 @@ final class Repo {
         if (keys.isEmpty()) return false;
         List<String> names = new ArrayList<>();
         for (String k : keys) names.add(CreditPlan.leagueName(k));
-        zirveBusy = "Zirve maçlarının ligi taranıyor (" + String.join(", ", names) + ")…";
+        zirveBusy("Zirve maçlarının ligi taranıyor (" + String.join(", ", names) + ")…");
         if (creditsLow()) {
             for (Map.Entry<String, String> e : keyOf.entrySet()) {
                 if (keys.contains(e.getValue())) notes.put(e.getKey(), "API kredisi az; hedefli tarama yapılmadı");
@@ -819,6 +914,7 @@ final class Repo {
     /** Verilen kapsamla canlı kaynak (ör. kadro saati taramasında yalnızca birkaç lig). */
     Daily.LiveSources live(Settings scope) {
         Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), scope);
+        src.progress = stepper; // arayüz bekliyorsa ilerleme gösterilir
         src.memory = memory;
         src.knownActive = active(); // pencere maç sayıları zaten biliniyorsa tekrar sorulmaz
         src.knownKeyCredits = keyCredits(); // birden fazla anahtar: kredisi en çok kalan seçilir

@@ -710,6 +710,34 @@ test("uzun işlemde ilerleme metni görünür, bitince temizlenir", async () => 
   assert.equal(t.$("#progress").textContent, "");
 });
 
+test("uzun işlemde geçen süre, arka plana alma ve sıradaki işlem", async () => {
+  const t = boot(clone(baseState));
+  const ids = [];
+  t.w.MockAndroid.act = (action, payload, id) => ids.push(id); // sonuç elle verilir
+  t.w.act("generate");
+  assert.match(t.$("#busy").className, /show/);
+  assert.doesNotMatch(t.$("#busyHide").className, /\bon\b/);
+  t.w.onProgress("Bugün oynayan ligler belirleniyor (ücretsiz): 12/40");
+  t.w.busyStart = Date.now() - 11000;
+  t.w.busyClock();
+  assert.equal(t.$("#busyTime").textContent, "11 sn");
+  assert.match(t.$("#busyHide").className, /\bon\b/);
+  t.$("#busyHide").click();
+  assert.doesNotMatch(t.$("#busy").className, /show/);
+  assert.match(t.$("#toast").textContent, /arka planda sürüyor/);
+  // gizliyken yeni işlem: ekran yeniden açılır, sırada olduğu yazar
+  t.w.act("radarScan");
+  assert.match(t.$("#busy").className, /show/);
+  assert.match(t.$("#progress").textContent, /Sırada/);
+  t.w.onActResult(ids[0], { ok: true, message: "Bugün pas" });
+  assert.match(t.$("#busy").className, /show/); // ikinci işlem sürüyor
+  t.w.onActResult(ids[1], { ok: true, message: "Tarama tamam." });
+  assert.doesNotMatch(t.$("#busy").className, /show/);
+  assert.equal(t.$("#progress").textContent, "");
+  assert.equal(t.$("#busyTime").textContent, "");
+  assert.deepEqual(t.errors, []);
+});
+
 test("uzun sonuç balonu kaplamaz, ayrıntı kutuda; dokununca kapanır", async () => {
   const s = clone(baseState);
   const t = boot(s, "#ayarlar");

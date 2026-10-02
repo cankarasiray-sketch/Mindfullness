@@ -82,6 +82,7 @@ font-size:14px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:2
 .busy.show{display:flex}
 .spinner{width:42px;height:42px;border-radius:50%;border:4px solid rgba(255,255,255,.35);border-top-color:#fff;animation:spin 1s linear infinite}
 .busy{flex-direction:column;gap:14px}.busy .progress{color:#fff;font-size:14px;max-width:80%;text-align:center;text-shadow:0 1px 2px rgba(0,0,0,.6)}
+.busy .elapsed{color:#fff;font-size:12px;opacity:.85;text-shadow:0 1px 2px rgba(0,0,0,.6)}.busy .b{background:#fff;display:none}.busy .b.on{display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:26px 10px}
 .verdict{border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13.5px}
@@ -131,26 +132,31 @@ p{margin:6px 0}
 <nav id="nav"></nav>
 <div id="toast"></div>
 <div class="sheet-bg" id="sheetBg"><div class="sheet" id="sheet"></div></div>
-<div class="busy" id="busy"><div class="spinner"></div><div class="progress" id="progress"></div></div>
+<div class="busy" id="busy"><div class="spinner"></div><div class="progress" id="progress"></div><div class="elapsed" id="busyTime"></div><button class="b ghost" id="busyHide" onclick="busyHide()">Arka planda sürsün</button></div>
 <script>
 "use strict";
 // ---- köprü ----------------------------------------------------------------
-var pending = {}, seq = 0, S = null, tab = "bugun", history_ = [];
+var pending = {}, seq = 0, S = null, tab = "bugun", history_ = [], visibleActs = 0;
 function bridge() { return window.Android || window.MockAndroid; }
 function act(action, payload, quiet) {
   return new Promise(function (resolve) {
     var id = "c" + (++seq);
-    pending[id] = resolve;
-    if (!quiet) busy(true);
+    pending[id] = {resolve: resolve, visible: !quiet};
+    if (!quiet) {
+      visibleActs++;
+      if (!document.getElementById("busy").classList.contains("show")) busy(true); // gizlenmiş olsa da yeniden göster
+      document.getElementById("progress").textContent = visibleActs > 1 ? "Sırada: önceki işlem bitince başlayacak…" : "";
+    }
     bridge().act(action, JSON.stringify(payload || {}), id);
   });
 }
 window.onActResult = function (id, res) {
-  busy(false);
   var r = pending[id]; delete pending[id];
+  if (r && r.visible && visibleActs > 0) visibleActs--;
+  if (!visibleActs) busy(false); // sıradaki görünür işlem sürüyorsa bekleme ekranı kalır
   if (res && res.message) toast(shortMessage(res.message), !res.ok);
   refresh();
-  if (r) r(res);
+  if (r) r.resolve(res);
 };
 window.refresh = function () {
   try { S = JSON.parse(bridge().state()); } catch (e) { toast("Durum okunamadı: " + e, true); return; }
@@ -265,9 +271,30 @@ function toast(msg, err) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function () { t.className = ""; }, err ? 6000 : 3500);
 }
+/** Bekleme ekranı: geçen süre görünür; uzun işlemde ekran kapatılabilir, sonuç bitince gelir. */
+var busyStart = 0, busyTimerId = null;
 function busy(on) {
   document.getElementById("busy").className = "busy" + (on ? " show" : "");
-  if (!on) document.getElementById("progress").textContent = "";
+  clearInterval(busyTimerId);
+  busyTimerId = null;
+  document.getElementById("busyTime").textContent = "";
+  document.getElementById("busyHide").className = "b ghost";
+  if (on) {
+    busyStart = Date.now();
+    busyTimerId = setInterval(busyClock, 1000);
+  } else document.getElementById("progress").textContent = "";
+}
+function busyClock() {
+  var s = Math.floor((Date.now() - busyStart) / 1000);
+  document.getElementById("busyTime").textContent = s + " sn";
+  if (s >= BUSY_HIDE_S) document.getElementById("busyHide").className = "b ghost on";
+}
+var BUSY_HIDE_S = 10;
+function busyHide() {
+  clearInterval(busyTimerId);
+  busyTimerId = null;
+  document.getElementById("busy").className = "busy";
+  toast("İşlem arka planda sürüyor; bitince sonuç burada görünecek.");
 }
 window.onProgress = function (text) { var p = document.getElementById("progress"); if (p) p.textContent = text; };
 function openSheet(html) {

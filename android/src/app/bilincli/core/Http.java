@@ -95,6 +95,14 @@ public interface Http {
             return 2;
         }
 
+        /**
+         * Bir yanıtın indirilmesi en fazla bu kadar sürebilir (ms). Okuma zaman aşımı yalnızca tamamen
+         * duran bağlantıyı yakalar; çok yavaş akan bağlantı (ör. uzak VPN) işlemi dakikalarca bekletmesin.
+         */
+        protected long maxTransferMs(URL u) {
+            return 120_000;
+        }
+
         /** Bu deneme başarısız olursa hata türü ne olursa olsun sonraki yol denensin mi (ör. VPN dışı ağ). */
         protected boolean alwaysRetry(URL u, int attempt) {
             return false;
@@ -139,10 +147,11 @@ public interface Http {
                 if (headers != null) for (Map.Entry<String, String> h : headers.entrySet()) {
                     c.setRequestProperty(h.getKey(), h.getValue());
                 }
+                long limit = maxTransferMs(u), deadline = System.currentTimeMillis() + limit;
                 int status = c.getResponseCode();
                 InputStream in = status >= 400 ? c.getErrorStream() : c.getInputStream();
                 if (in != null && "gzip".equalsIgnoreCase(c.getContentEncoding())) in = new GZIPInputStream(in);
-                String body = in == null ? "" : readAll(in);
+                String body = in == null ? "" : readAll(in, deadline, limit);
                 Map<String, String> hs = new LinkedHashMap<>();
                 for (Map.Entry<String, java.util.List<String>> e : c.getHeaderFields().entrySet()) {
                     if (e.getKey() != null && !e.getValue().isEmpty()) {
@@ -159,12 +168,17 @@ public interface Http {
             }
         }
 
-        private static String readAll(InputStream in) throws IOException {
+        static String readAll(InputStream in, long deadline, long limit) throws IOException {
             try (InputStream s = in) {
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 byte[] buf = new byte[16384];
                 int n;
-                while ((n = s.read(buf)) > 0) out.write(buf, 0, n);
+                while ((n = s.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                    if (System.currentTimeMillis() > deadline) {
+                        throw new IOException("yanıt " + limit / 1000 + " sn içinde inmedi (bağlantı çok yavaş; VPN sunucusunu değiştirmeyi dene)");
+                    }
+                }
                 return new String(out.toByteArray(), StandardCharsets.UTF_8);
             }
         }

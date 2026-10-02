@@ -31,6 +31,11 @@ final class AndroidHttp extends Http.UrlHttp {
     }
 
     @Override
+    protected long maxTransferMs(URL u) {
+        return direct(u) ? 180_000 : 90_000; // Nesine bülteni birkaç MB olabilir
+    }
+
+    @Override
     protected boolean alwaysRetry(URL u, int attempt) {
         return direct(u) && attempt == 0 && usedDirect;
     }

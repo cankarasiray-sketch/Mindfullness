@@ -95,6 +95,13 @@ public final class Bridge {
             @Override
             public void run() {
                 Map<String, Object> result = new LinkedHashMap<>();
+                Repo uiRepo = repo();
+                uiRepo.beginUi(new Daily.Progress() { // arka plandaki adımlar da bekleme ekranına yazılır
+                    @Override
+                    public void step(String text) {
+                        progress(text);
+                    }
+                });
                 try {
                     Map<String, Object> p = payload == null || payload.isEmpty()
                             ? new LinkedHashMap<String, Object>() : Json.parseObject(payload);
@@ -109,6 +116,8 @@ public final class Bridge {
                 } catch (Throwable e) { // ör. bellek: arayüz hiçbir durumda dönen simgede kalmasın
                     result.put("ok", false);
                     result.put("message", "Beklenmeyen hata: " + e);
+                } finally {
+                    uiRepo.endUi();
                 }
                 final String js = "window.onActResult(" + Json.write(callbackId) + "," + Json.write(result) + ")";
                 activity.runOnUiThread(new Runnable() {
@@ -187,6 +196,7 @@ public final class Bridge {
                 requireReal(repo);
                 Daily.Intraday r;
                 repo.lastSpent = 0;
+                progress("Tarama başlıyor…");
                 try {
                     r = repo.radarScan();
                 } catch (app.bilincli.core.Http.ProviderException e) {
@@ -201,6 +211,7 @@ public final class Bridge {
             case "recheck": {
                 requireReal(repo);
                 Map<String, Object> r;
+                progress("Kupon güncel oranlarla kontrol ediliyor…");
                 try {
                     r = repo.recheck(Json.lng(p, "coupon", -1));
                 } catch (app.bilincli.core.Http.ProviderException e) {
@@ -255,6 +266,7 @@ public final class Bridge {
             case "settle": {
                 requireReal(repo);
                 List<String> msgs;
+                progress("Biten maçların sonuçları kontrol ediliyor…");
                 synchronized (Repo.LOCK) {
                     msgs = Daily.settle(repo.real(), repo.live(), repo.forecasts, repo.virtual);
                 }
@@ -264,6 +276,7 @@ public final class Bridge {
                 requireReal(repo);
                 Daily.Result r;
                 String credit;
+                progress("Kupon için veriler hazırlanıyor…");
                 synchronized (Repo.LOCK) {
                     repo.probeActive();
                     Daily.LiveSources src = repo.live();
@@ -329,7 +342,7 @@ public final class Bridge {
             case "probe": {
                 requireReal(repo);
                 synchronized (Repo.LOCK) {
-                    repo.probeActive();
+                    repo.probeActive(true);
                 }
                 Map<String, Integer> active = repo.active();
                 if (active == null) throw new IllegalStateException("Maç listesi alınamadı (bağlantı ya da anahtar).");
@@ -470,7 +483,7 @@ public final class Bridge {
         StringBuilder b = new StringBuilder();
         repo.refreshInternationals(new Daily.LiveSources(new AndroidHttp(activity), repo.real().settings()), true);
         progress("Bugün oynayan ligler belirleniyor (ücretsiz)…");
-        repo.probeActive();
+        repo.probeActive(true);
         Daily.LiveSources src = repo.live();
         src.progress = new Daily.Progress() {
             @Override

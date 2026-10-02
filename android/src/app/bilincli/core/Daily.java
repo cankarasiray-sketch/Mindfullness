@@ -241,6 +241,7 @@ public final class Daily {
 
         @Override
         public Map<String, ScoreResult> scores(Set<String> sportKeys) throws Http.ProviderException {
+            step("Maç sonuçları alınıyor (" + sportKeys.size() + " lig)…");
             return api().fetchScores(sportKeys);
         }
     }
