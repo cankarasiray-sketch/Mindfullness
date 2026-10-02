@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.4.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.5.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,28 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Tutma olasılığı şartı, MBS, ek basketbol ligleri (2.5)
+
+- **Maç başına en az tutma olasılığı** (Ayarlar → Strateji, varsayılan %40): adil olasılığı bundan
+  düşük seçim avantajlı olsa da kupona girmez; "Değerli oranlar"da "tutma %32, seyrek" rozetiyle
+  görünür. Kupon için en az tutma olasılığının varsayılanı %20'den %30'a çıktı (eski varsayılanı
+  kullananlar taşınır, kendi eşiğini girenlerinki korunur).
+- Aynı şart promosyon kontrolünde ("avantajlı ama tutma olasılığı düşük"), Zirve Oran'da ("avantajlı
+  ama seyrek tutar", bildirilmez), en yakın seçimde (önce şartı sağlayanlar) ve kampanya
+  hesaplayıcıda (en az tutma olasılığı alanı) uygulanır.
+- **MBS:** adil oran tablosu ve Zirve oranları seçimin MBS'sini taşır. Kampanya hesaplayıcı tek
+  maçlık kampanyada MBS'si 1'den büyük maçları listelemez (istenirse gösterilir); Zirve'de değerli ama
+  MBS'si 1'den büyük oran "tek oynanamaz" olarak işaretlenir ve bildirilmez. En yakın seçim metninde
+  MBS 1'den büyükse yazılır.
+- **Kampanya hesaplayıcı:** her satırda tutma olasılığı; oynanacak tutar ile sağdaki değer (bedava
+  bahsin gerçek değeri ya da beklenen kâr/zarar) ayrı yazılır; "en sık tutan" sıralaması (değeri en
+  iyinin en az yarısı olanlar arasından); yalnızca gerçekten böyle bir kampanya varsa geçerli olduğu
+  açıkça yazılır.
+- **Ek basketbol ligleri:** oran kaynağının ücretsiz lig listesinden EuroLeague ve NBA dışındaki aktif
+  basketbol ligleri (ör. WNBA, Avustralya NBL; ABD üniversite ligleri hariç) Ayarlar → Basketbol'da
+  seçilebilir; liste günde bir kez güncellenir. iddaa'daki diğer ligler (İspanya, İtalya, Almanya,
+  VTB, ABA...) kaynakta yoksa Pinnacle fiyatı olmadan değerlendirilemez.
 
 ## Kampanya hesaplayıcı (2.4)
 
@@ -466,7 +488,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.4.0.apk
+./build.sh          # testler + build/BilincliKupon-2.5.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

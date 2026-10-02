@@ -45,6 +45,8 @@ public final class Zirve {
         public final double val, tval;
         /** Aynı pazarda "MS X" var (basketbolda normal süre üç seçenekli maç sonucu; iki seçenekliyle karıştırılmaz). */
         public final boolean threeWay;
+        /** iddaa'nın en az maç sayısı (MBS): 1 değilse tek maç oynanamaz, kombine gerekir. */
+        public int mbs = 1;
 
         /** Zirve oranı normal orandan yüksek. */
         public boolean boosted() {
@@ -127,9 +129,11 @@ public final class Zirve {
             for (Map<String, Object> om : odds) {
                 double val = number(om.get("val")), tval = number(om.get("tval"));
                 if (!(val > 1)) continue; // kapalı oran ("0")
-                out.add(new Offer(Json.str(om, "id"), Json.str(e, "id"), home, away, Json.str(e, "lgn"), kickoff,
+                Offer offer = new Offer(Json.str(om, "id"), Json.str(e, "id"), home, away, Json.str(e, "lgn"), kickoff,
                         clean(Json.str(om, "n")), clean(Json.str(om, "mrn")), Json.str(om, "sov"), val, tval,
-                        threeWay.contains(Json.str(om, "mrId"))));
+                        threeWay.contains(Json.str(om, "mrId")));
+                offer.mbs = (int) Math.max(1, Json.lng(om, "mbs", Json.lng(e, "mbs", 1))); // oranın MBS'si, yoksa maçın
+                out.add(offer);
             }
         }
         return out;
@@ -346,6 +350,7 @@ public final class Zirve {
      */
     public static List<Models.BookEvent> books(List<Offer> all, Set<String> events, Set<String> basketball) {
         Map<String, Map<String, Map<String, Double>>> odds = new LinkedHashMap<>();
+        Map<String, Map<String, Integer>> mbs = new LinkedHashMap<>();
         Map<String, Offer> first = new LinkedHashMap<>();
         for (Offer o : all) {
             if (!events.contains(o.event)) continue;
@@ -358,12 +363,16 @@ public final class Zirve {
             Map<String, Double> m = odds.get(o.event).get(mo[0]);
             if (m == null) odds.get(o.event).put(mo[0], m = new LinkedHashMap<>());
             m.put(mo[1], o.val);
+            Map<String, Integer> mm = mbs.get(o.event);
+            if (mm == null) mbs.put(o.event, mm = new LinkedHashMap<>());
+            mm.put(mo[0], Math.max(o.mbs, mm.containsKey(mo[0]) ? mm.get(mo[0]) : 1));
         }
         List<Models.BookEvent> out = new ArrayList<>();
         for (Map.Entry<String, Offer> e : first.entrySet()) {
             Offer o = e.getValue();
-            Models.BookEvent b = new Models.BookEvent("z" + o.event, o.home, o.away, o.kickoff, o.league, 1, odds.get(e.getKey()), null);
+            Models.BookEvent b = new Models.BookEvent("z" + o.event, o.home, o.away, o.kickoff, o.league, o.mbs, odds.get(e.getKey()), null);
             b.sport = basketball.contains(o.event) ? Models.BASKETBALL : Models.FOOTBALL;
+            if (mbs.get(e.getKey()) != null) b.marketMbs.putAll(mbs.get(e.getKey())); // pazar başına MBS
             out.add(b);
         }
         return out;
@@ -468,6 +477,7 @@ public final class Zirve {
             r.put("marketName", o.marketName);
             r.put("val", o.val);
             r.put("tval", o.tval);
+            r.put("mbs", (long) o.mbs);
             r.put("boost", o.tval / o.val - 1);
             Map<String, Object> row = findRow(o, fairs == null ? new ArrayList<Object>() : fairs);
             String status;
@@ -508,8 +518,9 @@ public final class Zirve {
                         status = "degisti";
                     } else {
                         evaluated++;
-                        status = c.play ? "oyna" : "oynama";
-                        if (c.play) {
+                        // değerli ama MBS'si 1'den büyük: tek oynanamaz, eklenecek her maç marjla avantajı siler
+                        status = c.play && o.mbs > 1 ? "mbs" : c.play ? "oyna" : c.lowProb && c.ev >= cfg.minLegEv ? "dusuk" : "oynama";
+                        if ("oyna".equals(status)) {
                             play++;
                             r.put("stake", c.stake);
                             r.put("fraction", c.fraction);
@@ -568,7 +579,7 @@ public final class Zirve {
             if (!"oynama".equals(Json.str(r, "status")) || r.get("ev") == null || r.get("p") == null) continue;
             double ev = Json.dbl(r, "ev", -9), odds = Json.dbl(r, "tval", 0);
             if (bestAny == null || ev > Json.dbl(bestAny, "ev", -9)) bestAny = r;
-            if (odds < cfg.minLegOdds || odds > cfg.maxLegOdds) continue;
+            if (odds < cfg.minLegOdds || odds > cfg.maxLegOdds || Json.dbl(r, "p", 0) < cfg.minLegProb) continue;
             if (best == null || ev > Json.dbl(best, "ev", -9)) best = r;
         }
         Map<String, Object> r = best != null ? best : bestAny;
@@ -585,7 +596,7 @@ public final class Zirve {
                 + " (adil " + Fmt.odds(1 / p) + ", " + Fmt.pct(ev, true) + ")");
         Map<String, Object> st = new LinkedHashMap<>();
         st.put("en_yakin_ev", ev);
-        st.put("en_yakin_aralikta", odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds);
+        st.put("en_yakin_aralikta", odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds && p >= cfg.minLegProb);
         double[] t = Engine.targetOdds(p, Json.str(r, "m"), cfg);
         if (t != null) {
             st.put("en_yakin_hedef", t[0]);
@@ -639,6 +650,8 @@ public final class Zirve {
         switch (status == null ? "" : status) {
             case "oyna": return "OYNA";
             case "oynama": return "değer yok";
+            case "mbs": return "değerli ama MBS 1'den büyük, tek oynanamaz";
+            case "dusuk": return "avantajlı ama tutma olasılığı düşük";
             case "degisti": return "iddaa oranı taramadan beri değişmiş; önce \"Şimdi tara\"";
             case "secim": return "bu seçimin adil oranı yok (pazar taranmadı)";
             case "pazar": return "uygulamanın bilmediği pazar";
@@ -686,8 +699,9 @@ public final class Zirve {
 
     private static int rank(String status) {
         if ("oyna".equals(status)) return 0;
-        if ("oynama".equals(status)) return 1;
-        if ("degisti".equals(status)) return 2;
-        return 3;
+        if ("mbs".equals(status) || "dusuk".equals(status)) return 1;
+        if ("oynama".equals(status)) return 2;
+        if ("degisti".equals(status)) return 3;
+        return 4;
     }
 }

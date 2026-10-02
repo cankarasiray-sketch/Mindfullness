@@ -51,7 +51,7 @@ public class PromoTest {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("en_yakin_ev", 0.05);
         out.put("en_yakin_aralikta", false);
-        assertEquals("0 TL — oranı ayarlardaki oran aralığının dışında, oynanmaz.", Texts.nearStake(out));
+        assertEquals("0 TL — oranı ayarlardaki oran aralığının ya da tutma olasılığı şartının dışında, oynanmaz.", Texts.nearStake(out));
         // kupon gününde yok
         Engine.Decision value = Engine.decide(Collections.singletonList(FeatureTest.book(1, 2.30, 1, 8)),
                 Collections.singletonList(FeatureTest.sharp(1, 0.50, 8)), NOW, new Settings());

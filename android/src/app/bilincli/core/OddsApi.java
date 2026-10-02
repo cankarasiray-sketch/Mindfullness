@@ -404,6 +404,16 @@ public final class OddsApi {
     static final String[] INTERNATIONAL = {"world_cup", "nations_league", "euro_qual", "european_championship",
         "friendl", "africa_cup", "copa_america", "gold_cup", "asian_cup", "international"};
 
+    /**
+     * Seçilebilir listede olmayan aktif basketbol ligi (ör. WNBA, Avustralya NBL): iddaa'da da varsa
+     * kullanıcı ekleyebilir; kadın ligleri de dahildir (WNBA iddaa'da oynanıyor).
+     */
+    public static boolean isExtraBasketball(String key) {
+        if (key == null || !key.startsWith("basketball_")) return false;
+        for (String[] l : Settings.KNOWN_LEAGUES) if (l[0].equals(key)) return false;
+        return !key.contains("ncaa"); // ABD üniversite ligleri iddaa'da nadir; liste kalabalıklaşmasın
+    }
+
     public static boolean isInternational(String key) {
         if (key == null || !key.startsWith("soccer_") || key.contains("women")) return false;
         for (String p : INTERNATIONAL) if (key.contains(p)) return true;
@@ -411,14 +421,15 @@ public final class OddsApi {
     }
 
     /**
-     * Şu an aktif futbol turnuvaları {kod, ad} (/v4/sports, kota harcamaz). Şampiyonluk
+     * Şu an aktif futbol ve basketbol ligleri {kod, ad} (/v4/sports, kota harcamaz). Şampiyonluk
      * (outright) pazarları hariç.
      */
     public List<String[]> fetchSports() throws Http.ProviderException {
         List<String[]> out = new ArrayList<>();
         for (Object o : Json.arr(get("/sports", new LinkedHashMap<String, String>()))) {
             Map<String, Object> s = Json.obj(o);
-            if (s == null || !"Soccer".equalsIgnoreCase(Json.str(s, "group")) || !Json.bool(s, "active", false)
+            String group = s == null ? null : Json.str(s, "group");
+            if (s == null || !("Soccer".equalsIgnoreCase(group) || "Basketball".equalsIgnoreCase(group)) || !Json.bool(s, "active", false)
                     || Json.bool(s, "has_outrights", false) || Json.str(s, "key") == null) continue;
             out.add(new String[] {Json.str(s, "key"), Json.str(s, "title") == null ? Json.str(s, "key") : Json.str(s, "title")});
         }

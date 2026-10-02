@@ -15,8 +15,8 @@ TOOLS="$ROOT/.tools"
 OUT="$ROOT/build"
 MIN_SDK=26
 TARGET_SDK=34
-VERSION_CODE=47
-VERSION_NAME=2.4.0
+VERSION_CODE=48
+VERSION_NAME=2.5.0
 MAVEN=https://repo1.maven.org/maven2
 
 mkdir -p "$TOOLS" "$OUT"
@@ -73,7 +73,7 @@ rm -rf "$OUT/test" && mkdir -p "$OUT/test"
 JAVA_OPTS_QUIET javac --release 8 -nowarn -encoding UTF-8 -cp "$TOOLS/junit.jar" -d "$OUT/test" \
     src/app/bilincli/core/*.java test/app/bilincli/core/*.java
 java -cp "$OUT/test:$TOOLS/junit.jar:$TOOLS/hamcrest.jar" -Dparity=test/fixtures/parity.json \
-    org.junit.runner.JUnitCore app.bilincli.core.ParityTest app.bilincli.core.CoreTest app.bilincli.core.FeatureTest app.bilincli.core.RadarTest app.bilincli.core.MarketsTest app.bilincli.core.BankrollTest app.bilincli.core.ProfitTest app.bilincli.core.AccuracyTest app.bilincli.core.BasketballTest app.bilincli.core.KeysTest app.bilincli.core.BasketTotalsTest app.bilincli.core.LineupTest app.bilincli.core.PromoTest app.bilincli.core.ZirveTest app.bilincli.core.VirtualTest 2>&1 \
+    org.junit.runner.JUnitCore app.bilincli.core.ParityTest app.bilincli.core.CoreTest app.bilincli.core.FeatureTest app.bilincli.core.RadarTest app.bilincli.core.MarketsTest app.bilincli.core.BankrollTest app.bilincli.core.ProfitTest app.bilincli.core.AccuracyTest app.bilincli.core.BasketballTest app.bilincli.core.KeysTest app.bilincli.core.BasketTotalsTest app.bilincli.core.LineupTest app.bilincli.core.PromoTest app.bilincli.core.ZirveTest app.bilincli.core.VirtualTest app.bilincli.core.ProbabilityTest 2>&1 \
     | grep -v "Picked up JAVA_TOOL_OPTIONS" | tee "$OUT/test.log" | tail -3
 grep -q "^OK (" "$OUT/test.log" || { echo "TESTLER BAŞARISIZ" >&2; exit 1; }
 

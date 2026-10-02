@@ -544,7 +544,7 @@ function promoResults() {
       + (r.code ? "kod " + esc(r.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(r.home) + " – " + esc(r.away) + "</div><div>"
       + r.sel.map(function (x, j) {
         return '<button class="chip promo-sel" onclick="promoSheet(' + i + "," + j + ')">' + esc(x.label) + ' <span class="small muted">adil ' + odds(1 / x.p)
-          + " · iddaa " + odds(x.i) + "</span></button>";
+          + " · iddaa " + odds(x.i) + (x.mbs > 1 ? " · MBS " + x.mbs : "") + "</span></button>";
       }).join(" ") + "</div></div>";
   }).join("");
 }
@@ -563,10 +563,10 @@ function promoSheet(i, j) {
 function promoEval(p, market, o) {
   var st = S.settings, fam = String(market).split("@")[0], seg = S.edge && (S.edge[fam] || S.edge["*"]);
   var f = st.edgeGuard && seg && seg.factor != null ? seg.factor : 1;
-  var q = f * p + (1 - f) / o, ev = q * o - 1, play = ev >= st.minLegEv && o > 1;
+  var q = f * p + (1 - f) / o, ev = q * o - 1, lowProb = p < (st.minLegProb || 0), play = ev >= st.minLegEv && o > 1 && !lowProb;
   var frac = play ? Math.min(st.kellyMultiplier * Math.max(0, ev / (o - 1)), st.maxStakeFraction) : 0;
   var stake = S.stats.balance > 0 ? Math.floor(S.stats.balance * frac / 1000) * 1000 : 0;
-  return {ev: ev, play: play, fraction: frac, stake: stake};
+  return {ev: ev, play: play, fraction: frac, stake: stake, lowProb: lowProb};
 }
 function promoLive(i, j) {
   var r = promoHits[i], x = r.sel[j], el = document.getElementById("promoRes");
@@ -575,7 +575,9 @@ function promoLive(i, j) {
   if (!(o > 1)) { el.innerHTML = '<p class="small muted">Oranı yazınca sonuç burada görünür.</p>'; return; }
   var e = promoEval(x.p, x.m, o);
   var html = '<p class="small">Kampanya oranı ' + odds(o) + " · adil " + odds(1 / x.p) + ' · avantaj <b class="' + cls(e.ev) + '">' + pct(e.ev, true) + "</b></p>";
-  if (!e.play) {
+  if (!e.play && e.lowProb && e.ev >= S.settings.minLegEv) {
+    html += "<p><b>Oynama:</b> avantajlı ama tutma olasılığı düşük (" + pct(x.p) + "; ayar en az " + pct(S.settings.minLegProb) + ").</p>";
+  } else if (!e.play) {
     html += "<p><b>Oynama:</b> kampanya oranı adil oranı yeterince geçmiyor (eşik " + pct(S.settings.minLegEv, true) + ").</p>";
   } else {
     html += "<p><b>Oyna:</b> önerilen tutar " + (e.stake ? tl(e.stake) : "kasa boş") + " (kasanın " + pct(e.fraction) + "'ü). Kampanyanın en yüksek bahis sınırı varsa onu aşma."
@@ -591,7 +593,10 @@ function promoPlay(i, j) {
 }
 // ---- Kampanya hesaplayıcı ------------------------------------------------------
 // Tek seçimli kampanyaların gerçek değeri, son taramanın adil oranlarıyla (kredi harcamaz).
-var CAMP = {type: "freebet", amount: "100", pct: "25", cap: "", refund: "nakit", boost: "10", lead: "2", minOdds: "1,50", returnStake: false};
+var CAMP = {type: "freebet", amount: "100", pct: "25", cap: "", refund: "nakit", boost: "10", lead: "2", minOdds: "1,50", returnStake: false,
+  sort: "value", combos: false, minProb: null};
+/** Hesaplayıcının en az tutma olasılığı: yazılmadıysa ayardaki maç başına şart. */
+function campMinProb() { return CAMP.minProb != null && String(CAMP.minProb).trim() !== "" ? numIn(CAMP.minProb, 0) / 100 : (S.settings.minLegProb || 0); }
 var CAMP_TYPES = [["freebet", "Bedava bahis"], ["cashback", "Kayıp iadesi"], ["boost", "Kazanç artışı"], ["early", "Erken ödeme"]];
 function numIn(v, def) { var x = parseFloat(String(v == null ? "" : v).trim().replace(",", ".")); return isFinite(x) ? x : def; }
 /** Bedava bahsin bir seçimdeki değeri (TL başına): tutar geri ödenmezse p·(o−1), ödenirse p·o. */
@@ -661,13 +666,15 @@ function earlyUplift(row, side, x) {
 var earlyCache = {};
 /** Kampanyaya göre en değerli 5 seçim ve özet (değerler kuruş). */
 function campResults() {
-  var c = CAMP, now = Date.parse(S.now), minOdds = numIn(c.minOdds, 1), amount = numIn(c.amount, 0) * 100;
+  var c = CAMP, now = Date.parse(S.now), minOdds = numIn(c.minOdds, 1), amount = numIn(c.amount, 0) * 100, minProb = campMinProb();
   var rows = ((S.radar && S.radar.fairs) || []).filter(function (r) { return Date.parse(r.kickoff) > now; }), out = [];
   var bestFree = 0; // iade bedava bahis olarak gelirse 1 TL'sinin nakit karşılığı
   rows.forEach(function (r) { r.sel.forEach(function (x) { if (x.i >= minOdds) bestFree = Math.max(bestFree, freebetRate(x.p, x.i, false)); }); });
   rows.forEach(function (r) {
     r.sel.forEach(function (x) {
       if (!(x.i >= minOdds) || !(x.p > 0)) return;
+      if ((x.mbs || 1) > 1 && !c.combos) return; // tek maçlık kampanya: MBS'si 1'den büyük maç tek oynanamaz
+      if (x.p < minProb) return; // seyrek tutan seçim önerilmez
       var v = null, ev = null, odds = x.i, note = "";
       if (c.type === "freebet") {
         v = amount * freebetRate(x.p, x.i, c.returnStake);
@@ -691,13 +698,19 @@ function campResults() {
     });
   });
   out.sort(function (a, b) { return (b.v - a.v) || ((b.ev || 0) - (a.ev || 0)); });
+  if (c.sort === "prob" && out.length) {
+    // en sık tutanlar: değeri en iyinin en az yarısı olanlar arasından tutma olasılığına göre
+    var bestV = out[0].v;
+    out = out.filter(function (e) { return bestV <= 0 ? e.v >= bestV * 1.5 : e.v >= bestV * 0.5; });
+    out.sort(function (a, b) { return b.x.p - a.x.p; });
+  }
   return out.slice(0, 5);
 }
 function campResultHtml() {
   var c = CAMP, res = campResults(), amount = numIn(c.amount, 0);
-  if (!res.length) return '<p class="small muted">Uygun seçim yok: son taramanın adil oranları gerekir (önce "Şimdi tara") ya da en düşük oranı küçült.'
+  if (!res.length) return '<p class="small muted">Uygun seçim yok: son taramanın adil oranları gerekir (önce "Şimdi tara") ya da en düşük oranı / en az tutma olasılığını küçült.'
     + (c.type === "early" ? " Erken ödeme için maçta MS ve 2,5 Alt/Üst adil oranı olmalı." : "") + "</p>";
-  var top = res[0], head;
+  var top = c.sort === "prob" ? res.reduce(function (a, e) { return e.v > a.v ? e : a; }, res[0]) : res[0], head;
   if (c.type === "freebet") {
     head = "Bu bedava bahsin gerçek değeri ≈ <b class=\"pos\">" + tl(top.v) + "</b> (" + pct(amount > 0 ? top.v / (amount * 100) : 0) + "). Bedava bahis zaten kârlıdır; en değerli seçimi oyna.";
   } else if (top.v > 0) {
@@ -705,12 +718,16 @@ function campResultHtml() {
   } else {
     head = "<b>Oynama:</b> bu şartla en iyi seçimde bile beklenen sonuç <b class=\"neg\">" + tl(top.v) + "</b> (" + pct(top.ev, true) + "); kampanya marjı kapatmıyor.";
   }
-  return '<p class="small camp-head">' + head + "</p>" + res.map(function (e) {
+  var stake = c.type === "freebet" ? "Oynanacak tutar: " + tl(amount * 100) + " bedava bahis (kendi paran değil)."
+    : "Oynanacak tutar: " + tl(amount * 100) + " (yazdığın bahis tutarı).";
+  return '<p class="small camp-head">' + head + "</p><p class=\"small muted camp-stake\">" + stake
+    + " Sağdaki rakam oynanacak tutar değil, " + (c.type === "freebet" ? "kampanyanın TL cinsinden gerçek değeri" : "beklenen kâr/zarar") + "dır. "
+    + "Tutma olasılığı düşük seçimler daha değerli çıkabilir; daha sık tutsun istersen \"en sık tutan\" sıralamasını seç.</p>" + res.map(function (e) {
     return '<div class="vrow camp-row"><div class="l1"><span>' + esc(dm(e.r.kickoff)) + " " + esc(hm(e.r.kickoff)) + (e.r.league ? " · " + esc(e.r.league) : "") + "</span><span>"
-      + (e.r.code ? "kod " + esc(e.r.code) : "") + '</span></div><div class="l2"><span>' + esc(e.r.home) + " – " + esc(e.r.away) + ' <span class="chip">' + esc(e.x.label) + "</span> "
+      + (e.r.code ? "kod " + esc(e.r.code) : "") + '</span></div><div class="l2"><span>' + esc(e.r.home) + " – " + esc(e.r.away) + ' <span class="chip">' + esc(e.x.label) + "</span>" + mbsChip(e.x.mbs) + " "
       + '<span class="odds">' + odds(e.odds) + "</span>" + (e.odds !== e.x.i ? ' <span class="small muted"><s>' + odds(e.x.i) + "</s></span>" : "")
-      + ' <span class="small muted">adil ' + odds(1 / e.x.p) + (e.note ? " · " + esc(e.note) : "") + "</span></span>"
-      + '<span class="' + cls(e.v) + '"><b>' + (c.type === "freebet" ? tl(e.v) : pct(e.ev, true)) + "</b></span></div></div>";
+      + ' <span class="small muted">adil ' + odds(1 / e.x.p) + " · tutma %" + num(e.x.p * 100, 0) + (e.note ? " · " + esc(e.note) : "") + "</span></span>"
+      + '<span class="' + cls(e.v) + '"><b>' + (c.type === "freebet" ? "değer " + tl(e.v) : pct(e.ev, true) + " (" + tl(e.v) + ")") + "</b></span></div></div>";
   }).join("");
 }
 function campInput(id, label, key, hint) {
@@ -733,7 +750,12 @@ function campFields() {
     html += campInput("campAmount", "Bahis tutarı (TL)", "amount") + campInput("campLead", "Kaç fark öne geçince kazanmış sayılır", "lead",
       "Maç sonucu (1 ya da 2) bahsi; takımın maç içinde bu kadar fark öne geçmesi yeterli. Artış Pinnacle'ın MS ve 2,5 Üst adil oranlarından kurulan gol modeliyle tahmin edilir; kesin değil.");
   }
-  return html + campInput("campMin", "Kampanyanın en düşük oranı", "minOdds");
+  if (c.minProb == null) c.minProb = String(Math.round((S.settings.minLegProb || 0) * 100));
+  return html + campInput("campMin", "Kampanyanın en düşük oranı", "minOdds")
+    + campInput("campProb", "En az tutma olasılığı (%)", "minProb", "Bundan seyrek tutan seçimler listelenmez (varsayılan: Ayarlar'daki maç başına şart).")
+    + '<label>Sıralama</label><select id="campSort" onchange="CAMP.sort=this.value;campRefresh()">'
+    + [["value", "En değerli"], ["prob", "En sık tutan (değeri en iyinin en az yarısı)"]].map(function (o) { return '<option value="' + o[0] + '"' + (c.sort === o[0] ? " selected" : "") + ">" + o[1] + "</option>"; }).join("") + "</select>"
+    + '<label class="check"><input type="checkbox" id="campCombos"' + (c.combos ? " checked" : "") + ' onchange="CAMP.combos=this.checked;campRefresh()">MBS\'si 1\'den büyük maçları da göster (kampanya kombineye izin veriyorsa)</label>';
 }
 function campRefresh() {
   var el = document.getElementById("campRes");
@@ -747,13 +769,16 @@ function campType(t) {
 function campaignCard() {
   if (S.demo) return "";
   return '<div class="card" id="campCard"><h2>Kampanya hesaplayıcı</h2><p class="small muted">Bedava bahis, kayıp iadesi, kazanç artışı ya da erken ödeme kampanyasının gerçek değeri: '
-    + "son taramanın adil oranlarıyla en değerli seçim ve beklenen kazanç (kredi harcamaz). Yalnızca tek seçimli kampanyalar; kombine şartı ve çevrim şartı hesaba katılmaz.</p>"
+    + "son taramanın adil oranlarıyla en değerli seçim ve beklenen kazanç (kredi harcamaz). <b>Yalnızca Bilyoner'de gerçekten böyle bir kampanyan varsa</b> geçerlidir; "
+    + "kampanya yoksa bu seçimler normal oranla zararlıdır, oynama. Tek maçlık kampanyalar için MBS'si 1 olan maçlar listelenir; çevrim şartı hesaba katılmaz.</p>"
     + '<select id="campType" onchange="campType(this.value)">' + CAMP_TYPES.map(function (t) { return '<option value="' + t[0] + '"' + (CAMP.type === t[0] ? " selected" : "") + ">" + t[1] + "</option>"; }).join("") + "</select>"
     + '<div id="campBody">' + campFields() + '<div id="campRes">' + campResultHtml() + "</div></div></div>";
 }
 
 // ---- Zirve Oran (Bilyoner) ------------------------------------------------------
-var ZIRVE_STATUS = {oyna: "OYNA", oynama: "değer yok", degisti: "oran değişmiş, tara", secim: "adil oran yok", pazar: "desteklenmeyen pazar", mac: "adil oran yok"};
+var ZIRVE_STATUS = {oyna: "OYNA", oynama: "değer yok", degisti: "oran değişmiş, tara", secim: "adil oran yok", pazar: "desteklenmeyen pazar", mac: "adil oran yok",
+  mbs: "değerli ama tek oynanamaz", dusuk: "avantajlı ama seyrek tutar"};
+function mbsChip(m) { return m > 1 ? ' <span class="st">MBS ' + m + "</span>" : ""; }
 var zirveRows = [];
 function zirveRow(i, plain) {
   var r = zirveRows[i], st = r.status;
@@ -761,8 +786,8 @@ function zirveRow(i, plain) {
     return '<div class="l2"><span><span class="chip">' + esc(r.label || r.name) + '</span> <span class="odds">' + odds(r.tval)
       + '</span> <span class="small muted"><s>' + odds(r.val) + "</s></span></span></div>";
   }
-  return '<div class="l2"><span><span class="chip' + (st === "oyna" ? " main" : "") + '">' + esc(r.label || r.name) + '</span> <span class="odds">' + odds(r.tval)
-    + '</span> <span class="small muted"><s>' + odds(r.val) + "</s>" + (r.p ? " · adil " + odds(1 / r.p) : "") + "</span></span><span>"
+  return '<div class="l2"><span><span class="chip' + (st === "oyna" ? " main" : "") + '">' + esc(r.label || r.name) + "</span>" + mbsChip(r.mbs) + ' <span class="odds">' + odds(r.tval)
+    + '</span> <span class="small muted"><s>' + odds(r.val) + "</s>" + (r.p ? " · adil " + odds(1 / r.p) + " · tutma %" + num(r.p * 100, 0) : "") + "</span></span><span>"
     + (r.ev != null ? '<b class="' + cls(r.ev) + '">' + pct(r.ev, true) + "</b> " : "")
     + (st === "oyna" ? '<button class="b sm zirve-play" onclick="zirveSheet(' + i + ')">Oyna</button>' : '<span class="st">' + esc(ZIRVE_STATUS[st] || st) + "</span>")
     + "</span></div>";
@@ -843,6 +868,7 @@ function viewOpportunities() {
         + '<div class="l2"><span><span class="chip main">' + esc(label(v.market, v.outcome)) + '</span> <span class="odds">' + odds(v.odds) + "</span> "
         + '<span class="small muted">adil ' + odds(1 / v.fair) + "</span></span><span><b class=\"pos\">" + pct(v.ev, true) + "</b>"
         + (inCoupon[v.bookRef + "|" + v.outcome] ? ' <span class="st ok">kuponda</span>' : "")
+        + (v.lowProb ? ' <span class="st">tutma %' + num(v.fair * 100, 0) + ", seyrek</span>" : "")
         + (v.inRange ? "" : ' <span class="st">oran aralığı dışında</span>') + "</span></div></div>";
     }).join("") : '<p class="muted">Son taramada değer taşıyan seçim yok. Bu normaldir: iddaa çoğu maçta marjlıdır.</p>') + "</div>";
   html += '<div class="card" id="promoCard"><h2>Promosyon / özel oran kontrolü</h2><p class="small muted">Zirve Oran yukarıda kendiliğinden kontrol edilir. Başka bir kampanya oranı gördüğünde: maçı ara, seçimi seç, kampanya oranını gir. '
@@ -1057,7 +1083,7 @@ function money(kind) {
 // ---- Ayarlar ------------------------------------------------------------------
 var FIELDS = [
   ["minLegEv", "Her maçta en az avantaj (%)", true], ["minCouponEv", "Kuponun en az beklenen değeri (%)", true],
-  ["minWinProb", "En düşük tutma olasılığı (%)", true], ["minLegOdds", "En düşük maç oranı", false],
+  ["minWinProb", "Kupon için en az tutma olasılığı (%)", true], ["minLegProb", "Maç başına en az tutma olasılığı (%)", true], ["minLegOdds", "En düşük maç oranı", false],
   ["maxLegOdds", "En yüksek maç oranı", false], ["minCouponOdds", "En düşük kupon oranı", false],
   ["maxLegs", "Kupondaki en fazla maç", false], ["kellyMultiplier", "Kelly çarpanı", false],
   ["maxStakeFraction", "Kupon başına en fazla kasa (%)", true], ["minCouponAmount", "Asgari kupon tutarı (TL)", false],
@@ -1102,7 +1128,11 @@ function viewSettings() {
   var isBasket = function (l) { return l[0].indexOf("basketball_") === 0; };
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.filter(function (l) { return !isBasket(l); }).map(lgBox).join("")
     + '<p class="small muted">Seçili lig yalnızca maçı olduğu gün kredi harcar (tarama başına 1, Alt/Üst açıkken 2). Maç listesi sorgusu ücretsizdir.</p></div>';
-  html += '<div class="card" id="basketCard"><h2>Basketbol</h2>' + S.knownLeagues.filter(isBasket).map(lgBox).join("")
+  var extraBasket = (S.basketLeagues || []).filter(function (l) { return !S.knownLeagues.some(function (k) { return k[0] === l[0]; }); });
+  html += '<div class="card" id="basketCard"><h2>Basketbol</h2>' + S.knownLeagues.filter(isBasket).map(lgBox).join("") + extraBasket.map(lgBox).join("")
+    + '<p class="small muted basket-extra">' + (extraBasket.length ? "Oran kaynağında şu an aktif ek ligler de seçilebilir (" + extraBasket.length + "). " : "")
+    + "iddaa'daki diğer basketbol ligleri (ör. İspanya, İtalya, Almanya, VTB, ABA) oran kaynağında (The Odds API) yoksa Pinnacle fiyatı olmadan değerlendirilemez; "
+    + "liste günde bir kez ücretsiz güncellenir, kaynakta açılan lig burada kendiliğinden görünür.</p>"
     + '<p class="small muted">Maç sonucu (uzatmalar dahil, beraberlik yok) ve Pazarlar\'da Alt/Üst açıksa toplam sayı Alt/Üst (uzatmalar dahil). '
     + 'Tarama başına 1 kredi, Alt/Üst açıkken 2. Avantajlı seçimler futbolla aynı günün kuponlarına girer ("Basket MS 1", "Basket 161,5 Üst"). '
     + 'Alt/Üst\'te iddaa\'nın çizgisi Pinnacle\'ın ana çizgisinden en fazla 3 sayı farklıysa olasılık o çizgiye çevrilir; tam sayı çizgiler kullanılmaz. '

@@ -65,7 +65,7 @@ public final class Engine {
                             : EdgeCalibration.adjust(prob, odds, EdgeCalibration.ratio(cfg.edgeRatios, m.getKey()));
                     Candidate c = new Candidate(p.book, p.sharp, m.getKey(), o.getKey(), odds, used, prob);
                     all.add(c);
-                    if (odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds && c.ev() >= cfg.minLegEv) good.add(c);
+                    if (odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds && c.ev() >= cfg.minLegEv && prob >= cfg.minLegProb) good.add(c);
                 }
             }
         }
@@ -238,23 +238,28 @@ public final class Engine {
         Candidate best = null, bestAny = null;
         for (Candidate c : all) {
             if (bestAny == null || c.ev() > bestAny.ev()) bestAny = c;
-            if (c.odds < cfg.minLegOdds || c.odds > cfg.maxLegOdds) continue;
+            if (!playable(c, cfg)) continue;
             if (best == null || c.ev() > best.ev()) best = c;
         }
         Candidate c = best != null ? best : bestAny;
         if (c == null) return;
         stats.put("en_yakin", Fmt.localTime(c.book.kickoff.toString()) + " " + c.book.home + " – " + c.book.away + " · "
                 + Models.outcomeLabel(c.market, c.outcome) + " @ " + Fmt.odds(c.odds)
-                + " (adil " + Fmt.odds(1 / c.prob) + ", " + Fmt.pct(c.ev(), true) + ")");
+                + " (adil " + Fmt.odds(1 / c.prob) + ", " + Fmt.pct(c.ev(), true) + ")" + (c.mbs() > 1 ? " · MBS " + c.mbs() : ""));
         stats.put("en_yakin_ev", c.ev());
         stats.put("en_yakin_secim", selection(c.book.home, c.book.away, c.book.kickoff.toString(), c.sharp.sportKey, c.sharp.ref,
                 c.market, c.outcome, c.odds, c.rawProb)); // sanal takip için
-        stats.put("en_yakin_aralikta", c.odds >= cfg.minLegOdds && c.odds <= cfg.maxLegOdds);
+        stats.put("en_yakin_aralikta", playable(c, cfg));
         double[] t = targetOdds(c.rawProb, c.market, cfg);
         if (t != null) {
             stats.put("en_yakin_hedef", t[0]);
             stats.put("en_yakin_hedef_oran", t[1]);
         }
+    }
+
+    /** Oran aralığında ve tutma olasılığı yeterli (avantajı olsa oynanabilir) seçim. */
+    static boolean playable(Candidate c, Settings cfg) {
+        return c.odds >= cfg.minLegOdds && c.odds <= cfg.maxLegOdds && c.rawProb >= cfg.minLegProb;
     }
 
     /** Sanal takip kaydı için seçim: {home, away, kickoff, sport, sref, market, outcome, odds, p}. */

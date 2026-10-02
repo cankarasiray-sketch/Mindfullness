@@ -175,7 +175,14 @@ public class AccuracyTest {
         Settings cfg = new Settings();
         cfg.oddsApiKey = "k";
         List<String[]> sports = new OddsApi(http, cfg).fetchSports();
-        assertEquals(2, sports.size()); // futbol, aktif, şampiyonluk pazarı olmayan
+        assertEquals(3, sports.size()); // futbol ve basketbol (2.5), aktif, şampiyonluk pazarı olmayan
+        assertEquals("basketball_nba", sports.get(2)[0]);
+        // ek basketbol ligleri: seçilebilir listede olmayanlar (üniversite ligleri hariç)
+        assertTrue(OddsApi.isExtraBasketball("basketball_wnba"));
+        assertTrue(OddsApi.isExtraBasketball("basketball_nbl"));
+        assertFalse(OddsApi.isExtraBasketball("basketball_nba")); // zaten listede
+        assertFalse(OddsApi.isExtraBasketball("basketball_ncaab"));
+        assertFalse(OddsApi.isExtraBasketball("soccer_epl"));
         assertTrue(OddsApi.isInternational("soccer_uefa_nations_league"));
         assertTrue(OddsApi.isInternational("soccer_fifa_world_cup_qualifiers_europe"));
         assertTrue(OddsApi.isInternational("soccer_international_friendlies"));

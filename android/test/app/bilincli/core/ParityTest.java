@@ -121,6 +121,9 @@ public class ParityTest {
             }
             Map<String, Object> cfgMap = Json.obj(c.get("cfg"));
             Settings cfg = Settings.fromMap(cfgMap);
+            // masaüstü (Python) sürümünün kuralları: maç başına olasılık şartı yok, kupon eşiği fikstürdeki gibi
+            cfg.minLegProb = 0;
+            cfg.minWinProb = Json.dbl(cfgMap, "minWinProb", 0.20);
             Decision d = Engine.decide(book, sharp, Instant.parse(Json.str(c, "now")), cfg);
             Map<String, Object> stats = Json.obj(c.get("stats"));
             for (String k : new String[] {"eslesen", "karsilastirilan_secim", "avantajli_secim"}) {

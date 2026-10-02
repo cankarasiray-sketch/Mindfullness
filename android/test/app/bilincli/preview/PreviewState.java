@@ -13,6 +13,17 @@ public final class PreviewState {
     public static void main(String[] args) {
         final Instant today = Instant.parse(args.length > 0 ? args[0] : "2026-10-01T03:00:00Z");
         Ledger.MemoryStorage st = new Ledger.MemoryStorage(null);
+        // önizleme kupon ekranlarını da göstersin: 2.5 öncesi eşikler (yeni olasılık şartında demo günü pas olabilir)
+        Ledger pre = new Ledger(st, new Ledger.Clock() {
+            @Override
+            public Instant now() {
+                return today.minusSeconds(61 * 86400L);
+            }
+        });
+        app.bilincli.core.Settings legacy = pre.settings();
+        legacy.minWinProb = 0.20;
+        legacy.minLegProb = 0;
+        pre.saveSettings(legacy);
         Map<String, Object> summary = DemoSim.run(st, 60, 1000000, 11, today);
         Ledger ledger = new Ledger(st, new Ledger.Clock() {
             @Override

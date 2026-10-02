@@ -186,6 +186,7 @@ public final class Radar {
                 r.put("ev", c.ev());
                 r.put("mbs", (long) c.mbs());
                 r.put("inRange", c.odds >= cfg.minLegOdds && c.odds <= cfg.maxLegOdds);
+                r.put("lowProb", c.rawProb < cfg.minLegProb); // avantajlı ama seyrek tutar: kupona girmez
                 rows.add(r);
             }
             state.put("values", rows);

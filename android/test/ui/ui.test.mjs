@@ -749,8 +749,8 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   const card = t.$("#zirveCard").textContent;
   assert.match(card, /3 maçta 5 artırılmış oran · adil oranı geçen 1/);
   assert.match(card, /Belçika – Türkiye/);
-  assert.match(card, /MS 1 1,40 1,37 · adil 1,33\+%5,0 Oyna/);
-  assert.match(card, /KG Var 1,90 1,80 · adil 2,00−%5,0 değer yok/);
+  assert.match(card, /MS 1 1,40 1,37 · adil 1,33 · tutma %75\+%5,0 Oyna/);
+  assert.match(card, /KG Var 1,90 1,80 · adil 2,00 · tutma %50−%5,0 değer yok/);
   assert.match(card, /Hırvatistan – İngiltere/);
   // son taramada olmayan maç: tek açıklama, seçimlerde tekrar yok
   assert.equal(t.$$(".zirve-why").length, 1);
@@ -860,6 +860,8 @@ test("kampanya hesaplayıcı: bedava bahis, kayıp iadesi, kazanç artışı, er
         { m: "AU25", o: "UST", label: "2,5 Üst", p: 0.45, i: 1.8 }, { m: "CS", o: "1X", label: "ÇŞ 1-X", p: 0.7, i: 1.2 }] },
     { ref: "b2", sref: "s2", sport: "x", code: "1", home: "Başlamış", away: "Maç", kickoff: past, league: "L", sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.9, i: 9 }] },
   ];
+  s.settings.minLegProb = 0; // önce olasılık şartı olmadan; aşağıda %40 ile
+  s.radar.fairs[0].sel.push({ m: "AU25", o: "ALT", label: "2,5 Alt", p: 0.55, i: 2.6, mbs: 3 }); // MBS 3: tek oynanamaz
   const t = boot(s, "#firsat");
   const res = () => t.$("#campRes").textContent;
   // bedava bahis 100 TL: en değerli MS 2 (0,30 x 2,20 = 0,66) -> 66 TL; ÇŞ 1-X en düşük oranın (1,50) altında
@@ -870,6 +872,34 @@ test("kampanya hesaplayıcı: bedava bahis, kayıp iadesi, kazanç artışı, er
   t.$("#campReturn").checked = true;
   t.$("#campReturn").dispatchEvent(new t.w.Event("change"));
   assert.match(res(), /≈ 96,00 TL/); // tutar da ödenirse 0,30 x 3,20
+  t.$("#campReturn").checked = false;
+  t.$("#campReturn").dispatchEvent(new t.w.Event("change"));
+  // tutar etiketi: oynanacak tutar ayrı, sağdaki rakam değer
+  assert.match(t.$(".camp-stake").textContent, /Oynanacak tutar: 100,00 TL bedava bahis \(kendi paran değil\)\. Sağdaki rakam oynanacak tutar değil/);
+  assert.match(t.$$(".camp-row")[0].textContent, /tutma %30.*değer 66,00 TL/);
+  // MBS 3 olan seçim tek maçlık kampanyada listelenmez; kombineye izin verilirse görünür
+  assert.doesNotMatch(res(), /2,5 Alt/);
+  t.$("#campCombos").checked = true;
+  t.$("#campCombos").dispatchEvent(new t.w.Event("change"));
+  assert.match(res(), /2,5 Alt MBS 3/);
+  t.$("#campCombos").checked = false;
+  t.$("#campCombos").dispatchEvent(new t.w.Event("change"));
+  // en az tutma olasılığı %40: MS 2 (%30) ve MS X (%20) çıkar; en değerlisi MS 1 (0,50 x 0,80 = 40 TL)
+  const prob = t.$("#campProb");
+  prob.value = "40";
+  prob.dispatchEvent(new t.w.Event("input"));
+  assert.match(res(), /≈ 40,00 TL/);
+  assert.doesNotMatch(res(), /MS 2|MS X/);
+  // en sık tutan sıralaması
+  prob.value = "0";
+  prob.dispatchEvent(new t.w.Event("input"));
+  const sort = t.$("#campSort");
+  sort.value = "prob";
+  sort.dispatchEvent(new t.w.Event("change"));
+  assert.match(t.$$(".camp-row")[0].textContent, /MS 1/); // %50, değeri en iyinin yarısından fazla
+  assert.match(res(), /≈ 66,00 TL/); // özet yine en değerli seçimin değeri
+  sort.value = "value";
+  sort.dispatchEvent(new t.w.Event("change"));
   // kayıp iadesi: 100 TL, %50 nakit iade: MS 2 -> 100(0,96 − 1) + 0,70 x 50 = +31 TL
   const type = t.$("#campType");
   type.value = "cashback";
@@ -888,13 +918,13 @@ test("kampanya hesaplayıcı: bedava bahis, kayıp iadesi, kazanç artışı, er
   // kazanç artışı %10: MS 2 3,20 -> 1 + 2,2 x 1,1 = 3,42; 0,30 x 3,42 − 1 = +%2,6
   type.value = "boost";
   type.dispatchEvent(new t.w.Event("change"));
-  assert.match(t.$$(".camp-row")[0].textContent, /MS 2 3,42 3,20 adil 3,33\+%2,6/);
+  assert.match(t.$$(".camp-row")[0].textContent, /MS 2 3,42 3,20 adil 3,33 · tutma %30\+%2,6 \(2,60 TL\)/);
   assert.match(res(), /Oyna: en iyi seçimde beklenen kâr 2,60 TL/);
   // erken ödeme: yalnızca MS 1 / MS 2 ve kazanma olasılığına model katkısı
   type.value = "early";
   type.dispatchEvent(new t.w.Event("change"));
   assert.ok(t.$$(".camp-row").length === 2);
-  assert.match(res(), /MS 1 1,80 adil 2,00 · \+\d+,\d puan/);
+  assert.match(res(), /MS 1 1,80 adil 2,00 · tutma %50 · \+\d+,\d puan/);
   // gol modeli: uyum ve erken ödeme olasılığı sıralaması
   const g = t.w.goalOutcomes(1.6, 1.1), l = t.w.fitGoals(g[0], g[1], g[2]);
   assert.ok(Math.abs(l[0] - 1.6) < 0.03 && Math.abs(l[1] - 1.1) < 0.03, String(l));
@@ -910,6 +940,38 @@ test("kampanya hesaplayıcı: bedava bahis, kayıp iadesi, kazanç artışı, er
   const d = clone(s);
   d.demo = true;
   assert.equal(boot(d, "#firsat").$("#campCard"), null);
+  assert.deepEqual(t.errors, []);
+});
+
+test("tutma olasılığı şartı, seyrek rozeti ve ek basketbol ligleri", async () => {
+  const s = clone(baseState);
+  s.settings.minLegProb = 0.4;
+  s.basketLeagues = [["basketball_wnba", "WNBA (basketbol)"], ["basketball_nbl", "NBL (basketbol)"]];
+  const a = boot(s, "#ayarlar");
+  assert.match(a.$("#basketCard").textContent, /WNBA \(basketbol\)NBL \(basketbol\)/);
+  assert.match(a.$(".basket-extra").textContent, /ek ligler de seçilebilir \(2\).*İspanya, İtalya, Almanya/);
+  assert.equal(a.$("#f_minLegProb").value, "40");
+  a.$$(".lg").find((x) => x.value === "basketball_wnba").checked = true;
+  a.$("#f_minLegProb").value = "50";
+  a.button("Ayarları kaydet").click();
+  await a.tick();
+  const st = a.calls.at(-1).payload.settings;
+  assert.ok(st.leagues.indexOf("basketball_wnba") >= 0);
+  assert.equal(st.minLegProb, 0.5);
+  // değerli ama seyrek tutan seçim rozetle gösterilir
+  const soon = new Date(Date.parse(s.now) + 7200000).toISOString();
+  s.radar = { values: [{ bookRef: "b1", code: "1", home: "Ev", away: "Dep", kickoff: soon, league: "Lig", market: "MS", outcome: "2", odds: 3.4, fair: 0.32, ev: 0.088, mbs: 1, inRange: true, lowProb: true }],
+    moves: [], fairsAt: s.now, fairs: [{ ref: "b1", sref: "s1", sport: "lig", code: "1", home: "Ev", away: "Dep", kickoff: soon, league: "Lig",
+      sel: [{ m: "MS", o: "2", label: "MS 2", p: 0.3, i: 3.0, mbs: 1 }] }] };
+  const t = boot(s, "#firsat");
+  assert.match(t.text(), /tutma %32, seyrek/);
+  // kampanya oranı avantajlı ama seyrek: oynama
+  t.$$(".promo-sel")[0].click();
+  const o = t.$("#promoOdds");
+  o.value = "3,60";
+  o.dispatchEvent(new t.w.Event("input"));
+  assert.match(t.$("#promoRes").textContent, /Oynama: avantajlı ama tutma olasılığı düşük \(%30,0; ayar en az %40,0\)/);
+  assert.equal(t.$("#promoAmt"), null);
   assert.deepEqual(t.errors, []);
 });
 

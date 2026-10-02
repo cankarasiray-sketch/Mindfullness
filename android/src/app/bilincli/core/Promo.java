@@ -58,6 +58,7 @@ public final class Promo {
                     s.put("label", Models.outcomeLabel(m.getKey(), o.getKey()));
                     s.put("p", prob);
                     s.put("i", o.getValue());
+                    s.put("mbs", (long) p.book.mbsFor(m.getKey())); // 1 değilse tek oynanamaz
                     sel.add(s);
                 }
             }
@@ -82,7 +83,7 @@ public final class Promo {
     public static final class Check {
         public double prob, odds, ev, fraction;
         public long stake;
-        public boolean play;
+        public boolean play, lowProb;
         public String message;
     }
 
@@ -96,11 +97,15 @@ public final class Promo {
         c.odds = odds;
         c.prob = cfg.edgeRatios == null ? fair : EdgeCalibration.adjust(fair, odds, EdgeCalibration.ratio(cfg.edgeRatios, market));
         c.ev = c.prob * odds - 1;
-        c.play = c.ev >= cfg.minLegEv && odds > 1;
+        c.lowProb = fair < cfg.minLegProb;
+        c.play = c.ev >= cfg.minLegEv && odds > 1 && !c.lowProb; // avantajlı ama seyrek tutan seçim önerilmez
         c.fraction = c.play ? Engine.stakeFraction(c.prob, odds, cfg) : 0;
         c.stake = balance <= 0 ? 0 : (long) (balance * c.fraction) / 1000 * 1000; // kuruş; 10 TL'ye aşağı yuvarla
         String head = "Kampanya oranı " + Fmt.odds(odds) + " · adil " + Fmt.odds(1 / fair) + " · avantaj " + Fmt.pct(c.ev, true);
-        if (!c.play) {
+        if (!c.play && c.lowProb && c.ev >= cfg.minLegEv) {
+            c.message = head + ". Oynama: avantajlı ama tutma olasılığı düşük (" + Fmt.pct(fair, false) + "; ayar en az "
+                    + Fmt.pct(cfg.minLegProb, false) + ").";
+        } else if (!c.play) {
             c.message = head + ". Oynama: kampanya oranı adil oranı yeterince geçmiyor (eşik " + Fmt.pct(cfg.minLegEv, true) + ").";
         } else {
             c.message = head + ". Oyna: önerilen tutar " + (c.stake > 0 ? Fmt.tl(c.stake) : "kasa boş, tutar hesaplanamadı")

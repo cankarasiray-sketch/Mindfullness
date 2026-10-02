@@ -39,7 +39,7 @@ public class BankrollTest {
         FeatureTest f = new FeatureTest();
         f.ledger = ledger;
         long cid = f.twoLegCoupon();
-        Settings cfg = new Settings();
+        Settings cfg = FeatureTest.legacy();
         Map<String, Object> ok = Recheck.run(ledger.coupon(cid), Arrays.asList(FeatureTest.book(1, 2.40, 1, 10),
                 FeatureTest.book(2, 2.25, 1, 12)), Arrays.asList(FeatureTest.sharp(1, 0.5, 10), FeatureTest.sharp(2, 0.5, 12)),
                 NOW, cfg, ledger.balance());

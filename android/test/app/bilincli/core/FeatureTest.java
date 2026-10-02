@@ -34,6 +34,13 @@ public class FeatureTest {
         ledger.deposit(1000000, "");
     }
 
+    /** 2.5 öncesi kupon eşiği (%20): iki maçlık örnek kupon (0,5 x 0,5) bu eşiğe göre kurulu. */
+    static Settings legacy() {
+        Settings s = new Settings();
+        s.minWinProb = 0.20;
+        return s;
+    }
+
     static BookEvent book(int i, double odds, int mbs, int hours) {
         return new BookEvent("b" + i, "Ev " + i, "Dep " + i, NOW.plusSeconds(hours * 3600L), "Lig", mbs,
                 CoreTest.ms(odds, 3.4, 4.0), String.valueOf(i));
@@ -57,7 +64,7 @@ public class FeatureTest {
         long cid = twoLegCoupon();
         Instant later = NOW.plusSeconds(4 * 3600);
         Map<String, Object> r = Recheck.run(ledger.coupon(cid), Arrays.asList(book(1, 2.35, 1, 10), book(2, 2.20, 1, 12)),
-                Arrays.asList(sharp(1, 0.50, 10), sharp(2, 0.49, 12)), later, new Settings(), ledger.balance());
+                Arrays.asList(sharp(1, 0.50, 10), sharp(2, 0.49, 12)), later, legacy(), ledger.balance());
         assertTrue(Json.str(r, "verdict"), Json.bool(r, "playable", false));
         assertEquals(2.35 * 2.20, Json.dbl(r, "odds", 0), 1e-12);
         assertEquals(0.50 * 0.49, Json.dbl(r, "prob", 0), 1e-12);
@@ -96,7 +103,7 @@ public class FeatureTest {
     public void playWithCheckedValuesUpdatesOddsAndProbability() {
         long cid = twoLegCoupon();
         Map<String, Object> r = Recheck.run(ledger.coupon(cid), Arrays.asList(book(1, 2.40, 1, 10), book(2, 2.25, 1, 12)),
-                Arrays.asList(sharp(1, 0.48, 10), sharp(2, 0.50, 12)), NOW, new Settings(), ledger.balance());
+                Arrays.asList(sharp(1, 0.48, 10), sharp(2, 0.50, 12)), NOW, legacy(), ledger.balance());
         ledger.saveCheck(cid, r);
         List<List<Double>> v = Recheck.checkedValues(ledger.coupon(cid).lastCheck);
         ledger.markPlayed(cid, Json.lng(r, "stake", 0), v.get(0), v.get(1));

@@ -44,7 +44,7 @@ public final class Texts {
         Long kasa = stats.get("kasa") instanceof Number ? ((Number) stats.get("kasa")).longValue() : null;
         StringBuilder b = new StringBuilder("0 TL — ");
         if (ev >= 0 && Boolean.FALSE.equals(stats.get("en_yakin_aralikta"))) {
-            b.append("oranı ayarlardaki oran aralığının dışında, oynanmaz.");
+            b.append("oranı ayarlardaki oran aralığının ya da tutma olasılığı şartının dışında, oynanmaz.");
         } else {
             b.append("avantaj yok, oynanmaz");
             if (ev < 0) b.append(" (yine de 100 TL oynanırsa beklenen kayıp ≈ ").append(Fmt.tl(Math.round(-ev * 10000))).append(')');

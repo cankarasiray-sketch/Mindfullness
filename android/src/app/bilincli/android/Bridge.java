@@ -69,6 +69,14 @@ public final class Bridge {
             intl.add(row);
         }
         extra.put("intlLeagues", intl);
+        List<Object> basket = new ArrayList<>();
+        for (String[] r : repo.basketLeagues()) {
+            List<Object> row = new ArrayList<>();
+            row.add(r[0]);
+            row.add(r[1]);
+            basket.add(row);
+        }
+        extra.put("basketLeagues", basket);
         String version = "?";
         try {
             version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;

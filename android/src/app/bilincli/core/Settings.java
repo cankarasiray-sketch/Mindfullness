@@ -120,7 +120,12 @@ public final class Settings {
     public double minLeadMinutes = 30;
     public double minLegEv = 0.03;
     public double minCouponEv = 0.05;
-    public double minWinProb = 0.20;
+    public double minWinProb = 0.30;
+    /**
+     * Maç başına en az tutma olasılığı (keskin piyasanın adil olasılığı): avantajlı olsa da bundan seyrek
+     * tutan seçim önerilmez (2.5). Kupon için ayrıca minWinProb.
+     */
+    public double minLegProb = 0.40;
     public double minLegOdds = 1.25;
     public double maxLegOdds = 3.50;
     public double minCouponOdds = 1.50;
@@ -267,6 +272,7 @@ public final class Settings {
         m.put("minLegEv", minLegEv);
         m.put("minCouponEv", minCouponEv);
         m.put("minWinProb", minWinProb);
+        m.put("minLegProb", minLegProb);
         m.put("minLegOdds", minLegOdds);
         m.put("maxLegOdds", maxLegOdds);
         m.put("minCouponOdds", minCouponOdds);
@@ -290,7 +296,7 @@ public final class Settings {
         m.put("edgeGuard", edgeGuard);
         m.put("internationals", internationals);
         m.put("profile", detectProfile());
-        m.put("v", 4L);
+        m.put("v", 5L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -318,6 +324,7 @@ public final class Settings {
         s.minLegEv = Json.dbl(m, "minLegEv", s.minLegEv);
         s.minCouponEv = Json.dbl(m, "minCouponEv", s.minCouponEv);
         s.minWinProb = Json.dbl(m, "minWinProb", s.minWinProb);
+        s.minLegProb = Json.dbl(m, "minLegProb", s.minLegProb);
         s.minLegOdds = Json.dbl(m, "minLegOdds", s.minLegOdds);
         s.maxLegOdds = Json.dbl(m, "maxLegOdds", s.maxLegOdds);
         s.minCouponOdds = Json.dbl(m, "minCouponOdds", s.minCouponOdds);
@@ -357,6 +364,10 @@ public final class Settings {
             // 1.9: basketbol (EuroLeague, NBA) eklendi; maçı olmayan gün kredi harcamaz
             for (String l : BASKETBALL_LEAGUES) if (!s.leagues.contains(l)) s.leagues.add(l);
         }
+        if (Json.lng(m, "v", 1) < 5 && Math.abs(s.minWinProb - 0.20) < 1e-9) {
+            // 2.5: tutma olasılığı da değerlendirilir; eski varsayılan kupon eşiği %20 -> %30
+            s.minWinProb = 0.30;
+        }
         s.profile = s.detectProfile();
         return s;
     }
@@ -369,6 +380,7 @@ public final class Settings {
         if (maxCandidates < 1 || maxCandidates > 60) return "Aday sayısı 1 ile 60 arasında olmalı";
         if (!(minLegOdds > 1.0 && maxLegOdds > minLegOdds)) return "Bacak oran aralığı geçersiz";
         if (minWinProb < 0 || minWinProb >= 1) return "En düşük tutma olasılığı %0-99 arasında olmalı";
+        if (minLegProb < 0 || minLegProb >= 1) return "Maç başına en az tutma olasılığı %0-99 arasında olmalı";
         if (windowHours <= 0 || windowHours > 72) return "Zaman penceresi 1-72 saat olmalı";
         if (minCouponAmount < 0) return "Asgari kupon tutarı negatif olamaz";
         if (weeklyLossLimit < 0 || weeklyLossLimit >= 1) return "Haftalık kayıp limiti %0-99 arasında olmalı";

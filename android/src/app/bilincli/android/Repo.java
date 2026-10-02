@@ -151,18 +151,38 @@ final class Repo {
         return out;
     }
 
-    /** Aktif milli turnuvaları günde bir kez (ücretsiz spor listesinden) yeniler. */
+    /**
+     * Oran kaynağındaki ek basketbol ligleri {kod, ad} (EuroLeague ve NBA dışında; ör. WNBA,
+     * Avustralya NBL). Liste milli turnuvalarla birlikte günde bir kez ücretsiz alınır.
+     */
+    List<String[]> basketLeagues() {
+        List<String[]> out = new ArrayList<>();
+        for (String row : prefs.getString("basket", "").split(";")) {
+            int i = row.indexOf('|');
+            if (i > 0) out.add(new String[] {row.substring(0, i), row.substring(i + 1) + " (basketbol)"});
+        }
+        for (String[] r : out) Settings.EXTRA_NAMES.put(r[0], r[1]);
+        return out;
+    }
+
+    /** Aktif milli turnuvaları ve ek basketbol liglerini günde bir kez (ücretsiz spor listesinden) yeniler. */
     void refreshInternationals(Daily.LiveSources src, boolean force) {
         String today = Fmt.dayKey(Instant.now());
-        if (!force && today.equals(prefs.getString("intlDay", ""))) return;
+        // ek basketbol listesi 2.5'te geldi: güncellemeden sonra o gün beklemeden alınır
+        if (!force && today.equals(prefs.getString("intlDay", "")) && prefs.contains("basket")) return;
         try {
-            StringBuilder b = new StringBuilder();
+            StringBuilder b = new StringBuilder(), bb = new StringBuilder();
             for (String[] s : src.sports()) {
-                if (!OddsApi.isInternational(s[0])) continue;
-                if (b.length() > 0) b.append(';');
-                b.append(s[0]).append('|').append(s[1].replace(";", ",").replace("|", "/"));
+                String row = s[0] + "|" + s[1].replace(";", ",").replace("|", "/");
+                if (OddsApi.isInternational(s[0])) {
+                    if (b.length() > 0) b.append(';');
+                    b.append(row);
+                } else if (OddsApi.isExtraBasketball(s[0])) {
+                    if (bb.length() > 0) bb.append(';');
+                    bb.append(row);
+                }
             }
-            prefs.edit().putString("intl", b.toString()).putString("intlDay", today).apply();
+            prefs.edit().putString("intl", b.toString()).putString("basket", bb.toString()).putString("intlDay", today).apply();
         } catch (Http.ProviderException ignored) {
             // liste alınamadı: önceki liste kullanılır, sonraki çalışmada yeniden denenir
         }
