@@ -241,10 +241,14 @@ public final class Settings {
      * "yuksek", simülasyonda (README) en yüksek tipik aylık getiriyi veren ayardır; daha büyük
      * bahis tipik getiriyi artırmaz, düşürür.
      */
+    /** En yüksek kazanç profilinin olasılık eşikleri (demo simülasyonunda en yüksek büyüme; README 2.7). */
+    static final double MAX_PROFIT_LEG_PROB = 0.30, MAX_PROFIT_WIN_PROB = 0.20;
+
     public static final Object[][] PROFILES = {
-        // ad, başlık, Kelly çarpanı, kupon başına üst sınır, günlük kupon, günlük toplam üst sınır
-        {"temkinli", "Temkinli", 0.25, 0.03, 5, 0.09},
-        {"yuksek", "En yüksek getiri", 0.50, 0.10, 5, 0.20},
+        // ad, başlık, Kelly çarpanı, kupon başına üst sınır, günlük kupon, günlük toplam üst sınır,
+        // maç başına en az tutma olasılığı, kupon için en az tutma olasılığı
+        {"temkinli", "Temkinli (sık tutsun)", 0.25, 0.03, 5, 0.09, 0.40, 0.30},
+        {"yuksek", "En yüksek kazanç", 0.50, 0.10, 5, 0.20, MAX_PROFIT_LEG_PROB, MAX_PROFIT_WIN_PROB},
     };
 
     public void applyProfile(String name) {
@@ -255,6 +259,17 @@ public final class Settings {
                 maxStakeFraction = (Double) p[3];
                 maxCouponsPerDay = (Integer) p[4];
                 maxDailyExposure = (Double) p[5];
+                minLegProb = (Double) p[6];
+                minWinProb = (Double) p[7];
+                if ("yuksek".equals(name)) {
+                    // daha çok fırsat: günde 4 radar, kadro saati, kredi bolsa ek ligler, Alt/Üst ve handikap
+                    // (kredi yetmezse kredi planı kendiliğinden daraltır)
+                    radarScans = 4;
+                    lineupScans = true;
+                    creditExpand = true;
+                    totals = true;
+                    basketHandicap = true;
+                }
                 return;
             }
         }

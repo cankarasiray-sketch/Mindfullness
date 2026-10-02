@@ -76,6 +76,32 @@ final class Repo {
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
         loadActive();
+        switchToMaxProfit();
+    }
+
+    /**
+     * 2.7: kullanıcı en yüksek kazancı istedi. Profili hiç değiştirilmemiş (Temkinli) kasa bir kez
+     * "En yüksek kazanç"a geçirilir; arayüz bir hafta boyunca bunu ve nasıl geri alınacağını gösterir.
+     */
+    private void switchToMaxProfit() {
+        if (prefs.getBoolean("maxProfit27", false)) return;
+        try {
+            Settings s = ledger.settings();
+            if ("temkinli".equals(s.detectProfile())) {
+                s.applyProfile("yuksek");
+                ledger.saveSettings(s);
+                prefs.edit().putLong("profileSwitchedAt", System.currentTimeMillis()).apply();
+            }
+        } catch (RuntimeException ignored) {
+            // ayar kaydedilemedi: kullanıcı profili elle seçebilir
+        }
+        prefs.edit().putBoolean("maxProfit27", true).apply();
+    }
+
+    /** Profilin otomatik geçirildiği an (ms); son 7 gün içinde değilse 0. */
+    long profileSwitchedAt() {
+        long at = prefs.getLong("profileSwitchedAt", 0);
+        return at > 0 && System.currentTimeMillis() - at < 7 * 86400000L ? at : 0;
     }
 
     /** Uygulama yeniden başlasa da (ör. güncelleme) son 3 saatlik maç sayıları kaybolmasın. */

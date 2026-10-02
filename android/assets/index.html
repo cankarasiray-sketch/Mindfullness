@@ -336,6 +336,11 @@ function banners() {
   }
   if (!S.settings.oddsApiKey) out.push('<div class="banner"><b>Kurulumu tamamla:</b> Adil olasılıkları hesaplamak için ücretsiz The Odds API anahtarı gerekli.'
     + '<div class="btns"><button class="b" onclick="show(\'ayarlar\')">Anahtarı gir</button><button class="b ghost" onclick="act(\'demoStart\')">Önce demoyu gör</button></div></div>');
+  if (S.profileSwitchedAt && S.settings.profile === "yuksek") out.push('<div class="banner profile-switched"><b>Strateji "En yüksek kazanç" profiline geçirildi.</b> '
+    + "Yarım Kelly, kupon başına kasanın en fazla %10'u, günde 4 radar taraması; seyrek tutan ama değerli seçimler de önerilir (maç başına en az %"
+    + num(S.settings.minLegProb * 100, 0) + " tutma). Uzun vadede beklenen kazanç daha yüksek, dalgalanma ve kötü aylar da daha büyük. "
+    + "Daha sık tutan ve daha küçük tutarlı oyun için Temkinli'ye dönebilirsin."
+    + '<div class="btns"><button class="b ghost" onclick="show(\'ayarlar\')">Strateji profili</button></div></div>');
   if (S.stats.balance <= 0) out.push('<div class="banner">Kasan boş. Önerilen tutarlar kasana göre hesaplanır.'
     + '<div class="btns"><button class="b ghost" onclick="show(\'kasa\')">Kasaya para yatır</button></div></div>');
   if (S.settings.edgeGuard && S.edge && S.edge["*"] && S.edge["*"].factor < 0.999) out.push('<div class="banner"><b>Kanıt koruması devrede.</b> Son '

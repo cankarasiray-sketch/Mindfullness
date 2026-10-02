@@ -236,7 +236,7 @@ test("aylık beklenti ve CLV uyarısı", async () => {
 test("risk profili seçimi", async () => {
   const t = boot(clone(baseState), "#ayarlar");
   assert.match(t.text(), /Temkinli/);
-  assert.match(t.text(), /En yüksek getiri/);
+  assert.match(t.text(), /En yüksek kazanç/);
   t.button("Bu profili kullan").click();
   await t.tick();
   assert.deepEqual(t.calls.at(-1), { action: "profile", payload: { name: "yuksek" } });
@@ -989,6 +989,25 @@ test("basketbol handikap: etiket ve ayar", async () => {
   await t.tick();
   assert.equal(t.calls.at(-1).payload.settings.basketHandicap, false);
   assert.deepEqual(t.errors, []);
+});
+
+test("en yüksek kazanç profiline geçiş bildirimi", async () => {
+  const s = clone(baseState);
+  s.settings.profile = "yuksek";
+  s.settings.minLegProb = 0.3;
+  s.profileSwitchedAt = s.now;
+  const t = boot(s);
+  const b = t.$(".profile-switched");
+  assert.ok(b, "bildirim yok");
+  assert.match(b.textContent, /Strateji "En yüksek kazanç" profiline geçirildi\..*maç başına en az %30 tutma.*Temkinli'ye dönebilirsin/);
+  t.button("Strateji profili").click();
+  assert.ok(t.$("#f_minLegProb"));
+  // Temkinli'ye dönüldüyse ya da süre geçtiyse gösterilmez
+  s.settings.profile = "temkinli";
+  assert.equal(boot(s).$(".profile-switched"), null);
+  s.settings.profile = "yuksek";
+  s.profileSwitchedAt = null;
+  assert.equal(boot(s).$(".profile-switched"), null);
 });
 
 let failed = 0;

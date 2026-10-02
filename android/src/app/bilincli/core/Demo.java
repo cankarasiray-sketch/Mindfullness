@@ -162,8 +162,12 @@ public final class Demo {
         List<double[]> picks = new ArrayList<>();
         for (Match m : day(date)) {
             Map<String, Double> o = m.book.odds.get("MS");
-            String key = "1";
-            for (String k : o.keySet()) if (o.get(k) < o.get(key)) key = k;
+            if (o == null) continue;
+            String key = null; // kalibrasyon şüpheli bir seçeneği bültenden çıkarmış olabilir
+            for (Map.Entry<String, Double> e : o.entrySet()) {
+                if (e.getValue() != null && (key == null || e.getValue() < o.get(key))) key = e.getKey();
+            }
+            if (key == null) continue;
             String actual = m.home > m.away ? "1" : m.away > m.home ? "2" : "X";
             picks.add(new double[] {o.get(key), key.equals(actual) ? 1 : 0});
         }

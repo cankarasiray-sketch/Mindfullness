@@ -58,6 +58,8 @@ public final class Bridge {
         extra.put("radar", repo.radarView());
         extra.put("zirve", repo.zirveView());
         extra.put("virtual", repo.virtualView());
+        long switched = repo.profileSwitchedAt();
+        extra.put("profileSwitchedAt", switched > 0 ? Instant.ofEpochMilli(switched).toString() : null);
         extra.put("credits", repo.credits());
         extra.put("creditPlan", repo.plan().toMap());
         extra.put("accuracy", repo.forecasts.summary());
