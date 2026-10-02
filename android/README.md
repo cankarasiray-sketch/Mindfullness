@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.6.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.7.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,40 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## En yüksek kazanç profili (2.7)
+
+- Profiller artık tutma olasılığı eşiklerini de kurar. **En yüksek kazanç**: ortak yarım Kelly,
+  kupon başına en fazla %10, günlük toplam %20; maç başına en az %30, kupon için en az %20 tutma
+  olasılığı; günde 4 radar, kadro saati taraması, kredi bolsa ek ligler, Alt/Üst ve basketbol
+  handikabı açık (kredi yetmezse kredi planı kendiliğinden daraltır). **Temkinli (sık tutsun)**:
+  çeyrek Kelly, %3; maç başına %40, kupon için %30.
+- Eşikler uygulamanın kendi motoruyla, demo piyasasında (20 piyasa × 180 gün, günlük karar) ölçüldü:
+
+  | Ayar | Ortanca kasa | Aylık büyüme | Kötü %10 | Tutma |
+  |---|---|---|---|---|
+  | Temkinli, %40/%30 | ×1,14 | +%1,7 | ×0,93 | %51 |
+  | Yarım Kelly, %50/%40 | ×1,21 | +%3,3 | ×0,91 | %62 |
+  | Yarım Kelly, %40/%30 | ×1,27 | +%3,3 | ×0,86 | %50 |
+  | Yarım Kelly, %35/%25 | ×1,25 | +%3,8 | ×0,95 | %45 |
+  | **Yarım Kelly, %30/%20** | **×1,39** | **+%5,0** | **×0,99** | %40 |
+  | Yarım Kelly, şart yok | ×1,39 | +%5,0 | ×0,98 | %40 |
+  | Tam Kelly, %20, %30/%20 | ×1,39 | +%6,7 | ×0,83 | %39 |
+
+  Tam Kelly ortalamayı artırdı ama ortancayı değiştirmedi ve kötü %10'u ×0,99'dan ×0,83'e indirdi;
+  bu dünyada olasılıklar neredeyse doğru bilinir. Gerçekte avantaj tahminleri abartılı çıkma
+  eğilimindedir (yalnızca iddaa'nın adilden yüksek olduğu seçimler oynanır); önceki 200 aylık
+  testte tahmin hatası %6 olunca tam Kelly yarım Kelly'nin gerisinde kaldı. Bu yüzden profil yarım
+  Kelly kullanır.
+
+  Olasılık şartı sıkılaştıkça tutma oranı artar ama değerli seçimlerin bir kısmı dışarıda kalır ve
+  büyüme düşer. Bu dünyada avantaj tasarım gereği vardır; rakamlar ayarları karşılaştırmak içindir,
+  gerçek getiri vaadi değildir.
+- Kullanıcı en yüksek kazancı istediği için, profili hiç değiştirilmemiş (Temkinli) kasa güncellemede
+  bir kez En yüksek kazanç'a geçirilir; Bugün sekmesi bir hafta boyunca bunu ve Temkinli'ye nasıl
+  dönüleceğini gösterir. Yeni kurulumların varsayılanı Temkinli'dir.
+- Demo: kalibrasyonun bültenden çıkardığı seçenek yüzünden "banko" kıyasında oluşan boş değer hatası
+  düzeltildi.
 
 ## Basketbol handikap (2.6)
 
@@ -503,7 +537,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.6.0.apk
+./build.sh          # testler + build/BilincliKupon-2.7.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

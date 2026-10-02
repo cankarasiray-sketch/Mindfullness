@@ -1195,11 +1195,11 @@ function viewSettings() {
   return html;
 }
 var PROFILE_TEXT = {
-  temkinli: "Günde en fazla 5 kupon, birlikte tutarlandırılır (ortak çeyrek Kelly); kupon başına en fazla %3, günlük toplam en fazla %9. "
-    + "Demo simülasyonunda (200 ay, model hatası %2–%6) tipik ay +%1,7 ile +%2,4 (1.4 yöntemiyle +%1,1 ile +%1,4); en kötü ay −%15 ile −%25.",
-  yuksek: "Günde en fazla 5 kupon, ortak yarım Kelly; kupon başına en fazla %10, günlük toplam en fazla %20. "
-    + "Demo simülasyonunda tipik ay +%2,9 ile +%4,2 (1.4 yöntemiyle +%1,8 ile +%2,3); en kötü ay −%29 ile −%45. "
-    + "Daha büyük bahis (¾ ya da tam Kelly) en kötü ayı −%60/−%70'e indirdi; model hatası %6 olunca tam Kelly yarım Kelly'nin gerisinde kaldı."
+  temkinli: "Daha sık tutsun diye: maç başına en az %40, kupon için en az %30 tutma olasılığı; ortak çeyrek Kelly, kupon başına en fazla %3, günlük toplam en fazla %9. "
+    + "Demo simülasyonunda (20 piyasa × 180 gün) ortanca aylık büyüme +%1,7, tutma oranı %51.",
+  yuksek: "En yüksek beklenen kazanç: ortak yarım Kelly, kupon başına en fazla %10, günlük toplam en fazla %20; maç başına en az %30, kupon için en az %20 tutma olasılığı; "
+    + "günde 4 radar, kadro saati taraması, ek ligler, Alt/Üst ve handikap açık. Demo simülasyonunda ortanca aylık büyüme +%5,0 (Temkinli +%1,7), tutma oranı %40: "
+    + "daha seyrek tutar ama tutunca daha çok kazandırır. Tam Kelly ortancayı değiştirmedi, kötü senaryoyu ×0,99'dan ×0,83'e indirdi; tahmin hatası arttıkça yarım Kelly'nin gerisinde kalır."
 };
 function profilesCard(st) {
   return '<div class="card"><h2>Strateji profili</h2>' + S.profiles.map(function (p) {
