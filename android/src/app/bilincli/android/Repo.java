@@ -330,7 +330,8 @@ final class Repo {
             Instant now = Instant.now();
             String last = Json.str(st, "fetchedAt");
             boolean current = Json.lng(Json.obj(st.get("view")), "v", 0) == Zirve.VIEW_VERSION;
-            if (!force && current && last != null && Instant.parse(last).plusSeconds(ZIRVE_MIN_GAP_S).isAfter(now)) return null;
+            long gap = zirveFailed(st) ? ZIRVE_RETRY_GAP_S : ZIRVE_MIN_GAP_S; // hata sonrası kısa bekleme
+            if (!force && current && last != null && Instant.parse(last).plusSeconds(gap).isAfter(now)) return null;
             st.put("fetchedAt", now.toString());
             String[] notice = null;
             zirveBusy = "Bilyoner Zirve Oran okunuyor…";
@@ -344,6 +345,7 @@ final class Repo {
                 zirveRaw = Json.write(st);
                 try {
                     if (zirveScan(offers, view, st, notes, now)) view = zirveEvaluate(offers, now); // hedefli taramayla eklenen maçlar
+                    if (zirveKg(offers, view, st, now)) view = zirveEvaluate(offers, now); // eksik Karşılıklı Gol adil oranları
                 } catch (RuntimeException e) {
                     st.put("error", "hedefli tarama: " + e.getMessage()); // ilk değerlendirme geçerli kalır
                 }
@@ -404,6 +406,69 @@ final class Repo {
 
     /** Başarısız hedefli tarama bu kadar sonra yeniden denenir (bağlantı kesintisi 3 saat beklemesin). */
     static final long ZIRVE_RETRY_S = 15 * 60;
+    /** Son okuma ya da hedefli tarama başarısızsa uygulama açılınca bu kadar sonra yeniden okunur. */
+    static final long ZIRVE_RETRY_GAP_S = 2 * 60;
+
+    /** Son okuma ya da hedefli tarama başarısız mıydı. */
+    private static boolean zirveFailed(Map<String, Object> st) {
+        if (st.get("error") != null) return true;
+        for (Object o : Json.arr(Json.obj(st.get("view")) == null ? null : Json.obj(st.get("view")).get("rows"))) {
+            String why = Json.str(Json.obj(o), "why");
+            if (why != null && why.contains("başarısız")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Son taramada eşleşen ama Karşılıklı Gol adil oranı olmayan yakın Zirve maçları (Zirve'de KG oranı
+     * varken): Pinnacle KG oranı maç başına çekilir (1 kredi; maç başına 3 saatte bir) ve adil oran
+     * tablosuna eklenir. iddaa tarafı Bilyoner'in normal KG oranları (eşleme korumasıyla).
+     */
+    private boolean zirveKg(List<Zirve.Offer> all, Map<String, Object> view, Map<String, Object> st, Instant now) {
+        Map<String, Map<String, Object>> need = new LinkedHashMap<>(); // sref -> satır
+        for (Object o : Json.arr(view.get("rows"))) {
+            Map<String, Object> r = Json.obj(o);
+            if (r == null || !"secim".equals(Json.str(r, "status")) || !"KG".equals(Json.str(r, "m"))) continue;
+            String sref = Json.str(r, "sref"), sport = Json.str(r, "sport"), ref = Json.str(r, "ref");
+            if (sref == null || sport == null || ref == null) continue;
+            Instant ko = Instant.parse(Json.str(r, "kickoff"));
+            if (ko.isAfter(now.plusSeconds(ZIRVE_SCAN_AHEAD_S)) || ko.isBefore(now.plusSeconds(15 * 60))) continue;
+            if (!need.containsKey(sref)) need.put(sref, r);
+        }
+        if (need.isEmpty() || ledger.settings().oddsApiKey.isEmpty() || creditsLow()) return false;
+        Map<String, String> done = stringMap(st.get("kgScans"));
+        for (String k : new ArrayList<>(done.keySet())) { // eski kayıtlar atılır
+            if (Instant.parse(done.get(k)).plusSeconds(2 * 86400L).isBefore(now)) done.remove(k);
+        }
+        for (String sref : new ArrayList<>(need.keySet())) {
+            String at = done.get(sref);
+            if (at != null && Instant.parse(at).plusSeconds(ZIRVE_SCAN_GAP_S).isAfter(now)) need.remove(sref);
+        }
+        if (need.isEmpty()) return false;
+        zirveBusy = "Zirve maçlarının Karşılıklı Gol adil oranı çekiliyor (" + need.size() + " maç, maç başına 1 kredi)…";
+        boolean changed = false;
+        synchronized (LOCK) {
+            Daily.LiveSources src = live(effective());
+            try {
+                for (Map.Entry<String, Map<String, Object>> e : need.entrySet()) {
+                    Map<String, Object> r = e.getValue();
+                    Models.SharpEvent ev = new Models.SharpEvent(e.getKey(), Json.str(r, "sport"), Json.str(r, "home"),
+                            Json.str(r, "away"), Instant.parse(Json.str(r, "kickoff")), new LinkedHashMap<String, Map<String, Double>>(), "pinnacle");
+                    try {
+                        src.enrich(ev, "btts");
+                    } catch (Http.ProviderException ignored) {
+                        continue; // bir sonraki okumada yeniden denenir
+                    }
+                    done.put(e.getKey(), now.toString());
+                    if (radar.addSelections(Json.str(r, "ref"), Zirve.kgSelections(all, Json.str(r, "event"), ev))) changed = true;
+                }
+            } finally {
+                after(src);
+            }
+        }
+        st.put("kgScans", new LinkedHashMap<String, Object>(done));
+        return changed;
+    }
 
     /**
      * Son taramada olmayan yakın Zirve maçlarının ligleri hedefli taranır: yalnızca o liglerin Pinnacle

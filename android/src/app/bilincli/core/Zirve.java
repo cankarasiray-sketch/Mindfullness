@@ -36,7 +36,7 @@ public final class Zirve {
     static final int MAX_ROWS = 150;
     static final int MAX_NOTIFIED = 300;
     /** Değerlendirme biçimi; eski sürümün kaydı görülünce okuma beklemeden yenilenir. */
-    public static final int VIEW_VERSION = 2;
+    public static final int VIEW_VERSION = 3;
 
     /** Zirve sekmesindeki artırılmış bir oran. */
     public static final class Offer {
@@ -405,6 +405,45 @@ public final class Zirve {
     }
 
     /**
+     * Eşleşmiş bir Zirve maçına Karşılıklı Gol seçimleri: iddaa tarafı Bilyoner'in normal KG oranları,
+     * adil olasılık sharp'taki KG (maç başına çekilmiş). Eşleme korumasına takılırsa ya da veri yoksa boş.
+     */
+    public static List<Object> kgSelections(List<Offer> all, String event, Models.SharpEvent sharp) {
+        List<Object> out = new ArrayList<>();
+        Map<String, Double> fair = sharp.fair.get("KG");
+        if (fair == null) return out;
+        Map<String, Double> odds = new LinkedHashMap<>();
+        Offer any = null;
+        for (Offer o : all) {
+            if (!o.event.equals(event)) continue;
+            String[] mo = map(o, false);
+            if (mo != null && "KG".equals(mo[0])) {
+                odds.put(mo[1], o.val);
+                any = o;
+            }
+        }
+        if (any == null) return out;
+        Map<String, Map<String, Double>> m = new LinkedHashMap<>();
+        m.put("KG", odds);
+        List<Models.Pair> one = new ArrayList<>();
+        one.add(new Models.Pair(new Models.BookEvent("z" + event, any.home, any.away, any.kickoff, any.league, 1, m, null), sharp, 1));
+        verify(one);
+        if (!m.containsKey("KG")) return out;
+        for (Map.Entry<String, Double> e : odds.entrySet()) {
+            Double p = fair.get(e.getKey());
+            if (p == null || !(p > 0 && p < 1)) continue;
+            Map<String, Object> s = new LinkedHashMap<>();
+            s.put("m", "KG");
+            s.put("o", e.getKey());
+            s.put("label", Models.outcomeLabel("KG", e.getKey()));
+            s.put("p", p);
+            s.put("i", e.getValue());
+            out.add(s);
+        }
+        return out;
+    }
+
+    /**
      * Zirve oranlarını son tam taramanın adil oranlarıyla değerlendirir. Sonuç (arayüz ve bildirim için):
      * {at, fairsAt, offers, matched, evaluated, play, rows: [...]}. Satır durumu (status): oyna, oynama,
      * degisti (iddaa oranı taramadan beri değişmiş ya da eşleme şüpheli), secim (bu seçimin adil oranı yok),
@@ -441,6 +480,7 @@ public final class Zirve {
                 r.put("code", Json.str(row, "code"));
                 String sport = Json.str(row, "sport");
                 r.put("sport", sport);
+                r.put("sref", Json.str(row, "sref"));
                 r.put("fairAt", row.get("at"));
                 String[] mo = map(o, sport != null && sport.startsWith("basketball"));
                 Map<String, Object> sel = null;

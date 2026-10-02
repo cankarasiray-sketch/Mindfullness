@@ -54,6 +54,30 @@ public final class Radar {
         if (mergeInto(pairs, now)) storage.write(Json.write(state));
     }
 
+    /**
+     * Tablodaki bir maça seçim ekler (ör. sonradan çekilen Karşılıklı Gol adil oranı); aynı pazar ve
+     * sonuçtaki eski seçim değişir. Maç tabloda yoksa false.
+     */
+    public synchronized boolean addSelections(String ref, List<Object> sel) {
+        if (sel == null || sel.isEmpty()) return false;
+        for (Object o : Json.arr(state.get("fairs"))) {
+            Map<String, Object> r = Json.obj(o);
+            if (r == null || !ref.equals(Json.str(r, "ref"))) continue;
+            List<Object> keep = new ArrayList<>();
+            Set<String> fresh = new HashSet<>();
+            for (Object x : sel) fresh.add(Json.str(Json.obj(x), "m") + "|" + Json.str(Json.obj(x), "o"));
+            for (Object x : Json.arr(r.get("sel"))) {
+                Map<String, Object> s = Json.obj(x);
+                if (s != null && !fresh.contains(Json.str(s, "m") + "|" + Json.str(s, "o"))) keep.add(s);
+            }
+            keep.addAll(sel);
+            r.put("sel", keep);
+            storage.write(Json.write(state));
+            return true;
+        }
+        return false;
+    }
+
     private boolean mergeInto(List<Pair> pairs, Instant now) {
         List<Object> fresh = Promo.table(pairs, now);
         if (fresh.isEmpty()) return false;

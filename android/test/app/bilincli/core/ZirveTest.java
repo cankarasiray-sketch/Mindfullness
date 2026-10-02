@@ -338,6 +338,55 @@ public class ZirveTest {
     }
 
     @Test
+    public void missingKgFairIsAddedToMatchedZirveEvent() {
+        // tabloda maç var, KG adil oranı yok -> "secim"
+        List<Object> noKg = fairs();
+        java.util.Iterator<Object> it = Json.arr(Json.obj(noKg.get(0)).get("sel")).iterator();
+        while (it.hasNext()) if ("KG".equals(Json.obj(it.next()).get("m"))) it.remove();
+        Map<String, Object> v = Zirve.evaluate(Zirve.parse(body()), noKg, null, new Settings(), 500000, NOW);
+        Map<String, Object> kgRow = rowFor(v, "KG Var");
+        assertEquals("secim", kgRow.get("status"));
+        assertEquals("sb1", kgRow.get("sref"));
+        assertEquals("soccer_uefa_nations_league", kgRow.get("sport"));
+        // maç başına çekilen KG adil oranı + Bilyoner'in normal KG oranları
+        String body = body().replace(odd("3172993", "83175180", 1, "KG Var", "1.80", "1.90", "Karşılıklı Gol", null),
+                odd("3172993", "83175180", 1, "KG Var", "1.80", "1.90", "Karşılıklı Gol", null) + ","
+                        + odd("3172993", "83175180", 2, "KG Yok", "1.95", "2.02", "Karşılıklı Gol", null));
+        List<Zirve.Offer> all = Zirve.parseAll(body);
+        Map<String, Map<String, Double>> fair = new LinkedHashMap<>();
+        Map<String, Double> kg = new LinkedHashMap<>();
+        kg.put("VAR", 0.56);
+        kg.put("YOK", 0.44);
+        fair.put("KG", kg);
+        Models.SharpEvent ev = new Models.SharpEvent("sb1", "soccer_uefa_nations_league", "Belçika", "Türkiye", KO, fair, "pinnacle");
+        List<Object> sel = Zirve.kgSelections(all, "3172993", ev);
+        assertEquals(2, sel.size());
+        assertEquals("VAR", Json.obj(sel.get(0)).get("o"));
+        assertEquals(1.80, Json.dbl(Json.obj(sel.get(0)), "i", 0), 0);
+        assertEquals(0.56, Json.dbl(Json.obj(sel.get(0)), "p", 0), 0);
+        // tabloya eklenir, değerlendirme KG'yi de yapar: 0,56 x 1,90 - 1 = +%6,4
+        Radar radar = new Radar(new Ledger.MemoryStorage(null));
+        radar.update(Arrays.asList(FeatureTest.book(1, 1.80, 1, 8)), Arrays.asList(FeatureTest.sharp(1, 0.50, 8)), NOW, new Settings(), true);
+        assertTrue(radar.addSelections("b1", sel));
+        assertFalse(radar.addSelections("yok", sel));
+        Map<String, Object>[] f = Promo.find(Json.arr(radar.view().get("fairs")), "b1", "KG", "VAR");
+        assertEquals(0.56, Json.dbl(f[1], "p", 0), 0);
+        assertNotNull(Promo.find(Json.arr(radar.view().get("fairs")), "b1", "MS", "1")); // eski seçimler kalır
+        List<Object> withKg = noKg;
+        Json.arr(Json.obj(withKg.get(0)).get("sel")).addAll(sel);
+        Map<String, Object> kgEval = rowFor(Zirve.evaluate(Zirve.parse(body), withKg, null, new Settings(), 500000, NOW), "KG Var");
+        assertEquals("oyna", kgEval.get("status"));
+        assertEquals(0.56 * 1.90 - 1, Json.dbl(kgEval, "ev", 0), 1e-9);
+        // ters okunmuş KG (Var/Yok yer değiştirmiş) korumaya takılır
+        kg.put("VAR", 0.20);
+        kg.put("YOK", 0.80);
+        assertTrue(Zirve.kgSelections(all, "3172993", ev).isEmpty());
+        // KG adil oranı gelmediyse boş
+        assertTrue(Zirve.kgSelections(all, "3172993", new Models.SharpEvent("x", "s", "a", "b", KO,
+                new LinkedHashMap<String, Map<String, Double>>(), "pinnacle")).isEmpty());
+    }
+
+    @Test
     public void fetchReportsHttpErrors() throws Exception {
         Http ok = new Http() {
             public Response get(String url, Map<String, String> headers) {
