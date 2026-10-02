@@ -7,6 +7,7 @@ import app.bilincli.core.Fmt;
 import app.bilincli.core.Http;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Texts;
+import app.bilincli.core.Zirve;
 
 /** Arka plan işi: ağ isteklerini ana iş parçacığı dışında yapar, sonucu bildirir. */
 public final class DailyJob extends JobService {
@@ -15,11 +16,16 @@ public final class DailyJob extends JobService {
         final boolean daily = params.getExtras().getBoolean(Scheduler.EXTRA_DAILY, false);
         final boolean event = params.getExtras().getBoolean(Scheduler.EXTRA_EVENT, false);
         final boolean radar = params.getExtras().getBoolean(Scheduler.EXTRA_RADAR, false);
+        final boolean zirveOnly = params.getExtras().getBoolean(Scheduler.EXTRA_ZIRVE, false);
         new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
                     Repo repo = Repo.get(DailyJob.this);
+                    if (zirveOnly) {
+                        if (Zirve.backgroundHour(java.time.Instant.now())) zirve(repo, false); // 10 dk sınırı geçerli
+                        return;
+                    }
                     if (radar) {
                         try {
                             Daily.Intraday r = repo.radarScan(true); // vadesi gelen kadro saati taraması kısmi yapılır

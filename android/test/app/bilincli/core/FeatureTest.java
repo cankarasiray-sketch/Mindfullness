@@ -163,7 +163,7 @@ public class FeatureTest {
         Settings s = new Settings();
         assertEquals("temkinli", s.detectProfile());
         s.applyProfile("yuksek");
-        assertEquals(0.5, s.kellyMultiplier, 0);
+        assertEquals(0.6, s.kellyMultiplier, 0);
         assertEquals(0.10, s.maxStakeFraction, 0);
         assertNull(s.validate());
         ledger.saveSettings(s);

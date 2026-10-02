@@ -80,22 +80,24 @@ final class Repo {
     }
 
     /**
-     * 2.7: kullanıcı en yüksek kazancı istedi. Profili hiç değiştirilmemiş (Temkinli) kasa bir kez
-     * "En yüksek kazanç"a geçirilir; arayüz bir hafta boyunca bunu ve nasıl geri alınacağını gösterir.
+     * 2.7: kullanıcı en yüksek kazancı istedi; 2.8'de yeniden ("max kâra odaklan"). Profil "En yüksek
+     * kazanç" değilse (Temkinli ya da özel) bir kez ona geçirilir (2.7'nin değerleri ayar dosyasında
+     * zaten taşınır); arayüz bir hafta boyunca yeni ayarları ve nasıl geri alınacağını gösterir.
+     * Sonradan elle seçilen profile dokunulmaz.
      */
     private void switchToMaxProfit() {
-        if (prefs.getBoolean("maxProfit27", false)) return;
+        if (prefs.getBoolean("maxProfit28", false)) return;
         try {
             Settings s = ledger.settings();
-            if ("temkinli".equals(s.detectProfile())) {
+            if (!"yuksek".equals(s.detectProfile())) {
                 s.applyProfile("yuksek");
                 ledger.saveSettings(s);
-                prefs.edit().putLong("profileSwitchedAt", System.currentTimeMillis()).apply();
             }
+            prefs.edit().putLong("profileSwitchedAt", System.currentTimeMillis()).apply();
         } catch (RuntimeException ignored) {
             // ayar kaydedilemedi: kullanıcı profili elle seçebilir
         }
-        prefs.edit().putBoolean("maxProfit27", true).apply();
+        prefs.edit().putBoolean("maxProfit28", true).apply();
     }
 
     /** Profilin otomatik geçirildiği an (ms); son 7 gün içinde değilse 0. */

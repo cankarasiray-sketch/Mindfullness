@@ -167,7 +167,7 @@ public final class CreditPlan {
                 return c != 0 ? c : Integer.compare(order.indexOf(a), order.indexOf(b));
             }
         });
-        int[] radarSteps = {4, 2, 1, 0};
+        int[] radarSteps = Settings.RADAR_STEPS;
         int[] kgSteps = {12, 8, 4, 0};
         while (cost(p, active, avgCoupons) > p.budget) {
             int droppable = -1; // bugün maçı olan, en az fırsat çıkaran lig (maçsız lig kredi harcamaz)

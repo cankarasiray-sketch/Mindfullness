@@ -37,6 +37,16 @@ public final class Zirve {
     static final int MAX_NOTIFIED = 300;
     /** Değerlendirme biçimi; eski sürümün kaydı görülünce okuma beklemeden yenilenir. */
     public static final int VIEW_VERSION = 4;
+    /**
+     * 2.8: arka planda saatlik Zirve kontrolü (kredi harcamaz; yeni ya da değişen artırılmış oran daha erken
+     * görülür). Gece 01:00–08:00 arası (Türkiye saati) atlanır.
+     */
+    public static final long BACKGROUND_PERIOD_MS = 60 * 60 * 1000L;
+
+    public static boolean backgroundHour(Instant now) {
+        int h = now.atOffset(Fmt.TR).getHour();
+        return h >= 8 || h < 1;
+    }
 
     /** Zirve sekmesindeki artırılmış bir oran. */
     public static final class Offer {

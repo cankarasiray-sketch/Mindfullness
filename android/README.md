@@ -62,6 +62,45 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## En yüksek kâr ayarları, günde 8 radar, saatlik Zirve (2.8)
+
+- **"En yüksek kazanç" profili güncellendi:** Kelly çarpanı 0,50 → **0,60**, maç oranı üst sınırı
+  3,50 → **4,50**, maç başına en az avantaj %3 → **%2**. Kupon başına %10, günlük toplam %20, maç
+  başına %30 / kupon için %20 tutma olasılığı aynı. Değerler uygulamanın kendi motoruyla, demo
+  piyasasında (24 piyasa × 180 gün, aynı tohumlar) ve iki zorlaştırılmış dünyada ölçüldü:
+
+  | Ayar (normal dünya: marj %8, model hatası %2) | Ortanca kasa | Aylık büyüme | Kötü %10 | Tutma |
+  |---|---|---|---|---|
+  | Temkinli | ×1,12 | +%1,5 | ×0,93 | %50 |
+  | 2.7 En yüksek kazanç | ×1,27 | +%4,6 | ×0,90 | %40 |
+  | yalnız üst oran 5,0 | ×1,40 | +%5,2 | ×1,04 | %40 |
+  | yalnız maç başına %2 | ×1,42 | +%5,2 | ×0,94 | %38 |
+  | üst oran 4,5 + %2 | ×1,53 | +%5,8 | ×1,03 | %38 |
+  | **2.8: üst oran 4,5 + %2 + Kelly 0,60** | **×1,63** | **+%6,7** | **×1,03** | %38 |
+  | aynısı, Kelly 0,65, %12 / gün %25 | ×1,70 | +%7,0 | ×1,03 (en kötü ×0,75) | %37 |
+
+  | Aylık büyüme (kötü %10) | 2.7 | üst 4,5 + %2 | **2.8** | Kelly 0,65 |
+  |---|---|---|---|---|
+  | Zor dünya: marj %12, model hatası %4 | +%1,9 (×0,88) | +%2,2 (×0,91) | **+%2,5 (×0,88)** | — |
+  | Çok hatalı model: marj %10, hata %8 | +%1,7 (×0,77) | +%1,8 (×0,80) | **+%2,0 (×0,74)** | +%2,1 (×0,64) |
+
+  Üst oran 4,5 ile 5,0 aynı sonucu verdi (%30 tutma şartıyla 4,5 üstü oranda değer pek çıkmaz).
+  Kupon eşiğini %5'ten %3'e indirmek, en az maç oranı, haftalık limit, aday sayısı ve en fazla maç
+  sayısı sonucu değiştirmedi ya da zor dünyada düşürdü; değiştirilmedi. Kelly 0,65 her dünyada biraz
+  daha büyüme verdi ama çok hatalı modelde kötü %10'u ×0,74'ten ×0,64'e indirdi; gerçekte avantaj
+  tahminleri abartılı çıkma eğiliminde olduğundan 0,60'ta kalındı. Bu dünyalarda avantaj tasarım
+  gereği vardır; rakamlar ayarları karşılaştırmak içindir, gerçek getiri vaadi değildir.
+- **Günde 6 ya da 8 radar:** iddaa, Pinnacle'ın fiyat değişikliğini geç yansıttığında değer doğar;
+  daha sık tarama bu aralıkları daha çok yakalar. En yüksek kazanç profili günde 8'e kadar tarar
+  (maç saatlerine göre, taramalar arasında en az 90 dk). Kredi yetmezse kredi planı önce Karşılıklı
+  Gol'ü, sonra kadro saatini, sonra radarı 8 → 6 → 4 → 2 → 1 diye azaltır; 10 anahtarla 8 tarama korunur.
+- **Zirve Oran saatlik:** Zirve okuması kredi harcamadığı için arka planda saatte bir yapılır
+  (01:00–08:00 arası hariç); yeni ya da yükselen artırılmış oran 3 saatlik işi beklemeden bildirilir.
+- **Geçiş:** 2.7'nin En yüksek kazanç değerleri ayar dosyasında 2.8 değerlerine taşınır. Kullanıcı
+  en yüksek kârı yeniden istediği için profil Temkinli ya da özelse güncellemede bir kez En yüksek
+  kazanç'a geçirilir; Bugün sekmesi bir hafta boyunca yeni ayarları ve Temkinli'ye nasıl dönüleceğini
+  gösterir. Sonradan elle seçilen profile dokunulmaz.
+
 ## En yüksek kazanç profili (2.7)
 
 - Profiller artık tutma olasılığı eşiklerini de kurar. **En yüksek kazanç**: ortak yarım Kelly,
@@ -169,7 +208,7 @@ bildirim olarak gelir.
   (`/api/v3/mobile/aggregator/gamelist/all/v1?tabType=160&bulletinType=2`; her oranda `val` normal
   iddaa oranı, `tval` Zirve oranı). Hesap ya da oturum gerekmez, kredi harcamaz. Okuma zamanları:
   uygulama açılınca (10 dakikada bir), sabah kararından, radar taramasından ve "Kaynakları test
-  et"ten sonra, 3 saatlik periyodik işte.
+  et"ten sonra, 3 saatlik periyodik işte ve (2.8) arka planda saatte bir.
 - **Değerlendirme:** Zirve maçı son tam taramanın adil oran tablosundaki maçla (aynı saat, benzer
   adlar) eşleştirilir; seçim uygulamanın pazarına çevrilir (MS, KG, ÇŞ, 2,5 Alt/Üst; basketbolda
   uzatmalar dahil maç sonucu ve iddaa çizgisindeki toplam sayı). Avantaj = adil olasılık x Zirve oranı

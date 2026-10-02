@@ -198,7 +198,11 @@ public final class Settings {
      */
     public transient java.util.Map<String, Double> edgeRatios;
 
-    /** Gün içi radar taraması sayısı: 0 (kapalı), 1 (17:00), 2 (13:00, 18:00), 4 (10, 13, 16, 19). */
+    /**
+     * Gün içi radar taraması sayısı: 0 (kapalı), 1 (17:00), 2 (13:00, 18:00), 4 (10, 13, 16, 19), 6 ya da 8
+     * (2.8; kredi bol olanlar için, plan kredi yetmezse kendiliğinden azaltır). Maç saatleri biliniyorsa
+     * saatler maçlara göre yerleşir (ScanPlan); buradakiler yedek saatlerdir.
+     */
     public int radarScans = 0;
     /**
      * Kadro saati taraması: her maç grubundan ~45 dk önce yalnızca o grupta oynayan ligler taranır
@@ -216,11 +220,21 @@ public final class Settings {
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
 
+    /** Geçerli radar sıklıkları (kredi planı bu sırayla azaltır). */
+    public static final int[] RADAR_STEPS = {8, 6, 4, 2, 1, 0};
+
+    static boolean isRadarStep(int n) {
+        for (int s : RADAR_STEPS) if (s == n) return true;
+        return false;
+    }
+
     public int[] radarHours() {
         switch (radarScans) {
             case 1: return new int[] {17};
             case 2: return new int[] {13, 18};
             case 4: return new int[] {10, 13, 16, 19};
+            case 6: return new int[] {10, 12, 14, 16, 18, 20};
+            case 8: return new int[] {9, 11, 13, 15, 17, 19, 20, 21};
             default: return new int[0];
         }
     }
@@ -243,13 +257,22 @@ public final class Settings {
      */
     /** En yüksek kazanç profilinin olasılık eşikleri (demo simülasyonunda en yüksek büyüme; README 2.7). */
     static final double MAX_PROFIT_LEG_PROB = 0.30, MAX_PROFIT_WIN_PROB = 0.20;
+    /**
+     * 2.8: Kelly çarpanı 0,50 -> 0,60, en yüksek maç oranı 3,50 -> 4,50 ve maç başına en az avantaj
+     * %3 -> %2 (README 2.8: üç ayrı demo dünyasında, yüksek marj ve büyük model hatası dahil, büyümeyi
+     * artırdı; 0,65 kötü senaryoyu belirgin bozduğu için seçilmedi).
+     */
+    static final double MAX_PROFIT_KELLY = 0.60, MAX_PROFIT_MAX_ODDS = 4.50, MAX_PROFIT_LEG_EV = 0.02;
 
     public static final Object[][] PROFILES = {
         // ad, başlık, Kelly çarpanı, kupon başına üst sınır, günlük kupon, günlük toplam üst sınır,
-        // maç başına en az tutma olasılığı, kupon için en az tutma olasılığı
-        {"temkinli", "Temkinli (sık tutsun)", 0.25, 0.03, 5, 0.09, 0.40, 0.30},
-        {"yuksek", "En yüksek kazanç", 0.50, 0.10, 5, 0.20, MAX_PROFIT_LEG_PROB, MAX_PROFIT_WIN_PROB},
+        // maç başına en az tutma olasılığı, kupon için en az tutma olasılığı, en yüksek maç oranı,
+        // maç başına en az avantaj
+        {"temkinli", "Temkinli (sık tutsun)", 0.25, 0.03, 5, 0.09, 0.40, 0.30, 3.50, 0.03},
+        {"yuksek", "En yüksek kazanç", MAX_PROFIT_KELLY, 0.10, 5, 0.20, MAX_PROFIT_LEG_PROB, MAX_PROFIT_WIN_PROB, MAX_PROFIT_MAX_ODDS, MAX_PROFIT_LEG_EV},
     };
+    /** 2.7'nin "En yüksek kazanç" bahis değerleri (2.8 geçişi için). */
+    static final Object[] YUKSEK_27 = {"yuksek", "", 0.50, 0.10, 5, 0.20};
 
     public void applyProfile(String name) {
         for (Object[] p : PROFILES) {
@@ -261,10 +284,12 @@ public final class Settings {
                 maxDailyExposure = (Double) p[5];
                 minLegProb = (Double) p[6];
                 minWinProb = (Double) p[7];
+                maxLegOdds = (Double) p[8];
+                minLegEv = (Double) p[9];
                 if ("yuksek".equals(name)) {
-                    // daha çok fırsat: günde 4 radar, kadro saati, kredi bolsa ek ligler, Alt/Üst ve handikap
-                    // (kredi yetmezse kredi planı kendiliğinden daraltır)
-                    radarScans = 4;
+                    // daha çok fırsat: kredi yettikçe günde 8 radar (2.8), kadro saati, kredi bolsa ek ligler,
+                    // Alt/Üst ve handikap (kredi yetmezse kredi planı kendiliğinden daraltır)
+                    radarScans = 8;
                     lineupScans = true;
                     creditExpand = true;
                     totals = true;
@@ -278,13 +303,14 @@ public final class Settings {
 
     /** Kelly/üst sınır bir profile birebir uyuyorsa onun adı, yoksa "ozel". */
     public String detectProfile() {
-        for (Object[] p : PROFILES) {
-            if (Math.abs(kellyMultiplier - (Double) p[2]) < 1e-9 && Math.abs(maxStakeFraction - (Double) p[3]) < 1e-9
-                    && maxCouponsPerDay == (Integer) p[4] && Math.abs(maxDailyExposure - (Double) p[5]) < 1e-9) {
-                return (String) p[0];
-            }
-        }
+        for (Object[] p : PROFILES) if (staking(p)) return (String) p[0];
         return "ozel";
+    }
+
+    /** Kelly, üst sınır, günlük kupon ve günlük toplam bu profil satırına birebir uyuyor mu. */
+    private boolean staking(Object[] p) {
+        return Math.abs(kellyMultiplier - (Double) p[2]) < 1e-9 && Math.abs(maxStakeFraction - (Double) p[3]) < 1e-9
+                && maxCouponsPerDay == (Integer) p[4] && Math.abs(maxDailyExposure - (Double) p[5]) < 1e-9;
     }
 
     public Map<String, Object> toMap() {
@@ -323,7 +349,7 @@ public final class Settings {
         m.put("edgeGuard", edgeGuard);
         m.put("internationals", internationals);
         m.put("profile", detectProfile());
-        m.put("v", 5L);
+        m.put("v", 6L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -397,6 +423,10 @@ public final class Settings {
             // 2.5: tutma olasılığı da değerlendirilir; eski varsayılan kupon eşiği %20 -> %30
             s.minWinProb = 0.30;
         }
+        if (Json.lng(m, "v", 1) < 6 && (s.staking(YUKSEK_27) || "yuksek".equals(s.detectProfile()))) {
+            // 2.8: "En yüksek kazanç" profili güncellendi (Kelly 0,60, üst oran 4,50, maç başına %2, kredi yettikçe 8 radar)
+            s.applyProfile("yuksek");
+        }
         s.profile = s.detectProfile();
         return s;
     }
@@ -423,7 +453,7 @@ public final class Settings {
         }
         if (creditResetDay < 1 || creditResetDay > 28) return "Kredi yenilenme günü 1 ile 28 arasında olmalı";
         if (kgEvents < 0 || kgEvents > 20) return "Karşılıklı Gol maç sayısı 0 ile 20 arasında olmalı";
-        if (radarScans != 0 && radarScans != 1 && radarScans != 2 && radarScans != 4) return "Radar sıklığı 0, 1, 2 ya da 4 olmalı";
+        if (!isRadarStep(radarScans)) return "Radar sıklığı 0, 1, 2, 4, 6 ya da 8 olmalı";
         return null;
     }
 }

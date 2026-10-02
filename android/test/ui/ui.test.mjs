@@ -297,6 +297,12 @@ test("radar sıklığı ayarı ve kredi tahmini", async () => {
   t.button("Ayarları kaydet").click();
   await t.tick();
   assert.equal(t.calls.at(-1).payload.settings.radarScans, 2);
+  // 2.8: kredi bol olanlar için günde 6 ve 8
+  assert.deepEqual([...t.$("#sRadar").options].map((o) => o.value), ["0", "1", "2", "4", "6", "8"]);
+  t.$("#sRadar").value = "8";
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).payload.settings.radarScans, 8);
 });
 
 test("günde birden fazla kupon gösterilir", async () => {
@@ -999,7 +1005,7 @@ test("en yüksek kazanç profiline geçiş bildirimi", async () => {
   const t = boot(s);
   const b = t.$(".profile-switched");
   assert.ok(b, "bildirim yok");
-  assert.match(b.textContent, /Strateji "En yüksek kazanç" profiline geçirildi\..*maç başına en az %30 tutma.*Temkinli'ye dönebilirsin/);
+  assert.match(b.textContent, /Strateji: "En yüksek kazanç" \(2\.8 ayarları\)\..*Kelly 0,60.*maç oranı 4,50.*günde 8.*Zirve Oran saatlik.*maç başına en az %30 tutma.*Temkinli'ye dönebilirsin/);
   t.button("Strateji profili").click();
   assert.ok(t.$("#f_minLegProb"));
   // Temkinli'ye dönüldüyse ya da süre geçtiyse gösterilmez

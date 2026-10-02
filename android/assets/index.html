@@ -336,8 +336,8 @@ function banners() {
   }
   if (!S.settings.oddsApiKey) out.push('<div class="banner"><b>Kurulumu tamamla:</b> Adil olasılıkları hesaplamak için ücretsiz The Odds API anahtarı gerekli.'
     + '<div class="btns"><button class="b" onclick="show(\'ayarlar\')">Anahtarı gir</button><button class="b ghost" onclick="act(\'demoStart\')">Önce demoyu gör</button></div></div>');
-  if (S.profileSwitchedAt && S.settings.profile === "yuksek") out.push('<div class="banner profile-switched"><b>Strateji "En yüksek kazanç" profiline geçirildi.</b> '
-    + "Yarım Kelly, kupon başına kasanın en fazla %10'u, günde 4 radar taraması; seyrek tutan ama değerli seçimler de önerilir (maç başına en az %"
+  if (S.profileSwitchedAt && S.settings.profile === "yuksek") out.push('<div class="banner profile-switched"><b>Strateji: "En yüksek kazanç" (2.8 ayarları).</b> '
+    + "Kelly 0,60, kupon başına kasanın en fazla %10'u, maç oranı 4,50'ye kadar, kredi yettikçe günde 8'e kadar radar taraması, Zirve Oran saatlik; seyrek tutan ama değerli seçimler de önerilir (maç başına en az %"
     + num(S.settings.minLegProb * 100, 0) + " tutma). Uzun vadede beklenen kazanç daha yüksek, dalgalanma ve kötü aylar da daha büyük. "
     + "Daha sık tutan ve daha küçük tutarlı oyun için Temkinli'ye dönebilirsin."
     + '<div class="btns"><button class="b ghost" onclick="show(\'ayarlar\')">Strateji profili</button></div></div>');
@@ -1151,7 +1151,7 @@ function viewSettings() {
     + 'iddaa pazarları Pinnacle\'la karşılaştırılarak otomatik bulunur; "Kaynakları test et" özetinde Basketbol MS ve Basketbol Alt/Üst ✓ görünmeli.</p></div>';
   html += '<div class="card"><h2>Düşen oran radarı</h2><p class="small muted">Gün içinde piyasayı yeniden tarar: Pinnacle\'da oranı hızla düşen sonuçları ve '
     + "sabah olmayan yeni değer fırsatlarını bulur. Bugün oynanmış kupon yoksa güncel oranlarla yeni kupon önerir ve bildirir.</p>"
-    + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"]].map(function (o) {
+    + '<label>Tarama sıklığı</label><select id="sRadar">' + [[0, "Kapalı"], [1, "Günde 1"], [2, "Günde 2"], [4, "Günde 4"], [6, "Günde 6"], [8, "Günde 8"]].map(function (o) {
       return '<option value="' + o[0] + '"' + (st.radarScans === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + '</select><p class="small muted">Taramalar günün maç saatlerine göre, maç gruplarından ~2,5 saat önceye yerleştirilir (o saatte Pinnacle fiyatı olgun, iddaa çoğu zaman henüz güncellenmemiş); maç bilgisi yoksa 10–19 arası sabit saatler. Tahmini aylık kredi: ~' + st.estimatedCredits + " (ücretsiz plan 500). "
     + (st.estimatedCredits > 500 ? "<b>Ücretsiz planı aşar:</b> birden fazla anahtar ekle, lig sayısını azalt ya da ücretli plana geç." : "Ücretsiz plana sığar.") + "</p>"
@@ -1195,11 +1195,12 @@ function viewSettings() {
   return html;
 }
 var PROFILE_TEXT = {
-  temkinli: "Daha sık tutsun diye: maç başına en az %40, kupon için en az %30 tutma olasılığı; ortak çeyrek Kelly, kupon başına en fazla %3, günlük toplam en fazla %9. "
-    + "Demo simülasyonunda (20 piyasa × 180 gün) ortanca aylık büyüme +%1,7, tutma oranı %51.",
-  yuksek: "En yüksek beklenen kazanç: ortak yarım Kelly, kupon başına en fazla %10, günlük toplam en fazla %20; maç başına en az %30, kupon için en az %20 tutma olasılığı; "
-    + "günde 4 radar, kadro saati taraması, ek ligler, Alt/Üst ve handikap açık. Demo simülasyonunda ortanca aylık büyüme +%5,0 (Temkinli +%1,7), tutma oranı %40: "
-    + "daha seyrek tutar ama tutunca daha çok kazandırır. Tam Kelly ortancayı değiştirmedi, kötü senaryoyu ×0,99'dan ×0,83'e indirdi; tahmin hatası arttıkça yarım Kelly'nin gerisinde kalır."
+  temkinli: "Daha sık tutsun diye: maç başına en az %40, kupon için en az %30 tutma olasılığı; ortak çeyrek Kelly, kupon başına en fazla %3, günlük toplam en fazla %9, maç oranı en fazla 3,50. "
+    + "Demo simülasyonunda (24 piyasa × 180 gün) ortanca aylık büyüme +%1,5, tutma oranı %50.",
+  yuksek: "En yüksek beklenen kazanç: ortak Kelly 0,60, kupon başına en fazla %10, günlük toplam en fazla %20; maç başına en az %30, kupon için en az %20 tutma olasılığı, "
+    + "maç başına en az %2 avantaj, maç oranı en fazla 4,50; kredi yettikçe günde 8 radar, kadro saati taraması, ek ligler, Alt/Üst ve handikap açık. "
+    + "Demo simülasyonunda ortanca aylık büyüme +%6,7 (2.7 ayarı +%4,6, Temkinli +%1,5), tutma oranı %38: daha seyrek tutar ama tutunca daha çok kazandırır. "
+    + "Yüksek marjlı ve model hatası büyük dünyalarda da öndeydi; Kelly 0,65 biraz daha kazandırdı ama kötü senaryoyu belirgin bozdu, bu yüzden seçilmedi."
 };
 function profilesCard(st) {
   return '<div class="card"><h2>Strateji profili</h2>' + S.profiles.map(function (p) {

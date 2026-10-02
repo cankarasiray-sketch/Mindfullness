@@ -11,6 +11,7 @@ import android.os.Build;
 import app.bilincli.core.Fmt;
 import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
+import app.bilincli.core.Zirve;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -25,6 +26,8 @@ final class Scheduler {
     static final int JOB_PERIODIC = 2;
     static final int JOB_EVENT = 3;
     static final int JOB_RADAR = 4;
+    static final int JOB_ZIRVE = 5;
+    static final String EXTRA_ZIRVE = "zirve";
     static final String EXTRA_RADAR = "radar";
     static final String ACTION_RADAR = "app.bilincli.RADAR";
     static final String EXTRA_DAILY = "daily";
@@ -65,6 +68,17 @@ final class Scheduler {
                     .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                     .setPeriodic(3 * 60 * 60 * 1000L)
                     .setPersisted(true)
+                    .build());
+        }
+        if (js.getPendingJob(JOB_ZIRVE) == null) {
+            // Zirve Oran saatlik (kredi harcamaz): yeni artırılmış oran 3 saatlik işi beklemeden görülür
+            android.os.PersistableBundle extras = new android.os.PersistableBundle();
+            extras.putBoolean(EXTRA_ZIRVE, true);
+            js.schedule(new JobInfo.Builder(JOB_ZIRVE, new ComponentName(ctx, DailyJob.class))
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .setPeriodic(Zirve.BACKGROUND_PERIOD_MS)
+                    .setPersisted(true)
+                    .setExtras(extras)
                     .build());
         }
         scheduleNextEvent(ctx);

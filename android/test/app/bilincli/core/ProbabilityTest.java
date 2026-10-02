@@ -104,11 +104,11 @@ public class ProbabilityTest {
         Settings s = new Settings();
         s.applyProfile("yuksek");
         assertEquals("yuksek", s.detectProfile());
-        assertEquals(0.50, s.kellyMultiplier, 0);
+        assertEquals(0.60, s.kellyMultiplier, 0);
         assertEquals(0.10, s.maxStakeFraction, 0);
         assertEquals(Settings.MAX_PROFIT_LEG_PROB, s.minLegProb, 0);
         assertEquals(Settings.MAX_PROFIT_WIN_PROB, s.minWinProb, 0);
-        assertEquals(4, s.radarScans);
+        assertEquals(8, s.radarScans);
         assertTrue(s.lineupScans && s.creditExpand && s.totals && s.basketHandicap);
         assertEquals(null, s.validate());
         // geri dönüş: Temkinli sık tutan eşiklere döner (tarama ayarları korunur)
