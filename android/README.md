@@ -62,6 +62,28 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Günün seçimi (2.9)
+
+iddaa oranları neredeyse her zaman adil oranın altında kaldığından çoğu gün değerli seçim çıkmıyor.
+Yine de oynamak isteyen için her gün tek bir öneri:
+
+- **Kural:** tek maç oynanabilen (MBS 1), tutma olasılığı en az %60 (Ayarlar → Günün seçimi), oranı
+  1,25–maç oranı üst sınırı arasında, en az 30 dk sonra ve 24 saat içinde başlayan seçimler arasında
+  **adil orana en yakın** (beklenen değeri en yüksek) olan. Normal iddaa oranları ve Bilyoner Zirve Oran
+  birlikte karşılaştırılır; Zirve oranı daha iyiyse o önerilir.
+- **Tutar:** Kelly değil, sabit ve küçük: ayar 0 ise kasanın %1'i (10 TL'ye yuvarlı, en az 10 TL).
+  Kart tutarı, tutarsa ödemeyi, beklenen sonucu ve her gün oynanırsa aylık beklenen sonucu yazar.
+  Seçim adil oranı geçiyorsa "değerli" diye işaretlenir.
+- **Neden böyle:** rastgele bir tek maç bahsinde iddaa marjı (~%22) yüzünden 100 TL'de ortalama ~18 TL
+  kaybedilir; adil orana en yakın, sık tutan seçimde kayıp tipik olarak 2–8 TL'ye iner. Sık tutması
+  kaybı ortadan kaldırmaz, dalgalanmayı azaltır.
+- **Nerede:** pas günlerinde Bugün sekmesinde "Günün seçimi" kartı (diğer 3 aday açılır listede) ve
+  sabah bildiriminde başlık. Haftalık kayıp limiti dolduysa öneri gösterilmez. "Oynadım" seçimi
+  kasaya "günün seçimi" kuponu olarak yazar (avantaj ölçümüne girmez); Geçmiş'te ayrı sonuç kartı
+  gerçekleşen ve beklenen tutma oranı ile kâr/zararı karşılaştırır.
+- **Sanal takip:** günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis olarak kaydedilir ve
+  sonuçlanır (seçim maç başlamadan değişirse yenisi geçer); strateji para riske atmadan sınanır.
+
 ## Uzun işlemlerde bekleme ekranı (2.8.1)
 
 - "Güncel oranlarla yeni kupon" ve "Şimdi tara" kredi bolken dakikalarca sürebiliyordu: taramadan önce

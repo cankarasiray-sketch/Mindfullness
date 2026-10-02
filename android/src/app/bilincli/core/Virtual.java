@@ -21,6 +21,8 @@ public final class Virtual {
     public static final long STAKE = 10000;
     static final int KEEP = 500;
     public static final String NORMAL = "normal", ZIRVE = "zirve";
+    /** Günün seçimi (2.9): her gün önerilen seçim, oynansın oynanmasın. */
+    public static final String PICK = "secim";
 
     private final Ledger.Storage storage;
     private final List<Map<String, Object>> rows = new ArrayList<>();
@@ -175,11 +177,15 @@ public final class Virtual {
 
     /** Arayüz: toplam, tür başına (normal / Zirve) ölçüler ve son kayıtlar (yeniden eskiye). */
     public synchronized Map<String, Object> view() {
-        List<Map<String, Object>> normal = new ArrayList<>(), zirve = new ArrayList<>();
-        for (Map<String, Object> r : rows) (ZIRVE.equals(Json.str(r, "kind")) ? zirve : normal).add(r);
+        List<Map<String, Object>> normal = new ArrayList<>(), zirve = new ArrayList<>(), pick = new ArrayList<>();
+        for (Map<String, Object> r : rows) {
+            String k = Json.str(r, "kind");
+            (ZIRVE.equals(k) ? zirve : PICK.equals(k) ? pick : normal).add(r);
+        }
         Map<String, Object> v = stats(rows);
         v.put("normal", stats(normal));
         v.put("zirve", stats(zirve));
+        v.put("secim", stats(pick));
         List<Object> recent = new ArrayList<>();
         for (int i = rows.size() - 1; i >= 0 && recent.size() < 20; i--) {
             Map<String, Object> r = new LinkedHashMap<>(rows.get(i));

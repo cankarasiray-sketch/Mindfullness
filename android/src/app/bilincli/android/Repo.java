@@ -16,6 +16,7 @@ import app.bilincli.core.Ledger;
 import app.bilincli.core.Matching;
 import app.bilincli.core.Models;
 import app.bilincli.core.OddsApi;
+import app.bilincli.core.Pick;
 import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
@@ -1090,6 +1091,21 @@ final class Repo {
     }
 
     /** Arayüz için sanal takip (demoda yok). */
+    /** Günün seçimi (2.9): son taramanın adil oran tablosu ve Zirve Oran'dan; demo ya da kapalıysa null. */
+    Map<String, Object> pick() {
+        if (isDemo()) return null;
+        try {
+            Map<String, Object> rv = radar.view();
+            Instant now = Instant.now();
+            Map<String, Object> p = Pick.choose(Json.arr(rv.get("fairs")), zirveView(), Daily.decisionSettings(ledger), ledger.balance(), now);
+            // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
+            if (p != null) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(p), now);
+            return p;
+        } catch (RuntimeException e) {
+            return null; // tablo yazılırken okunduysa bir sonraki çizimde gelir
+        }
+    }
+
     Map<String, Object> virtualView() {
         return isDemo() ? null : virtual.view();
     }

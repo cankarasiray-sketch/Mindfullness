@@ -58,6 +58,7 @@ public final class Bridge {
         extra.put("radar", repo.radarView());
         extra.put("zirve", repo.zirveView());
         extra.put("virtual", repo.virtualView());
+        extra.put("pick", repo.pick());
         long switched = repo.profileSwitchedAt();
         extra.put("profileSwitchedAt", switched > 0 ? Instant.ofEpochMilli(switched).toString() : null);
         extra.put("credits", repo.credits());
@@ -330,6 +331,27 @@ public final class Bridge {
                 }
                 Scheduler.scheduleNextEvent(activity);
                 return "Kampanya bahsi kupon #" + id + " olarak kaydedildi: " + Fmt.tl(stake) + ". Sonuç maçtan sonra otomatik işlenir.";
+            }
+            case "pickPlay": {
+                requireReal(repo);
+                double odds;
+                try {
+                    odds = Double.parseDouble(String.valueOf(Json.str(p, "odds")).trim().replace(',', '.'));
+                } catch (NumberFormatException e) {
+                    throw new Ledger.LedgerException("Oynadığın oranı yaz, örn. 1,55");
+                }
+                if (!(odds > 1.0 && odds < 1000)) throw new Ledger.LedgerException("Geçersiz oran");
+                @SuppressWarnings("unchecked")
+                Map<String, Object>[] found = app.bilincli.core.Promo.find(Json.arr(repo.radar.view().get("fairs")), String.valueOf(Json.str(p, "ref")),
+                        String.valueOf(Json.str(p, "m")), String.valueOf(Json.str(p, "o")));
+                if (found == null) throw new Ledger.LedgerException("Bu seçim son taramada yok. Fırsatlar → \"Şimdi tara\" ile güncelle.");
+                long stake = Ledger.parseTl(Json.str(p, "amount"));
+                long id;
+                synchronized (Repo.LOCK) {
+                    id = app.bilincli.core.Promo.recordPick(repo.real(), found[0], found[1], odds, stake, Fmt.dayKey(Instant.now()));
+                }
+                Scheduler.scheduleNextEvent(activity);
+                return "Günün seçimi kupon #" + id + " olarak kaydedildi: " + Fmt.tl(stake) + ". Sonuç maçtan sonra otomatik işlenir.";
             }
             case "zirveRefresh": {
                 requireReal(repo);

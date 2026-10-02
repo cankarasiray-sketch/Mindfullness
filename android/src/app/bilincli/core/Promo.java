@@ -139,6 +139,10 @@ public final class Promo {
      * kampanya oranı piyasa oranı değildir.
      */
     public static long record(Ledger ledger, Map<String, Object> row, Map<String, Object> sel, double odds, long stake, String day) {
+        if (stake <= 0) throw new Ledger.LedgerException("Kupon tutarı pozitif olmalı");
+        if (stake > ledger.balance()) { // önce: yetmezse oynanmamış kupon artığı kalmasın
+            throw new Ledger.LedgerException("Kasada yeterli para yok (kasa: " + Fmt.tl(ledger.balance()) + ")");
+        }
         String market = Json.str(sel, "m"), outcome = Json.str(sel, "o");
         double prob = Json.dbl(sel, "p", 0);
         Instant kickoff = Instant.parse(Json.str(row, "kickoff"));
@@ -160,6 +164,13 @@ public final class Promo {
         long id = ledger.addCoupon(p, day, stake);
         ledger.markPromo(id);
         ledger.markPlayed(id, stake, null);
+        return id;
+    }
+
+    /** Günün seçimi oynandı (2.9): tekli kupon, avantaj ölçümüne girmez, "günün seçimi" olarak takip edilir. */
+    public static long recordPick(Ledger ledger, Map<String, Object> row, Map<String, Object> sel, double odds, long stake, String day) {
+        long id = record(ledger, row, sel, odds, stake, day);
+        ledger.markPick(id);
         return id;
     }
 }

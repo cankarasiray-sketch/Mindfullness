@@ -14,6 +14,7 @@ import app.bilincli.core.Daily;
 import app.bilincli.core.Ledger;
 import app.bilincli.core.Texts;
 import java.util.List;
+import java.util.Map;
 
 /** Bildirimler: günün kararı ve kupon sonuçları. */
 final class Notifier {
@@ -74,9 +75,9 @@ final class Notifier {
         return hour < 8 && Repo.get(ctx).real().settings().quietNights;
     }
 
-    static void daily(Context ctx, Ledger ledger, Daily.Result r, boolean notifyErrors) {
+    static void daily(Context ctx, Ledger ledger, Daily.Result r, boolean notifyErrors, Map<String, Object> pick) {
         if (r.error != null && !notifyErrors) return;
-        String[] t = Texts.notification(ledger, r);
+        String[] t = Texts.notification(ledger, r, pick);
         if (t != null) show(ctx, CH_DAILY, ID_DAILY, t[0], t[1]);
     }
 

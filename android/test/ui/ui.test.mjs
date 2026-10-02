@@ -867,8 +867,9 @@ test("sanal takip: en yakın seçimlerin sanal sonucu Geçmiş'te", async () => 
   assert.match(card, /Tutma oranı%50,0 \(adil olasılığa göre beklenen %59,0\)/);
   assert.match(card, /Sanal kâr\/zarar-60,00 TL \(2 × 100 TL, ROI −%30,0\)/);
   assert.match(card, /Beklenen kâr\/zarar-16,50 TL/);
-  assert.match(card, /Normal oranlarda1 bahis · tutan 1 · 40,00 TL/);
-  assert.match(card, /Zirve Oran'da1 bahis · tutan 0 · -100,00 TL/);
+  assert.match(card, /En yakın · normal oranlar1 bahis · tutan 1 · 40,00 TL/);
+  assert.match(card, /En yakın · Zirve Oran1 bahis · tutan 0 · -100,00 TL/);
+  assert.match(card, /Günün seçimihenüz yok/);
   assert.equal(t.$$(".virtual-row").length, 3);
   assert.match(t.$$(".virtual-row")[0].textContent, /İtalya – Türkiye MS 1 1,31Bekliyor/);
   assert.match(t.$$(".virtual-row")[1].textContent, /Zirve Oran1-1Hırvatistan – İngiltere MS 2 1,74Yattı -100,00 TL/);
@@ -1042,6 +1043,64 @@ test("en yüksek kazanç profiline geçiş bildirimi", async () => {
   s.settings.profile = "yuksek";
   s.profileSwitchedAt = null;
   assert.equal(boot(s).$(".profile-switched"), null);
+});
+
+test("günün seçimi: pas gününde öneri, oynadım kaydı, sonuç takibi ve ayar", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "Bugün pas.", summary: "Bülten 32 maç", couponId: null };
+  s.coupons = s.coupons.filter((c) => !c.pick);
+  const ko = new Date(Date.parse(s.now) + 8 * 3600000).toISOString();
+  s.pick = { source: "zirve", ref: "b1", m: "MS", o: "1", label: "MS 1", home: "Portekiz", away: "Norveç", kickoff: ko, league: "UEFA Nations League", code: "3176288",
+    odds: 1.53, normalOdds: 1.47, p: 0.60, fair: 1 / 0.6, ev: 0.6 * 1.53 - 1, mbs: 1, stake: 5000, win: 7650, expected: -410, monthly: -12300, value: false, candidates: 14,
+    alternatives: [{ source: "iddaa", home: "Kazakistan", away: "Moldova", kickoff: ko, label: "MS 1", odds: 1.42, p: 0.64, ev: 0.64 * 1.42 - 1 }] };
+  s.settings.dailyPick = true;
+  s.settings.pickMinProb = 0.6;
+  s.settings.pickStake = 0;
+  const t = boot(s);
+  const card = t.$("#pickCard");
+  assert.ok(card, "günün seçimi kartı yok");
+  assert.match(card.textContent, /GÜNÜN SEÇİMİ/);
+  assert.match(card.textContent, /Portekiz – Norveç/);
+  assert.match(card.textContent, /Zirve Oran/);
+  assert.match(card.textContent, /%60/);
+  assert.match(card.textContent, /50,00 TL → tutarsa 76,50 TL · beklenen sonuç -4,10 TL/);
+  assert.match(card.textContent, /Değerli seçim yok.*en az %60 tutan 14 seçim.*ayda beklenen ≈ -123,00 TL/);
+  assert.match(card.textContent, /Kazakistan – Moldova/);
+  t.button("Oynadım").click();
+  assert.equal(t.$("#pkOdds").value, "1,53");
+  assert.equal(t.$("#pkAmt").value, "50");
+  t.button("Kaydet").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "pickPlay", payload: { ref: "b1", m: "MS", o: "1", odds: "1,53", amount: "50" } });
+  // koruma devredeyken öneri yok
+  const g = clone(s);
+  g.todayRun = { day: s.today, decision: "koruma", reason: "Haftalık kayıp limiti doldu.", summary: "", couponId: null };
+  assert.equal(boot(g).$("#pickCard"), null);
+  // oynandıysa kart sonucu gösterir; Geçmiş'te gerçek sonuç ve beklenen
+  const p2 = clone(s);
+  const today = new Date(Date.parse(s.now) + 3 * 3600000).toISOString().slice(0, 10);
+  const leg = { position: 1, home: "Portekiz", away: "Norveç", kickoff: ko, market: "MS", outcome: "1", odds: 1.53, fairProb: 0.6, mbs: 1 };
+  p2.coupons = [{ id: 901, day: today, played: true, pick: true, stake: 5000, totalOdds: 1.53, winProb: 0.6, legs: [leg], result: null, payout: null, createdAt: s.now },
+    { id: 900, day: "2026-09-30", played: true, pick: true, stake: 5000, totalOdds: 1.60, winProb: 0.62, legs: [leg], result: "kazandi", payout: 8000, createdAt: s.now, settledAt: s.now }];
+  const t2 = boot(p2);
+  assert.match(t2.$("#pickCard").textContent, /OYNANDI.*Portekiz – Norveç/);
+  assert.equal(t2.$$("#pickCard button").length, 0);
+  const h = boot(p2, "#gecmis");
+  assert.match(h.$("#pickStats").textContent, /Sonuçlanan1 \(\+1 bekliyor\)/);
+  assert.match(h.$("#pickStats").textContent, /Tutma%100 \(beklenen %62\)/);
+  assert.match(h.$("#pickStats").textContent, /Kâr\/zarar30,00 TL \(beklenen -0,40 TL\)/);
+  // ayarlar
+  const st = boot(clone(s), "#ayarlar");
+  assert.ok(st.$("#sPick").checked);
+  st.$("#sPickProb").value = "65";
+  st.$("#sPickStake").value = "20";
+  st.button("Ayarları kaydet").click();
+  await st.tick();
+  const saved = st.calls.at(-1).payload.settings;
+  assert.equal(saved.dailyPick, true);
+  assert.equal(saved.pickMinProb, 0.65);
+  assert.equal(saved.pickStake, 20);
+  assert.deepEqual(t.errors, []);
 });
 
 let failed = 0;

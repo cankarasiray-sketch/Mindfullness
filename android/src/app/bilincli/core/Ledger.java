@@ -80,6 +80,8 @@ public final class Ledger {
         public boolean superseded;
         /** Kampanya (özel oran) bahsi: kasada ve sonuçta sayılır, kapanış avantajı ölçümüne girmez. */
         public boolean promo;
+        /** Günün seçimi (2.9): kasada ve sonuçta sayılır, avantaj ölçümüne girmez; ayrıca takip edilir. */
+        public boolean pick;
     }
 
     public static final class Run {
@@ -218,6 +220,7 @@ public final class Ledger {
         o.put("autoPlayed", c.autoPlayed);
         o.put("superseded", c.superseded);
         o.put("promo", c.promo);
+        if (c.pick) o.put("pick", true);
         return o;
     }
 
@@ -256,6 +259,7 @@ public final class Ledger {
             c.autoPlayed = Json.bool(x, "autoPlayed", false);
             c.superseded = Json.bool(x, "superseded", false);
             c.promo = Json.bool(x, "promo", false);
+            c.pick = Json.bool(x, "pick", false);
             for (Object lo : Json.arr(x.get("legs"))) {
                 Map<String, Object> g = Json.obj(lo);
                 Leg l = new Leg();
@@ -468,6 +472,14 @@ public final class Ledger {
         save();
     }
 
+    /** Kuponu günün seçimi olarak işaretler (kampanya değil). */
+    public synchronized void markPick(long couponId) {
+        Coupon c = coupon(couponId);
+        c.pick = true;
+        c.promo = false;
+        save();
+    }
+
     public synchronized void markPlayed(long couponId, long stake, List<Double> legOdds) {
         markPlayed(couponId, stake, legOdds, null);
     }
@@ -604,6 +616,7 @@ public final class Ledger {
         double playedSum = 0, allSum = 0;
         int playedN = 0, allN = 0;
         for (Coupon c : coupons) {
+            if (c.promo || c.pick) continue; // kampanya / günün seçimi: avantaj kanıtı ölçümüne girmez
             for (Leg l : c.legs) {
                 Double v = l.clv();
                 if (v == null) continue;

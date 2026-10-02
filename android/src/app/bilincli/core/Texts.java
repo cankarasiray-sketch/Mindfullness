@@ -103,11 +103,24 @@ public final class Texts {
 
     /** [başlık, metin] */
     public static String[] notification(Ledger ledger, Daily.Result r) {
+        return notification(ledger, r, null);
+    }
+
+    /** pick: günün seçimi (2.9; pas gününde başlıkta ve metinde). */
+    public static String[] notification(Ledger ledger, Daily.Result r, Map<String, Object> pick) {
         String when = LocalDate.parse(r.day).format(DateTimeFormatter.ofPattern("dd.MM.yyyy", Locale.ROOT));
         if (r.error != null) return new String[] {"Veri alınamadı", r.error};
         if (r.blocked != null) return new String[] {"Bugün kupon yok · koruma devrede", r.blocked};
         if (r.decision == null) return null;
         if (r.decision.isPass()) {
+            if (pick != null) {
+                String head = Json.str(pick, "home") + " – " + Json.str(pick, "away") + " · " + Json.str(pick, "label") + " @ "
+                        + Fmt.odds(Json.dbl(pick, "odds", 0));
+                String why = Json.bool(pick, "value", false) ? "Bu seçim adil oranı geçiyor (değerli). "
+                        : "Değerli seçim yok (iddaa oranları adilin altında); bu, adil orana en yakın ve sık tutan seçim. ";
+                return new String[] {"Günün seçimi · " + head, Pick.line(pick) + "\n" + why
+                        + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + ".\n\n" + r.decision.reason};
+            }
             return new String[] {"Bugün pas · " + when, r.decision.reason + "\n" + statsLine(r.decision.stats)};
         }
         Coupon c = ledger.coupon(r.couponId);

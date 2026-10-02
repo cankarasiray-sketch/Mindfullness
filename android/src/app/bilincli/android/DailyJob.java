@@ -53,9 +53,11 @@ public final class DailyJob extends JobService {
                     }
                     Notifier.settled(DailyJob.this, r.settleMessages);
                     if (r.daily != null) {
-                        Notifier.daily(DailyJob.this, Repo.get(DailyJob.this).real(), r.daily, daily);
+                        zirve(repo, true); // sabah taramasından sonra hemen: günün seçimi Zirve Oran'ı da içersin
+                        Notifier.daily(DailyJob.this, repo.real(), r.daily, daily, repo.pick());
+                    } else {
+                        zirve(repo, false); // diğer işlerde 10 dk aralıkla
                     }
-                    zirve(repo, r.daily != null); // sabah taramasından sonra hemen, diğer işlerde 10 dk aralıkla
                 } catch (RuntimeException e) {
                     if (daily) Notifier.show(DailyJob.this, "kupon", 12, "Günlük çalışma başarısız", String.valueOf(e.getMessage()));
                 } finally {

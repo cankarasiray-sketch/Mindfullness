@@ -219,6 +219,15 @@ public final class Settings {
     public boolean zirve = true;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
+    /**
+     * Günün seçimi (2.9): değerli seçim olmayan günlerde de tek seçim önerisi (tek maç, sık tutan, adil orana
+     * en yakın). Kasa Kelly'si değil, sabit küçük tutar.
+     */
+    public boolean dailyPick = true;
+    /** Günün seçiminde en az tutma olasılığı. */
+    public double pickMinProb = 0.60;
+    /** Günün seçiminin tutarı (TL); 0 = kasanın %1'i. */
+    public double pickStake = 0;
 
     /** Geçerli radar sıklıkları (kredi planı bu sırayla azaltır). */
     public static final int[] RADAR_STEPS = {8, 6, 4, 2, 1, 0};
@@ -355,6 +364,9 @@ public final class Settings {
         m.put("quietNights", quietNights);
         m.put("zirve", zirve);
         m.put("basketHandicap", basketHandicap);
+        m.put("dailyPick", dailyPick);
+        m.put("pickMinProb", pickMinProb);
+        m.put("pickStake", pickStake);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
     }
@@ -404,6 +416,9 @@ public final class Settings {
         s.quietNights = Json.bool(m, "quietNights", s.quietNights);
         s.zirve = Json.bool(m, "zirve", s.zirve);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
+        s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
+        s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
+        s.pickStake = Json.dbl(m, "pickStake", s.pickStake);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
         s.internationals = Json.bool(m, "internationals", s.internationals);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {
@@ -454,6 +469,8 @@ public final class Settings {
         if (creditResetDay < 1 || creditResetDay > 28) return "Kredi yenilenme günü 1 ile 28 arasında olmalı";
         if (kgEvents < 0 || kgEvents > 20) return "Karşılıklı Gol maç sayısı 0 ile 20 arasında olmalı";
         if (!isRadarStep(radarScans)) return "Radar sıklığı 0, 1, 2, 4, 6 ya da 8 olmalı";
+        if (pickMinProb < 0.30 || pickMinProb > 0.95) return "Günün seçiminde tutma olasılığı %30-95 olmalı";
+        if (pickStake < 0) return "Günün seçimi tutarı negatif olamaz";
         return null;
     }
 }
