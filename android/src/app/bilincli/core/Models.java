@@ -82,6 +82,16 @@ public final class Models {
         return market + " " + outcome;
     }
 
+    /**
+     * Maçın lig adı: Nesine bazı turnuvalarda (ör. milli maçlar) ad yerine sayısal kod verir ("10004");
+     * o zaman oran sorgusundaki lig adı kullanılır.
+     */
+    public static String leagueLabel(BookEvent b, SharpEvent s) {
+        String l = b.league == null ? "" : b.league.trim();
+        if (!l.isEmpty() && !l.matches("\\d+")) return l;
+        return s == null || s.sportKey == null ? l : CreditPlan.leagueName(s.sportKey);
+    }
+
     /** Pazarın okunur adı (analiz ve özetler için). */
     public static String marketName(String market) {
         if ("MS".equals(market)) return "Maç Sonucu";

@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.3.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.4.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,22 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Kampanya hesaplayıcı (2.4)
+
+- Fırsatlar → "Kampanya hesaplayıcı": tek seçimli kampanyanın gerçek değeri, son taramanın adil
+  oranlarıyla (kredi harcamaz); en değerli 5 seçim ve özet ("Oyna" / "Oynama").
+  - **Bedava bahis:** değer = tutar x p x (oran − 1) (kazanınca tutar da ödeniyorsa p x oran).
+    Bedava bahis her zaman artıdır; hesaplayıcı en değerli seçimi ve TL karşılığını gösterir.
+  - **Kayıp iadesi:** beklenen = tutar x (p x oran − 1) + (1 − p) x min(iade % x tutar, üst sınır) x k;
+    iade nakitse k = 1, bedava bahis olarak geliyorsa k = o anki en iyi bedava bahis dönüşümü.
+  - **Kazanç artışı:** yeni oran = 1 + (oran − 1)(1 + artış).
+  - **Erken ödeme** (takım maç içinde x fark öne geçerse kazanmış sayılır; yalnızca MS 1 / MS 2):
+    Pinnacle'ın MS ve 2,5 Üst adil oranlarına uyan Poisson gol beklentileriyle dakika dakika
+    "x farka ulaşma" olasılığı; artış Pinnacle'ın kazanma olasılığına eklenir. Model tahminidir.
+  - Kampanyanın en düşük oranı girilir; kombine ve çevrim şartları hesaba katılmaz.
+- Nesine bazı turnuvalarda lig adı yerine sayısal kod veriyor ("10004"); o maçlarda oran sorgusundaki
+  lig adı gösterilir.
 
 ## Sanal takip (2.3)
 
@@ -450,7 +466,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.3.0.apk
+./build.sh          # testler + build/BilincliKupon-2.4.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

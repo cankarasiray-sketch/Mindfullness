@@ -849,6 +849,70 @@ test("sanal takip: en yakın seçimlerin sanal sonucu Geçmiş'te", async () => 
   assert.deepEqual(t.errors, []);
 });
 
+test("kampanya hesaplayıcı: bedava bahis, kayıp iadesi, kazanç artışı, erken ödeme", async () => {
+  const s = clone(baseState);
+  const soon = new Date(Date.parse(s.now) + 7200000).toISOString(), past = new Date(Date.parse(s.now) - 600000).toISOString();
+  s.radar = s.radar || { values: [], moves: [] };
+  s.radar.fairsAt = s.now;
+  s.radar.fairs = [
+    { ref: "b1", sref: "s1", sport: "soccer_uefa_nations_league", code: "3172999", home: "Kazakistan", away: "Moldova", kickoff: soon, league: "UEFA Nations League", at: s.now,
+      sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.5, i: 1.8 }, { m: "MS", o: "X", label: "MS X", p: 0.2, i: 3.0 }, { m: "MS", o: "2", label: "MS 2", p: 0.3, i: 3.2 },
+        { m: "AU25", o: "UST", label: "2,5 Üst", p: 0.45, i: 1.8 }, { m: "CS", o: "1X", label: "ÇŞ 1-X", p: 0.7, i: 1.2 }] },
+    { ref: "b2", sref: "s2", sport: "x", code: "1", home: "Başlamış", away: "Maç", kickoff: past, league: "L", sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.9, i: 9 }] },
+  ];
+  const t = boot(s, "#firsat");
+  const res = () => t.$("#campRes").textContent;
+  // bedava bahis 100 TL: en değerli MS 2 (0,30 x 2,20 = 0,66) -> 66 TL; ÇŞ 1-X en düşük oranın (1,50) altında
+  assert.match(res(), /Bu bedava bahsin gerçek değeri ≈ 66,00 TL \(%66,0\)/);
+  assert.equal(t.$$(".camp-row").length, 4);
+  assert.doesNotMatch(res(), /Başlamış|ÇŞ 1-X/);
+  assert.match(t.$$(".camp-row")[0].textContent, /Kazakistan – Moldova MS 2 3,20 adil 3,33.*66,00 TL/);
+  t.$("#campReturn").checked = true;
+  t.$("#campReturn").dispatchEvent(new t.w.Event("change"));
+  assert.match(res(), /≈ 96,00 TL/); // tutar da ödenirse 0,30 x 3,20
+  // kayıp iadesi: 100 TL, %50 nakit iade: MS 2 -> 100(0,96 − 1) + 0,70 x 50 = +31 TL
+  const type = t.$("#campType");
+  type.value = "cashback";
+  type.dispatchEvent(new t.w.Event("change"));
+  const pctIn = t.$("#campPct");
+  pctIn.value = "50";
+  pctIn.dispatchEvent(new t.w.Event("input"));
+  assert.match(res(), /Oyna: en iyi seçimde beklenen kâr 31,00 TL \(100,00 TL'lik bahiste, \+%31,0\)/);
+  const cap = t.$("#campCap");
+  cap.value = "10"; // iade en fazla 10 TL: 100(0,96 − 1) + 0,70 x 10 = +3 TL
+  cap.dispatchEvent(new t.w.Event("input"));
+  assert.match(res(), /beklenen kâr 3,00 TL/);
+  pctIn.value = "0";
+  pctIn.dispatchEvent(new t.w.Event("input"));
+  assert.match(res(), /Oynama: bu şartla en iyi seçimde bile beklenen sonuç -4,00 TL \(−%4,0\)/);
+  // kazanç artışı %10: MS 2 3,20 -> 1 + 2,2 x 1,1 = 3,42; 0,30 x 3,42 − 1 = +%2,6
+  type.value = "boost";
+  type.dispatchEvent(new t.w.Event("change"));
+  assert.match(t.$$(".camp-row")[0].textContent, /MS 2 3,42 3,20 adil 3,33\+%2,6/);
+  assert.match(res(), /Oyna: en iyi seçimde beklenen kâr 2,60 TL/);
+  // erken ödeme: yalnızca MS 1 / MS 2 ve kazanma olasılığına model katkısı
+  type.value = "early";
+  type.dispatchEvent(new t.w.Event("change"));
+  assert.ok(t.$$(".camp-row").length === 2);
+  assert.match(res(), /MS 1 1,80 adil 2,00 · \+\d+,\d puan/);
+  // gol modeli: uyum ve erken ödeme olasılığı sıralaması
+  const g = t.w.goalOutcomes(1.6, 1.1), l = t.w.fitGoals(g[0], g[1], g[2]);
+  assert.ok(Math.abs(l[0] - 1.6) < 0.03 && Math.abs(l[1] - 1.1) < 0.03, String(l));
+  const win = t.w.leadWin(1.6, 1.1, 99), two = t.w.leadWin(1.6, 1.1, 2), one = t.w.leadWin(1.6, 1.1, 1);
+  assert.ok(Math.abs(win - g[0]) < 0.01, win + " " + g[0]); // dakika adımlı model Poisson kazanma olasılığına yakın
+  assert.ok(one > two && two > win, [one, two, win].join(" "));
+  assert.equal(t.w.freebetRate(0.3, 3.2, false).toFixed(2), "0.66");
+  assert.equal(t.w.boostOdds(2.2, 0.1).toFixed(2), "2.32");
+  // adil oran yokken açıklama; demoda kart yok
+  const e = clone(s);
+  e.radar.fairs = [];
+  assert.match(boot(e, "#firsat").$("#campRes").textContent, /Uygun seçim yok/);
+  const d = clone(s);
+  d.demo = true;
+  assert.equal(boot(d, "#firsat").$("#campCard"), null);
+  assert.deepEqual(t.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

@@ -70,7 +70,7 @@ public final class Promo {
             r.put("home", p.book.home);
             r.put("away", p.book.away);
             r.put("kickoff", p.book.kickoff.toString());
-            r.put("league", p.book.league);
+            r.put("league", Models.leagueLabel(p.book, p.sharp));
             r.put("at", now.toString()); // adil oranın alındığı an (hedefli taramalar tabloyu satır satır günceller)
             r.put("sel", sel);
             rows.add(r);

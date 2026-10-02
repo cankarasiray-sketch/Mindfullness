@@ -60,6 +60,17 @@ public class PromoTest {
     }
 
     @Test
+    public void numericNesineLeagueCodeShownAsLeagueName() {
+        BookEvent coded = new BookEvent("b1", "Kazakistan", "Moldova", NOW.plusSeconds(3600), "10004", 1, CoreTest.ms(1.69, 3.03, 3.93), "1");
+        SharpEvent s = new SharpEvent("s1", "soccer_epl", "Kazakhstan", "Moldova", NOW.plusSeconds(3600), CoreTest.ms(0.52, 0.28, 0.2), "pinnacle");
+        assertEquals("İngiltere Premier Lig", Models.leagueLabel(coded, s)); // kod yerine lig adı
+        BookEvent named = new BookEvent("b2", "A", "B", NOW, "Süper Lig", 1, CoreTest.ms(2, 3, 4), "2");
+        assertEquals("Süper Lig", Models.leagueLabel(named, s));
+        List<Object> table = Promo.table(Collections.singletonList(new Models.Pair(coded, s, 1)), NOW);
+        assertEquals("İngiltere Premier Lig", Json.obj(table.get(0)).get("league"));
+    }
+
+    @Test
     public void fairTableStoredOnFullScanAndSearchable() {
         Radar radar = new Radar(new Ledger.MemoryStorage(null));
         List<BookEvent> book = Arrays.asList(FeatureTest.book(1, 1.80, 1, 8), FeatureTest.book(2, 1.95, 1, 200));
