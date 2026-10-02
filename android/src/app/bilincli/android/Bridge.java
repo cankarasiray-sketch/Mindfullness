@@ -56,6 +56,7 @@ public final class Bridge {
         extra.put("nextRun", Scheduler.nextRun(repo.real().settings(), Instant.now()).toString());
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
         extra.put("radar", repo.radarView());
+        extra.put("zirve", repo.zirveView());
         extra.put("credits", repo.credits());
         extra.put("creditPlan", repo.plan().toMap());
         extra.put("accuracy", repo.forecasts.summary());
@@ -115,6 +116,17 @@ public final class Bridge {
         return " (" + spent + " kredi harcandı" + (remaining != null ? ", kalan " + remaining : "") + ")";
     }
 
+    /** Zirve Oran'ı yeniden okur (taze adil oranlarla); " Zirve Oran: 3 maçta 90 artırılmış oran, 1 değerli." ya da boş. */
+    private String zirveNote(Repo repo) {
+        if (!repo.real().settings().zirve) return "";
+        String[] n = repo.zirveCheck(true);
+        if (n != null) Notifier.show(activity, "kupon", Notifier.ID_ZIRVE, n[0], n[1]);
+        Map<String, Object> z = repo.zirveView();
+        if (z == null || z.get("error") != null || z.get("offers") == null) return "";
+        return " Zirve Oran: " + Json.lng(z, "events", 0) + " maçta " + Json.lng(z, "offers", 0) + " artırılmış oran, "
+                + (Json.lng(z, "play", 0) > 0 ? Json.lng(z, "play", 0) + " değerli (Fırsatlar)." : "değerli yok.");
+    }
+
     private static void requireReal(Repo repo) {
         if (repo.isDemo()) throw new Ledger.LedgerException("Demo modunda işlem yapılamaz. Önce demodan çık.");
     }
@@ -170,7 +182,7 @@ public final class Bridge {
                     throw new IllegalStateException("Tarama yapılamadı: " + e.getMessage());
                 }
                 Scheduler.scheduleNextEvent(activity);
-                String credit = creditNote(repo.lastSpent, repo.lastRemaining);
+                String credit = creditNote(repo.lastSpent, repo.lastRemaining) + zirveNote(repo);
                 if (r.newCouponId != null) return "Güncel oranlarla yeni kupon bulundu: #" + r.newCouponId + "." + credit;
                 if (r.blocked != null) return "Tarama tamam. Yeni kupon yok: " + r.blocked + credit;
                 return "Tarama tamam. " + r.moves.size() + " yeni düşen oran fırsatı." + credit;
@@ -294,6 +306,14 @@ public final class Bridge {
                 }
                 Scheduler.scheduleNextEvent(activity);
                 return "Kampanya bahsi kupon #" + id + " olarak kaydedildi: " + Fmt.tl(stake) + ". Sonuç maçtan sonra otomatik işlenir.";
+            }
+            case "zirveRefresh": {
+                requireReal(repo);
+                if (!repo.real().settings().zirve) throw new IllegalStateException("Zirve Oran kontrolü kapalı (Ayarlar → Radar).");
+                String note = zirveNote(repo);
+                Map<String, Object> z = repo.zirveView();
+                if (z != null && z.get("error") != null) throw new IllegalStateException("Zirve Oran okunamadı: " + z.get("error"));
+                return note.trim().isEmpty() ? "Zirve Oran okundu." : note.trim();
             }
             case "probe": {
                 requireReal(repo);
@@ -458,6 +478,8 @@ public final class Bridge {
             repo.after(src);
         }
         List<Models.Pair> pairs = Matching.match(f.book, f.sharp);
+        // kredi harcanmış tam veri: Fırsatlar ve Zirve Oran karşılaştırması da güncellensin
+        if (!repo.isDemo()) repo.radar.update(f.book, f.sharp, Instant.now(), repo.real().settings(), true);
         Map<String, Object> cal = f.calibration;
         Engine.Decision d = Engine.decide(f.book, f.sharp, Instant.now(), Daily.decisionSettings(repo.real()));
         // Özet en üstte: kaynaklar, pazar doğrulamaları, karar
@@ -500,9 +522,18 @@ public final class Bridge {
             for (int i = 0; i < Math.min(12, lines.length); i++) b.append(lines[i]).append('\n');
             if (lines.length > 12) b.append("(+").append(lines.length - 12).append(" pazar kodu daha)\n");
         }
-        progress("Bilyoner inceleniyor (Zirve Oran keşfi, kredi harcamaz)…");
-        b.append("\nBilyoner keşfi (Zirve Oran için; bu bölümü paylaşırsan okuma eklenir)\n")
-                .append(app.bilincli.core.BilyonerProbe.report(new AndroidHttp(activity)));
+        progress("Bilyoner Zirve Oran okunuyor (kredi harcamaz)…");
+        b.append("\nBilyoner Zirve Oran\n");
+        if (!repo.real().settings().zirve || repo.isDemo()) {
+            b.append("  kapalı (Ayarlar → Radar) ya da demo modu\n");
+        } else {
+            String[] zn = repo.zirveCheck(true);
+            if (zn != null) Notifier.show(activity, "kupon", Notifier.ID_ZIRVE, zn[0], zn[1]);
+            Map<String, Object> z = repo.zirveView();
+            if (z == null) b.append("  okunamadı\n");
+            else if (z.get("error") != null) b.append("  okunamadı: ").append(z.get("error")).append('\n');
+            else b.append(app.bilincli.core.Zirve.summary(z));
+        }
         String binv = app.bilincli.core.Nesine.lastBasketInventory;
         if (binv != null && !binv.isEmpty()) {
             String[] lines = binv.split("\n");

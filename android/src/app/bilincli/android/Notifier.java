@@ -23,6 +23,7 @@ final class Notifier {
     private static final String CH_QUIET = "gece";
     private static final int ID_DAILY = 10;
     private static final int ID_RESULT = 11;
+    static final int ID_ZIRVE = 16;
 
     private Notifier() {}
 

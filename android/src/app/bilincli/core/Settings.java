@@ -193,6 +193,11 @@ public final class Settings {
     public boolean lineupScans = true;
     /** 00:00–08:00 arası bildirimler sessiz gelir (gece maçlarının kontrolleri uyandırmasın). */
     public boolean quietNights = true;
+    /**
+     * Bilyoner Zirve Oran: artırılmış oranlar herkese açık bültenden kendiliğinden okunur (kredi harcamaz)
+     * ve son taramanın adil oranıyla karşılaştırılır; değerli olan bildirilir.
+     */
+    public boolean zirve = true;
 
     public int[] radarHours() {
         switch (radarScans) {
@@ -289,6 +294,7 @@ public final class Settings {
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
+        m.put("zirve", zirve);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
     }
@@ -335,6 +341,7 @@ public final class Settings {
         s.radarScans = (int) Json.lng(m, "radarScans", s.radarScans);
         s.lineupScans = Json.bool(m, "lineupScans", s.lineupScans);
         s.quietNights = Json.bool(m, "quietNights", s.quietNights);
+        s.zirve = Json.bool(m, "zirve", s.zirve);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
         s.internationals = Json.bool(m, "internationals", s.internationals);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {

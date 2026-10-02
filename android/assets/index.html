@@ -56,6 +56,7 @@ background:var(--accent);color:var(--accent-ink);flex:1;min-width:120px}
 button.b.ghost{background:transparent;color:var(--accent)}
 button.b.warn{border-color:var(--bad);background:transparent;color:var(--bad)}
 button.b:disabled{opacity:.5}
+button.b.sm{padding:4px 12px;font-size:13px;border-radius:8px}
 .banner{border-radius:12px;padding:12px;margin:10px 0;background:var(--warn-soft);color:var(--warn);font-size:13.5px}
 .banner button{margin-top:8px}
 label{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px}
@@ -422,6 +423,10 @@ function viewToday() {
       + "</div><p>" + esc(run.reason) + "</p>" + summaryHtml(run.summary)
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
+  if (!S.demo && S.zirve && S.zirve.play > 0) {
+    html += '<div class="card" id="zirveHome"><div class="kicker">ZİRVE ORAN</div><p>' + S.zirve.play + " Zirve Oran seçimi adil oranı geçiyor.</p>"
+      + '<div class="btns"><button class="b" onclick="show(\'firsat\')">Fırsatlar\'da gör</button></div></div>';
+  }
   html += outlookCard();
   var ids = todayIds();
   S.coupons.forEach(function (c) {
@@ -540,6 +545,61 @@ function promoPlay(i, j) {
   var r = promoHits[i], x = r.sel[j];
   act("promoPlay", {ref: r.ref, m: x.m, o: x.o, odds: val("promoOdds"), amount: val("promoAmt")}).then(function (res) { if (res && res.ok) closeSheet(); });
 }
+// ---- Zirve Oran (Bilyoner) ------------------------------------------------------
+var ZIRVE_STATUS = {oyna: "OYNA", oynama: "değer yok", degisti: "oran değişmiş, tara", secim: "adil oran yok", pazar: "desteklenmeyen pazar", mac: "maç taranmadı"};
+var zirveRows = [];
+function zirveRow(i) {
+  var r = zirveRows[i], st = r.status;
+  return '<div class="l2"><span><span class="chip' + (st === "oyna" ? " main" : "") + '">' + esc(r.label || r.name) + '</span> <span class="odds">' + odds(r.tval)
+    + '</span> <span class="small muted"><s>' + odds(r.val) + "</s>" + (r.p ? " · adil " + odds(1 / r.p) : "") + "</span></span><span>"
+    + (r.ev != null ? '<b class="' + cls(r.ev) + '">' + pct(r.ev, true) + "</b> " : "")
+    + (st === "oyna" ? '<button class="b sm zirve-play" onclick="zirveSheet(' + i + ')">Oyna</button>' : '<span class="st">' + esc(ZIRVE_STATUS[st] || st) + "</span>")
+    + "</span></div>";
+}
+function zirveCard() {
+  if (S.demo) return "";
+  var Z = S.zirve, html = '<div class="card" id="zirveCard"><h2>Zirve Oran (Bilyoner)</h2>';
+  if (!S.settings.zirve) return html + '<p class="small muted">Kapalı. Açmak için Ayarlar → Radar → "Bilyoner Zirve Oran\'ı kontrol et".</p></div>';
+  html += '<p class="small muted">Bilyoner\'in artırılmış oranları kendiliğinden okunur (açılışta, taramalardan sonra, 3 saatte bir; kredi harcamaz) ve Pinnacle\'ın adil oranıyla karşılaştırılır. '
+    + "Adil oranı geçen olursa bildirim gelir. Artış genelde %2–5'tir; çoğu zaman adil oranı geçmez, bu normaldir.</p>";
+  if (!Z) return html + '<p class="small muted">Henüz okunmadı.</p><div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')">Şimdi oku</button></div></div>';
+  if (Z.error) html += '<p class="small"><b>Son okuma başarısız:</b> ' + esc(Z.error) + "</p>";
+  if (Z.at) html += '<p class="small">Okundu ' + esc(dm(Z.at)) + " " + esc(hm(Z.at)) + " (" + esc(ago(Z.at)) + ") · " + Z.events + " maçta " + Z.offers + " artırılmış oran · adil oranı geçen <b>" + Z.play + "</b></p>";
+  var now = Date.parse(S.now), groups = [], byEvent = {};
+  zirveRows = Z.rows || [];
+  zirveRows.forEach(function (r, i) {
+    if (Date.parse(r.kickoff) <= now) return; // başlamış maç
+    if (!byEvent[r.event]) { byEvent[r.event] = {r: r, items: []}; groups.push(byEvent[r.event]); }
+    byEvent[r.event].items.push(i);
+  });
+  if (!groups.length) html += '<p class="muted">' + (Z.at ? "Şu an Zirve Oran'lı yaklaşan maç yok." : "") + "</p>";
+  groups.forEach(function (g) {
+    var r = g.r, shown = g.items.slice(0, 5), rest = g.items.slice(5);
+    html += '<div class="vrow"><div class="l1"><span>' + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff)) + (r.league ? " · " + esc(r.league) : "") + "</span><span>"
+      + (r.code ? "kod " + esc(r.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(r.home) + " – " + esc(r.away) + "</div>"
+      + shown.map(zirveRow).join("")
+      + (rest.length ? '<details class="info"><summary class="small">' + rest.length + " seçim daha</summary>" + rest.map(zirveRow).join("") + "</details>" : "") + "</div>";
+  });
+  var stale = Z.fairsAt && now - Date.parse(Z.fairsAt) > 6 * 3600 * 1000;
+  html += '<p class="small muted">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Henüz tam tarama yok: adil oran için önce \"Şimdi tara\".")
+    + (stale ? " <b>Tarama eski:</b> maça yakınsa önce \"Şimdi tara\"." : "") + " \"Maç taranmadı\": maçın ligi taranan liglerde değil ya da son taramadan sonra eklendi.</p>"
+    + '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')">Yeniden oku</button></div></div>';
+  return html;
+}
+function zirveSheet(i) {
+  var r = zirveRows[i];
+  openSheet("<h3>" + esc(r.home) + " – " + esc(r.away) + "</h3><p class=\"muted small\">" + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff))
+    + " · <b>" + esc(r.label || r.name) + "</b> · Zirve " + odds(r.tval) + " (normal " + odds(r.val) + ") · adil " + odds(1 / r.p) + " · avantaj " + pct(r.ev, true) + "</p>"
+    + "<p><b>Oyna:</b> önerilen tutar " + (r.stake ? tl(r.stake) : "kasa boş") + (r.fraction ? " (kasanın " + pct(r.fraction) + "'ü)" : "") + ". Bilyoner'de oranın hâlâ "
+    + odds(r.tval) + " Zirve Oran olarak göründüğünü ve kampanya şartlarını (tekli/kombine, en yüksek tutar) kontrol et.</p>"
+    + '<label>Oynadığın oran</label><input id="zirveOdds" inputmode="decimal" value="' + esc(String(r.tval).replace(".", ",")) + '">'
+    + '<label>Oynadığın tutar (TL)</label><input id="zirveAmt" inputmode="decimal" value="' + esc(r.stake ? String(r.stake / 100) : "") + '">'
+    + '<div class="btns"><button class="b" onclick="zirvePlay(' + i + ')">Bu tutarla oynadım</button><button class="b ghost" onclick="closeSheet()">Kapat</button></div>');
+}
+function zirvePlay(i) {
+  var r = zirveRows[i];
+  act("promoPlay", {ref: r.ref, m: r.m, o: r.o, odds: val("zirveOdds"), amount: val("zirveAmt")}).then(function (res) { if (res && res.ok) closeSheet(); });
+}
 function viewOpportunities() {
   var R = S.radar || {values: [], moves: []}, html = "";
   var inCoupon = {};
@@ -550,6 +610,7 @@ function viewOpportunities() {
     + " Otomatik radar: " + (S.settings.radarScans ? "günde " + S.settings.radarScans + " kez" : "kapalı") + ".</p>"
     + (S.demo ? "" : '<div class="btns"><button class="b" onclick="act(\'radarScan\')">Şimdi tara</button><button class="b ghost" onclick="show(\'ayarlar\')">Radar ayarı</button></div>')
     + "</div>";
+  html += zirveCard();
   html += '<div class="card"><h2>Değerli oranlar</h2><p class="small muted">iddaa oranının, Pinnacle\'ın marjı arındırılmış adil oranından yüksek olduğu seçimler. '
     + "Örnek: gerçek olasılığı %50 olan sonuca 2,20 oran → 0,50 × 2,20 − 1 = +%10 avantaj. Kupon motoru bunların arasından MBS ve risk kurallarına uyan en iyi kombinasyonu seçer.</p>"
     + (R.values.length ? R.values.map(function (v) {
@@ -561,7 +622,7 @@ function viewOpportunities() {
         + (inCoupon[v.bookRef + "|" + v.outcome] ? ' <span class="st ok">kuponda</span>' : "")
         + (v.inRange ? "" : ' <span class="st">oran aralığı dışında</span>') + "</span></div></div>";
     }).join("") : '<p class="muted">Son taramada değer taşıyan seçim yok. Bu normaldir: iddaa çoğu maçta marjlıdır.</p>') + "</div>";
-  html += '<div class="card" id="promoCard"><h2>Promosyon / özel oran kontrolü</h2><p class="small muted">Bilyoner\'de "Süper Oran" gibi bir kampanya oranı gördüğünde: maçı ara, seçimi seç, kampanya oranını gir. '
+  html += '<div class="card" id="promoCard"><h2>Promosyon / özel oran kontrolü</h2><p class="small muted">Zirve Oran yukarıda kendiliğinden kontrol edilir. Başka bir kampanya oranı gördüğünde: maçı ara, seçimi seç, kampanya oranını gir. '
     + "Yaklaşan maçların adil oranları aşağıda kendiliğinden listelenir; bir seçime dokunup kampanya oranını yazdığın anda avantaj ve tutar görünür (kredi harcamaz). Yalnızca tek seçimli kampanyalar; "
     + "\"X kazanır ve 2,5 Üst\" gibi birleşik seçimler hesaplanamaz.</p>"
     + '<input id="promoQ" placeholder="Süzmek için takım ya da lig adı (isteğe bağlı)" autocomplete="off" value="' + esc(promoQuery) + '" oninput="promoQuery=this.value;document.getElementById(\'promoList\').innerHTML=promoResults()">'
@@ -799,7 +860,9 @@ function viewSettings() {
     + (st.estimatedCredits > 500 ? "<b>Ücretsiz planı aşar:</b> birden fazla anahtar ekle, lig sayısını azalt ya da ücretli plana geç." : "Ücretsiz plana sığar.") + "</p>"
     + '<label class="check"><input type="checkbox" id="sLineup"' + (st.lineupScans ? " checked" : "") + ">Kadro saati taraması</label>"
     + '<p class="small muted">İlk 11\'ler maçtan ~60 dk önce açıklanır; Pinnacle hemen tepki verir, iddaa çoğu zaman gecikir. Her maç grubundan ~45 dk önce yalnızca o saatte oynayan ligler taranır; '
-    + "avantaj çıkarsa bugünkü kuponlara dokunmadan ek kupon önerilir ve bildirilir. Kredi: her lig günde bir tarama daha; kredi yetmezse plan bunu Karşılıklı Gol'den sonra kapatır.</p></div>";
+    + "avantaj çıkarsa bugünkü kuponlara dokunmadan ek kupon önerilir ve bildirilir. Kredi: her lig günde bir tarama daha; kredi yetmezse plan bunu Karşılıklı Gol'den sonra kapatır.</p>"
+    + '<label class="check"><input type="checkbox" id="sZirve"' + (st.zirve ? " checked" : "") + ">Bilyoner Zirve Oran'ı kontrol et</label>"
+    + '<p class="small muted">Bilyoner\'in artırılmış oranları herkese açık bültenden okunur (hesap gerekmez, kredi harcamaz) ve adil oranla karşılaştırılır; geçen olursa bildirilir.</p></div>';
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
     + esc(dm(S.nextRun)) + " " + esc(hm(S.nextRun)) + ". Biten maçlar 3 saatte bir kontrol edilir.</p>"
@@ -901,6 +964,8 @@ function collectSettings() {
   var lu = document.getElementById("sLineup"), qn = document.getElementById("sQuiet");
   st.lineupScans = !!(lu && lu.checked);
   st.quietNights = !!(qn && qn.checked);
+  var zv = document.getElementById("sZirve");
+  st.zirve = !!(zv && zv.checked);
   var tot = document.getElementById("sTotals");
   st.totals = !!(tot && tot.checked);
   st.kgEvents = parseInt(val("sKg") || "0", 10);

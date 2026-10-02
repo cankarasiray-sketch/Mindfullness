@@ -20,6 +20,7 @@ import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
+import app.bilincli.core.Zirve;
 import java.io.File;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -47,6 +48,9 @@ final class Repo {
     /** Tahmin defteri: tahminlerin gerçek sonuçlarla isabeti. */
     final Forecasts forecasts;
     private final Map<String, Object> memory;
+    /** Bilyoner Zirve Oran: son değerlendirme ve bildirilen oranlar (zirve.json). */
+    private final FileStorage zirveStore;
+    private final Object zirveLock = new Object();
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
 
@@ -64,6 +68,7 @@ final class Repo {
         radar = new Radar(new FileStorage(new File(app.getFilesDir(), "piyasa.json")));
         memoryStore = new FileStorage(new File(app.getFilesDir(), "dogrulama.json"));
         forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
+        zirveStore = new FileStorage(new File(app.getFilesDir(), "zirve.json"));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
         loadActive();
@@ -273,6 +278,72 @@ final class Repo {
             return (Map<String, Object>) demoSummary.get("radar");
         }
         return radar.view();
+    }
+
+    /** Zirve Oran en sık bu aralıkla indirilir (zorlanmadıkça): uygulama her açıldığında siteye gidilmesin. */
+    static final long ZIRVE_MIN_GAP_S = 10 * 60;
+
+    /** Son yazılan Zirve durumu (arayüz her çizimde dosya okumasın). */
+    private volatile String zirveRaw;
+
+    private Map<String, Object> zirveState() {
+        try {
+            String raw = zirveRaw != null ? zirveRaw : zirveStore.read();
+            if (raw != null && !raw.trim().isEmpty()) {
+                zirveRaw = raw;
+                return Json.parseObject(raw);
+            }
+        } catch (RuntimeException ignored) {
+            // bozuk kayıt: yeniden okunur
+        }
+        return new LinkedHashMap<>();
+    }
+
+    /** Arayüz için son Zirve Oran değerlendirmesi (+ fetchedAt, error); hiç okunmadıysa ya da demodaysa null. */
+    Map<String, Object> zirveView() {
+        if (isDemo()) return null;
+        Map<String, Object> st = zirveState(); // kilitsiz: okuma sürerken arayüz beklemesin
+        if (st.get("fetchedAt") == null) return null;
+        Map<String, Object> v = new LinkedHashMap<>();
+        Map<String, Object> view = Json.obj(st.get("view"));
+        if (view != null) v.putAll(view);
+        v.put("fetchedAt", st.get("fetchedAt"));
+        v.put("error", st.get("error"));
+        return v;
+    }
+
+    /**
+     * Bilyoner Zirve Oran'ı indirip son tam taramanın adil oranlarıyla değerlendirir (kredi harcamaz).
+     * force değilse son okumadan 10 dk geçmeden tekrar indirilmez. Yeni değerli oran varsa bildirim
+     * [başlık, metin] döner; aynı oran bir kez bildirilir.
+     */
+    String[] zirveCheck(boolean force) {
+        if (isDemo() || !ledger.settings().zirve) return null;
+        synchronized (zirveLock) {
+            Map<String, Object> st = zirveState();
+            Instant now = Instant.now();
+            String last = Json.str(st, "fetchedAt");
+            if (!force && last != null && Instant.parse(last).plusSeconds(ZIRVE_MIN_GAP_S).isAfter(now)) return null;
+            st.put("fetchedAt", now.toString());
+            String[] notice = null;
+            try {
+                List<Zirve.Offer> offers = Zirve.fetch(new AndroidHttp(app));
+                Map<String, Object> rv = radar.view();
+                Map<String, Object> view = Zirve.evaluate(offers, Json.arr(rv.get("fairs")), Json.str(rv, "fairsAt"),
+                        Daily.decisionSettings(ledger), ledger.balance(), now);
+                List<Object> notified = new ArrayList<>(Json.arr(st.get("notified")));
+                notice = Zirve.notice(view, notified);
+                st.put("view", view);
+                st.put("notified", notified);
+                st.remove("error");
+            } catch (Http.ProviderException | RuntimeException e) {
+                st.put("error", String.valueOf(e.getMessage())); // son değerlendirme ekranda kalır
+            }
+            String raw = Json.write(st);
+            zirveStore.write(raw);
+            zirveRaw = raw;
+            return notice;
+        }
     }
 
     /** Elle tarama ("Şimdi tara"): tüm ligler. */

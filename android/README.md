@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.1.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.2.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,30 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Bilyoner Zirve Oran (2.2)
+
+- **Otomatik okuma:** Bilyoner'in "Zirve Oran" kampanyası (seçilen maçlarda oranlar ~%2–5
+  artırılmış) herkese açık bültenin Zirve sekmesinden okunur
+  (`/api/v3/mobile/aggregator/gamelist/all/v1?tabType=160&bulletinType=2`; her oranda `val` normal
+  iddaa oranı, `tval` Zirve oranı). Hesap ya da oturum gerekmez, kredi harcamaz. Okuma zamanları:
+  uygulama açılınca (10 dakikada bir), sabah kararından, radar taramasından ve "Kaynakları test
+  et"ten sonra, 3 saatlik periyodik işte.
+- **Değerlendirme:** Zirve maçı son tam taramanın adil oran tablosundaki maçla (aynı saat, benzer
+  adlar) eşleştirilir; seçim uygulamanın pazarına çevrilir (MS, KG, ÇŞ, 2,5 Alt/Üst; basketbolda
+  uzatmalar dahil maç sonucu ve iddaa çizgisindeki toplam sayı). Avantaj = adil olasılık x Zirve oranı
+  − 1; eşik, kanıt koruması ve Kelly tutarı promosyon kontrolüyle aynıdır.
+- **Koruma:** Bilyoner'in normal oranı son taramadaki iddaa oranıyla aynı olmalı (iki site de resmi
+  programı verir); %8'den büyük fark oranın değiştiğini ya da eşlemenin şüpheli olduğunu gösterir,
+  seçim önerilmez ("oran değişmiş, tara"). İlk yarı, takım, korner ve kart pazarları alınmaz.
+- **Gösterim:** Fırsatlar'da "Zirve Oran (Bilyoner)" kartı maç maç Zirve oranını, normal oranı,
+  adil oranı ve avantajı gösterir; adil oranı geçenlerde "Oyna" önerilen tutarla açılır ve "Bu
+  tutarla oynadım" bahsi promosyon kuponu olarak kasaya yazar. Adil oranı geçen olursa bildirim gelir
+  (aynı oran bir kez; Zirve oranı yükselirse yeniden) ve Bugün sekmesinde uyarı görünür. Ayarlar →
+  Radar'dan kapatılabilir.
+- **Gerçekçi beklenti:** iddaa marjı ~%22, Zirve artışı ~%2–5; marj ~%17'ye iner ama çoğu zaman
+  sıfırın altına inmez. Zirve Oran'lı seçimlerin çoğu "değer yok" çıkar; değerli olanı ara sıra görülür.
+- Keşif aracı (2.1.2–2.1.6) kaldırıldı; "Kaynakları test et" artık Zirve okumasının özetini yazar.
 
 ## Promosyon kontrolü ve en yakın seçim (2.1)
 
@@ -376,7 +400,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.1.6.apk
+./build.sh          # testler + build/BilincliKupon-2.2.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

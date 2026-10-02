@@ -698,6 +698,65 @@ test("uzun sonuç balonu kaplamaz, ayrıntı kutuda; dokununca kapanır", async 
     "Nesine: 639 maç · Pinnacle: 35 maç (ayrıntı ekranda)");
 });
 
+test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sayfada uyarı", async () => {
+  const s = clone(baseState);
+  s.settings.zirve = true;
+  s.stats.balance = 500000;
+  const soon = new Date(Date.parse(s.now) + 7200000).toISOString(), later = new Date(Date.parse(s.now) + 90000000).toISOString();
+  const past = new Date(Date.parse(s.now) - 600000).toISOString();
+  s.zirve = { at: s.now, fairsAt: s.now, events: 3, offers: 4, matched: 1, evaluated: 2, play: 1, rows: [
+    { id: "1:1:1", event: "1", home: "Belçika", away: "Türkiye", kickoff: soon, league: "UEFA Uluslar Ligi", name: "MS 1", label: "MS 1", m: "MS", o: "1",
+      val: 1.37, tval: 1.4, ref: "b1", code: "123", p: 0.75, i: 1.37, ev: 0.05, status: "oyna", stake: 15000, fraction: 0.03 },
+    { id: "1:2:1", event: "1", home: "Belçika", away: "Türkiye", kickoff: soon, name: "KG Var", label: "KG Var", m: "KG", o: "VAR",
+      val: 1.8, tval: 1.9, ref: "b1", p: 0.5, i: 1.8, ev: -0.05, status: "oynama" },
+    { id: "2:1:1", event: "2", home: "Hırvatistan", away: "İngiltere", kickoff: later, name: "MS 1", val: 3.48, tval: 3.65, status: "mac" },
+    { id: "3:1:1", event: "3", home: "Başlamış", away: "Maç", kickoff: past, name: "MS 1", val: 2, tval: 2.1, p: 0.6, ev: 0.26, status: "oyna" },
+  ] };
+  const t = boot(s, "#firsat");
+  const card = t.$("#zirveCard").textContent;
+  assert.match(card, /3 maçta 4 artırılmış oran · adil oranı geçen 1/);
+  assert.match(card, /Belçika – Türkiye/);
+  assert.match(card, /MS 1 1,40 1,37 · adil 1,33\+%5,0 Oyna/);
+  assert.match(card, /KG Var 1,90 1,80 · adil 2,00−%5,0 değer yok/);
+  assert.match(card, /Hırvatistan – İngiltere/);
+  assert.match(card, /maç taranmadı/);
+  assert.doesNotMatch(card, /Başlamış/);
+  t.$(".zirve-play").click();
+  const sheet = t.$("#sheet").textContent;
+  assert.match(sheet, /Zirve 1,40 \(normal 1,37\) · adil 1,33 · avantaj \+%5,0/);
+  assert.match(sheet, /önerilen tutar 150,00 TL \(kasanın %3,0'ü\)/);
+  assert.equal(t.$("#zirveOdds").value, "1,4");
+  assert.equal(t.$("#zirveAmt").value, "150");
+  t.button("Bu tutarla oynadım").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "promoPlay", payload: { ref: "b1", m: "MS", o: "1", odds: "1,4", amount: "150" } });
+  t.button("Yeniden oku").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).action, "zirveRefresh");
+  // ana sayfada uyarı, Fırsatlar'a götürür
+  const h = boot(s, "");
+  assert.match(h.$("#zirveHome").textContent, /1 Zirve Oran seçimi adil oranı geçiyor/);
+  h.button("Fırsatlar'da gör").click();
+  assert.ok(h.$("#zirveCard"));
+  // hiç okunmadıysa elle okuma düğmesi; kapalıysa açıklama; demoda yok
+  const n = clone(s);
+  n.zirve = null;
+  assert.match(boot(n, "#firsat").$("#zirveCard").textContent, /Henüz okunmadı/);
+  n.settings.zirve = false;
+  assert.match(boot(n, "#firsat").$("#zirveCard").textContent, /Kapalı/);
+  const d = clone(s);
+  d.demo = true;
+  assert.equal(boot(d, "#firsat").$("#zirveCard"), null);
+  // ayar kaydedilir
+  const a = boot(s, "#ayarlar");
+  assert.equal(a.$("#sZirve").checked, true);
+  a.$("#sZirve").checked = false;
+  a.button("Ayarları kaydet").click();
+  await a.tick();
+  assert.equal(a.calls.at(-1).payload.settings.zirve, false);
+  assert.deepEqual(t.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

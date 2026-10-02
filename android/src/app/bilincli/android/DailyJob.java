@@ -33,6 +33,7 @@ public final class DailyJob extends JobService {
                         } catch (Http.ProviderException ignored) {
                             // tarama bir sonraki saatte tekrarlanır
                         }
+                        zirve(repo, true); // taze adil oranlarla
                         return;
                     }
                     if (event || !daily) {
@@ -48,6 +49,7 @@ public final class DailyJob extends JobService {
                     if (r.daily != null) {
                         Notifier.daily(DailyJob.this, Repo.get(DailyJob.this).real(), r.daily, daily);
                     }
+                    zirve(repo, r.daily != null); // sabah taramasından sonra hemen, diğer işlerde 10 dk aralıkla
                 } catch (RuntimeException e) {
                     if (daily) Notifier.show(DailyJob.this, "kupon", 12, "Günlük çalışma başarısız", String.valueOf(e.getMessage()));
                 } finally {
@@ -59,6 +61,16 @@ public final class DailyJob extends JobService {
             }
         }, "bilincli-job").start();
         return true;
+    }
+
+    /** Bilyoner Zirve Oran kontrolü (kredi harcamaz); yeni değerli oran bildirilir. */
+    private void zirve(Repo repo, boolean force) {
+        try {
+            String[] n = repo.zirveCheck(force);
+            if (n != null) Notifier.show(this, "kupon", Notifier.ID_ZIRVE, n[0], n[1]);
+        } catch (RuntimeException ignored) {
+            // bir sonraki işte yeniden denenir
+        }
     }
 
     @Override

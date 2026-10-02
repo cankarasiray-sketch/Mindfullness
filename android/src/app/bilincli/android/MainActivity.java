@@ -60,6 +60,34 @@ public final class MainActivity extends Activity {
         }
         web.evaluateJavascript("window.refresh && window.refresh()", null);
         probeInBackground(repo);
+        zirveInBackground(repo);
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean ZIRVE = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /** Açılışta Bilyoner Zirve Oran okunur (10 dk'da bir, kredi harcamaz); değerli oran bildirilir, ekran yenilenir. */
+    private void zirveInBackground(final Repo repo) {
+        if (repo.isDemo() || !repo.real().settings().zirve) return;
+        if (!ZIRVE.compareAndSet(false, true)) return;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    String[] n = repo.zirveCheck(false);
+                    if (n != null) Notifier.show(MainActivity.this, "kupon", Notifier.ID_ZIRVE, n[0], n[1]);
+                } catch (RuntimeException ignored) {
+                    // bağlantı yoksa bir sonraki açılışta yeniden denenir
+                } finally {
+                    ZIRVE.set(false);
+                }
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        web.evaluateJavascript("window.refresh && window.refresh()", null);
+                    }
+                });
+            }
+        }, "bilincli-zirve").start();
     }
 
     private static final java.util.concurrent.atomic.AtomicBoolean PROBING = new java.util.concurrent.atomic.AtomicBoolean();
