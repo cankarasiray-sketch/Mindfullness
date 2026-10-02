@@ -108,4 +108,40 @@ public class PromoTest {
         c.legs.get(0).closingFair = 0.52;
         assertEquals(0, EdgeCalibration.fromLedger(ledger).segments.get("*").n);
     }
+
+    @Test
+    public void bilyonerProbeSummarizesPageAndScripts() {
+        final java.util.List<String> urls = new java.util.ArrayList<>();
+        Http http = new Http() {
+            public Response get(String url, Map<String, String> headers) throws ProviderException {
+                urls.add(url);
+                assertTrue(headers.get("User-Agent").contains("Mozilla"));
+                if (url.equals("https://www.bilyoner.com/iddaa")) {
+                    return new Response(200, "<html><script id=\"__NEXT_DATA__\">{}</script>"
+                            + "<script src=\"/_next/static/app.js\"></script><script src=\"https://cdn.other.com/x.js\"></script>"
+                            + "<a>Süper Oran</a> fetch('https://www.bilyoner.com/api/v3/mobile/bulletin?x=1')</html>", new LinkedHashMap<String, String>());
+                }
+                if (url.equals("https://www.bilyoner.com/_next/static/app.js")) {
+                    return new Response(200, "var a='/api/v2/super-odds/list';var b='superOdds';", new LinkedHashMap<String, String>());
+                }
+                throw new ProviderException(url + " -> bağlantı hatası");
+            }
+        };
+        String r = BilyonerProbe.report(http);
+        assertTrue(r, r.contains("https://www.bilyoner.com/iddaa -> HTTP 200"));
+        assertTrue(r, r.contains("gömülü veri: __NEXT_DATA__ var"));
+        assertTrue(r, r.contains("\"süper oran\" geçen yer: 1"));
+        assertTrue(r, r.contains("https://www.bilyoner.com/api/v3/mobile/bulletin?x=1"));
+        assertTrue(r, r.contains("/api/v2/super-odds/list"));
+        assertFalse(urls.contains("https://cdn.other.com/x.js")); // yalnızca sitenin kendi betikleri
+        assertFalse(urls.contains("https://m.bilyoner.com/iddaa")); // ilk açılan sayfa yeterli
+        // site açılmazsa çıktı yine üretilir (test çökmez)
+        Http down = new Http() {
+            public Response get(String url, Map<String, String> headers) throws ProviderException {
+                throw new ProviderException("bağlantı hatası");
+            }
+        };
+        String d = BilyonerProbe.report(down);
+        assertTrue(d, d.contains("www.bilyoner.com/iddaa -> alınamadı") && d.contains("m.bilyoner.com/iddaa -> alınamadı"));
+    }
 }

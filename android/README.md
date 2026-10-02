@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.1.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.1.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -74,6 +74,13 @@ bildirim olarak gelir.
   kanıt koruması ölçümüne (kapanış avantajı) girmez: kampanya oranı piyasa oranı değildir.
   Yalnızca tek seçimli kampanyalar; birleşik seçimler ("X kazanır ve 2,5 Üst") hesaplanamaz.
   Adil oranlar son tam taramadan (sabah kararı, radar ya da "Şimdi tara"); 3 saatten eskiyse uyarır.
+- **Bilyoner Süper Oran keşfi (2.1.2):** Bilyoner'in kampanya oranlarını hangi adresten ve hangi
+  biçimde verdiği bilinmiyor; körlemesine okuma yanlış oran okutabilir. "Kaynakları test et"
+  artık telefonda herkese açık Bilyoner iddaa sayfasını ve sitenin ilk birkaç betiğini indirip
+  yapılarını özetler (durum, boyut, gömülü veri, "süper oran" geçen yerler, API'ye benzeyen
+  adresler). Bu bölüm paylaşılınca Süper Oranlar gerçek veriye göre otomatik okunacak ve
+  promosyon kontrolüne kendiliğinden düşecek. Oturum ya da hesap kullanılmaz, kredi harcanmaz;
+  Bilyoner istekleri Nesine gibi önce VPN dışı ağdan denenir.
 - **Bugünün maçları kendiliğinden (2.1.1):** Uygulama açıldığında bugün hangi liglerin oynadığı
   bilinmiyorsa (ör. güncellemeden sonra) arka planda ücretsiz maç listesinden öğrenilir; kredi
   planı ve ek ligler düğmeye basmadan güncellenir.
@@ -352,7 +359,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.1.1.apk
+./build.sh          # testler + build/BilincliKupon-2.1.2.apk
 ./build.sh test     # yalnızca testler
 ```
 
