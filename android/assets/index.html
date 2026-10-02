@@ -263,6 +263,18 @@ function render() {
   var v = document.getElementById("view");
   v.innerHTML = tab === "bugun" ? viewToday() : tab === "firsat" ? viewOpportunities() : tab === "gecmis" ? viewHistory()
     : tab === "kasa" ? viewMoney() : viewSettings();
+  if (S.zirve && S.zirve.busy && !busyTimer) busyTimer = setTimeout(busyRefresh, 3000);
+}
+// Zirve okuması sürerken ekran birkaç saniyede bir yenilenir (yazı yazılırken ya da sayfa açıkken beklenir)
+var busyTimer = null;
+function busyRefresh() {
+  busyTimer = null;
+  var typing = document.activeElement && /INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+  if (tab === "ayarlar" || typing || document.getElementById("sheetBg").classList.contains("show")) {
+    busyTimer = setTimeout(busyRefresh, 3000);
+    return;
+  }
+  window.refresh();
 }
 
 // ---- Bugün ----------------------------------------------------------------
@@ -567,9 +579,14 @@ function zirveCard() {
   html += '<p class="small muted">Bilyoner\'in artırılmış oranları kendiliğinden okunur (açılışta, taramalardan sonra, 3 saatte bir; kredi harcamaz) ve Pinnacle\'ın adil oranıyla karşılaştırılır. '
     + "Adil oranı geçen olursa bildirim gelir. Artış genelde %2–5'tir; çoğu zaman adil oranı geçmez, bu normaldir.</p>";
   if (!Z) return html + '<p class="small muted">Henüz okunmadı.</p><div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')">Şimdi oku</button></div></div>';
+  var now = Date.parse(S.now);
+  if (Z.busy) html += '<p class="small zirve-busy"><b>' + esc(Z.busy) + "</b> Bitince liste kendiliğinden yenilenir.</p>";
   if (Z.error) html += '<p class="small"><b>Son okuma başarısız:</b> ' + esc(Z.error) + "</p>";
   if (Z.at) html += '<p class="small">Okundu ' + esc(dm(Z.at)) + " " + esc(hm(Z.at)) + " (" + esc(ago(Z.at)) + ") · " + Z.events + " maçta " + Z.offers + " artırılmış oran · adil oranı geçen <b>" + Z.play + "</b></p>";
-  var now = Date.parse(S.now), groups = [], byEvent = {};
+  var stale = Z.fairsAt && now - Date.parse(Z.fairsAt) > 6 * 3600 * 1000;
+  if (Z.at) html += '<p class="small muted zirve-fairs">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Henüz tam tarama yok.")
+    + (stale ? " <b>Tarama eski.</b>" : "") + " Son taramada olmayan Zirve maçlarının ligi kendiliğinden ayrıca taranır (lig başına ~2 kredi, 3 saatte en fazla bir kez).</p>";
+  var groups = [], byEvent = {};
   zirveRows = Z.rows || [];
   zirveRows.forEach(function (r, i) {
     if (Date.parse(r.kickoff) <= now) return; // başlamış maç
@@ -588,10 +605,7 @@ function zirveCard() {
       + shown.map(row).join("")
       + (rest.length ? '<details class="info"><summary class="small">' + rest.length + " seçim daha</summary>" + rest.map(row).join("") + "</details>" : "") + "</div>";
   });
-  var stale = Z.fairsAt && now - Date.parse(Z.fairsAt) > 6 * 3600 * 1000;
-  html += '<p class="small muted">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Henüz tam tarama yok: adil oran için önce \"Şimdi tara\".")
-    + (stale ? " <b>Tarama eski:</b> maça yakınsa önce \"Şimdi tara\"." : "") + " Son taramada olmayan Zirve maçlarının ligi kendiliğinden ayrıca taranır (lig başına ~2 kredi, 3 saatte en fazla bir kez).</p>"
-    + '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')">Yeniden oku</button></div></div>';
+  html += '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')"' + (Z.busy ? " disabled" : "") + ">Yeniden oku</button></div></div>";
   return html;
 }
 function zirveSheet(i) {

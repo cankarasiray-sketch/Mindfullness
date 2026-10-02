@@ -35,6 +35,8 @@ public final class Zirve {
     static final double MAX_ODDS_GAP = 0.08;
     static final int MAX_ROWS = 150;
     static final int MAX_NOTIFIED = 300;
+    /** Değerlendirme biçimi; eski sürümün kaydı görülünce okuma beklemeden yenilenir. */
+    public static final int VIEW_VERSION = 2;
 
     /** Zirve sekmesindeki artırılmış bir oran. */
     public static final class Offer {
@@ -406,6 +408,7 @@ public final class Zirve {
             }
         });
         Map<String, Object> v = new LinkedHashMap<>();
+        v.put("v", (long) VIEW_VERSION);
         v.put("at", now.toString());
         v.put("fairsAt", fairsAt);
         v.put("events", (long) events.size());

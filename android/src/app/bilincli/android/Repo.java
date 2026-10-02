@@ -299,22 +299,28 @@ final class Repo {
         return new LinkedHashMap<>();
     }
 
-    /** Arayüz için son Zirve Oran değerlendirmesi (+ fetchedAt, error); hiç okunmadıysa ya da demodaysa null. */
+    /** Süren Zirve okumasının adımı (arayüzde "okunuyor" satırı); okuma yoksa null. */
+    private volatile String zirveBusy;
+
+    /** Arayüz için son Zirve Oran değerlendirmesi (+ fetchedAt, error, busy); hiç okunmadıysa ya da demodaysa null. */
     Map<String, Object> zirveView() {
         if (isDemo()) return null;
         Map<String, Object> st = zirveState(); // kilitsiz: okuma sürerken arayüz beklemesin
-        if (st.get("fetchedAt") == null) return null;
+        String busy = zirveBusy;
+        if (st.get("fetchedAt") == null && busy == null) return null;
         Map<String, Object> v = new LinkedHashMap<>();
         Map<String, Object> view = Json.obj(st.get("view"));
         if (view != null) v.putAll(view);
         v.put("fetchedAt", st.get("fetchedAt"));
         v.put("error", st.get("error"));
+        v.put("busy", busy);
         return v;
     }
 
     /**
      * Bilyoner Zirve Oran'ı indirip son tam taramanın adil oranlarıyla değerlendirir (kredi harcamaz).
-     * force değilse son okumadan 10 dk geçmeden tekrar indirilmez. Yeni değerli oran varsa bildirim
+     * force değilse son okumadan 10 dk geçmeden tekrar indirilmez (eski sürümün kaydı hemen yenilenir).
+     * Son taramada olmayan yakın maçların ligi hedefli taranır. Yeni değerli oran varsa bildirim
      * [başlık, metin] döner; aynı oran bir kez bildirilir.
      */
     String[] zirveCheck(boolean force) {
@@ -323,22 +329,33 @@ final class Repo {
             Map<String, Object> st = zirveState();
             Instant now = Instant.now();
             String last = Json.str(st, "fetchedAt");
-            if (!force && last != null && Instant.parse(last).plusSeconds(ZIRVE_MIN_GAP_S).isAfter(now)) return null;
+            boolean current = Json.lng(Json.obj(st.get("view")), "v", 0) == Zirve.VIEW_VERSION;
+            if (!force && current && last != null && Instant.parse(last).plusSeconds(ZIRVE_MIN_GAP_S).isAfter(now)) return null;
             st.put("fetchedAt", now.toString());
             String[] notice = null;
+            zirveBusy = "Bilyoner Zirve Oran okunuyor…";
             try {
                 List<Zirve.Offer> offers = Zirve.fetch(new AndroidHttp(app));
                 Map<String, Object> view = zirveEvaluate(offers, now);
                 Map<String, String> notes = new LinkedHashMap<>();
-                if (zirveScan(view, st, notes, now)) view = zirveEvaluate(offers, now); // hedefli taramayla eklenen maçlar
+                zirveAnnotate(view, st, notes);
+                st.put("view", view); // ilk değerlendirme hemen ekranda (hedefli tarama sürerken)
+                st.remove("error");
+                zirveRaw = Json.write(st);
+                try {
+                    if (zirveScan(view, st, notes, now)) view = zirveEvaluate(offers, now); // hedefli taramayla eklenen maçlar
+                } catch (RuntimeException e) {
+                    st.put("error", "hedefli tarama: " + e.getMessage()); // ilk değerlendirme geçerli kalır
+                }
                 zirveAnnotate(view, st, notes);
                 List<Object> notified = new ArrayList<>(Json.arr(st.get("notified")));
                 notice = Zirve.notice(view, notified);
                 st.put("view", view);
                 st.put("notified", notified);
-                st.remove("error");
             } catch (Http.ProviderException | RuntimeException e) {
                 st.put("error", String.valueOf(e.getMessage())); // son değerlendirme ekranda kalır
+            } finally {
+                zirveBusy = null;
             }
             String raw = Json.write(st);
             zirveStore.write(raw);
@@ -436,6 +453,9 @@ final class Repo {
             keys.add(key);
         }
         if (keys.isEmpty()) return false;
+        List<String> names = new ArrayList<>();
+        for (String k : keys) names.add(CreditPlan.leagueName(k));
+        zirveBusy = "Zirve maçlarının ligi taranıyor (" + String.join(", ", names) + ")…";
         if (creditsLow()) {
             for (Map.Entry<String, String> e : keyOf.entrySet()) {
                 if (keys.contains(e.getValue())) notes.put(e.getKey(), "API kredisi az; hedefli tarama yapılmadı");

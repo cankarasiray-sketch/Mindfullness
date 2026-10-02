@@ -744,6 +744,19 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   assert.match(h.$("#zirveHome").textContent, /1 Zirve Oran seçimi adil oranı geçiyor/);
   h.button("Fırsatlar'da gör").click();
   assert.ok(h.$("#zirveCard"));
+  // okuma sürerken: adım yazılır, düğme kapalı, ekran kendiliğinden yenilenir
+  const b = clone(s);
+  b.zirve.busy = "Zirve maçlarının ligi taranıyor (UEFA Nations League)…";
+  const tb = boot(b, "#firsat");
+  assert.match(tb.$(".zirve-busy").textContent, /ligi taranıyor \(UEFA Nations League\)… Bitince liste kendiliğinden yenilenir/);
+  assert.equal(tb.button("Yeniden oku").disabled, true);
+  assert.match(tb.$(".zirve-fairs").textContent, /Adil oranlar: son tam tarama/);
+  let reads = 0;
+  const done = clone(s);
+  tb.w.MockAndroid.state = () => { reads++; return JSON.stringify(done); };
+  await new Promise((r) => setTimeout(r, 3100));
+  assert.ok(reads >= 1);
+  assert.equal(tb.$(".zirve-busy"), null);
   // hiç okunmadıysa elle okuma düğmesi; kapalıysa açıklama; demoda yok
   const n = clone(s);
   n.zirve = null;

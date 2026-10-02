@@ -243,7 +243,7 @@ public final class CreditPlan {
         if (!p.expanded.isEmpty()) note(p, "genis", "Kredi bol: " + p.expanded.size() + " ek lig tarandı");
     }
 
-    static String leagueName(String key) {
+    public static String leagueName(String key) {
         for (String[] l : Settings.KNOWN_LEAGUES) if (l[0].equals(key)) return l[1];
         String extra = Settings.EXTRA_NAMES.get(key);
         return extra != null ? extra : key;

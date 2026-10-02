@@ -122,6 +122,7 @@ public class ZirveTest {
     public void evaluatesAgainstFairOddsWithSafetyChecks() {
         Settings cfg = new Settings();
         Map<String, Object> v = Zirve.evaluate(Zirve.parse(body()), fairs(), NOW.toString(), cfg, 500000, NOW);
+        assertEquals((long) Zirve.VIEW_VERSION, v.get("v")); // eski sürümün kaydı tanınır, hemen yenilenir
         assertEquals(2L, v.get("events")); // başlamış maç alınmaz
         assertEquals(8L, v.get("offers"));
         assertEquals(1L, v.get("matched"));
