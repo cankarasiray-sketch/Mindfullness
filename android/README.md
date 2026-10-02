@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.1.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.1.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -83,7 +83,12 @@ bildirim olarak gelir.
   `/api/v3/mobile/aggregator/gamelist/all/v1?tabType=1&bulletinType=2` (HTTP 200, ~4 MB bülten:
   events → marketGroups → odds); diğer adresler uygulamaya özel başlık istiyor (HTTP 400, kod 4021).
   Zirve Oran kodda "topWin" (topWinOdds, topWinEnabled, günlük üst sınır). 2.1.5 bu bülteni indirip
-  bir maçın ve Zirve alanı taşıyan bir maçın tam yapısını yazar.
+  bir maçın ve Zirve alanı taşıyan bir maçın tam yapısını yazar. 2.1.5 çıktısı: sekme listesinde
+  "Zirve Oran" tabType 160; futbol bülteninde Zirve alanı yok; oranlar `{"id":"maç:pazar:sonuç",
+  "n":"MS 1","val":"1.79","mrt":1,"ocn":1,...}` biçiminde. 2.1.6 Zirve sekmesini (tabType 160)
+  indirir; futbol bülteninde olmayan maç/oran alanlarını ve aynı oran kimliğinin bültenden farklı
+  olduğu yerleri (artırılmış oran) yazar; futbol maçının takım adı/başlama saati alanlarını ve
+  betikteki kısa ad tablosunu (topWinOdds'un API'deki adı) gösterir.
 - **Bilyoner Süper Oran keşfi (2.1.2):** Bilyoner'in kampanya oranlarını hangi adresten ve hangi
   biçimde verdiği bilinmiyor; körlemesine okuma yanlış oran okutabilir. "Kaynakları test et"
   artık telefonda herkese açık Bilyoner iddaa sayfasını ve sitenin ilk birkaç betiğini indirip
@@ -371,7 +376,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.1.5.apk
+./build.sh          # testler + build/BilincliKupon-2.1.6.apk
 ./build.sh test     # yalnızca testler
 ```
 
