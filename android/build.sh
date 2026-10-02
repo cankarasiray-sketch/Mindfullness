@@ -15,8 +15,8 @@ TOOLS="$ROOT/.tools"
 OUT="$ROOT/build"
 MIN_SDK=26
 TARGET_SDK=34
-VERSION_CODE=33
-VERSION_NAME=2.1.4
+VERSION_CODE=34
+VERSION_NAME=2.1.5
 MAVEN=https://repo1.maven.org/maven2
 
 mkdir -p "$TOOLS" "$OUT"

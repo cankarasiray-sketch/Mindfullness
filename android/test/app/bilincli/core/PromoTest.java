@@ -110,7 +110,7 @@ public class PromoTest {
     }
 
     @Test
-    public void bilyonerProbeFindsZirveTracesAndDescribesEndpoints() {
+    public void bilyonerProbeShowsBulletinAndZirveStructure() {
         final java.util.List<String> urls = new java.util.ArrayList<>();
         Http http = new Http() {
             public Response get(String url, Map<String, String> headers) throws ProviderException {
@@ -122,30 +122,33 @@ public class PromoTest {
                             + "<script src=\"https://bundles.efilli.com/bilyoner.com.prod.js\"></script></html>", h);
                 }
                 if (url.equals("https://www.bilyoner.com/static/main.js")) {
-                    return new Response(200, "x={title:'Zirve Oran Nedir?'};y.specialOddsType;q={tabType:3};"
-                            + "u='/v3/mobile/aggregator/gamelist/events/zirve-oran';v='/v3/mobile/aggregator/gamelist/auth/events/x';"
-                            + "w=`/v3/mobile/aggregator/gamelist/${id}`;hd={'x-platform-token':t}", h);
+                    return new Response(200, "r={path:'/iddaa/zirve-oran'};u&&e.topWinOdds&&icon;{topWinEnabled:j}=x;"
+                            + "u='/v3/mobile/aggregator/gamelist/all/v1';hd={'X-CLIENT-CHANNEL':c}", h);
                 }
-                if (url.equals("https://www.bilyoner.com/api/v3/mobile/aggregator/gamelist/events/zirve-oran")) {
-                    assertEquals("application/json", headers.get("Accept"));
-                    return new Response(200, "{\"events\":[{\"homeTeam\":\"Belçika\",\"awayTeam\":\"Türkiye\","
-                            + "\"markets\":[{\"outcomes\":[{\"odd\":1.39,\"oldOdd\":1.36}]}]}],\"total\":3}", h);
+                if (url.equals(BilyonerProbe.API + BilyonerProbe.TABS)) {
+                    return new Response(200, "{\"tabs\":[{\"name\":\"Futbol\",\"tabType\":1},{\"name\":\"Basketbol\",\"tabType\":2}]}", h);
+                }
+                if (url.equals(BilyonerProbe.API + String.format(java.util.Locale.ROOT, BilyonerProbe.BULLETIN, 1))) {
+                    return new Response(200, "{\"events\":{\"100\":{\"id\":100,\"hn\":\"A\",\"an\":\"B\",\"topWinOdds\":null,"
+                            + "\"marketGroups\":[{\"odds\":[{\"val\":1.5}]}]},\"200\":{\"id\":200,\"hn\":\"Belçika\",\"an\":\"Türkiye\","
+                            + "\"marketGroups\":[{\"odds\":[{\"val\":1.36,\"topWinOdds\":1.39}]}]}},\"marketGroups\":[{\"id\":1,\"name\":\"MS\"}]}", h);
+                }
+                if (url.equals(BilyonerProbe.API + String.format(java.util.Locale.ROOT, BilyonerProbe.BULLETIN, 2))) {
+                    return new Response(200, "{\"events\":{}}", h);
                 }
                 throw new ProviderException(url + " -> HTTP 403: cloudflare");
             }
         };
         String r = BilyonerProbe.report(http);
-        assertTrue(r, r.contains("\"zirve\" geçen yerler: 2") && r.contains("Zirve Oran Nedir?"));
-        assertTrue(r, r.contains("\"specialOdds\" geçen yerler: 1") && r.contains("\"tabType\" geçen yerler: 1"));
-        assertTrue(r, r.contains("bülten veri yolları (3):") && r.contains("/v3/mobile/aggregator/gamelist/events/zirve-oran"));
-        assertTrue(r, r.contains("istek başlığı adayları: x-platform-token"));
-        assertTrue(r, r.contains("https://www.bilyoner.com/api/v3/mobile/aggregator/gamelist/events/zirve-oran -> HTTP 200"));
-        assertTrue(r, r.contains("üst alanlar: events:liste(1), total:sayı"));
-        assertTrue(r, r.contains("events[0].homeTeam = Belçika") && r.contains("events[0].markets[0].outcomes[0].oldOdd = 1.36"));
-        // kullanıcıya özel (auth) ve değişkenli yollar denenmez; çalışan kökten sonra öbürü denenmez
-        for (String u : urls) assertFalse(u, u.contains("/auth/") || u.contains("${"));
-        assertFalse(urls.contains("https://aping.bilyoner.com/v3/mobile/aggregator/gamelist/events/zirve-oran"));
-        assertTrue(r, r.contains(BilyonerProbe.GUESS + " -> ")); // topluluk tahmini de denendi
+        assertTrue(r, r.contains("\"topWin\" geçen yerler: 2") && r.contains("e.topWinOdds"));
+        assertTrue(r, r.contains("Zirve Oran sayfası/sekmesi geçen yerler: 1"));
+        assertTrue(r, r.contains("istek başlığı adayları: X-CLIENT-CHANNEL"));
+        assertTrue(r, r.contains("\"name\":\"Basketbol\",\"tabType\":2"));
+        assertTrue(r, r.contains("maç: 2 · \"topWin\" geçen yer: 2 · Zirve alanı taşıyan maç: 1")); // null alan sayılmaz
+        assertTrue(r, r.contains("marketGroups[0]: {\"id\":1,\"name\":\"MS\"}"));
+        assertTrue(r, r.contains("ilk maç: {\"id\":100,\"hn\":\"A\""));
+        assertTrue(r, r.contains("ilk Zirve maçı: {\"id\":200,\"hn\":\"Belçika\"") && r.contains("\"topWinOdds\":1.39"));
+        assertTrue(r, r.contains("maç: 0 ·")); // basketbol bülteni boş
         assertFalse(urls.contains("https://bundles.efilli.com/bilyoner.com.prod.js")); // adında bilyoner geçen başka site
         // site açılmazsa çıktı yine üretilir (test çökmez)
         Http down = new Http() {
@@ -154,6 +157,6 @@ public class PromoTest {
             }
         };
         String d = BilyonerProbe.report(down);
-        assertTrue(d, d.contains("iddaa/zirve-oran -> alınamadı") && d.contains("Aday veri adresleri"));
+        assertTrue(d, d.contains("iddaa/zirve-oran -> alınamadı") && d.contains("Bilyoner bülteni"));
     }
 }
