@@ -31,7 +31,36 @@ public final class Texts {
         }
         String line = String.join(" · ", parts);
         Object near = stats.get("en_yakin");
-        return near == null ? line : line + "\nEn yakın seçim: " + near;
+        return near == null ? line : line + "\nEn yakın seçim: " + near + "\nÖnerilen tutar: " + nearStake(stats);
+    }
+
+    /**
+     * En yakın seçimin tutarı: avantaj yoksa 0 TL (Kelly sıfır; oynamak zarar beklentisi) ve yine de
+     * oynanırsa 100 TL'de beklenen kayıp; oynanır olacağı oran ve o oranda önerilen tutar. "kasa"
+     * (kuruş) varsa tutar TL olarak, yoksa kasanın yüzdesi olarak yazılır.
+     */
+    static String nearStake(Map<String, Object> stats) {
+        double ev = stats.get("en_yakin_ev") instanceof Number ? ((Number) stats.get("en_yakin_ev")).doubleValue() : 0;
+        Long kasa = stats.get("kasa") instanceof Number ? ((Number) stats.get("kasa")).longValue() : null;
+        StringBuilder b = new StringBuilder("0 TL — ");
+        if (ev >= 0 && Boolean.FALSE.equals(stats.get("en_yakin_aralikta"))) {
+            b.append("oranı ayarlardaki oran aralığının dışında, oynanmaz.");
+        } else {
+            b.append("avantaj yok, oynanmaz");
+            if (ev < 0) b.append(" (yine de 100 TL oynanırsa beklenen kayıp ≈ ").append(Fmt.tl(Math.round(-ev * 10000))).append(')');
+            b.append('.');
+        }
+        Object target = stats.get("en_yakin_hedef"), frac = stats.get("en_yakin_hedef_oran");
+        if (target instanceof Number && frac instanceof Number && ev < 0) {
+            double f = ((Number) frac).doubleValue();
+            b.append(" Oran ").append(Fmt.odds(((Number) target).doubleValue())).append(" ya da üstüne çıkarsa (ör. kampanya, oran değişimi) önerilen ");
+            if (kasa != null && kasa > 0) {
+                b.append(Fmt.tl((long) (kasa * f) / 1000 * 1000)).append(" (kasa payı ").append(Fmt.pct(f, false)).append(").");
+            } else {
+                b.append("kasa payı ").append(Fmt.pct(f, false)).append('.');
+            }
+        }
+        return b.toString();
     }
 
     public static String legLine(Leg l) {

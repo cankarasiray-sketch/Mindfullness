@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.2.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.2.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -152,6 +152,11 @@ bildirim olarak gelir.
 - **Pas kartında en yakın seçim:** Pas günlerinde, oynanabilir oran aralığındaki seçimler arasından
   avantaja en çok yaklaşan ve ne kadar uzak olduğu gösterilir (ör. "Ev – Dep · MS 1 @ 1,95 (adil
   2,00, −%2,5)"); bildirimde de yer alır.
+- **En yakın seçimin tutarı (2.2.6):** altında "Önerilen tutar" satırı: avantaj eksi olduğu için
+  Kelly tutarı 0 TL (oynanmaz) ve yine de 100 TL oynanırsa beklenen kayıp; seçimin oynanır olacağı en
+  düşük oran (avantaj eşiği, kanıt koruması devredeyse onun küçültmesiyle) ve o oranda önerilecek
+  tutar (kasa bakiyesine göre, 10 TL'ye aşağı yuvarlanmış). Ör. "0 TL — avantaj yok, oynanmaz (yine de
+  100 TL oynanırsa beklenen kayıp ≈ 2,50 TL). Oran 2,06 ya da üstüne çıkarsa önerilen 30,00 TL".
 
 ## Kadro saati taraması, gece sessizliği, 7 anahtar (2.0)
 
@@ -424,7 +429,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.2.5.apk
+./build.sh          # testler + build/BilincliKupon-2.2.6.apk
 ./build.sh test     # yalnızca testler
 ```
 

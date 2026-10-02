@@ -460,6 +460,7 @@ public final class Daily {
         d.stats.put("dogrulama", Calibration.summary(f.calibration));
         r.decision = d;
         r.calibration = f.calibration;
+        d.stats.put("kasa", ledger.balance()); // pas gününde en yakın seçimin tutarı TL olarak yazılsın
         String summary = Texts.statsLine(d.stats);
         if (d.isPass()) {
             if (keep) {

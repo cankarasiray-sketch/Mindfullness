@@ -561,16 +561,21 @@ test("kadro saati taraması ve gece sessizliği ayarları kaydedilir", async () 
   assert.match(t2.text(), /günde 2 \+ kadro saati/);
 });
 
-test("pas kartında en yakın seçim ayrı satırda", async () => {
+test("pas kartında en yakın seçim ve tutarı ayrı satırda", async () => {
   const s = clone(baseState);
   s.todayRun = { day: s.today, decision: "pas", reason: "69 seçim karşılaştırıldı. Bugün pas.", couponId: null,
-    summary: "Bülten 650 maç · eşleşen 30\nEn yakın seçim: 03.10 20:00 Ev – Dep · MS 1 @ 1,95 (adil 2,00, −%2,5)" };
+    summary: "Bülten 650 maç · eşleşen 30\nEn yakın seçim: 03.10 20:00 Ev – Dep · MS 1 @ 1,95 (adil 2,00, −%2,5)"
+      + "\nÖnerilen tutar: 0 TL — avantaj yok, oynanmaz (yine de 100 TL oynanırsa beklenen kayıp ≈ 2,50 TL). Oran 2,06 ya da üstüne çıkarsa önerilen 30,00 TL (kasa payı %0,7)." };
   const t = boot(s);
   const near = t.$$("p").find((p) => p.textContent.startsWith("En yakın seçim:"));
   assert.ok(near, "en yakın seçim satırı yok");
   assert.match(near.textContent, /Ev – Dep · MS 1 @ 1,95 \(adil 2,00, −%2,5\)/);
   assert.ok(near.querySelector("b"));
   assert.ok(t.$$("p.muted").some((p) => p.textContent === "Bülten 650 maç · eşleşen 30"));
+  const stake = t.$(".near-stake");
+  assert.ok(stake, "tutar satırı yok");
+  assert.equal(stake.querySelector("b").textContent, "Önerilen tutar:");
+  assert.match(stake.textContent, /0 TL — avantaj yok, oynanmaz .* Oran 2,06 ya da üstüne çıkarsa önerilen 30,00 TL/);
 });
 
 test("promosyon kontrolü: adil oranlar kendiliğinden listelenir, karar oran yazılınca görünür", async () => {

@@ -214,8 +214,7 @@ public final class Engine {
                     + "veri kaynaklarını kontrol et.", stats));
         }
         if (cands.isEmpty()) {
-            String near = nearest(all, cfg);
-            if (near != null) stats.put("en_yakin", near);
+            nearest(all, cfg, stats);
             return withKickoffs(kos, kls, new Decision(null, none, all.size() + " seçim karşılaştırıldı, hiçbirinde iddaa oranı "
                     + "adil oranı yeterince geçmiyor. Bugün pas.", stats));
         }
@@ -232,9 +231,10 @@ public final class Engine {
     /**
      * Pas gününde avantaja en yakın seçim (oynanabilir oran aralığındakiler arasından; yoksa hepsi):
      * "03.10 20:00 Ev – Dep · MS 1 @ 2,10 (adil 2,15, −%2,3)". Kullanıcı neden pas dendiğini ve
-     * fırsatın ne kadar uzak olduğunu görsün diye.
+     * fırsatın ne kadar uzak olduğunu görsün diye. Tutar için: avantaj (en_yakin_ev), oynanır olacağı
+     * en düşük oran (en_yakin_hedef) ve o oranda kasanın önerilen payı (en_yakin_hedef_oran).
      */
-    static String nearest(List<Candidate> all, Settings cfg) {
+    static void nearest(List<Candidate> all, Settings cfg, Map<String, Object> stats) {
         Candidate best = null, bestAny = null;
         for (Candidate c : all) {
             if (bestAny == null || c.ev() > bestAny.ev()) bestAny = c;
@@ -242,10 +242,30 @@ public final class Engine {
             if (best == null || c.ev() > best.ev()) best = c;
         }
         Candidate c = best != null ? best : bestAny;
-        if (c == null) return null;
-        return Fmt.localTime(c.book.kickoff.toString()) + " " + c.book.home + " – " + c.book.away + " · "
+        if (c == null) return;
+        stats.put("en_yakin", Fmt.localTime(c.book.kickoff.toString()) + " " + c.book.home + " – " + c.book.away + " · "
                 + Models.outcomeLabel(c.market, c.outcome) + " @ " + Fmt.odds(c.odds)
-                + " (adil " + Fmt.odds(1 / c.prob) + ", " + Fmt.pct(c.ev(), true) + ")";
+                + " (adil " + Fmt.odds(1 / c.prob) + ", " + Fmt.pct(c.ev(), true) + ")");
+        stats.put("en_yakin_ev", c.ev());
+        stats.put("en_yakin_aralikta", c.odds >= cfg.minLegOdds && c.odds <= cfg.maxLegOdds);
+        double[] t = targetOdds(c.rawProb, c.market, cfg);
+        if (t != null) {
+            stats.put("en_yakin_hedef", t[0]);
+            stats.put("en_yakin_hedef_oran", t[1]);
+        }
+    }
+
+    /**
+     * Seçimin oynanır olacağı en düşük oran (avantaj eşiği; kanıt koruması devredeyse onun küçültmesiyle,
+     * 2 haneye yukarı yuvarlanmış) ve o oranda kasanın önerilen payı (Kelly). Kanıt koruması avantajı
+     * neredeyse sıfırlıyorsa null.
+     */
+    static double[] targetOdds(double rawProb, String market, Settings cfg) {
+        double r = cfg.edgeRatios == null ? 1 : EdgeCalibration.ratio(cfg.edgeRatios, market);
+        if (!(r > 0.05) || !(rawProb > 0 && rawProb < 1)) return null;
+        double target = Math.ceil((1 + cfg.minLegEv / r) / rawProb * 100 - 1e-9) / 100; // r(p·o − 1) ≥ eşik
+        double prob = r * rawProb + (1 - r) / target;
+        return new double[] {target, stakeFraction(prob, target, cfg)};
     }
 
     private static Decision withKickoffs(List<Instant> kos, List<String> leagues, Decision d) {

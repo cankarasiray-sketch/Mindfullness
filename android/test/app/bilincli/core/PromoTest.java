@@ -31,6 +31,27 @@ public class PromoTest {
         assertTrue(near, near.contains("Ev 2 – Dep 2 · MS 1 @ 1,95 (adil 2,00, −%2,5)"));
         String line = Texts.statsLine(d.stats);
         assertTrue(line, line.contains("\nEn yakın seçim: ") && line.startsWith("Bülten 2 maç"));
+        // tutar: avantaj yok -> 0 TL; oynanır olacağı oran (1,03 / 0,50 = 2,06) ve o orandaki Kelly payı
+        assertTrue(line, line.endsWith("\nÖnerilen tutar: 0 TL — avantaj yok, oynanmaz (yine de 100 TL oynanırsa beklenen kayıp ≈ 2,50 TL). "
+                + "Oran 2,06 ya da üstüne çıkarsa (ör. kampanya, oran değişimi) önerilen kasa payı %0,7."));
+        d.stats.put("kasa", 500000L); // 5.000 TL: 0,25 x (0,03 / 1,06) = %0,71 -> 35,4 TL, 10 TL'ye aşağı
+        assertTrue(Texts.statsLine(d.stats), Texts.statsLine(d.stats).endsWith("önerilen 30,00 TL (kasa payı %0,7)."));
+        // eşikte avantaj tam ayardaki kadar
+        double[] t = Engine.targetOdds(0.5, "MS", new Settings());
+        assertEquals(2.06, t[0], 1e-9);
+        assertTrue(0.5 * t[0] - 1 >= 0.03 - 1e-9);
+        // kanıt koruması devredeyse daha yüksek oran gerekir: r(p·o − 1) ≥ eşik -> (1 + 0,03/0,5) / 0,5 = 2,12
+        Settings guarded = new Settings();
+        guarded.edgeRatios = new LinkedHashMap<>();
+        guarded.edgeRatios.put("*", 0.5);
+        assertEquals(2.12, Engine.targetOdds(0.5, "MS", guarded)[0], 1e-9);
+        guarded.edgeRatios.put("*", 0.0);
+        assertNull(Engine.targetOdds(0.5, "MS", guarded));
+        // avantajı var ama oran aralığı dışında
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("en_yakin_ev", 0.05);
+        out.put("en_yakin_aralikta", false);
+        assertEquals("0 TL — oranı ayarlardaki oran aralığının dışında, oynanmaz.", Texts.nearStake(out));
         // kupon gününde yok
         Engine.Decision value = Engine.decide(Collections.singletonList(FeatureTest.book(1, 2.30, 1, 8)),
                 Collections.singletonList(FeatureTest.sharp(1, 0.50, 8)), NOW, new Settings());

@@ -191,8 +191,10 @@ function dayLabel(day) { var p = day.split("-"); return p[2] + "." + p[1] + "." 
 /** Karar özeti: istatistik satırı soluk; pas gününde "En yakın seçim" ayrı satırda. */
 function summaryHtml(summary) {
   return (summary || "").split("\n").map(function (line) {
-    var near = line.indexOf("En yakın seçim: ") === 0;
-    return near ? '<p class="small"><b>En yakın seçim:</b> ' + esc(line.slice(16)) + "</p>" : '<p class="small muted">' + esc(line) + "</p>";
+    var near = line.indexOf("En yakın seçim: ") === 0, stake = line.indexOf("Önerilen tutar: ") === 0;
+    return near ? '<p class="small"><b>En yakın seçim:</b> ' + esc(line.slice(16)) + "</p>"
+      : stake ? '<p class="small near-stake"><b>Önerilen tutar:</b> ' + esc(line.slice(16)) + "</p>"
+      : '<p class="small muted">' + esc(line) + "</p>";
   }).join("");
 }
 function label(market, outcome) {

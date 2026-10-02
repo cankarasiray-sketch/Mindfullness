@@ -497,6 +497,7 @@ public final class Bridge {
         b.append("  Karşılıklı Gol: ").append(mark(cal.get("KG"))).append('\n');
         b.append("  Basketbol MS: ").append(mark(cal.get("BS"))).append('\n');
         b.append("  Basketbol Alt/Üst: ").append(mark(cal.get("BT"))).append('\n');
+        d.stats.put("kasa", repo.real().balance());
         b.append("  Karar: ").append(Texts.statsLine(d.stats)).append('\n');
         if (d.isPass()) b.append("  ").append(d.reason).append('\n');
 
