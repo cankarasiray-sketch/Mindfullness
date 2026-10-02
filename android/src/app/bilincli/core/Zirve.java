@@ -146,7 +146,7 @@ public final class Zirve {
     }
 
     /** Türkçe harfler sadeleştirilmiş küçük harf (Locale.ROOT). */
-    static String fold(String s) {
+    public static String fold(String s) {
         StringBuilder t = new StringBuilder();
         for (char c : (s == null ? "" : s).toCharArray()) {
             switch (c) {
@@ -224,27 +224,99 @@ public final class Zirve {
         }
     }
 
+    /**
+     * Aynı maç mı (Bilyoner ve Nesine aynı resmi programı verir): başlama farkı en fazla 20 dk, takım
+     * varyantı (kadın/genç) aynı, iki taraf da benzer. Eşleşme puanı (0..1), eşleşmiyorsa 0.
+     */
+    public static double sameEvent(String home, String away, Instant kickoff, String home2, String away2, Instant kickoff2) {
+        if (home == null || away == null || home2 == null || away2 == null || kickoff == null || kickoff2 == null) return 0;
+        if (Math.abs(kickoff.getEpochSecond() - kickoff2.getEpochSecond()) > MAX_KICKOFF_GAP_S) return 0;
+        if (!Matching.variant(home).equals(Matching.variant(home2)) || !Matching.variant(away).equals(Matching.variant(away2))) return 0;
+        double h = Matching.similarity(home, home2), a = Matching.similarity(away, away2);
+        if (Math.min(h, a) < MIN_SIDE || (h + a) / 2 < MIN_PAIR) return 0;
+        return (h + a) / 2;
+    }
+
     /** Son taramanın adil oran tablosunda bu maç (aynı saat, benzer adlar); yoksa null. */
     static Map<String, Object> findRow(Offer o, List<Object> fairs) {
         Map<String, Object> best = null;
         double bestScore = 0;
         for (Object x : fairs) {
             Map<String, Object> r = Json.obj(x);
-            if (r == null) continue;
-            String ko = Json.str(r, "kickoff");
-            if (ko == null) continue;
-            if (Math.abs(Instant.parse(ko).getEpochSecond() - o.kickoff.getEpochSecond()) > MAX_KICKOFF_GAP_S) continue;
-            String home = Json.str(r, "home"), away = Json.str(r, "away");
-            if (home == null || away == null) continue;
-            if (!Matching.variant(home).equals(Matching.variant(o.home)) || !Matching.variant(away).equals(Matching.variant(o.away))) continue;
-            double h = Matching.similarity(home, o.home), a = Matching.similarity(away, o.away);
-            if (Math.min(h, a) < MIN_SIDE || (h + a) / 2 < MIN_PAIR) continue;
-            if ((h + a) / 2 > bestScore) {
-                bestScore = (h + a) / 2;
+            if (r == null || Json.str(r, "kickoff") == null) continue;
+            double score = sameEvent(Json.str(r, "home"), Json.str(r, "away"), Instant.parse(Json.str(r, "kickoff")), o.home, o.away, o.kickoff);
+            if (score > bestScore) {
+                bestScore = score;
                 best = r;
             }
         }
         return best;
+    }
+
+    /** Eşleşmeyen maç için açıklama: son taramada o saatte hangi maçlar vardı (ad farkını görmek için). */
+    static String why(Offer o, List<Object> fairs) {
+        List<String> near = new ArrayList<>();
+        for (Object x : fairs) {
+            Map<String, Object> r = Json.obj(x);
+            if (r == null || Json.str(r, "kickoff") == null) continue;
+            if (Math.abs(Instant.parse(Json.str(r, "kickoff")).getEpochSecond() - o.kickoff.getEpochSecond()) > MAX_KICKOFF_GAP_S) continue;
+            String n = Json.str(r, "home") + " – " + Json.str(r, "away");
+            if (!near.contains(n) && near.size() < 3) near.add(n);
+        }
+        return near.isEmpty() ? "son taramada bu saatte maç yok"
+                : "son taramada bu saatte " + String.join(", ", near) + " var; bu maçla eşleşmedi";
+    }
+
+    /** Bilyoner'in iddaa lig adları -> The Odds API lig kodu (sadeleştirilmiş adla). */
+    static final Map<String, String> LEAGUE_ALIASES = new LinkedHashMap<>();
+
+    static {
+        LEAGUE_ALIASES.put("uefa uluslar ligi", "soccer_uefa_nations_league");
+        LEAGUE_ALIASES.put("uluslar ligi", "soccer_uefa_nations_league");
+        LEAGUE_ALIASES.put("uefa sampiyonlar ligi", "soccer_uefa_champs_league");
+        LEAGUE_ALIASES.put("sampiyonlar ligi", "soccer_uefa_champs_league");
+        LEAGUE_ALIASES.put("uefa avrupa ligi", "soccer_uefa_europa_league");
+        LEAGUE_ALIASES.put("avrupa ligi", "soccer_uefa_europa_league");
+        LEAGUE_ALIASES.put("uefa konferans ligi", "soccer_uefa_europa_conference_league");
+        LEAGUE_ALIASES.put("konferans ligi", "soccer_uefa_europa_conference_league");
+        LEAGUE_ALIASES.put("super lig", "soccer_turkey_super_league");
+        LEAGUE_ALIASES.put("turkiye super lig", "soccer_turkey_super_league");
+        LEAGUE_ALIASES.put("trendyol super lig", "soccer_turkey_super_league");
+        LEAGUE_ALIASES.put("ingiltere premier lig", "soccer_epl");
+        LEAGUE_ALIASES.put("premier lig", "soccer_epl");
+        LEAGUE_ALIASES.put("ispanya la liga", "soccer_spain_la_liga");
+        LEAGUE_ALIASES.put("la liga", "soccer_spain_la_liga");
+        LEAGUE_ALIASES.put("italya serie a", "soccer_italy_serie_a");
+        LEAGUE_ALIASES.put("almanya bundesliga", "soccer_germany_bundesliga");
+        LEAGUE_ALIASES.put("fransa ligue 1", "soccer_france_ligue_one");
+        LEAGUE_ALIASES.put("euroleague", "basketball_euroleague");
+        LEAGUE_ALIASES.put("thy euroleague", "basketball_euroleague");
+        LEAGUE_ALIASES.put("nba", "basketball_nba");
+    }
+
+    /**
+     * Zirve maçının ligi için oran sorgusu kodu: önce öğrenilmiş eşleme (daha önce eşleşen Zirve
+     * maçlarından), sonra bilinen iddaa adları, sonra lig listesindeki adlarla benzerlik. Bulunamazsa null.
+     * candidates: {kod, ad} (seçilebilir ligler ve milli turnuvalar).
+     */
+    public static String leagueKey(String league, Map<String, String> learned, List<String[]> candidates) {
+        if (league == null || league.trim().isEmpty()) return null;
+        if (learned != null && learned.get(league) != null) return learned.get(league);
+        String f = fold(league).replaceAll("[^a-z0-9 ]", " ").trim().replaceAll("\\s+", " ");
+        if (LEAGUE_ALIASES.containsKey(f)) return LEAGUE_ALIASES.get(f);
+        String best = null;
+        double bestScore = 0;
+        if (candidates != null) {
+            for (String[] c : candidates) {
+                String name = fold(c[1].replaceAll("\\(.*?\\)", "")).replaceAll("[^a-z0-9 ]", " ").trim().replaceAll("\\s+", " ");
+                double score = name.equals(f) ? 1.0 : Matching.ratio(name, f);
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = c[0];
+                }
+            }
+        }
+        return bestScore >= 0.85 ? best : null;
     }
 
     /**
@@ -277,11 +349,14 @@ public final class Zirve {
             String status;
             if (row == null) {
                 status = "mac";
+                r.put("why", why(o, fairs == null ? new ArrayList<Object>() : fairs));
             } else {
                 matchedEvents.add(o.event);
                 r.put("ref", Json.str(row, "ref"));
                 r.put("code", Json.str(row, "code"));
                 String sport = Json.str(row, "sport");
+                r.put("sport", sport);
+                r.put("fairAt", row.get("at"));
                 String[] mo = map(o, sport != null && sport.startsWith("basketball"));
                 Map<String, Object> sel = null;
                 if (mo != null) {
@@ -388,7 +463,7 @@ public final class Zirve {
             case "degisti": return "iddaa oranı taramadan beri değişmiş; önce \"Şimdi tara\"";
             case "secim": return "bu seçimin adil oranı yok (pazar taranmadı)";
             case "pazar": return "uygulamanın bilmediği pazar";
-            case "mac": return "maç son taramada yok (lig taranmıyor ya da tarama eski)";
+            case "mac": return "adil oran yok";
             default: return status;
         }
     }
@@ -402,7 +477,8 @@ public final class Zirve {
                 .append(Json.lng(view, "play", 0)).append('\n');
         List<Map<String, Object>> rows = best(view);
         for (Map<String, Object> r : rows.subList(0, Math.min(10, rows.size()))) {
-            b.append("  ").append(line(r)).append(" → ").append(statusText(Json.str(r, "status"))).append('\n');
+            b.append("  ").append(line(r)).append(" → ").append(statusText(Json.str(r, "status")))
+                    .append(r.get("why") != null ? " (" + Json.str(r, "why") + ")" : "").append('\n');
         }
         return b.toString();
     }

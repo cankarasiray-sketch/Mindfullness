@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.2.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.2.1.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -82,6 +82,14 @@ bildirim olarak gelir.
   tutarla oynadım" bahsi promosyon kuponu olarak kasaya yazar. Adil oranı geçen olursa bildirim gelir
   (aynı oran bir kez; Zirve oranı yükselirse yeniden) ve Bugün sekmesinde uyarı görünür. Ayarlar →
   Radar'dan kapatılabilir.
+- **Hedefli tarama (2.2.1):** Zirve maçı son taramada yoksa (ör. ligi o gün kredi planında değildi
+  ya da sabah taraması olmadı), maçın ligi kendiliğinden ayrıca taranır: iddaa bülteni (ücretsiz) ve
+  yalnızca o ligin Pinnacle oranı (lig başına ~2 kredi; Zirve'de Karşılıklı Gol varsa maç başına +1).
+  Lig son 3 saatte tarandıysa tekrar taranmaz; 2 günden ilerideki maçlar maç gününe bırakılır.
+  Lig adı bilinen iddaa adlarından, lig listesinden ve daha önce eşleşen Zirve maçlarından bulunur.
+  Kısmi taramalar (kadro saati, hedefli) adil oran tablosunu satır satır tazeler. Hâlâ eşleşmeyen
+  maçta kart nedenini tek satırda yazar (ör. "son taramada bu saatte Fransa – İtalya var; bu maçla
+  eşleşmedi" ya da "ligi 07:50'de tarandı; Pinnacle'da bu maç yok").
 - **Gerçekçi beklenti:** iddaa marjı ~%22, Zirve artışı ~%2–5; marj ~%17'ye iner ama çoğu zaman
   sıfırın altına inmez. Zirve Oran'lı seçimlerin çoğu "değer yok" çıkar; değerli olanı ara sıra görülür.
 - Keşif aracı (2.1.2–2.1.6) kaldırıldı; "Kaynakları test et" artık Zirve okumasının özetini yazar.
@@ -400,7 +408,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.2.0.apk
+./build.sh          # testler + build/BilincliKupon-2.2.1.apk
 ./build.sh test     # yalnızca testler
 ```
 

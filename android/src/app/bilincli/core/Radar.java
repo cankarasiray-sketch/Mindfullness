@@ -46,6 +46,41 @@ public final class Radar {
         return v;
     }
 
+    /**
+     * Adil oran tablosuna (promosyon ve Zirve Oran kontrolü) kısmi bir taramanın maçlarını ekler:
+     * aynı maçın eski satırı değişir, başlamış maçlar atılır, diğer satırlar kalır.
+     */
+    public synchronized void mergeFairs(List<Pair> pairs, Instant now) {
+        if (mergeInto(pairs, now)) storage.write(Json.write(state));
+    }
+
+    private boolean mergeInto(List<Pair> pairs, Instant now) {
+        List<Object> fresh = Promo.table(pairs, now);
+        if (fresh.isEmpty()) return false;
+        Set<String> refs = new HashSet<>();
+        for (Object o : fresh) refs.add(Json.str(Json.obj(o), "ref"));
+        List<Object> rows = new ArrayList<>(fresh);
+        Object old = state.get("fairs");
+        if (old instanceof List) {
+            for (Object o : (List<?>) old) {
+                Map<String, Object> r = Json.obj(o);
+                if (r == null || refs.contains(Json.str(r, "ref"))) continue;
+                String ko = Json.str(r, "kickoff");
+                if (ko == null || !Instant.parse(ko).isAfter(now)) continue;
+                rows.add(r);
+            }
+        }
+        Collections.sort(rows, new Comparator<Object>() {
+            @Override
+            public int compare(Object a, Object b) {
+                return Json.str(Json.obj(a), "kickoff").compareTo(Json.str(Json.obj(b), "kickoff"));
+            }
+        });
+        state.put("fairs", new ArrayList<Object>(rows.subList(0, Math.min(Promo.MAX_ROWS, rows.size()))));
+        if (state.get("fairsAt") == null) state.put("fairsAt", now.toString());
+        return true;
+    }
+
     private Map<String, Object> snapshots() {
         Map<String, Object> s = Json.obj(state.get("snapshots"));
         if (s == null) state.put("snapshots", s = new LinkedHashMap<String, Object>());
@@ -97,6 +132,7 @@ public final class Radar {
         Map<String, Pair> pairBySharp = new LinkedHashMap<>();
         for (Pair p : pairs) pairBySharp.put(p.sharp.ref, p);
 
+        if (!full) mergeInto(pairs, now); // kısmi tarama: yalnızca taranan maçların adil oranı tazelenir
         if (full) {
             state.put("fairs", Promo.table(pairs, now)); // promosyon kontrolü için (kredi harcamadan)
             state.put("fairsAt", now.toString());

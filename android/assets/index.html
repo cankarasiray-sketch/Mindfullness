@@ -546,10 +546,14 @@ function promoPlay(i, j) {
   act("promoPlay", {ref: r.ref, m: x.m, o: x.o, odds: val("promoOdds"), amount: val("promoAmt")}).then(function (res) { if (res && res.ok) closeSheet(); });
 }
 // ---- Zirve Oran (Bilyoner) ------------------------------------------------------
-var ZIRVE_STATUS = {oyna: "OYNA", oynama: "değer yok", degisti: "oran değişmiş, tara", secim: "adil oran yok", pazar: "desteklenmeyen pazar", mac: "maç taranmadı"};
+var ZIRVE_STATUS = {oyna: "OYNA", oynama: "değer yok", degisti: "oran değişmiş, tara", secim: "adil oran yok", pazar: "desteklenmeyen pazar", mac: "adil oran yok"};
 var zirveRows = [];
-function zirveRow(i) {
+function zirveRow(i, plain) {
   var r = zirveRows[i], st = r.status;
+  if (plain) {
+    return '<div class="l2"><span><span class="chip">' + esc(r.label || r.name) + '</span> <span class="odds">' + odds(r.tval)
+      + '</span> <span class="small muted"><s>' + odds(r.val) + "</s></span></span></div>";
+  }
   return '<div class="l2"><span><span class="chip' + (st === "oyna" ? " main" : "") + '">' + esc(r.label || r.name) + '</span> <span class="odds">' + odds(r.tval)
     + '</span> <span class="small muted"><s>' + odds(r.val) + "</s>" + (r.p ? " · adil " + odds(1 / r.p) : "") + "</span></span><span>"
     + (r.ev != null ? '<b class="' + cls(r.ev) + '">' + pct(r.ev, true) + "</b> " : "")
@@ -575,14 +579,18 @@ function zirveCard() {
   if (!groups.length) html += '<p class="muted">' + (Z.at ? "Şu an Zirve Oran'lı yaklaşan maç yok." : "") + "</p>";
   groups.forEach(function (g) {
     var r = g.r, shown = g.items.slice(0, 5), rest = g.items.slice(5);
+    // maç son taramada yoksa: seçim seçim tekrar yerine tek açıklama
+    var none = g.items.every(function (i) { return zirveRows[i].status === "mac"; });
+    var row = function (i) { return zirveRow(i, none); };
     html += '<div class="vrow"><div class="l1"><span>' + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff)) + (r.league ? " · " + esc(r.league) : "") + "</span><span>"
       + (r.code ? "kod " + esc(r.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(r.home) + " – " + esc(r.away) + "</div>"
-      + shown.map(zirveRow).join("")
-      + (rest.length ? '<details class="info"><summary class="small">' + rest.length + " seçim daha</summary>" + rest.map(zirveRow).join("") + "</details>" : "") + "</div>";
+      + (none ? '<p class="small muted zirve-why">Adil oran yok: ' + esc(r.why || "maç son taramada yok") + ".</p>" : "")
+      + shown.map(row).join("")
+      + (rest.length ? '<details class="info"><summary class="small">' + rest.length + " seçim daha</summary>" + rest.map(row).join("") + "</details>" : "") + "</div>";
   });
   var stale = Z.fairsAt && now - Date.parse(Z.fairsAt) > 6 * 3600 * 1000;
   html += '<p class="small muted">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Henüz tam tarama yok: adil oran için önce \"Şimdi tara\".")
-    + (stale ? " <b>Tarama eski:</b> maça yakınsa önce \"Şimdi tara\"." : "") + " \"Maç taranmadı\": maçın ligi taranan liglerde değil ya da son taramadan sonra eklendi.</p>"
+    + (stale ? " <b>Tarama eski:</b> maça yakınsa önce \"Şimdi tara\"." : "") + " Son taramada olmayan Zirve maçlarının ligi kendiliğinden ayrıca taranır (lig başına ~2 kredi, 3 saatte en fazla bir kez).</p>"
     + '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')">Yeniden oku</button></div></div>';
   return html;
 }

@@ -328,9 +328,10 @@ final class Repo {
             String[] notice = null;
             try {
                 List<Zirve.Offer> offers = Zirve.fetch(new AndroidHttp(app));
-                Map<String, Object> rv = radar.view();
-                Map<String, Object> view = Zirve.evaluate(offers, Json.arr(rv.get("fairs")), Json.str(rv, "fairsAt"),
-                        Daily.decisionSettings(ledger), ledger.balance(), now);
+                Map<String, Object> view = zirveEvaluate(offers, now);
+                Map<String, String> notes = new LinkedHashMap<>();
+                if (zirveScan(view, st, notes, now)) view = zirveEvaluate(offers, now); // hedefli taramayla eklenen maçlar
+                zirveAnnotate(view, st, notes);
                 List<Object> notified = new ArrayList<>(Json.arr(st.get("notified")));
                 notice = Zirve.notice(view, notified);
                 st.put("view", view);
@@ -344,6 +345,164 @@ final class Repo {
             zirveRaw = raw;
             return notice;
         }
+    }
+
+    /** Zirve maçının ligi bu kadar yakın zamanda tarandıysa (tam ya da hedefli) yeniden taranmaz. */
+    static final long ZIRVE_SCAN_GAP_S = 3 * 3600;
+    /** Hedefli tarama yalnızca bu aralıkta başlayan Zirve maçları için (daha ilerisi maç günü taranır). */
+    static final long ZIRVE_SCAN_AHEAD_S = 48 * 3600;
+
+    private Map<String, Object> zirveEvaluate(List<Zirve.Offer> offers, Instant now) {
+        Map<String, Object> rv = radar.view();
+        return Zirve.evaluate(offers, Json.arr(rv.get("fairs")), Json.str(rv, "fairsAt"), Daily.decisionSettings(ledger),
+                ledger.balance(), now);
+    }
+
+    private static Map<String, String> stringMap(Object o) {
+        Map<String, String> out = new LinkedHashMap<>();
+        Map<String, Object> m = Json.obj(o);
+        if (m != null) for (Map.Entry<String, Object> e : m.entrySet()) if (e.getValue() != null) out.put(e.getKey(), String.valueOf(e.getValue()));
+        return out;
+    }
+
+    private static String clock(Instant t) {
+        return t.atOffset(Fmt.TR).toLocalTime().toString().substring(0, 5);
+    }
+
+    /** Ligin adil oranlarının tabloya en son girdiği an (tam ya da kısmi tarama); yoksa null. */
+    private Instant lastFairs(String league) {
+        Map<String, Object> rv = radar.view();
+        String fairsAt = Json.str(rv, "fairsAt");
+        Instant last = null;
+        for (Object o : Json.arr(rv.get("fairs"))) {
+            Map<String, Object> r = Json.obj(o);
+            if (r == null || !league.equals(Json.str(r, "sport"))) continue;
+            String at = Json.str(r, "at") != null ? Json.str(r, "at") : fairsAt;
+            if (at == null) continue;
+            Instant t = Instant.parse(at);
+            if (last == null || t.isAfter(last)) last = t;
+        }
+        return last;
+    }
+
+    /**
+     * Son taramada olmayan yakın Zirve maçlarının ligleri hedefli taranır: iddaa bülteni (ücretsiz) ve
+     * yalnızca o liglerin Pinnacle oranı (lig başına ~2 kredi; Karşılıklı Gol'de Zirve oranı varsa maç
+     * başına +1). Lig son 3 saatte tarandıysa tekrar taranmaz. Tablo güncellendiyse true; notes: maç -> açıklama.
+     */
+    private boolean zirveScan(Map<String, Object> view, Map<String, Object> st, Map<String, String> notes, Instant now) {
+        Map<String, Map<String, Object>> events = new LinkedHashMap<>();
+        Set<String> kgEvents = new LinkedHashSet<>();
+        for (Object o : Json.arr(view.get("rows"))) {
+            Map<String, Object> r = Json.obj(o);
+            if (r == null || !"mac".equals(Json.str(r, "status"))) continue;
+            String ev = Json.str(r, "event");
+            Instant ko = Instant.parse(Json.str(r, "kickoff"));
+            if (ko.isAfter(now.plusSeconds(ZIRVE_SCAN_AHEAD_S))) {
+                notes.put(ev, "maç 2 günden ileride; maç gününe yaklaşınca taranır");
+                continue;
+            }
+            if (!events.containsKey(ev)) events.put(ev, r);
+            if ("karsilikli gol".equals(Zirve.fold(Json.str(r, "marketName")))) kgEvents.add(ev);
+        }
+        if (events.isEmpty()) return false;
+        if (ledger.settings().oddsApiKey.isEmpty()) {
+            for (String ev : events.keySet()) notes.put(ev, "The Odds API anahtarı yok");
+            return false;
+        }
+        Map<String, String> learned = stringMap(st.get("leagues"));
+        List<String[]> candidates = new ArrayList<>(java.util.Arrays.asList(Settings.KNOWN_LEAGUES));
+        candidates.addAll(internationals());
+        Map<String, String> scans = stringMap(st.get("scans"));
+        Map<String, String> keyOf = new LinkedHashMap<>();
+        Set<String> keys = new LinkedHashSet<>();
+        for (Map.Entry<String, Map<String, Object>> e : events.entrySet()) {
+            String league = Json.str(e.getValue(), "league");
+            String key = Zirve.leagueKey(league, learned, candidates);
+            if (key == null) {
+                notes.put(e.getKey(), "ligi (" + league + ") oran listesinde bulunamadı");
+                continue;
+            }
+            keyOf.put(e.getKey(), key);
+            Instant recent = lastFairs(key);
+            if (scans.get(key) != null) {
+                Instant z = Instant.parse(scans.get(key));
+                if (recent == null || z.isAfter(recent)) recent = z;
+            }
+            if (recent != null && recent.plusSeconds(ZIRVE_SCAN_GAP_S).isAfter(now)) {
+                notes.put(e.getKey(), "ligi " + clock(recent) + "'de tarandı; Pinnacle'da bu maç yok ya da adlar eşleşmedi");
+                continue;
+            }
+            keys.add(key);
+        }
+        if (keys.isEmpty()) return false;
+        if (creditsLow()) {
+            for (Map.Entry<String, String> e : keyOf.entrySet()) {
+                if (keys.contains(e.getValue())) notes.put(e.getKey(), "API kredisi az; hedefli tarama yapılmadı");
+            }
+            return false;
+        }
+        boolean merged = false;
+        String failure = null;
+        int spent = 0;
+        synchronized (LOCK) {
+            Settings scope = effective();
+            scope.leagues = new ArrayList<>(keys);
+            Daily.LiveSources src = live(scope);
+            src.knownActive = null; // pencere dışındaki (yarınki) maçlar için de oran çekilsin
+            try {
+                List<Models.BookEvent> book = src.book();
+                List<Models.SharpEvent> sharp = src.sharp(keys);
+                for (Models.Pair p : Matching.match(book, sharp)) { // Zirve'de KG oranı varsa o maçın KG adil oranı
+                    for (String ev : kgEvents) {
+                        Map<String, Object> r = events.get(ev);
+                        if (Zirve.sameEvent(Json.str(r, "home"), Json.str(r, "away"), Instant.parse(Json.str(r, "kickoff")),
+                                p.book.home, p.book.away, p.book.kickoff) <= 0) continue;
+                        try {
+                            src.enrich(p.sharp, "btts");
+                        } catch (Http.ProviderException ignored) {
+                            // KG adil oranı alınamazsa o seçim "adil oran yok" kalır
+                        }
+                        break;
+                    }
+                }
+                Calibration.apply(book, sharp, memory);
+                radar.mergeFairs(Matching.match(book, sharp), now);
+                merged = true;
+            } catch (Http.ProviderException | RuntimeException e) {
+                failure = String.valueOf(e.getMessage());
+            } finally {
+                spent = src.spent();
+                after(src);
+            }
+        }
+        for (String k : keys) scans.put(k, now.toString());
+        st.put("scans", new LinkedHashMap<String, Object>(scans));
+        for (Map.Entry<String, String> e : keyOf.entrySet()) {
+            if (!keys.contains(e.getValue())) continue;
+            notes.put(e.getKey(), failure != null ? "hedefli tarama başarısız: " + failure
+                    : "ligi şimdi tarandı (" + spent + " kredi); Pinnacle'da bu maç yok ya da adlar eşleşmedi");
+        }
+        return merged;
+    }
+
+    /**
+     * Eşleşmeyen maçlara açıklama yazılır (yalnızca hâlâ eşleşmeyenlere); eşleşen maçların lig adı
+     * öğrenilir (sonraki Zirve maçlarında lig kodu doğrudan bulunur).
+     */
+    private static void zirveAnnotate(Map<String, Object> view, Map<String, Object> st, Map<String, String> notes) {
+        Map<String, String> learned = stringMap(st.get("leagues"));
+        for (Object o : Json.arr(view.get("rows"))) {
+            Map<String, Object> r = Json.obj(o);
+            if (r == null) continue;
+            String league = Json.str(r, "league"), sport = Json.str(r, "sport");
+            if (league != null && sport != null && learned.size() < 200) learned.put(league, sport);
+            String note = notes.get(Json.str(r, "event"));
+            if (note == null || !"mac".equals(Json.str(r, "status"))) continue;
+            String base = Json.str(r, "why");
+            r.put("why", note + (base != null && base.contains("eşleşmedi") ? " (" + base + ")" : ""));
+        }
+        st.put("leagues", new LinkedHashMap<String, Object>(learned));
     }
 
     /** Elle tarama ("Şimdi tara"): tüm ligler. */

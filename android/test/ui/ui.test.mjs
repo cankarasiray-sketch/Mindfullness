@@ -704,22 +704,28 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   s.stats.balance = 500000;
   const soon = new Date(Date.parse(s.now) + 7200000).toISOString(), later = new Date(Date.parse(s.now) + 90000000).toISOString();
   const past = new Date(Date.parse(s.now) - 600000).toISOString();
-  s.zirve = { at: s.now, fairsAt: s.now, events: 3, offers: 4, matched: 1, evaluated: 2, play: 1, rows: [
+  s.zirve = { at: s.now, fairsAt: s.now, events: 3, offers: 5, matched: 1, evaluated: 2, play: 1, rows: [
     { id: "1:1:1", event: "1", home: "Belçika", away: "Türkiye", kickoff: soon, league: "UEFA Uluslar Ligi", name: "MS 1", label: "MS 1", m: "MS", o: "1",
       val: 1.37, tval: 1.4, ref: "b1", code: "123", p: 0.75, i: 1.37, ev: 0.05, status: "oyna", stake: 15000, fraction: 0.03 },
     { id: "1:2:1", event: "1", home: "Belçika", away: "Türkiye", kickoff: soon, name: "KG Var", label: "KG Var", m: "KG", o: "VAR",
       val: 1.8, tval: 1.9, ref: "b1", p: 0.5, i: 1.8, ev: -0.05, status: "oynama" },
-    { id: "2:1:1", event: "2", home: "Hırvatistan", away: "İngiltere", kickoff: later, name: "MS 1", val: 3.48, tval: 3.65, status: "mac" },
+    { id: "2:1:1", event: "2", home: "Hırvatistan", away: "İngiltere", kickoff: later, name: "MS 1", val: 3.48, tval: 3.65, status: "mac",
+      why: "ligi 07:50'de tarandı; Pinnacle'da bu maç yok ya da adlar eşleşmedi" },
+    { id: "2:2:1", event: "2", home: "Hırvatistan", away: "İngiltere", kickoff: later, name: "MS X", val: 3.43, tval: 3.6, status: "mac" },
     { id: "3:1:1", event: "3", home: "Başlamış", away: "Maç", kickoff: past, name: "MS 1", val: 2, tval: 2.1, p: 0.6, ev: 0.26, status: "oyna" },
   ] };
   const t = boot(s, "#firsat");
   const card = t.$("#zirveCard").textContent;
-  assert.match(card, /3 maçta 4 artırılmış oran · adil oranı geçen 1/);
+  assert.match(card, /3 maçta 5 artırılmış oran · adil oranı geçen 1/);
   assert.match(card, /Belçika – Türkiye/);
   assert.match(card, /MS 1 1,40 1,37 · adil 1,33\+%5,0 Oyna/);
   assert.match(card, /KG Var 1,90 1,80 · adil 2,00−%5,0 değer yok/);
   assert.match(card, /Hırvatistan – İngiltere/);
-  assert.match(card, /maç taranmadı/);
+  // son taramada olmayan maç: tek açıklama, seçimlerde tekrar yok
+  assert.equal(t.$$(".zirve-why").length, 1);
+  assert.match(t.$(".zirve-why").textContent, /Adil oran yok: ligi 07:50'de tarandı; Pinnacle'da bu maç yok ya da adlar eşleşmedi\./);
+  assert.match(card, /MS X 3,60 3,43/);
+  assert.equal((card.match(/adil oran yok/g) || []).length, 0);
   assert.doesNotMatch(card, /Başlamış/);
   t.$(".zirve-play").click();
   const sheet = t.$("#sheet").textContent;

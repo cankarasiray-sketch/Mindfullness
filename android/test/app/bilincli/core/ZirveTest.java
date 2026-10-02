@@ -10,6 +10,7 @@ import static org.junit.Assert.assertTrue;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -199,6 +200,84 @@ public class ZirveTest {
         assertTrue(s, s.startsWith("  2 maçta 8 artırılmış oran · son taramada eşleşen maç 1 · değerlendirilen 3 · değerli 1\n"
                 + "  Belçika – Türkiye · MS 1 · Zirve 1,45"));
         assertTrue(s, s.contains("→ OYNA") && s.contains("→ değer yok") && s.contains("taramadan beri değişmiş"));
+    }
+
+    @Test
+    public void unmatchedEventExplainsWhatTheScanHadAtThatTime() {
+        List<Object> fairs = new ArrayList<>();
+        fairs.add(row("b5", "soccer_uefa_nations_league", "Fransa", "İtalya", KO, sel("MS", "1", 0.7, 1.31)));
+        Map<String, Object> v = Zirve.evaluate(Zirve.parse(body()), fairs, null, new Settings(), 500000, NOW);
+        Map<String, Object> ms = rowFor(v, "MS 1");
+        assertEquals("mac", ms.get("status"));
+        assertEquals("son taramada bu saatte Fransa – İtalya var; bu maçla eşleşmedi", ms.get("why"));
+        Map<String, Object> other = null;
+        for (Object x : Json.arr(v.get("rows"))) if ("Hırvatistan".equals(Json.obj(x).get("home"))) other = Json.obj(x);
+        assertEquals("son taramada bu saatte maç yok", other.get("why"));
+        assertTrue(Zirve.summary(v), Zirve.summary(v).contains("→ adil oran yok (son taramada bu saatte Fransa – İtalya var"));
+        // eşleşen maçta lig kodu ve adil oranın alındığı an
+        Map<String, Object> r = Json.obj(fairs().get(0));
+        r.put("at", NOW.minusSeconds(600).toString());
+        List<Object> one = new ArrayList<>();
+        one.add(r);
+        Map<String, Object> matched = rowFor(Zirve.evaluate(Zirve.parse(body()), one, null, new Settings(), 500000, NOW), "MS 1");
+        assertEquals("soccer_uefa_nations_league", matched.get("sport"));
+        assertEquals(NOW.minusSeconds(600).toString(), matched.get("fairAt"));
+    }
+
+    @Test
+    public void leagueOfZirveMatchIsFoundForTargetedScan() {
+        List<String[]> candidates = new ArrayList<>(Arrays.asList(Settings.KNOWN_LEAGUES));
+        candidates.add(new String[] {"soccer_fifa_world_cup_qualifiers_europe", "FIFA World Cup Qualifiers - Europe"});
+        assertEquals("soccer_uefa_nations_league", Zirve.leagueKey("UEFA Uluslar Ligi", null, candidates));
+        assertEquals("soccer_epl", Zirve.leagueKey("İngiltere Premier Lig", null, candidates));
+        assertEquals("soccer_uefa_champs_league", Zirve.leagueKey("UEFA Şampiyonlar Ligi", null, candidates));
+        assertEquals("basketball_euroleague", Zirve.leagueKey("EuroLeague", null, candidates));
+        assertEquals("soccer_spain_segunda_division", Zirve.leagueKey("İspanya La Liga 2", null, candidates));
+        assertNull(Zirve.leagueKey("Ukrayna Premier Lig", null, candidates)); // benzer ama başka lig
+        assertNull(Zirve.leagueKey("", null, candidates));
+        // öğrenilmiş eşleme önce gelir
+        Map<String, String> learned = new LinkedHashMap<>();
+        learned.put("Dünya Kupası Elemeleri", "soccer_fifa_world_cup_qualifiers_europe");
+        assertEquals("soccer_fifa_world_cup_qualifiers_europe", Zirve.leagueKey("Dünya Kupası Elemeleri", learned, candidates));
+        // aynı maç: saat ve adlar
+        assertTrue(Zirve.sameEvent("Belçika", "Türkiye", KO, "BELÇİKA", "Türkiye", KO.plusSeconds(600)) > 0.9);
+        assertEquals(0, Zirve.sameEvent("Belçika", "Türkiye", KO, "Belçika", "Türkiye", KO.plusSeconds(3600)), 0);
+        assertEquals(0, Zirve.sameEvent("Belçika", "Türkiye", KO, "Fransa", "İtalya", KO), 0);
+    }
+
+    @Test
+    public void partialScanMergesIntoFairTable() {
+        Radar radar = new Radar(new Ledger.MemoryStorage(null));
+        radar.update(Arrays.asList(FeatureTest.book(1, 1.80, 1, 8), FeatureTest.book(2, 1.95, 1, 9)),
+                Arrays.asList(FeatureTest.sharp(1, 0.50, 8), FeatureTest.sharp(2, 0.50, 9)), NOW, new Settings(), true);
+        assertEquals(2, Json.arr(radar.view().get("fairs")).size());
+        // hedefli tarama: maç 2 tazelenir, maç 3 eklenir, maç 1 kalır
+        Instant later = NOW.plusSeconds(3600);
+        radar.mergeFairs(Matching.match(Arrays.asList(FeatureTest.book(2, 2.05, 1, 9), FeatureTest.book(3, 1.70, 1, 30)),
+                Arrays.asList(FeatureTest.sharp(2, 0.55, 9), FeatureTest.sharp(3, 0.60, 30))), later);
+        List<Object> fairs = Json.arr(radar.view().get("fairs"));
+        assertEquals(3, fairs.size());
+        assertEquals("b1", Json.obj(fairs.get(0)).get("ref")); // başlama saatine göre sıralı
+        assertEquals(NOW.toString(), Json.obj(fairs.get(0)).get("at"));
+        Map<String, Object>[] two = Promo.find(fairs, "b2", "MS", "1");
+        assertEquals(0.55, Json.dbl(two[1], "p", 0), 1e-12);
+        assertEquals(2.05, Json.dbl(two[1], "i", 0), 1e-12);
+        assertEquals(later.toString(), two[0].get("at"));
+        assertNotNull(Promo.find(fairs, "b3", "MS", "1"));
+        assertEquals(NOW.toString(), radar.view().get("fairsAt")); // tam tarama zamanı değişmez
+        // başlamış maç atılır; kalıcı
+        Ledger.MemoryStorage store = new Ledger.MemoryStorage(null);
+        Radar r2 = new Radar(store);
+        r2.update(Collections.singletonList(FeatureTest.book(1, 1.80, 1, 8)), Collections.singletonList(FeatureTest.sharp(1, 0.50, 8)), NOW, new Settings(), true);
+        r2.mergeFairs(Matching.match(Collections.singletonList(FeatureTest.book(3, 1.70, 1, 30)),
+                Collections.singletonList(FeatureTest.sharp(3, 0.60, 30))), NOW.plusSeconds(9 * 3600));
+        List<Object> f2 = Json.arr(new Radar(store).view().get("fairs"));
+        assertEquals(1, f2.size());
+        assertEquals("b3", Json.obj(f2.get(0)).get("ref"));
+        // lineup gibi kısmi radar taraması da tabloyu tazeler
+        radar.update(Collections.singletonList(FeatureTest.book(1, 1.85, 1, 8)), Collections.singletonList(FeatureTest.sharp(1, 0.52, 8)),
+                later, new Settings(), false);
+        assertEquals(0.52, Json.dbl(Promo.find(Json.arr(radar.view().get("fairs")), "b1", "MS", "1")[1], "p", 0), 1e-12);
     }
 
     @Test
