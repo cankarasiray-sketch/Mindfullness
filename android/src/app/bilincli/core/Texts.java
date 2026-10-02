@@ -26,7 +26,10 @@ public final class Texts {
         Object m = stats.get("marjlar");
         if (m instanceof Map) {
             for (Map.Entry<String, Object> e : ((Map<String, Object>) m).entrySet()) {
-                parts.add("iddaa " + ("BS".equals(e.getKey()) ? "basket MS" : "BT".equals(e.getKey()) ? "basket A/Ü" : "BH".equals(e.getKey()) ? "basket handikap" : e.getKey()) + " marjı " + Fmt.pct(((Number) e.getValue()).doubleValue(), false));
+                String k = e.getKey();
+                String name = "BS".equals(k) ? "basket MS" : "BT".equals(k) ? "basket A/Ü" : "BH".equals(k) ? "basket handikap"
+                        : "AU".equals(k) ? "diğer A/Ü" : "EVG".equals(k) ? "ev gol A/Ü" : "DEPG".equals(k) ? "dep gol A/Ü" : k;
+                parts.add("iddaa " + name + " marjı " + Fmt.pct(((Number) e.getValue()).doubleValue(), false));
             }
         }
         String line = String.join(" · ", parts);

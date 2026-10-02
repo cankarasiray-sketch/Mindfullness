@@ -56,8 +56,8 @@ public class PickTest {
         f.add(row("4", "Everton", 0, sel("MS", "1", 0.70, 1.45, 1)));
         // pencere dışı (30 saat sonra)
         f.add(row("5", "Fulham", 30, sel("MS", "1", 0.70, 1.48, 1)));
-        // oran aralığı dışı (1,10)
-        f.add(row("6", "Spurs", 7, sel("MS", "1", 0.91, 1.10, 1)));
+        // 1,05'in altındaki oran anlamsız
+        f.add(row("6", "Spurs", 7, sel("MS", "1", 0.97, 1.04, 1)));
         Json.obj(f.get(3)).put("kickoff", NOW.plusSeconds(20 * 60).toString());
         return f;
     }

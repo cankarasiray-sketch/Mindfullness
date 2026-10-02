@@ -65,7 +65,8 @@ public final class Engine {
                             : EdgeCalibration.adjust(prob, odds, EdgeCalibration.ratio(cfg.edgeRatios, m.getKey()));
                     Candidate c = new Candidate(p.book, p.sharp, m.getKey(), o.getKey(), odds, used, prob);
                     all.add(c);
-                    if (odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds && c.ev() >= cfg.minLegEv && prob >= cfg.minLegProb) good.add(c);
+                    if (odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds && c.ev() >= cfg.minLegEv && prob >= cfg.minLegProb
+                            && (!cfg.singlesOnly || c.mbs() <= 1)) good.add(c); // tek maç modunda yalnızca tek oynanabilenler
                 }
             }
         }
@@ -89,7 +90,8 @@ public final class Engine {
     static List<Proposal> bestProposals(List<Candidate> cands, Settings cfg, int top) {
         List<Candidate> pool = cands.subList(0, Math.min(cands.size(), cfg.maxCandidates));
         List<Proposal> found = new ArrayList<>();
-        for (int k = 1; k <= cfg.maxLegs; k++) {
+        int maxLegs = cfg.singlesOnly ? 1 : cfg.maxLegs; // tek maç modu: kombine yok
+        for (int k = 1; k <= maxLegs; k++) {
             List<Candidate> sub = k <= 4 ? pool : pool.subList(0, Math.min(pool.size(), 20));
             if (sub.size() < k) continue;
             int[] idx = new int[k];

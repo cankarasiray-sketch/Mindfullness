@@ -147,6 +147,11 @@ public final class Nesine {
                         odds.put("MS", outcomes);
                         if (mm != null && mm > 0) marketMbs = mm.intValue();
                     }
+                } else if (raw.size() == 3 && special && raw.containsKey("1") && raw.containsKey("2") && raw.containsKey("3")) {
+                    // 2.10: özel değerli üç seçenekli aday (handikaplı maç sonucu olabilir); Calibration gol modeliyle bulur
+                    String key = Calibration.RAW_X3 + mtid + "@" + sov;
+                    odds.put(key, raw);
+                    if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
                 } else if (raw.size() == 3 && !special && raw.containsKey("1") && raw.containsKey("2") && raw.containsKey("3")) {
                     // Üç seçenekli aday pazar (Çifte Şans olabilir; İlk Yarı Sonucu da üç seçeneklidir).
                     // Hangisi olduğunu Calibration, Pinnacle'dan türetilen olasılıklarla bulur.
@@ -161,6 +166,11 @@ public final class Nesine {
                     if (key != null) {
                         odds.put(key, raw);
                         if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
+                    }
+                    if (special) { // 2.10: her çizgili iki seçenekli pazar ek pazar adayı (toplam / takım golü)
+                        String x = Calibration.RAW_X2 + mtid + "@" + sov;
+                        odds.put(x, raw);
+                        if (mm != null && mm > 0) rawMbs.put(x, mm.intValue());
                     }
                 }
             }

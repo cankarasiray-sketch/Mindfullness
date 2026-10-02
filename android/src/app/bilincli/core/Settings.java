@@ -228,6 +228,13 @@ public final class Settings {
     public double pickMinProb = 0.60;
     /** Günün seçiminin tutarı (TL); 0 = kasanın %1'i. */
     public double pickStake = 0;
+    /** Günün seçiminde ikinci katman: en az bu tutma olasılığı (2.10; "%70+ seçimi"). */
+    public double pickHighProb = 0.70;
+    /**
+     * Yalnızca tek maç (2.10): değerli kuponlar tek seçimli kurulur ve yalnızca tek oynanabilen (MBS 1)
+     * maçlar alınır. Kombine yok: iddaa marjı her bacakta yeniden ödenir.
+     */
+    public boolean singlesOnly = false;
 
     /** Geçerli radar sıklıkları (kredi planı bu sırayla azaltır). */
     public static final int[] RADAR_STEPS = {8, 6, 4, 2, 1, 0};
@@ -358,7 +365,7 @@ public final class Settings {
         m.put("edgeGuard", edgeGuard);
         m.put("internationals", internationals);
         m.put("profile", detectProfile());
-        m.put("v", 6L);
+        m.put("v", 7L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -367,6 +374,8 @@ public final class Settings {
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
         m.put("pickStake", pickStake);
+        m.put("pickHighProb", pickHighProb);
+        m.put("singlesOnly", singlesOnly);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
     }
@@ -419,6 +428,8 @@ public final class Settings {
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
         s.pickStake = Json.dbl(m, "pickStake", s.pickStake);
+        s.pickHighProb = Json.dbl(m, "pickHighProb", s.pickHighProb);
+        s.singlesOnly = Json.bool(m, "singlesOnly", s.singlesOnly);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
         s.internationals = Json.bool(m, "internationals", s.internationals);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {
@@ -441,6 +452,10 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 6 && (s.staking(YUKSEK_27) || "yuksek".equals(s.detectProfile()))) {
             // 2.8: "En yüksek kazanç" profili güncellendi (Kelly 0,60, üst oran 4,50, maç başına %2, kredi yettikçe 8 radar)
             s.applyProfile("yuksek");
+        }
+        if (Json.lng(m, "v", 1) < 7) {
+            // 2.10: kullanıcı tek maç uzmanlığı istedi: yalnızca tekli kupon (Ayarlar'dan kapatılabilir)
+            s.singlesOnly = true;
         }
         s.profile = s.detectProfile();
         return s;
@@ -471,6 +486,7 @@ public final class Settings {
         if (!isRadarStep(radarScans)) return "Radar sıklığı 0, 1, 2, 4, 6 ya da 8 olmalı";
         if (pickMinProb < 0.30 || pickMinProb > 0.95) return "Günün seçiminde tutma olasılığı %30-95 olmalı";
         if (pickStake < 0) return "Günün seçimi tutarı negatif olamaz";
+        if (pickHighProb < pickMinProb || pickHighProb > 0.97) return "Yüksek olasılık katmanı, en az tutma olasılığından küçük olamaz (en fazla %97)";
         return null;
     }
 }

@@ -59,6 +59,7 @@ public final class Promo {
                     s.put("p", prob);
                     s.put("i", o.getValue());
                     s.put("mbs", (long) p.book.mbsFor(m.getKey())); // 1 değilse tek oynanamaz
+                    if (GoalModel.isModelMarket(m.getKey())) s.put("model", true); // gol modeli, payı düşülmüş
                     sel.add(s);
                 }
             }

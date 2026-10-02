@@ -92,7 +92,7 @@ public final class Portfolio {
         List<Integer> masks = new ArrayList<>();
         for (int mask = 1; mask < (1 << n); mask++) {
             int k = Integer.bitCount(mask);
-            if (k > cfg.maxLegs) continue;
+            if (k > (cfg.singlesOnly ? 1 : cfg.maxLegs)) continue; // tek maç modu: yalnızca tekli kuponlar
             List<Candidate> legs = new ArrayList<>(k);
             int maxMbs = 0;
             double prob = 1, odds = 1;

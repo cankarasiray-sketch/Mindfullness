@@ -79,6 +79,15 @@ public final class Models {
 
     /** Kararda kullanılan adil olasılıklar; basketbol Alt/Üst'te iddaa çizgisine dönüştürülür. */
     public static Map<String, Double> fair(SharpEvent s, String market) {
+        if (GoalModel.isModelMarket(market)) {
+            // 2.10: Pinnacle'ın fiyat vermediği tek maç pazarı: gol modeli, güvenlik payı düşülerek
+            if (market.startsWith("IYAU@")) return null; // yalnızca eşlemede ayırt etmek için
+            Map<String, Double> raw = GoalModel.market(goalMatrix(s), market);
+            if (raw == null) return null;
+            Map<String, Double> m = new LinkedHashMap<>();
+            for (Map.Entry<String, Double> e : raw.entrySet()) m.put(e.getKey(), Math.max(0.001, e.getValue() - GoalModel.MARGIN));
+            return m;
+        }
         if (market.startsWith("BT@")) {
             Double over = overProb(s, line(market));
             if (over == null) return null;
@@ -98,7 +107,35 @@ public final class Models {
         return s.fair.get(market);
     }
 
+    /**
+     * Futbol maçının gol modeli skor matrisi (Pinnacle'ın MS ve 2,5 Alt/Üst adil olasılığından; maç
+     * başına bir kez hesaplanır). Veri yoksa null.
+     */
+    public static double[][] goalMatrix(SharpEvent s) {
+        if (s == null) return null;
+        synchronized (s) {
+            if (!s.goalTried) {
+                s.goalTried = true;
+                Map<String, Double> ms = s.fair.get("MS"), au = s.fair.get("AU25");
+                if (ms != null && au != null && ms.get("1") != null && ms.get("2") != null && au.get("UST") != null) {
+                    s.goalMatrix = GoalModel.matrix(ms.get("1"), ms.get("2"), au.get("UST"));
+                }
+            }
+            return s.goalMatrix;
+        }
+    }
+
+    /** "(0:1)" gibi iddaa handikap gösterimi: ev sahibine eklenen gol h. */
+    static String handicapText(double h) {
+        long g = Math.round(Math.abs(h));
+        return h >= 0 ? "(" + g + ":0)" : "(0:" + g + ")";
+    }
+
     public static String outcomeLabel(String market, String outcome) {
+        if (market.startsWith("AU@")) return Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
+        if (market.startsWith("EVG@")) return "Ev " + Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
+        if (market.startsWith("DEPG@")) return "Dep " + Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
+        if (market.startsWith("HMS@")) return "H.MS " + handicapText(line(market)) + " " + outcome;
         if ("MS".equals(market)) return "MS " + outcome;
         if ("BS".equals(market)) return "Basket MS " + outcome;
         if (market.startsWith("BT@")) {
@@ -126,6 +163,10 @@ public final class Models {
 
     /** Pazarın okunur adı (analiz ve özetler için). */
     public static String marketName(String market) {
+        if (market.startsWith("AU@")) return "Alt/Üst " + Fmt.line(line(market));
+        if (market.startsWith("EVG@")) return "Ev sahibi gol Alt/Üst";
+        if (market.startsWith("DEPG@")) return "Deplasman gol Alt/Üst";
+        if (market.startsWith("HMS@")) return "Handikaplı Maç Sonucu";
         if ("MS".equals(market)) return "Maç Sonucu";
         if ("AU25".equals(market)) return "2,5 Alt/Üst";
         if ("KG".equals(market)) return "Karşılıklı Gol";
@@ -169,6 +210,9 @@ public final class Models {
         public final String ref, sportKey, home, away, source;
         public final Instant kickoff;
         public final Map<String, Map<String, Double>> fair;
+        /** Gol modeli skor matrisi (Models.goalMatrix; ilk kullanımda hesaplanır). */
+        transient double[][] goalMatrix;
+        transient boolean goalTried;
 
         public SharpEvent(String ref, String sportKey, String home, String away, Instant kickoff,
                           Map<String, Map<String, Double>> fair, String source) {

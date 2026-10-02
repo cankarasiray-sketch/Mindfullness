@@ -1103,6 +1103,68 @@ test("günün seçimi: pas gününde öneri, oynadım kaydı, sonuç takibi ve a
   assert.deepEqual(t.errors, []);
 });
 
+test("tek maç: %70+ katmanı, tek maç fırsatları süzgeci, yeni bahis türleri ve ayar", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "Bugün pas.", summary: "", couponId: null };
+  s.coupons = s.coupons.filter((c) => !c.pick);
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  const base = { source: "iddaa", kickoff: ko, league: "Premier Lig", mbs: 1 };
+  const x1 = Object.assign({}, base, { ref: "b3", m: "AU25", o: "UST", label: "2,5 Üst", home: "Liverpool", away: "Everton", odds: 1.58, p: 0.61, fair: 1 / 0.61, ev: 0.61 * 1.58 - 1 });
+  const x2 = Object.assign({}, base, { ref: "b7", m: "AU@1.5", o: "UST", label: "1,5 Üst", home: "City", away: "Luton", odds: 1.22, p: 0.78, fair: 1 / 0.78, ev: 0.78 * 1.22 - 1, model: true });
+  const x3 = Object.assign({}, base, { ref: "b8", m: "HMS@-1.0", o: "1", label: "H.MS (0:1) 1", home: "Arsenal", away: "Wolves", odds: 1.95, p: 0.52, fair: 1 / 0.52, ev: 0.52 * 1.95 - 1, model: true });
+  s.pick = Object.assign({}, x1, { stake: 5000, win: 7900, expected: -181, monthly: -5430, value: false, candidates: 9, highCount: 1, alternatives: [],
+    high: Object.assign({}, x2, { stake: 5000, win: 6100, expected: -242 }) });
+  s.singles = [x1, x2, x3].sort((a, b) => b.ev - a.ev);
+  s.settings.dailyPick = true;
+  s.settings.pickMinProb = 0.6;
+  s.settings.pickHighProb = 0.7;
+  s.settings.singlesOnly = true;
+  const t = boot(s);
+  const card = t.$("#pickCard");
+  assert.match(card.textContent, /GÜNÜN SEÇİMİ · TEK MAÇ/);
+  assert.match(card.textContent, /%70\+ SEÇİMİ/);
+  assert.match(card.textContent, /City – Luton/);
+  assert.match(card.textContent, /1,5 Üst/);
+  assert.match(card.textContent, /model/);
+  assert.match(card.textContent, /%70\+ tutan 1 seçim var/);
+  const btns = t.$$("#pickCard button").filter((b) => b.textContent === "Oynadım");
+  assert.equal(btns.length, 2);
+  btns[1].click();
+  assert.equal(t.$("#pkOdds").value, "1,22");
+  t.button("Kaydet").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "pickPlay", payload: { ref: "b7", m: "AU@1.5", o: "UST", odds: "1,22", amount: "50" } });
+  // Fırsatlar: tek maç listesi, olasılık süzgeci
+  const f = boot(clone(s), "#firsat");
+  let rows = f.$$("#singlesCard .single-row");
+  assert.equal(rows.length, 2); // varsayılan %60+
+  f.button("%50+").click();
+  rows = f.$$("#singlesCard .single-row");
+  assert.equal(rows.length, 3);
+  assert.match(f.$("#singlesCard").textContent, /H\.MS \(0:1\) 1/);
+  f.button("%70+").click();
+  assert.equal(f.$$("#singlesCard .single-row").length, 1);
+  f.$$("#singlesCard .single-row button")[0].click();
+  assert.match(f.$("#sheet").textContent, /City – Luton/);
+  // yeni pazarların etiketleri (kupon bacakları)
+  assert.equal(f.w.label("EVG@0.5", "ALT"), "Ev 0,5 Alt");
+  assert.equal(f.w.label("DEPG@1.5", "UST"), "Dep 1,5 Üst");
+  assert.equal(f.w.label("HMS@1.0", "X"), "H.MS (1:0) X");
+  assert.equal(f.w.label("AU@3.5", "ALT"), "3,5 Alt");
+  // ayar
+  const st = boot(clone(s), "#ayarlar");
+  assert.ok(st.$("#sSingles").checked);
+  st.$("#sSingles").checked = false;
+  st.$("#sPickHigh").value = "75";
+  st.button("Ayarları kaydet").click();
+  await st.tick();
+  const saved = st.calls.at(-1).payload.settings;
+  assert.equal(saved.singlesOnly, false);
+  assert.equal(saved.pickHighProb, 0.75);
+  assert.deepEqual(t.errors, []);
+  assert.deepEqual(f.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

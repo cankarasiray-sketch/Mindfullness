@@ -62,6 +62,33 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Tek maç uzmanı (2.10)
+
+- **Yalnızca tek maç:** değerli seçimler de yalnızca tek oynanabilen (MBS 1) maçlardan, tekli kupon
+  olarak önerilir (Ayarlar → Tek maç; güncellemede bir kez açılır). Kombinede iddaa marjı her bacakta
+  yeniden ödenir. Demo simülasyonunda (24 piyasa × 180 gün, En yüksek kazanç ayarı) tutma oranı
+  %38'den %46'ya çıktı, aylık büyüme +%6,7'den +%5,4'e indi: değerli bacakların birleşimi ve MBS 2–3
+  maçlar dışarıda kalıyor. Kombineye izin vermek için ayar kapatılabilir.
+- **Her bahis türü:** maç sonucu, çifte şans, 2,5 Alt/Üst, karşılıklı gol, basketbol (maç sonucu,
+  toplam, handikap) yanında artık **Alt/Üst 0,5 / 1,5 / 3,5 / 4,5**, **ev ve deplasman gol Alt/Üst**
+  ve **handikaplı maç sonucu**. Pinnacle bu pazarlara fiyat vermediği için adil olasılık, Pinnacle'ın
+  maç sonucu ve 2,5 Alt/Üst fiyatına uyan gol modelinden (bağımsız Poisson, skor matrisi) gelir ve
+  kararda **4 puan güvenlik payı** düşülür; ekranda "model" diye işaretlenir.
+- **Pazar eşlemesi:** Nesine bülteninde bu pazarların kodu ve seçenek sırası bilinmediğinden her
+  taramada gol modeliyle karşılaştırılarak bulunur: her çizgili iki seçenekli pazar için toplam / ev /
+  deplasman golü / ilk yarı toplamı ve iki yön, çizgili üç seçenekli pazar için handikabın iki işareti
+  denenir; maç başına ortalama olasılık farkı %6'nın altında ve ikinci adaydan belirgin ayrılan kabul
+  edilir. Korner ve kart gibi gol dışı pazarlar uymaz. İlk yarı pazarları tanınır ama kullanılmaz (sonuç
+  kaynağında ilk yarı skoru yok, otomatik sonuçlandırılamaz). Durum "Kaynakları test et"te: "Ek tek maç
+  pazarları".
+- **Günün seçimi her oranı alır** (1,05 üstü; önce 1,25–4,50) ve iki katmanlıdır: en az %60 tutanlar
+  arasında adil orana en yakın seçim ve ayrıca **%70+ seçimi** (daha sık tutar, ödemesi küçük). Eşikler
+  Ayarlar → Tek maç'tan değişir.
+- **Tek maç fırsatları (Fırsatlar):** son taramanın bütün tek oynanabilen seçimleri (her pazar, Zirve
+  dahil), adil orana yakınlığa göre; %50+ / %60+ / %70+ / %80+ süzgeci ve her satırda "Oynadım".
+  Yeşil beklenen değer gerçek fırsattır.
+- Bütün yeni pazarlar maç sonucuna göre otomatik sonuçlanır (x,5 çizgide iade yok; handikapta eşitlik X).
+
 ## Günün seçimi (2.9)
 
 iddaa oranları neredeyse her zaman adil oranın altında kaldığından çoğu gün değerli seçim çıkmıyor.

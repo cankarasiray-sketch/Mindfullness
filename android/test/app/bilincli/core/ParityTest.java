@@ -124,6 +124,7 @@ public class ParityTest {
             // masaüstü (Python) sürümünün kuralları: maç başına olasılık şartı yok, kupon eşiği fikstürdeki gibi
             cfg.minLegProb = 0;
             cfg.minWinProb = Json.dbl(cfgMap, "minWinProb", 0.20);
+            cfg.singlesOnly = false; // masaüstünde kombine serbest
             Decision d = Engine.decide(book, sharp, Instant.parse(Json.str(c, "now")), cfg);
             Map<String, Object> stats = Json.obj(c.get("stats"));
             for (String k : new String[] {"eslesen", "karsilastirilan_secim", "avantajli_secim"}) {

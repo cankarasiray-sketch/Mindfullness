@@ -1106,6 +1106,16 @@ final class Repo {
         }
     }
 
+    /** Tek maç fırsatları listesi (2.10): en az %50 tutan tek oynanabilen seçimler, adil orana yakınlığa göre. */
+    List<Object> singles() {
+        if (isDemo()) return null;
+        try {
+            return Pick.list(Json.arr(radar.view().get("fairs")), zirveView(), Daily.decisionSettings(ledger), Instant.now());
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     Map<String, Object> virtualView() {
         return isDemo() ? null : virtual.view();
     }

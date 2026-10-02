@@ -29,6 +29,8 @@ public final class Calibration {
     public static final String RAW_BS = "BS#";
     /** Basketbol toplam sayı adayı: "BT#pazar@çizgi" (özel değerli iki seçenekli pazar). */
     public static final String RAW_BT = "BT#";
+    /** 2.10: çizgili iki seçenekli (gol Alt/Üst adayları) ve çizgili üç seçenekli (handikaplı MS adayı) ham pazarlar. */
+    public static final String RAW_X2 = "X2#", RAW_X3 = "X3#";
     /** Yön kanıtı sayılması için Üst olasılığının %50'den en az bu kadar uzak olması gerekir. */
     static final double BT_INFORMATIVE = 0.04;
     static final String[] CS_KEYS = {"1X", "12", "X2"};
@@ -142,11 +144,13 @@ public final class Calibration {
         report.put("BS", basketball(book, pairs, notes, memory));
         report.put("BT", basketTotals(book, pairs, notes, memory));
         report.put("BH", basketHandicap(book, pairs, notes, memory));
+        report.put("EK", extraMarkets(book, pairs, notes, memory));
         for (BookEvent b : book) {
             Iterator<String> it = b.odds.keySet().iterator();
             while (it.hasNext()) {
                 String k = it.next();
-                if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS) || k.startsWith(RAW_BS) || k.startsWith(RAW_BT)) it.remove();
+                if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS) || k.startsWith(RAW_BS) || k.startsWith(RAW_BT)
+                        || k.startsWith(RAW_X2) || k.startsWith(RAW_X3)) it.remove();
             }
         }
 
@@ -737,6 +741,7 @@ public final class Calibration {
         if (String.valueOf(r.get("BS")).startsWith("doğrulandı")) b.append(", Basket MS ✓");
         if (String.valueOf(r.get("BT")).startsWith("doğrulandı")) b.append(", Basket A/Ü ✓");
         if (String.valueOf(r.get("BH")).startsWith("doğrulandı")) b.append(", Basket H. ✓");
+        if (String.valueOf(r.get("EK")).startsWith("doğrulandı")) b.append(", ek pazarlar ✓");
         long mis = r.get("mismatched") instanceof Long ? (Long) r.get("mismatched") : 0;
         if (mis > 0) b.append(", ").append(mis).append(" uyumsuz eşleşme ayıklandı");
         long sus = r.get("suspicious") instanceof Long ? (Long) r.get("suspicious") : 0;
@@ -747,5 +752,136 @@ public final class Calibration {
     private static String ok(Object s) {
         String t = String.valueOf(s);
         return t.startsWith("doğrulandı") || t.startsWith("sıra düzeltildi") ? "✓" : t.startsWith("az maç") ? "?" : "✗";
+    }
+
+    /** Çizgili iki seçenekli ham pazarın olabileceği gol pazarları (ilk yarı yalnızca ayırt etmek için). */
+    static final String[] X2_FAMILIES = {"AU", "EVG", "DEPG", "IYAU"};
+
+    private static void addFit(Map<String, double[]> fit, String key, double diff) {
+        double[] a = fit.get(key);
+        if (a == null) fit.put(key, a = new double[2]);
+        a[0] += diff;
+        a[1] += 1;
+    }
+
+    /**
+     * Ek tek maç pazarları (2.10): Nesine'nin çizgili iki seçenekli pazarları (gol Alt/Üst: toplam, ev,
+     * deplasman; ilk yarı) ve çizgili üç seçenekli pazarları (handikaplı maç sonucu), Pinnacle'ın MS ve
+     * 2,5 Alt/Üst fiyatından kurulan gol modeliyle karşılaştırılarak tanınır. Her ham pazar (kod@çizgi) için
+     * her hipotez ve seçenek yönü denenir; maç başına ortalama olasılık farkı en küçük olan MAX_MAD altında
+     * ve ikinci adaydan belirgin ayrılıyorsa kabul edilir (korner, kart gibi gol dışı pazarlar uymaz).
+     * Aynı hedefe birden fazla ham pazar uyarsa en iyisi alınır. 2,5 toplam Alt/Üst Pinnacle'dan geldiği
+     * ve ilk yarı skoru sonuçlandırmada olmadığı için onlar tanınır ama eklenmez. Veri azsa son güvenilir
+     * eşleme kullanılır (hafıza "EK": ham pazar -> hedef|yön).
+     */
+    static String extraMarkets(List<BookEvent> book, List<Pair> pairs, List<String> notes, Map<String, Object> memory) {
+        Map<String, double[]> fit = new LinkedHashMap<>(); // ham|hedef|yön -> {fark toplamı, maç}
+        java.util.Set<String> raws = new java.util.LinkedHashSet<>();
+        for (BookEvent b : book) for (String k : b.odds.keySet()) if (k.startsWith(RAW_X2) || k.startsWith(RAW_X3)) raws.add(k);
+        if (raws.isEmpty()) return "bültende ek pazar yok";
+        for (Pair p : pairs) {
+            double[][] m = Models.goalMatrix(p.sharp);
+            if (m == null) continue;
+            for (Map.Entry<String, Map<String, Double>> e : p.book.odds.entrySet()) {
+                String k = e.getKey();
+                Map<String, Double> o = e.getValue();
+                String line = k.substring(k.indexOf('@') + 1);
+                if (k.startsWith(RAW_X2)) {
+                    if (o.get("1") == null || o.get("2") == null) continue;
+                    double[] pr = devig(o.get("1"), o.get("2"));
+                    for (String fam : X2_FAMILIES) {
+                        Map<String, Double> f = GoalModel.market(m, fam + "@" + line);
+                        if (f == null) continue;
+                        addFit(fit, k + "|" + fam + "@" + line + "|0", Math.abs(pr[0] - f.get("ALT"))); // N1 = Alt
+                        addFit(fit, k + "|" + fam + "@" + line + "|1", Math.abs(pr[0] - f.get("UST"))); // N1 = Üst
+                    }
+                } else if (k.startsWith(RAW_X3)) {
+                    if (o.get("1") == null || o.get("2") == null || o.get("3") == null) continue;
+                    double s = 1 / o.get("1") + 1 / o.get("2") + 1 / o.get("3");
+                    double[] pr = {1 / o.get("1") / s, 1 / o.get("2") / s, 1 / o.get("3") / s};
+                    double sov = Double.parseDouble(line);
+                    for (double h : new double[] {sov, -sov}) { // ev sahibine eklenen gol mü, çıkarılan mı
+                        String target = "HMS@" + h;
+                        Map<String, Double> f = GoalModel.market(m, target);
+                        if (f == null) continue;
+                        addFit(fit, k + "|" + target + "|0", (Math.abs(pr[0] - f.get("1")) + Math.abs(pr[1] - f.get("X")) + Math.abs(pr[2] - f.get("2"))) / 3);
+                    }
+                }
+            }
+        }
+        Map<String, Object> remembered = Json.obj(memory.get("EK"));
+        Map<String, Object> learned = new LinkedHashMap<>();
+        Map<String, Object[]> chosen = new LinkedHashMap<>(); // hedef -> {ham, yön, sapma}
+        int ambiguous = 0;
+        for (String raw : raws) {
+            String best = null, second = null;
+            double bestMad = 9, secondMad = 9;
+            for (Map.Entry<String, double[]> e : fit.entrySet()) {
+                if (!e.getKey().startsWith(raw + "|") || e.getValue()[1] < MIN_N) continue;
+                double mad = e.getValue()[0] / e.getValue()[1];
+                if (mad < bestMad) {
+                    second = best;
+                    secondMad = bestMad;
+                    best = e.getKey();
+                    bestMad = mad;
+                } else if (mad < secondMad) {
+                    second = e.getKey();
+                    secondMad = mad;
+                }
+            }
+            String hyp;
+            double mad;
+            if (best == null) {
+                Object r = remembered == null ? null : remembered.get(raw);
+                if (r == null) continue;
+                hyp = String.valueOf(r); // veri yetmiyor: son güvenilir eşleme
+                mad = MAX_MAD;
+            } else if (bestMad > MAX_MAD) {
+                continue; // gol pazarı değil (korner, kart...) ya da model uymuyor
+            } else if (second != null && secondMad < bestMad * 1.5 + 0.01) {
+                ambiguous++;
+                continue;
+            } else {
+                hyp = best.substring(raw.length() + 1);
+                mad = bestMad;
+            }
+            learned.put(raw, hyp);
+            String target = hyp.substring(0, hyp.indexOf('|'));
+            if (target.startsWith("IYAU@") || target.equals("AU@2.5")) continue; // tanındı, kullanılmaz
+            Object[] old = chosen.get(target);
+            if (old == null || (Double) old[2] > mad) chosen.put(target, new Object[] {raw, hyp.endsWith("|1") ? 1 : 0, mad});
+        }
+        if (!learned.isEmpty()) memory.put("EK", learned);
+        int adopted = 0;
+        for (BookEvent b : book) {
+            for (Map.Entry<String, Object[]> c : chosen.entrySet()) {
+                Map<String, Double> raw = b.odds.get((String) c.getValue()[0]);
+                if (raw == null) continue;
+                Map<String, Double> m = new LinkedHashMap<>();
+                if (c.getKey().startsWith("HMS@")) {
+                    m.put("1", raw.get("1"));
+                    m.put("X", raw.get("2"));
+                    m.put("2", raw.get("3"));
+                } else {
+                    boolean flip = (Integer) c.getValue()[1] == 1;
+                    m.put("ALT", flip ? raw.get("2") : raw.get("1"));
+                    m.put("UST", flip ? raw.get("1") : raw.get("2"));
+                }
+                b.odds.put(c.getKey(), m);
+                Integer mbs = b.marketMbs.get((String) c.getValue()[0]);
+                if (mbs != null) b.marketMbs.put(c.getKey(), mbs);
+                adopted++;
+            }
+        }
+        if (chosen.isEmpty()) {
+            return ambiguous > 0 ? "belirsiz, kullanılmadı" : "eşleşen ek pazar yok";
+        }
+        List<String> names = new ArrayList<>();
+        for (String t : chosen.keySet()) {
+            names.add(t.startsWith("HMS@") ? "H.MS " + Models.handicapText(Models.line(t))
+                    : (t.startsWith("EVG@") ? "Ev " : t.startsWith("DEPG@") ? "Dep " : "") + Fmt.line(Models.line(t)) + " Alt/Üst");
+        }
+        java.util.Collections.sort(names);
+        return "doğrulandı (" + String.join(", ", names) + "; " + adopted + " seçenek grubu, gol modeli)";
     }
 }

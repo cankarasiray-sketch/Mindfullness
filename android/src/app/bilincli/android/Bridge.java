@@ -59,6 +59,7 @@ public final class Bridge {
         extra.put("zirve", repo.zirveView());
         extra.put("virtual", repo.virtualView());
         extra.put("pick", repo.pick());
+        extra.put("singles", repo.singles());
         long switched = repo.profileSwitchedAt();
         extra.put("profileSwitchedAt", switched > 0 ? Instant.ofEpochMilli(switched).toString() : null);
         extra.put("credits", repo.credits());
@@ -544,6 +545,7 @@ public final class Bridge {
         b.append("  Basketbol MS: ").append(mark(cal.get("BS"))).append('\n');
         b.append("  Basketbol Alt/Üst: ").append(mark(cal.get("BT"))).append('\n');
         b.append("  Basketbol Handikap: ").append(mark(cal.get("BH"))).append('\n');
+        b.append("  Ek tek maç pazarları (Alt/Üst 0,5–4,5, takım golü, handikaplı MS): ").append(mark(cal.get("EK"))).append('\n');
         d.stats.put("kasa", repo.real().balance());
         b.append("  Karar: ").append(Texts.statsLine(d.stats)).append('\n');
         if (d.isPass()) b.append("  ").append(d.reason).append('\n');

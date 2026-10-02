@@ -9,10 +9,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Günün seçimi (2.9): her gün tek seçim önerisi. Değerli (adil oranı geçen) seçim yoksa da oynamak
- * isteyen için: tek maç oynanabilen (MBS 1), tutma olasılığı en az cfg.pickMinProb, oranı
- * [minLegOdds, maxLegOdds] aralığında, en az 30 dk sonra ve karar penceresi içinde başlayan seçimler
- * arasından beklenen değeri en yüksek, yani adil orana en yakın olan. Normal iddaa oranları (son taramanın
+ * Günün seçimi (2.9) ve tek maç fırsatları (2.10): her gün tek seçim önerisi. Değerli (adil oranı
+ * geçen) seçim yoksa da oynamak isteyen için: tek maç oynanabilen (MBS 1), tutma olasılığı en az
+ * cfg.pickMinProb (ve ikinci katman cfg.pickHighProb), her pazar ve her oran (1,05 üstü), en az 30 dk
+ * sonra ve karar penceresi içinde başlayan seçimler arasından beklenen değeri en yüksek, yani adil orana
+ * en yakın olan. Normal iddaa oranları (son taramanın
  * adil oran tablosu) ve Bilyoner Zirve Oran birlikte değerlendirilir. Tutar küçük ve sabittir (Kelly değil):
  * beklenen değer çoğu gün eksidir ve açıkça yazılır.
  */
@@ -55,21 +56,26 @@ public final class Pick {
         return e;
     }
 
-    private static boolean eligible(String kickoff, double odds, double p, int mbs, Settings cfg, Instant now) {
+    /** Tek maç seçimlerinde en düşük oran (2.10: her oran değerlendirilir; 1,05 altı anlamsız). */
+    static final double MIN_ODDS = 1.05;
+    /** Tek maç fırsatları listesi: en az bu tutma olasılığı ve en fazla bu kadar satır. */
+    public static final double LIST_MIN_PROB = 0.50;
+    static final int LIST_SIZE = 40;
+
+    private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, Instant now) {
         if (kickoff == null || !(p > 0 && p < 1) || mbs > 1) return false;
-        if (p < cfg.pickMinProb || odds < cfg.minLegOdds || odds > cfg.maxLegOdds) return false;
+        if (p < minProb || odds < MIN_ODDS) return false;
         Instant ko = Instant.parse(kickoff);
         return !ko.isBefore(now.plusSeconds(LEAD_S)) && !ko.isAfter(now.plusSeconds(Math.round(cfg.windowHours * 3600)));
     }
 
     /**
-     * fairs: Radar adil oran tablosu ({ref, home, away, kickoff, league, code, sel:[{m, o, label, p, i, mbs}]}).
-     * zirve: Zirve görünümü (null olabilir; satırlar {ref, m, o, label, p, tval, val, mbs, kickoff, status}).
-     * Seçim yoksa null. Dönen: kaynak, maç, seçim, oran, adil oran, tutma olasılığı, beklenen değer, tutar,
-     * tutarsa ödeme, beklenen sonuç, her gün oynanırsa aylık beklenen ve en fazla 3 alternatif.
+     * Tek oynanabilen (MBS 1), en az minProb tutan, başlamasına 30 dk–karar penceresi kalan tüm seçimler
+     * (her pazar ve her oran; aynı seçimde normal oran ile Zirve Oran'dan iyi olanı), adil orana yakınlığa
+     * (beklenen değer) göre azalan; eşitlikte sık tutan önce. Model pazarlarında olasılık güvenlik payı
+     * düşülmüş gelir (Models.fair) ve "model" işaretlidir.
      */
-    public static Map<String, Object> choose(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
-        if (!cfg.dailyPick) return null;
+    public static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, Instant now) {
         Map<String, Map<String, Object>> best = new LinkedHashMap<>(); // ref|m|o -> en iyi oran
         for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
             Map<String, Object> r = Json.obj(o);
@@ -79,8 +85,9 @@ public final class Pick {
                 if (s == null) continue;
                 double odds = Json.dbl(s, "i", 0), p = Json.dbl(s, "p", 0);
                 int mbs = (int) Json.lng(s, "mbs", 1);
-                if (!eligible(Json.str(r, "kickoff"), odds, p, mbs, cfg, now)) continue;
+                if (!eligible(Json.str(r, "kickoff"), odds, p, mbs, minProb, cfg, now)) continue;
                 Map<String, Object> e = entry(r, "iddaa", Json.str(s, "m"), Json.str(s, "o"), Json.str(s, "label"), odds, 0, p, mbs);
+                if (Json.bool(s, "model", false)) e.put("model", true);
                 best.put(Json.str(r, "ref") + "|" + Json.str(s, "m") + "|" + Json.str(s, "o"), e);
             }
         }
@@ -92,14 +99,13 @@ public final class Pick {
                 if (z == null || !("oyna".equals(st) || "oynama".equals(st) || "dusuk".equals(st)) || Json.str(z, "ref") == null) continue;
                 double odds = Json.dbl(z, "tval", 0), p = Json.dbl(z, "p", 0);
                 int mbs = (int) Json.lng(z, "mbs", 1);
-                if (!eligible(Json.str(z, "kickoff"), odds, p, mbs, cfg, now)) continue;
+                if (!eligible(Json.str(z, "kickoff"), odds, p, mbs, minProb, cfg, now)) continue;
                 String key = Json.str(z, "ref") + "|" + Json.str(z, "m") + "|" + Json.str(z, "o");
                 Map<String, Object> old = best.get(key);
                 if (old != null && Json.dbl(old, "odds", 0) >= odds) continue;
                 best.put(key, entry(z, "zirve", Json.str(z, "m"), Json.str(z, "o"), Json.str(z, "label"), odds, Json.dbl(z, "val", 0), p, mbs));
             }
         }
-        if (best.isEmpty()) return null;
         List<Map<String, Object>> all = new ArrayList<>(best.values());
         Collections.sort(all, new Comparator<Map<String, Object>>() {
             @Override
@@ -108,7 +114,22 @@ public final class Pick {
                 return c != 0 ? c : Double.compare(Json.dbl(b, "p", 0), Json.dbl(a, "p", 0));
             }
         });
-        Map<String, Object> pick = new LinkedHashMap<>(all.get(0));
+        return all;
+    }
+
+    /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 40 seçim. */
+    public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, Instant now) {
+        List<Object> out = new ArrayList<>();
+        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, now)) {
+            if (out.size() >= LIST_SIZE) break;
+            e.put("value", Json.dbl(e, "ev", 0) >= cfg.minLegEv);
+            out.add(e);
+        }
+        return out;
+    }
+
+    private static Map<String, Object> withStake(Map<String, Object> e, Settings cfg, long balance) {
+        Map<String, Object> pick = new LinkedHashMap<>(e);
         long stake = stake(cfg, balance);
         double ev = Json.dbl(pick, "ev", 0);
         pick.put("stake", stake);
@@ -116,10 +137,36 @@ public final class Pick {
         pick.put("expected", Math.round(stake * ev));
         pick.put("monthly", Math.round(30 * stake * ev));
         pick.put("value", ev >= cfg.minLegEv); // gerçekten değerli (nadir)
+        return pick;
+    }
+
+    /**
+     * fairs: Radar adil oran tablosu ({ref, home, away, kickoff, league, code, sel:[{m, o, label, p, i, mbs}]}).
+     * zirve: Zirve görünümü (null olabilir; satırlar {ref, m, o, label, p, tval, val, mbs, kickoff, status}).
+     * Seçim yoksa null. Dönen: kaynak, maç, seçim, oran, adil oran, tutma olasılığı, beklenen değer, tutar,
+     * tutarsa ödeme, beklenen sonuç, her gün oynanırsa aylık beklenen, en fazla 3 alternatif ve (2.10)
+     * yüksek olasılık katmanı: en az cfg.pickHighProb tutanların adil orana en yakını ("high"; ana seçim
+     * zaten o katmandaysa "isHigh").
+     */
+    public static Map<String, Object> choose(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
+        if (!cfg.dailyPick) return null;
+        List<Map<String, Object>> all = singles(fairs, zirve, cfg, cfg.pickMinProb, now);
+        if (all.isEmpty()) return null;
+        Map<String, Object> pick = withStake(all.get(0), cfg, balance);
         List<Object> alt = new ArrayList<>();
         for (int i = 1; i < all.size() && alt.size() < 3; i++) alt.add(all.get(i));
         pick.put("alternatives", alt);
         pick.put("candidates", (long) all.size());
+        int highCount = 0;
+        Map<String, Object> high = null;
+        for (Map<String, Object> e : all) {
+            if (Json.dbl(e, "p", 0) < cfg.pickHighProb) continue;
+            highCount++;
+            if (high == null) high = e;
+        }
+        pick.put("highCount", (long) highCount);
+        if (high == all.get(0)) pick.put("isHigh", true);
+        else if (high != null) pick.put("high", withStake(high, cfg, balance));
         return pick;
     }
 

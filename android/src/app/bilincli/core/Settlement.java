@@ -42,6 +42,16 @@ public final class Settlement {
             actual = home > away ? "1" : "2";
         }
         else if ("AU25".equals(market)) actual = home + away >= 3 ? "UST" : "ALT";
+        else if (market.startsWith("AU@") || market.startsWith("EVG@") || market.startsWith("DEPG@")) {
+            // 2.10: x,5 çizgili gol Alt/Üst (toplam, ev, deplasman)
+            int goals = market.startsWith("AU@") ? home + away : market.startsWith("EVG@") ? home : away;
+            actual = goals < Models.line(market) ? "ALT" : "UST";
+        }
+        else if (market.startsWith("HMS@")) {
+            // handikaplı maç sonucu: çizgi ev sahibine eklenen gol, eşitlik X
+            double d = home + Models.line(market) - away;
+            actual = d > 0 ? "1" : d < 0 ? "2" : "X";
+        }
         else if ("KG".equals(market)) actual = home > 0 && away > 0 ? "VAR" : "YOK";
         else if ("CS".equals(market)) {
             // Çifte Şans: iki sonucu birden kapsar

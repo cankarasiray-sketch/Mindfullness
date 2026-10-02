@@ -242,6 +242,11 @@ function label(market, outcome) {
     return "Basket H. " + (outcome === "1" ? "Ev " : "Dep ") + (hl > 0 ? "+" : hl < 0 ? "−" : "") + String(Math.abs(hl)).replace(".", ",");
   }
   if (market === "AU25") return outcome === "ALT" ? "2,5 Alt" : "2,5 Üst";
+  var ln = market.indexOf("@") > 0 ? market.slice(market.indexOf("@") + 1) : "", au = outcome === "ALT" ? " Alt" : " Üst";
+  if (market.indexOf("AU@") === 0) return ln.replace(".", ",") + au;
+  if (market.indexOf("EVG@") === 0) return "Ev " + ln.replace(".", ",") + au;
+  if (market.indexOf("DEPG@") === 0) return "Dep " + ln.replace(".", ",") + au;
+  if (market.indexOf("HMS@") === 0) { var hg = Math.round(Math.abs(parseFloat(ln))); return "H.MS " + (parseFloat(ln) >= 0 ? "(" + hg + ":0)" : "(0:" + hg + ")") + " " + outcome; }
   if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
   if (market === "CS") return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
   return market + " " + outcome;
@@ -324,6 +329,7 @@ function render() {
       + ICONS[t[0]] + "</svg>" + t[1] + "</button>";
   }).join("");
   var v = document.getElementById("view");
+  pickRows = []; // "Oynadım" düğmelerinin seçim kaydı her çizimde yeniden kurulur
   v.innerHTML = tab === "bugun" ? viewToday() : tab === "firsat" ? viewOpportunities() : tab === "gecmis" ? viewHistory()
     : tab === "kasa" ? viewMoney() : viewSettings();
   if (S.zirve && S.zirve.busy && !busyTimer) busyTimer = setTimeout(busyRefresh, 3000);
@@ -530,45 +536,83 @@ function todayPick() {
   }
   return null;
 }
+var pickRows = [];
+function regPick(x) { pickRows.push(x); return pickRows.length - 1; }
+/** Seçim satırı: oran (Zirve ise normal oran üstü çizili), model rozeti, MBS. */
+function pickOdds(x) {
+  return '<span class="chip main">' + esc(x.label) + '</span> <span class="odds">' + odds(x.odds) + "</span>"
+    + (x.source === "zirve" ? ' <span class="st ok">Zirve Oran</span>' + (x.normalOdds ? ' <span class="small muted"><s>' + odds(x.normalOdds) + "</s></span>" : "") : "")
+    + (x.model ? ' <span class="st" title="Pinnacle bu pazara fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek">model</span>' : "");
+}
+function pickBlock(x, title) {
+  var i = regPick(x);
+  return '<div class="pick-block">' + (title ? '<div class="kicker" style="margin-top:10px">' + title + "</div>" : "")
+    + '<div class="small muted">' + esc(dm(x.kickoff)) + " " + esc(hm(x.kickoff)) + (x.league ? " · " + esc(x.league) : "") + (x.code ? " · kod " + esc(x.code) : "") + "</div>"
+    + '<div class="teams" style="font-weight:600;font-size:17px">' + esc(x.home) + " – " + esc(x.away) + "</div>"
+    + '<div class="l2"><span>' + pickOdds(x) + "</span></div>"
+    + '<div class="sum"><div><span>Tutma</span><b>%' + num(x.p * 100, 0) + "</b></div><div><span>Adil oran</span><b>" + odds(x.fair) + "</b></div><div><span>Beklenen</span><b class=\"" + cls(x.ev) + "\">"
+    + pct(x.ev, true) + "</b></div></div>"
+    + '<p class="small"><b>Tutar:</b> ' + (x.stake ? tl(x.stake) + " → tutarsa " + tl(x.win) + " · beklenen sonuç <span class=\"" + cls(x.expected) + "\">" + tl(x.expected) + "</span>" : "kasa boş") + "</p>"
+    + '<div class="btns"><button class="b" onclick="pickSheet(' + i + ')">Oynadım</button></div></div>';
+}
 function pickCard() {
   if (S.demo || !S.settings.dailyPick) return "";
-  var p = S.pick, played = todayPick();
+  var p = S.pick, played = todayPick(), high = S.settings.pickHighProb || 0.7;
   if (played) {
     var l = played.legs[0];
     return '<div class="card" id="pickCard"><div class="kicker">GÜNÜN SEÇİMİ · OYNANDI</div><p><b>' + esc(l.home) + " – " + esc(l.away) + "</b> · "
-      + esc(label(l.market, l.outcome)) + " @ " + odds(l.odds) + " · " + tl(played.stake) + (played.result ? " · " + pill(played.result) : "") + "</p></div>";
+      + esc(label(l.market, l.outcome)) + " @ " + odds(l.odds) + " · " + tl(played.stake) + (played.result ? " · " + pill(played.result) : "") + "</p>"
+      + '<p class="small muted">Başka tek maç seçimleri Fırsatlar → Tek maç fırsatları\'nda.</p></div>';
   }
   if (!p) return "";
-  var ev = p.ev, zirve = p.source === "zirve";
   var alt = (p.alternatives || []).map(function (a) {
     return '<div class="small muted">' + esc(dm(a.kickoff)) + " " + esc(hm(a.kickoff)) + " " + esc(a.home) + " – " + esc(a.away) + " · " + esc(a.label) + " " + odds(a.odds)
-      + (a.source === "zirve" ? " (Zirve)" : "") + " · tutma %" + num(a.p * 100, 0) + " · " + pct(a.ev, true) + "</div>";
+      + (a.source === "zirve" ? " (Zirve)" : "") + (a.model ? " (model)" : "") + " · tutma %" + num(a.p * 100, 0) + " · " + pct(a.ev, true) + "</div>";
   }).join("");
-  return '<div class="card" id="pickCard"><div class="kicker">GÜNÜN SEÇİMİ' + (p.value ? " · DEĞERLİ" : "") + '</div>'
-    + '<div class="small muted">' + esc(dm(p.kickoff)) + " " + esc(hm(p.kickoff)) + (p.league ? " · " + esc(p.league) : "") + (p.code ? " · kod " + esc(p.code) : "") + "</div>"
-    + '<div class="teams" style="font-weight:600;font-size:17px">' + esc(p.home) + " – " + esc(p.away) + "</div>"
-    + '<div class="l2"><span><span class="chip main">' + esc(p.label) + '</span> <span class="odds">' + odds(p.odds) + "</span>"
-    + (zirve ? ' <span class="st ok">Zirve Oran</span>' + (p.normalOdds ? ' <span class="small muted"><s>' + odds(p.normalOdds) + "</s></span>" : "") : "") + "</span></div>"
-    + '<div class="sum"><div><span>Tutma</span><b>%' + num(p.p * 100, 0) + "</b></div><div><span>Adil oran</span><b>" + odds(p.fair) + "</b></div><div><span>Beklenen</span><b class=\"" + cls(ev) + "\">"
-    + pct(ev, true) + "</b></div></div>"
-    + '<p class="small"><b>Tutar:</b> ' + (p.stake ? tl(p.stake) + " → tutarsa " + tl(p.win) + " · beklenen sonuç <span class=\"" + cls(p.expected) + "\">" + tl(p.expected) + "</span>" : "kasa boş") + "</p>"
+  return '<div class="card" id="pickCard"><div class="kicker">GÜNÜN SEÇİMİ · TEK MAÇ' + (p.isHigh ? " · %" + num(high * 100, 0) + "+" : "") + (p.value ? " · DEĞERLİ" : "") + "</div>"
+    + pickBlock(p, "")
+    + (p.high ? pickBlock(p.high, "%" + num(high * 100, 0) + "+ SEÇİMİ · daha sık tutar, ödemesi küçük") : "")
     + '<p class="small muted">' + (p.value ? "Bu seçim adil oranı geçiyor: değerli. "
       : "Değerli seçim yok (iddaa oranları adil oranın altında). Bu, tek maç oynanabilen ve en az %" + num(S.settings.pickMinProb * 100, 0)
-        + " tutan " + p.candidates + " seçim arasında adil orana en yakın olanı. Her gün oynanırsa ayda beklenen ≈ " + tl(p.monthly) + ". ")
-    + "Tutar sabit ve küçük (Ayarlar → Günün seçimi); kaybı telafi için artırma.</p>"
+        + " tutan " + p.candidates + " seçim (her pazar, her oran) arasında adil orana en yakın olanı"
+        + (p.highCount ? "; %" + num(high * 100, 0) + "+ tutan " + p.highCount + " seçim var" : "") + ". Her gün oynanırsa ayda beklenen ≈ " + tl(p.monthly) + ". ")
+    + "Tutar sabit ve küçük (Ayarlar → Tek maç); kaybı telafi için artırma.</p>"
     + (alt ? '<details><summary class="small">Diğer adaylar</summary>' + alt + "</details>" : "")
-    + '<div class="btns"><button class="b" onclick="pickSheet()">Oynadım</button><button class="b ghost" onclick="act(\'openUrl\',{url:\'https://www.bilyoner.com/\'},true)">Bilyoner\'i aç</button></div></div>';
+    + '<div class="btns"><button class="b ghost" onclick="show(\'firsat\')">Tüm tek maç fırsatları</button><button class="b ghost" onclick="act(\'openUrl\',{url:\'https://www.bilyoner.com/\'},true)">Bilyoner\'i aç</button></div></div>';
 }
-function pickSheet() {
-  var p = S.pick;
-  openSheet("<h3>Günün seçimi oynandı</h3><p>" + esc(p.home) + " – " + esc(p.away) + " · " + esc(p.label) + "</p><p class=\"muted small\">Tutar kasadan düşülür; sonuç maçtan sonra otomatik işlenir.</p>"
+function pickSheet(i) {
+  var p = pickRows[i], stake = p.stake || (S.pick && S.pick.stake) || 0;
+  openSheet("<h3>Tek maç oynandı</h3><p>" + esc(p.home) + " – " + esc(p.away) + " · " + esc(p.label) + "</p><p class=\"muted small\">Tutar kasadan düşülür; sonuç maçtan sonra otomatik işlenir.</p>"
     + '<label>Oynadığın oran</label><input id="pkOdds" inputmode="decimal" value="' + esc(num(p.odds, 2)) + '">'
-    + '<label>Oynadığın tutar (TL)</label><input id="pkAmt" inputmode="decimal" value="' + esc(p.stake ? String(p.stake / 100) : "") + '">'
-    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="pickPlay()">Kaydet</button></div>');
+    + '<label>Oynadığın tutar (TL)</label><input id="pkAmt" inputmode="decimal" value="' + esc(stake ? String(stake / 100) : "") + '">'
+    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Vazgeç</button><button class="b" onclick="pickPlay(' + i + ')">Kaydet</button></div>');
 }
-function pickPlay() {
-  var p = S.pick;
+function pickPlay(i) {
+  var p = pickRows[i];
   act("pickPlay", {ref: p.ref, m: p.m, o: p.o, odds: val("pkOdds"), amount: val("pkAmt")}).then(function (res) { if (res && res.ok) closeSheet(); });
+}
+// ---- Tek maç fırsatları (2.10) --------------------------------------------------------------
+// Son taramanın tüm tek oynanabilen seçimleri (her pazar, her oran; Zirve dahil), adil orana yakınlığa göre.
+var singlesMin = null;
+function singlesCard() {
+  if (S.demo) return "";
+  var all = S.singles || [], min = singlesMin != null ? singlesMin : Math.max(0.5, S.settings.pickMinProb || 0.6);
+  var rows = all.filter(function (x) { return x.p >= min - 1e-9; }).slice(0, 25);
+  var chips = [0.5, 0.6, 0.7, 0.8].map(function (v) {
+    return '<button class="chip' + (Math.abs(v - min) < 1e-9 ? " main" : "") + '" onclick="singlesMin=' + v + ';render()">%' + Math.round(v * 100) + "+</button>";
+  }).join(" ");
+  var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
+  return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
+    + "ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; adil orana en yakın üstte. "
+    + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
+    + '<div class="btns" style="flex-wrap:wrap">' + chips + "</div>"
+    + (rows.length ? rows.map(function (x) {
+      var i = regPick(Object.assign({}, x, {stake: stake, win: Math.round(stake * x.odds), expected: Math.round(stake * x.ev)}));
+      return '<div class="vrow single-row"><div class="l1"><span>' + esc(dm(x.kickoff)) + " " + esc(hm(x.kickoff)) + (x.league ? " · " + esc(x.league) : "") + "</span><span>"
+        + (x.code ? "kod " + esc(x.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(x.home) + " – " + esc(x.away) + "</div>"
+        + '<div class="l2"><span>' + pickOdds(x) + ' <span class="small muted">adil ' + odds(x.fair) + " · tutma %" + num(x.p * 100, 0) + "</span></span>"
+        + '<span><b class="' + cls(x.ev) + '">' + pct(x.ev, true) + '</b> <button class="b ghost" style="padding:4px 10px" onclick="pickSheet(' + i + ')">Oynadım</button></span></div></div>';
+    }).join("") : '<p class="small muted">Bu olasılıkla tek oynanabilen seçim yok' + (all.length ? "" : " (önce \"Şimdi tara\")") + ".</p>") + "</div>";
 }
 /** Geçmiş: oynanan günün seçimlerinin gerçek sonucu ve beklenenle karşılaştırma. */
 function pickStatsCard() {
@@ -968,6 +1012,7 @@ function viewOpportunities() {
     + " Otomatik radar: " + (S.settings.radarScans ? "günde " + S.settings.radarScans + " kez" : "kapalı") + ".</p>"
     + (S.demo ? "" : '<div class="btns"><button class="b" onclick="act(\'radarScan\')">Şimdi tara</button><button class="b ghost" onclick="show(\'ayarlar\')">Radar ayarı</button></div>')
     + "</div>";
+  html += singlesCard();
   html += zirveCard();
   html += campaignCard();
   html += '<div class="card"><h2>Değerli oranlar</h2><p class="small muted">iddaa oranının, Pinnacle\'ın marjı arındırılmış adil oranından yüksek olduğu seçimler. '
@@ -1264,10 +1309,13 @@ function viewSettings() {
     + "avantaj çıkarsa bugünkü kuponlara dokunmadan ek kupon önerilir ve bildirilir. Kredi: her lig günde bir tarama daha; kredi yetmezse plan bunu Karşılıklı Gol'den sonra kapatır.</p>"
     + '<label class="check"><input type="checkbox" id="sZirve"' + (st.zirve ? " checked" : "") + ">Bilyoner Zirve Oran'ı kontrol et</label>"
     + '<p class="small muted">Bilyoner\'in artırılmış oranları herkese açık bültenden okunur (hesap gerekmez, kredi harcamaz) ve adil oranla karşılaştırılır; geçen olursa bildirilir.</p></div>';
-  html += '<div class="card" id="pickSettings"><h2>Günün seçimi</h2><label class="check"><input type="checkbox" id="sPick"' + (st.dailyPick ? " checked" : "") + ">Her gün bir seçim öner</label>"
-    + '<p class="small muted">Değerli seçim olmayan günlerde: tek maç oynanabilen (MBS 1), aşağıdaki olasılıkla tutan seçimler arasında adil orana en yakın olan (normal oran ve Zirve Oran). '
+  html += '<div class="card" id="pickSettings"><h2>Tek maç</h2><label class="check"><input type="checkbox" id="sSingles"' + (st.singlesOnly ? " checked" : "") + ">Yalnızca tek maç kupon (kombine yok)</label>"
+    + '<p class="small muted">Değerli seçimler de yalnızca tek oynanabilen (MBS 1) maçlardan, tekli kupon olarak önerilir. Tutma oranı artar; demo simülasyonunda aylık büyüme +%6,7\'den +%5,4\'e indi (değerli bacakların birleşimi ve MBS 2–3 maçlar dışarıda kalır).</p>'
+    + '<label class="check"><input type="checkbox" id="sPick"' + (st.dailyPick ? " checked" : "") + ">Her gün bir seçim öner (günün seçimi)</label>"
+    + '<p class="small muted">Değerli seçim olmayan günlerde: tek oynanabilen, aşağıdaki olasılıkla tutan seçimler (her pazar, her oran; normal oran ve Zirve Oran) arasında adil orana en yakın olan. '
     + "Beklenen sonuç çoğu gün eksidir ve kartta yazar; tutar Kelly değil, sabittir.</p>"
     + '<label>En az tutma olasılığı (%)</label><input id="sPickProb" inputmode="decimal" value="' + esc(num(st.pickMinProb * 100, 0)) + '">'
+    + '<label>Yüksek olasılık katmanı (%)</label><input id="sPickHigh" inputmode="decimal" value="' + esc(num((st.pickHighProb || 0.7) * 100, 0)) + '">'
     + '<label>Tutar (TL; 0 = kasanın %1\'i)</label><input id="sPickStake" inputmode="decimal" value="' + esc(String(st.pickStake || 0)) + '"></div>';
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
@@ -1377,7 +1425,9 @@ function collectSettings() {
   if (pk) {
     st.dailyPick = pk.checked;
     st.pickMinProb = numIn(val("sPickProb"), 60) / 100;
+    st.pickHighProb = numIn(val("sPickHigh"), 70) / 100;
     st.pickStake = numIn(val("sPickStake"), 0);
+    st.singlesOnly = !!(document.getElementById("sSingles") || {}).checked;
   }
   var hc = document.getElementById("sHandicap");
   if (hc) st.basketHandicap = hc.checked;
