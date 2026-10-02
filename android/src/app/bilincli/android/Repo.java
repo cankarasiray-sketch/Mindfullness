@@ -299,6 +299,16 @@ final class Repo {
         return new LinkedHashMap<>();
     }
 
+    /** Kurulu sürümün numarası (güncellemeden sonra Zirve kaydını yenilemek için). */
+    @SuppressWarnings("deprecation")
+    private long appVersion() {
+        try {
+            return app.getPackageManager().getPackageInfo(app.getPackageName(), 0).versionCode;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
     /** Süren Zirve okumasının adımı (arayüzde "okunuyor" satırı); okuma yoksa null. */
     private volatile String zirveBusy;
 
@@ -311,6 +321,14 @@ final class Repo {
         Map<String, Object> v = new LinkedHashMap<>();
         Map<String, Object> view = Json.obj(st.get("view"));
         if (view != null) v.putAll(view);
+        if (view != null && v.get("nearest") == null && Json.lng(view, "play", 0) == 0) {
+            try { // önceki sürümün kaydı: en yakın seçim satırlardan hesaplanır
+                Map<String, Object> near = Zirve.nearest(view, Daily.decisionSettings(ledger), ledger.balance());
+                if (near != null) v.put("nearest", near);
+            } catch (RuntimeException ignored) {
+                // satır gösterilmez; bir sonraki okumada gelir
+            }
+        }
         v.put("fetchedAt", st.get("fetchedAt"));
         v.put("error", st.get("error"));
         v.put("busy", busy);
@@ -329,10 +347,12 @@ final class Repo {
             Map<String, Object> st = zirveState();
             Instant now = Instant.now();
             String last = Json.str(st, "fetchedAt");
-            boolean current = Json.lng(Json.obj(st.get("view")), "v", 0) == Zirve.VIEW_VERSION;
+            // uygulama güncellendiyse ya da kayıt eski biçimdeyse beklemeden yeniden okunur
+            boolean current = Json.lng(Json.obj(st.get("view")), "v", 0) == Zirve.VIEW_VERSION && Json.lng(st, "app", 0) == appVersion();
             long gap = zirveFailed(st) ? ZIRVE_RETRY_GAP_S : ZIRVE_MIN_GAP_S; // hata sonrası kısa bekleme
             if (!force && current && last != null && Instant.parse(last).plusSeconds(gap).isAfter(now)) return null;
             st.put("fetchedAt", now.toString());
+            st.put("app", appVersion());
             String[] notice = null;
             zirveBusy = "Bilyoner Zirve Oran okunuyor…";
             try {

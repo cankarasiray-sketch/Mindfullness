@@ -401,6 +401,10 @@ public class ZirveTest {
         assertEquals("0 TL — avantaj yok, oynanmaz (yine de 100 TL oynanırsa beklenen kayıp ≈ 2,00 TL). "
                 + "Oran 1,48 ya da üstüne çıkarsa (Zirve oranı yükselirse) önerilen 90,00 TL (kasa payı %1,9).", near.get("stake"));
         assertTrue(Zirve.summary(v), Zirve.summary(v).contains("  En yakın Zirve seçimi: Belçika – Türkiye · MS 1 @ 1,40"));
+        // önceki sürümün kaydı (nearest alanı yok): satırlardan aynı sonuç hesaplanır
+        Map<String, Object> old = new LinkedHashMap<>(v);
+        old.remove("nearest");
+        assertEquals(near, Zirve.nearest(old, new Settings(), 500000));
         // değerli Zirve oranı varken gösterilmez
         assertNull(Zirve.evaluate(Zirve.parse(body()), fairs(), null, new Settings(), 500000, NOW).get("nearest"));
     }

@@ -36,7 +36,7 @@ public final class Zirve {
     static final int MAX_ROWS = 150;
     static final int MAX_NOTIFIED = 300;
     /** Değerlendirme biçimi; eski sürümün kaydı görülünce okuma beklemeden yenilenir. */
-    public static final int VIEW_VERSION = 3;
+    public static final int VIEW_VERSION = 4;
 
     /** Zirve sekmesindeki artırılmış bir oran. */
     public static final class Offer {
@@ -552,6 +552,16 @@ public final class Zirve {
      * yoksa hepsi) ve pas kartındaki gibi tutar satırı: avantaj yoksa 0 TL, 100 TL'de beklenen kayıp,
      * oynanır olacağı Zirve oranı ve o oranda önerilen tutar.
      */
+    /** Kayıtlı değerlendirmenin satırlarından en yakın seçim (eski kayıtta yoksa ekranda hesaplanır). */
+    public static Map<String, Object> nearest(Map<String, Object> view, Settings cfg, long balance) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Object o : Json.arr(view == null ? null : view.get("rows"))) {
+            Map<String, Object> r = Json.obj(o);
+            if (r != null) rows.add(r);
+        }
+        return nearest(rows, cfg, balance);
+    }
+
     static Map<String, Object> nearest(List<Map<String, Object>> rows, Settings cfg, long balance) {
         Map<String, Object> best = null, bestAny = null;
         for (Map<String, Object> r : rows) {
