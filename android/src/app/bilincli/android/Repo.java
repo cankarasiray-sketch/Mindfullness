@@ -20,6 +20,7 @@ import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
+import app.bilincli.core.Virtual;
 import app.bilincli.core.Zirve;
 import java.io.File;
 import java.time.Instant;
@@ -47,6 +48,8 @@ final class Repo {
     private final FileStorage memoryStore;
     /** Tahmin defteri: tahminlerin gerçek sonuçlarla isabeti. */
     final Forecasts forecasts;
+    /** Sanal takip: pas günlerinde en yakın seçimin 100 TL'lik sanal bahis sonucu (kasaya dokunmaz). */
+    final Virtual virtual;
     private final Map<String, Object> memory;
     /** Bilyoner Zirve Oran: son değerlendirme ve bildirilen oranlar (zirve.json). */
     private final FileStorage zirveStore;
@@ -69,6 +72,7 @@ final class Repo {
         memoryStore = new FileStorage(new File(app.getFilesDir(), "dogrulama.json"));
         forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
         zirveStore = new FileStorage(new File(app.getFilesDir(), "zirve.json"));
+        virtual = new Virtual(new FileStorage(new File(app.getFilesDir(), "sanal.json")));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
         loadActive();
@@ -370,6 +374,8 @@ final class Repo {
                     st.put("error", "hedefli tarama: " + e.getMessage()); // ilk değerlendirme geçerli kalır
                 }
                 zirveAnnotate(view, st, notes);
+                Map<String, Object> near = Json.obj(view.get("nearest"));
+                if (near != null) virtual.record(Fmt.dayKey(now), Virtual.ZIRVE, Json.obj(near.get("selection")), now); // sanal takip
                 List<Object> notified = new ArrayList<>(Json.arr(st.get("notified")));
                 notice = Zirve.notice(view, notified);
                 st.put("view", view);
@@ -790,7 +796,7 @@ final class Repo {
             refreshInternationals(new Daily.LiveSources(new AndroidHttp(app), ledger.settings()), false);
             probeActive();
             Daily.LiveSources src = live();
-            out.settleMessages = Daily.settle(ledger, src, forecasts);
+            out.settleMessages = Daily.settle(ledger, src, forecasts, virtual);
             String today = Fmt.dayKey(Instant.now());
             boolean due = !Instant.now().isBefore(todaysRunTime()) && ledger.runFor(today) == null;
             boolean scanned = false;
@@ -930,6 +936,18 @@ final class Repo {
 
     void recordForecasts(Daily.Result r) {
         if (r != null && r.book != null && r.sharp != null) forecasts.record(Matching.match(r.book, r.sharp), Instant.now());
+        // sanal takip: pas gününde normal oranlardaki en yakın seçim
+        if (r != null && r.decision != null && r.decision.isPass() && !isDemo()) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> sel = r.decision.stats.get("en_yakin_secim") instanceof Map
+                    ? (Map<String, Object>) r.decision.stats.get("en_yakin_secim") : null;
+            virtual.record(Fmt.dayKey(Instant.now()), Virtual.NORMAL, sel, Instant.now());
+        }
+    }
+
+    /** Arayüz için sanal takip (demoda yok). */
+    Map<String, Object> virtualView() {
+        return isDemo() ? null : virtual.view();
     }
 
     /** Günün karar penceresindeki maç saatleri (radar zamanlaması için) saklanır. */

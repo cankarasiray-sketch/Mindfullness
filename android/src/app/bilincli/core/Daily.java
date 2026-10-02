@@ -407,21 +407,47 @@ public final class Daily {
 
     /** forecasts verilirse aynı skor yanıtıyla tahmin defteri de sonuçlandırılır (ek kredi yok). */
     public static List<String> settle(Ledger ledger, final Sources src, final Forecasts forecasts) {
-        if (ledger.openCoupons().isEmpty()) return new ArrayList<>();
-        try {
-            return Settlement.settleOpen(ledger, new Settlement.ScoreFetcher() {
-                @Override
-                public Map<String, ScoreResult> fetch(Set<String> sportKeys) throws Exception {
-                    Map<String, ScoreResult> scores = src.scores(sportKeys);
-                    if (forecasts != null) forecasts.resolve(scores);
-                    return scores;
-                }
-            }, ledger.now());
-        } catch (Exception e) {
-            List<String> m = new ArrayList<>();
-            m.add("Sonuçlar alınamadı: " + e.getMessage());
-            return m;
+        return settle(ledger, src, forecasts, null);
+    }
+
+    /**
+     * virtual verilirse sanal takip kayıtları da aynı skorlarla sonuçlandırılır; kuponların liginde
+     * olmayan sanal kayıtlar için yalnızca o liglerin skoru ayrıca çekilir (açık kupon yokken de).
+     */
+    public static List<String> settle(Ledger ledger, final Sources src, final Forecasts forecasts, final Virtual virtual) {
+        final Set<String> fetched = new java.util.HashSet<>();
+        final Instant now = ledger.now();
+        List<String> out = new ArrayList<>();
+        if (!ledger.openCoupons().isEmpty()) {
+            try {
+                out = Settlement.settleOpen(ledger, new Settlement.ScoreFetcher() {
+                    @Override
+                    public Map<String, ScoreResult> fetch(Set<String> sportKeys) throws Exception {
+                        Map<String, ScoreResult> scores = src.scores(sportKeys);
+                        fetched.addAll(sportKeys);
+                        if (forecasts != null) forecasts.resolve(scores);
+                        if (virtual != null) virtual.resolve(scores, now);
+                        return scores;
+                    }
+                }, now);
+            } catch (Exception e) {
+                out.add("Sonuçlar alınamadı: " + e.getMessage());
+            }
         }
+        if (virtual != null) {
+            Set<String> need = virtual.dueSports(now);
+            need.removeAll(fetched);
+            if (!need.isEmpty()) {
+                try {
+                    Map<String, ScoreResult> scores = src.scores(need);
+                    virtual.resolve(scores, now);
+                    if (forecasts != null) forecasts.resolve(scores);
+                } catch (Exception ignored) {
+                    // bir sonraki sonuç kontrolünde yeniden denenir
+                }
+            }
+        }
+        return out;
     }
 
     public static Result generate(Ledger ledger, Sources src, boolean force, boolean autoPlay) {

@@ -817,6 +817,38 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   assert.deepEqual(t.errors, []);
 });
 
+test("sanal takip: en yakın seçimlerin sanal sonucu Geçmiş'te", async () => {
+  const s = clone(baseState);
+  const ko = new Date(Date.parse(s.now) - 86400000).toISOString(), soon = new Date(Date.parse(s.now) + 7200000).toISOString();
+  s.virtual = { n: 2, won: 1, lost: 1, voids: 0, open: 1, pl: -6000, staked: 20000, expectedPl: -1650, hitRate: 0.5, expectedHitRate: 0.59, roi: -0.3,
+    normal: { n: 1, won: 1, lost: 0, open: 1, pl: 4000 }, zirve: { n: 1, won: 0, lost: 1, open: 0, pl: -10000 },
+    recent: [
+      { kind: "normal", home: "İtalya", away: "Türkiye", kickoff: soon, label: "MS 1", odds: 1.31, result: null },
+      { kind: "zirve", home: "Hırvatistan", away: "İngiltere", kickoff: ko, label: "MS 2", odds: 1.74, result: "kaybetti", score: "1-1", pl: -10000 },
+      { kind: "normal", home: "Macaristan", away: "Gürcistan", kickoff: ko, label: "MS 1", odds: 1.4, result: "kazandi", score: "2-0", pl: 4000 },
+    ] };
+  const t = boot(s, "#gecmis");
+  const card = t.$("#virtualCard").textContent;
+  assert.match(card, /Sonuçlanan2 \(tutan 1, yatan 1\) · bekleyen 1/);
+  assert.match(card, /Tutma oranı%50,0 \(adil olasılığa göre beklenen %59,0\)/);
+  assert.match(card, /Sanal kâr\/zarar-60,00 TL \(2 × 100 TL, ROI −%30,0\)/);
+  assert.match(card, /Beklenen kâr\/zarar-16,50 TL/);
+  assert.match(card, /Normal oranlarda1 bahis · tutan 1 · 40,00 TL/);
+  assert.match(card, /Zirve Oran'da1 bahis · tutan 0 · -100,00 TL/);
+  assert.equal(t.$$(".virtual-row").length, 3);
+  assert.match(t.$$(".virtual-row")[0].textContent, /İtalya – Türkiye MS 1 1,31Bekliyor/);
+  assert.match(t.$$(".virtual-row")[1].textContent, /Zirve Oran1-1Hırvatistan – İngiltere MS 2 1,74Yattı -100,00 TL/);
+  assert.match(card, /50\+ bahisten sonra/);
+  // kayıt yokken açıklama; demoda kart yok
+  const e = clone(s);
+  e.virtual = { n: 0, won: 0, lost: 0, voids: 0, open: 0, pl: 0, normal: {}, zirve: {}, recent: [] };
+  assert.match(boot(e, "#gecmis").$("#virtualCard").textContent, /Henüz kayıt yok/);
+  const d = clone(s);
+  d.demo = true;
+  assert.equal(boot(d, "#gecmis").$("#virtualCard"), null);
+  assert.deepEqual(t.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

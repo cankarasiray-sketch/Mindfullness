@@ -579,6 +579,8 @@ public final class Zirve {
         n.put("event", r.get("event"));
         n.put("kickoff", r.get("kickoff"));
         n.put("ev", ev);
+        n.put("selection", Engine.selection(Json.str(r, "home"), Json.str(r, "away"), Json.str(r, "kickoff"), Json.str(r, "sport"),
+                Json.str(r, "sref"), Json.str(r, "m"), Json.str(r, "o"), odds, p)); // sanal takip için
         n.put("text", Json.str(r, "home") + " – " + Json.str(r, "away") + " · " + Json.str(r, "label") + " @ " + Fmt.odds(odds)
                 + " (adil " + Fmt.odds(1 / p) + ", " + Fmt.pct(ev, true) + ")");
         Map<String, Object> st = new LinkedHashMap<>();

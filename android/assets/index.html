@@ -743,6 +743,7 @@ function viewHistory() {
     + "</div>" + (v.playedN < 30 ? '<p class="small muted">Güvenilir yorum için en az 30 maç gerekir.</p>' : "") + "</div>";
   html += edgeCard();
   html += accuracyCard();
+  html += virtualCard();
   html += analysisCard();
   html += '<div class="card"><h2>Kuponlar</h2><div class="list">' + (S.coupons.length ? S.coupons.map(function (c) {
     var pl = c.played && c.result ? (c.payout || 0) - c.stake : null;
@@ -829,6 +830,37 @@ function analysisCard() {
     + '<p class="kicker" style="margin-top:12px">LİGE GÖRE</p>' + bars(a.byLeague)
     + '<p class="kicker" style="margin-top:12px">PAZARA GÖRE</p>' + bars(a.byMarket)
     + '<p class="kicker" style="margin-top:12px">AYLARA GÖRE</p>' + bars(a.byMonth) + "</div>";
+}
+/**
+ * Sanal takip: pas günlerinde en yakın seçimin 100 TL'lik sanal bahis sonucu (kasaya dokunmaz).
+ * "Avantajı yok ama tutuyor" düşüncesini gerçek sonuçlarla sınar.
+ */
+function virtualCard() {
+  var V = S.virtual;
+  if (S.demo || !V) return "";
+  var html = '<div class="card" id="virtualCard"><h2>Sanal takip (en yakın seçim)</h2><p class="small muted">Pas günlerinde en yakın seçim (normal oranlarda ve Zirve Oran\'da ayrı ayrı) '
+    + "100 TL'lik sanal bahis olarak kaydedilir, maç bitince sonuçlanır. Kasaya dokunmaz; \"avantajı yok ama tutuyor\" düşüncesini para riske atmadan gerçek sonuçlarla sınar.</p>";
+  if (!V.n && !V.open && !V.voids) return html + '<p class="muted">Henüz kayıt yok: ilk pas gününden sonra başlar.</p></div>';
+  var part = function (x) {
+    return x.n ? x.n + " bahis · tutan " + x.won + " · " + '<span class="' + cls(x.pl) + '">' + tl(x.pl) + "</span>" : (x.open ? "bekleyen " + x.open : "henüz yok");
+  };
+  html += '<div class="list">'
+    + item("Sonuçlanan", V.n + " (tutan " + V.won + ", yatan " + V.lost + (V.voids ? ", iade " + V.voids : "") + ")" + (V.open ? " · bekleyen " + V.open : ""))
+    + (V.n ? item("Tutma oranı", pct(V.hitRate) + " (adil olasılığa göre beklenen " + pct(V.expectedHitRate) + ")") : "")
+    + (V.n ? item("Sanal kâr/zarar", '<b class="' + cls(V.pl) + '">' + tl(V.pl) + "</b> (" + V.n + " × 100 TL, ROI " + pct(V.roi, true) + ")") : "")
+    + (V.n ? item("Beklenen kâr/zarar", '<span class="' + cls(V.expectedPl) + '">' + tl(V.expectedPl) + "</span>") : "")
+    + item("Normal oranlarda", part(V.normal))
+    + item("Zirve Oran'da", part(V.zirve))
+    + "</div>";
+  html += (V.recent || []).slice(0, 10).map(function (r) {
+    return '<div class="vrow virtual-row"><div class="l1"><span>' + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff)) + (r.kind === "zirve" ? " · Zirve Oran" : "") + "</span><span>"
+      + (r.score && r.result !== "iade" ? esc(r.score) : "") + '</span></div><div class="l2"><span>' + esc(r.home) + " – " + esc(r.away) + ' <span class="chip">' + esc(r.label)
+      + '</span> <span class="odds">' + odds(r.odds) + "</span></span><span>" + pill(r.result)
+      + (r.result ? ' <span class="small ' + cls(r.pl) + '">' + tl(r.pl) + "</span>" : "") + "</span></div></div>";
+  }).join("");
+  html += '<p class="small muted">' + (V.n < 50 ? "Az sonuçla şans payı büyük; 50+ bahisten sonra gerçekleşen ile beklenen kâr/zararı karşılaştır. " : "")
+    + "Düşük oranlı seçimler sık tutar ama ödeme küçük olduğundan toplamda kayıp beklenir; tutma oranı tek başına kârlılık göstermez.</p></div>";
+  return html;
 }
 function item(k, v) { return '<div class="item"><span class="muted">' + k + "</span><span>" + v + "</span></div>"; }
 function detail(id) {

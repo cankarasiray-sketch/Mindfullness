@@ -57,6 +57,7 @@ public final class Bridge {
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
         extra.put("radar", repo.radarView());
         extra.put("zirve", repo.zirveView());
+        extra.put("virtual", repo.virtualView());
         extra.put("credits", repo.credits());
         extra.put("creditPlan", repo.plan().toMap());
         extra.put("accuracy", repo.forecasts.summary());
@@ -245,7 +246,7 @@ public final class Bridge {
                 requireReal(repo);
                 List<String> msgs;
                 synchronized (Repo.LOCK) {
-                    msgs = Daily.settle(repo.real(), repo.live());
+                    msgs = Daily.settle(repo.real(), repo.live(), repo.forecasts, repo.virtual);
                 }
                 return msgs.isEmpty() ? "Sonuçlanacak maç yok." : String.join("\n", msgs);
             }

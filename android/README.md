@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.2.9.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.3.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,19 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Sanal takip (2.3)
+
+- Pas günlerinde "en yakın seçim" (normal iddaa oranlarında ve Zirve Oran'da ayrı ayrı, günde tür
+  başına bir tane) 100 TL'lik sanal bahis olarak kaydedilir ve maç bitince skorla sonuçlanır. Seçim gün
+  içinde değişirse, önceki seçimin maçı başlamadıysa yenisi yerine geçer (sonuç bilinmeden; seçim
+  yanlılığı yok). Kasaya, kupon istatistiklerine ve kanıt korumasına dokunmaz (`sanal.json`).
+- Geçmiş → "Sanal takip": sonuçlanan / tutan / yatan, tutma oranı ile adil olasılığa göre beklenen
+  tutma oranı, sanal kâr/zarar ve ROI, beklenen kâr/zarar, normal ve Zirve ayrı, son kayıtlar.
+  "Avantajı yok ama tutuyor" düşüncesini para riske atmadan gerçek sonuçlarla sınar.
+- Sonuçlar kupon sonuçlandırmasının skorlarından gelir; kuponların liginde olmayan sanal kayıtlar
+  için yalnızca o liglerin skoru ayrıca çekilir (açık kupon yokken de). 3 günde sonucu bulunamayan
+  kayıt iade sayılır.
 
 ## Bilyoner Zirve Oran (2.2)
 
@@ -437,7 +450,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.2.9.apk
+./build.sh          # testler + build/BilincliKupon-2.3.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

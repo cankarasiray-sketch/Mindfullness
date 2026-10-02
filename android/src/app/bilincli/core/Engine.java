@@ -247,12 +247,30 @@ public final class Engine {
                 + Models.outcomeLabel(c.market, c.outcome) + " @ " + Fmt.odds(c.odds)
                 + " (adil " + Fmt.odds(1 / c.prob) + ", " + Fmt.pct(c.ev(), true) + ")");
         stats.put("en_yakin_ev", c.ev());
+        stats.put("en_yakin_secim", selection(c.book.home, c.book.away, c.book.kickoff.toString(), c.sharp.sportKey, c.sharp.ref,
+                c.market, c.outcome, c.odds, c.rawProb)); // sanal takip için
         stats.put("en_yakin_aralikta", c.odds >= cfg.minLegOdds && c.odds <= cfg.maxLegOdds);
         double[] t = targetOdds(c.rawProb, c.market, cfg);
         if (t != null) {
             stats.put("en_yakin_hedef", t[0]);
             stats.put("en_yakin_hedef_oran", t[1]);
         }
+    }
+
+    /** Sanal takip kaydı için seçim: {home, away, kickoff, sport, sref, market, outcome, odds, p}. */
+    public static Map<String, Object> selection(String home, String away, String kickoff, String sport, String sref,
+                                                String market, String outcome, double odds, double p) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("home", home);
+        m.put("away", away);
+        m.put("kickoff", kickoff);
+        m.put("sport", sport);
+        m.put("sref", sref);
+        m.put("market", market);
+        m.put("outcome", outcome);
+        m.put("odds", odds);
+        m.put("p", p);
+        return m;
     }
 
     /**
