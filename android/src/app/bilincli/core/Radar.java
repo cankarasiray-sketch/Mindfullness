@@ -41,6 +41,8 @@ public final class Radar {
         v.put("scannedAt", state.get("scannedAt"));
         v.put("values", state.containsKey("values") ? state.get("values") : new ArrayList<Object>());
         v.put("moves", state.containsKey("moves") ? state.get("moves") : new ArrayList<Object>());
+        v.put("fairs", state.containsKey("fairs") ? state.get("fairs") : new ArrayList<Object>());
+        v.put("fairsAt", state.get("fairsAt"));
         return v;
     }
 
@@ -96,6 +98,8 @@ public final class Radar {
         for (Pair p : pairs) pairBySharp.put(p.sharp.ref, p);
 
         if (full) {
+            state.put("fairs", Promo.table(pairs, now)); // promosyon kontrolü için (kredi harcamadan)
+            state.put("fairsAt", now.toString());
             List<Candidate> all = Engine.buildCandidates(pairs, now, cfg).get(1);
             List<Candidate> value = new ArrayList<>();
             for (Candidate c : all) if (c.ev() >= cfg.minLegEv) value.add(c);

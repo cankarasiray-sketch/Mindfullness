@@ -29,7 +29,9 @@ public final class Texts {
                 parts.add("iddaa " + ("BS".equals(e.getKey()) ? "basket MS" : "BT".equals(e.getKey()) ? "basket A/Ü" : e.getKey()) + " marjı " + Fmt.pct(((Number) e.getValue()).doubleValue(), false));
             }
         }
-        return String.join(" · ", parts);
+        String line = String.join(" · ", parts);
+        Object near = stats.get("en_yakin");
+        return near == null ? line : line + "\nEn yakın seçim: " + near;
     }
 
     public static String legLine(Leg l) {

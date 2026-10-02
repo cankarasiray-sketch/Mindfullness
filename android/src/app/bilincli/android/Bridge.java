@@ -272,6 +272,39 @@ public final class Bridge {
                 return "Ayarlar kaydedildi. Sonraki çalışma: " + next.atOffset(Fmt.TR).toLocalDateTime().toString()
                         .replace('T', ' ').substring(0, 16);
             }
+            case "promo":
+            case "promoPlay": {
+                requireReal(repo);
+                String ref = Json.str(p, "ref"), market = Json.str(p, "m"), outcome = Json.str(p, "o");
+                double odds;
+                try {
+                    odds = Double.parseDouble(String.valueOf(Json.str(p, "odds")).trim().replace(',', '.'));
+                } catch (NumberFormatException e) {
+                    throw new Ledger.LedgerException("Kampanya oranını yaz, örn. 2,40");
+                }
+                if (!(odds > 1.0 && odds < 1000)) throw new Ledger.LedgerException("Geçersiz oran");
+                Map<String, Object> view = repo.radar.view();
+                @SuppressWarnings("unchecked")
+                Map<String, Object>[] found = app.bilincli.core.Promo.find(Json.arr(view.get("fairs")), ref == null ? "" : ref,
+                        market == null ? "" : market, outcome == null ? "" : outcome);
+                if (found == null) throw new Ledger.LedgerException("Bu seçim son taramada yok. Fırsatlar → \"Şimdi tara\" ile güncelle.");
+                if ("promoPlay".equals(action)) {
+                    long stake = Ledger.parseTl(Json.str(p, "amount"));
+                    long id;
+                    synchronized (Repo.LOCK) {
+                        id = app.bilincli.core.Promo.record(repo.real(), found[0], found[1], odds, stake, Fmt.dayKey(Instant.now()));
+                    }
+                    Scheduler.scheduleNextEvent(activity);
+                    return "Kampanya bahsi kupon #" + id + " olarak kaydedildi: " + Fmt.tl(stake) + ". Sonuç maçtan sonra otomatik işlenir.";
+                }
+                app.bilincli.core.Promo.Check c = app.bilincli.core.Promo.evaluate(Json.dbl(found[1], "p", 0), market, odds,
+                        Daily.decisionSettings(repo.real()), repo.real().balance());
+                result.put("play", c.play);
+                result.put("stake", c.stake);
+                String at = Json.str(view, "fairsAt");
+                long ageMin = at == null ? 0 : (Instant.now().getEpochSecond() - Instant.parse(at).getEpochSecond()) / 60;
+                return c.message + (ageMin > 180 ? " Adil oran " + (ageMin / 60) + " saat önceki taramadan; maça yakınsa önce \"Şimdi tara\"." : "");
+            }
             case "probe": {
                 requireReal(repo);
                 synchronized (Repo.LOCK) {

@@ -561,6 +561,57 @@ test("kadro saati taraması ve gece sessizliği ayarları kaydedilir", async () 
   assert.match(t2.text(), /günde 2 \+ kadro saati/);
 });
 
+test("pas kartında en yakın seçim ayrı satırda", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "69 seçim karşılaştırıldı. Bugün pas.", couponId: null,
+    summary: "Bülten 650 maç · eşleşen 30\nEn yakın seçim: 03.10 20:00 Ev – Dep · MS 1 @ 1,95 (adil 2,00, −%2,5)" };
+  const t = boot(s);
+  const near = t.$$("p").find((p) => p.textContent.startsWith("En yakın seçim:"));
+  assert.ok(near, "en yakın seçim satırı yok");
+  assert.match(near.textContent, /Ev – Dep · MS 1 @ 1,95 \(adil 2,00, −%2,5\)/);
+  assert.ok(near.querySelector("b"));
+  assert.ok(t.$$("p.muted").some((p) => p.textContent === "Bülten 650 maç · eşleşen 30"));
+});
+
+test("promosyon kontrolü: ara, seç, kampanya oranını kontrol et, oynandı kaydet", async () => {
+  const s = clone(baseState);
+  s.radar = s.radar || { values: [], moves: [] };
+  s.radar.fairsAt = s.now;
+  s.radar.fairs = [{ ref: "b9", sref: "s9", sport: "lig", code: "123", home: "Fenerbahçe", away: "Galatasaray",
+    kickoff: new Date(Date.parse(s.now) + 7200000).toISOString(), league: "Süper Lig",
+    sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.5, i: 1.9 }, { m: "MS", o: "2", label: "MS 2", p: 0.25, i: 3.6 }] }];
+  const t = boot(s, "#firsat");
+  assert.match(t.text(), /Promosyon \/ özel oran kontrolü/);
+  const q = t.$("#promoQ");
+  q.value = "fener";
+  q.dispatchEvent(new t.w.Event("input"));
+  assert.match(t.$("#promoList").textContent, /Fenerbahçe – Galatasaray/);
+  assert.match(t.$("#promoList").textContent, /MS 1 adil 2,00/);
+  q.value = "besiktas";
+  q.dispatchEvent(new t.w.Event("input"));
+  assert.match(t.$("#promoList").textContent, /eşleşen maç yok/);
+  q.value = "GALATA";
+  q.dispatchEvent(new t.w.Event("input"));
+  t.$$(".promo-sel")[0].click();
+  assert.match(t.$("#sheet").textContent, /iddaa'nın normal oranı 1,90/);
+  t.$("#promoOdds").value = "2,40";
+  t.w.MockAndroid.act = (action, payload, id) => {
+    t.calls.push({ action, payload: JSON.parse(payload) });
+    setTimeout(() => t.w.onActResult(id, { ok: true, message: "Kampanya oranı 2,40 · avantaj +%20,0. Oyna", play: true, stake: 15000 }), 0);
+  };
+  t.button("Kontrol et").click();
+  await t.tick();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "promo", payload: { ref: "b9", m: "MS", o: "1", odds: "2,40" } });
+  assert.match(t.$("#promoRes").textContent, /Oyna/);
+  assert.equal(t.$("#promoAmt").value, "150");
+  t.button("Bu tutarla oynadım").click();
+  await t.tick();
+  const last = t.calls.at(-1);
+  assert.equal(last.action, "promoPlay");
+  assert.deepEqual(last.payload, { ref: "b9", m: "MS", o: "1", odds: "2,40", amount: "150" });
+});
+
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {
   const s = clone(baseState);
   const old = s.coupons.find((x) => x.id !== s.todayRun.couponId);

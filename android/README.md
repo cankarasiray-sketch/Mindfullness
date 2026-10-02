@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.0.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.1.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,21 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Promosyon kontrolü ve en yakın seçim (2.1)
+
+- **Promosyon / özel oran kontrolü (Fırsatlar):** iddaa'nın normal oranları ~%22 marjlı olduğundan
+  çoğu gün pas çıkar; Bilyoner'in "Süper Oran" gibi kampanyaları ise bazen adil oranın üstüne
+  çıkar. Takım adını yaz, maçın seçimini seç (her birinin adil oranı yazar), kampanya oranını gir:
+  uygulama son tam taramadaki Pinnacle adil olasılığıyla avantajı ve Kelly tutarını hesaplar (kredi
+  harcamaz; kanıt koruması devredeyse olasılık motordaki gibi küçültülür). "Bu tutarla oynadım"
+  bahsi tekli kupon olarak kasaya yazar; sonuç maçtan sonra otomatik işlenir. Kampanya bahisleri
+  kanıt koruması ölçümüne (kapanış avantajı) girmez: kampanya oranı piyasa oranı değildir.
+  Yalnızca tek seçimli kampanyalar; birleşik seçimler ("X kazanır ve 2,5 Üst") hesaplanamaz.
+  Adil oranlar son tam taramadan (sabah kararı, radar ya da "Şimdi tara"); 3 saatten eskiyse uyarır.
+- **Pas kartında en yakın seçim:** Pas günlerinde, oynanabilir oran aralığındaki seçimler arasından
+  avantaja en çok yaklaşan ve ne kadar uzak olduğu gösterilir (ör. "Ev – Dep · MS 1 @ 1,95 (adil
+  2,00, −%2,5)"); bildirimde de yer alır.
 
 ## Kadro saati taraması, gece sessizliği, 7 anahtar (2.0)
 
@@ -333,7 +348,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.0.0.apk
+./build.sh          # testler + build/BilincliKupon-2.1.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

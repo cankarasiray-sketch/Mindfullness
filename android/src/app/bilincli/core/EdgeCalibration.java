@@ -130,6 +130,7 @@ public final class EdgeCalibration {
     public static Calib fromLedger(Ledger ledger) {
         List<Obs> obs = new ArrayList<>();
         for (Ledger.Coupon c : ledger.coupons()) { // en yeni önce
+            if (c.promo) continue; // kampanya oranı piyasa oranı değildir: avantaj ölçümünü bozmasın
             for (Ledger.Leg l : c.legs) {
                 if (l.closingFair == null || l.fairProb <= 0 || l.odds <= 1) continue;
                 obs.add(new Obs(l.market, l.odds, l.fairProb, l.closingFair));

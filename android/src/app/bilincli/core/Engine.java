@@ -214,6 +214,8 @@ public final class Engine {
                     + "veri kaynaklarını kontrol et.", stats));
         }
         if (cands.isEmpty()) {
+            String near = nearest(all, cfg);
+            if (near != null) stats.put("en_yakin", near);
             return withKickoffs(kos, kls, new Decision(null, none, all.size() + " seçim karşılaştırıldı, hiçbirinde iddaa oranı "
                     + "adil oranı yeterince geçmiyor. Bugün pas.", stats));
         }
@@ -225,6 +227,25 @@ public final class Engine {
         Decision d = new Decision(proposals.get(0), new ArrayList<>(proposals.subList(1, proposals.size())), "", stats);
         d.candidates = cands;
         return withKickoffs(kos, kls, d);
+    }
+
+    /**
+     * Pas gününde avantaja en yakın seçim (oynanabilir oran aralığındakiler arasından; yoksa hepsi):
+     * "03.10 20:00 Ev – Dep · MS 1 @ 2,10 (adil 2,15, −%2,3)". Kullanıcı neden pas dendiğini ve
+     * fırsatın ne kadar uzak olduğunu görsün diye.
+     */
+    static String nearest(List<Candidate> all, Settings cfg) {
+        Candidate best = null, bestAny = null;
+        for (Candidate c : all) {
+            if (bestAny == null || c.ev() > bestAny.ev()) bestAny = c;
+            if (c.odds < cfg.minLegOdds || c.odds > cfg.maxLegOdds) continue;
+            if (best == null || c.ev() > best.ev()) best = c;
+        }
+        Candidate c = best != null ? best : bestAny;
+        if (c == null) return null;
+        return Fmt.localTime(c.book.kickoff.toString()) + " " + c.book.home + " – " + c.book.away + " · "
+                + Models.outcomeLabel(c.market, c.outcome) + " @ " + Fmt.odds(c.odds)
+                + " (adil " + Fmt.odds(1 / c.prob) + ", " + Fmt.pct(c.ev(), true) + ")";
     }
 
     private static Decision withKickoffs(List<Instant> kos, List<String> leagues, Decision d) {

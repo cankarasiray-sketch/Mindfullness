@@ -187,6 +187,13 @@ function trDate(iso) { return new Date(Date.parse(iso) + 3 * 3600 * 1000); }
 function hm(iso) { var d = trDate(iso); return String(d.getUTCHours()).padStart(2, "0") + ":" + String(d.getUTCMinutes()).padStart(2, "0"); }
 function dm(iso) { var d = trDate(iso); return String(d.getUTCDate()).padStart(2, "0") + "." + String(d.getUTCMonth() + 1).padStart(2, "0"); }
 function dayLabel(day) { var p = day.split("-"); return p[2] + "." + p[1] + "." + p[0]; }
+/** Karar özeti: istatistik satırı soluk; pas gününde "En yakın seçim" ayrı satırda. */
+function summaryHtml(summary) {
+  return (summary || "").split("\n").map(function (line) {
+    var near = line.indexOf("En yakın seçim: ") === 0;
+    return near ? '<p class="small"><b>En yakın seçim:</b> ' + esc(line.slice(16)) + "</p>" : '<p class="small muted">' + esc(line) + "</p>";
+  }).join("");
+}
 function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
   if (market === "BS") return "Basket MS " + outcome;
@@ -407,12 +414,12 @@ function viewToday() {
       if (!c) return;
       var title = ids.length > 1 ? "Günün kuponu " + (i + 1) + "/" + ids.length : "Günün kuponu";
       html += couponCard(c, title, i === ids.length - 1 ? (run.reason ? '<p class="small muted">' + esc(run.reason) + "</p>" : "")
-        + '<p class="small muted">' + esc(run.summary || "") + "</p>" : "");
+        + summaryHtml(run.summary) : "");
     });
   } else {
     var pass = run.decision === "pas";
     html += '<div class="card"><div class="kicker">' + (pass ? "BUGÜN" : "KORUMA DEVREDE") + '</div><div class="big">' + (pass ? "Pas" : "Kupon yok")
-      + "</div><p>" + esc(run.reason) + '</p><p class="small muted">' + esc(run.summary || "") + "</p>"
+      + "</div><p>" + esc(run.reason) + "</p>" + summaryHtml(run.summary)
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
   html += outlookCard();
@@ -470,6 +477,50 @@ function manualSheet(id, pos) {
 }
 
 // ---- Fırsatlar ----------------------------------------------------------------
+var promoQuery = "", promoHits = [];
+function fold(t) {
+  return String(t || "").replace(/İ/g, "i").replace(/I/g, "ı").toLowerCase().replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g")
+    .replace(/ç/g, "c").replace(/ö/g, "o").replace(/ü/g, "u").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+function promoResults() {
+  var rows = (S.radar && S.radar.fairs) || [], q = fold(promoQuery).trim();
+  promoHits = [];
+  if (q.length < 2) return "";
+  promoHits = rows.filter(function (r) { return fold(r.home + " " + r.away).indexOf(q) >= 0; }).slice(0, 6);
+  if (!promoHits.length) return '<p class="small muted">Son taramada bu adla eşleşen maç yok (maç taranan liglerde olmayabilir).</p>';
+  return promoHits.map(function (r, i) {
+    return '<div class="vrow"><div class="l1"><span>' + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff)) + (r.league ? " · " + esc(r.league) : "") + "</span><span>"
+      + (r.code ? "kod " + esc(r.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(r.home) + " – " + esc(r.away) + "</div><div>"
+      + r.sel.map(function (x, j) {
+        return '<button class="chip promo-sel" onclick="promoSheet(' + i + "," + j + ')">' + esc(x.label) + ' <span class="small muted">adil ' + odds(1 / x.p) + "</span></button>";
+      }).join(" ") + "</div></div>";
+  }).join("");
+}
+function promoSheet(i, j) {
+  var r = promoHits[i], x = r.sel[j];
+  openSheet("<h3>" + esc(r.home) + " – " + esc(r.away) + "</h3><p class=\"muted small\">" + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff))
+    + " · <b>" + esc(x.label) + "</b> · adil oran " + odds(1 / x.p) + " · iddaa'nın normal oranı " + odds(x.i) + "</p>"
+    + '<label>Kampanya oranı</label><input id="promoOdds" inputmode="decimal" placeholder="ör. 2,40">'
+    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Kapat</button><button class="b" onclick="promoCheck(' + i + "," + j + ')">Kontrol et</button></div>'
+    + '<div id="promoRes"></div>');
+}
+function promoCheck(i, j) {
+  var r = promoHits[i], x = r.sel[j], o = val("promoOdds");
+  act("promo", {ref: r.ref, m: x.m, o: x.o, odds: o}, true).then(function (res) {
+    var el = document.getElementById("promoRes");
+    if (!el || !res) return;
+    var html = '<p class="small">' + esc(res.message || "") + "</p>";
+    if (res.ok && res.play) {
+      html += '<label>Oynadığın tutar (TL)</label><input id="promoAmt" inputmode="decimal" value="' + esc(res.stake ? String(res.stake / 100) : "") + '">'
+        + '<div class="btns"><button class="b" onclick="promoPlay(' + i + "," + j + ')">Bu tutarla oynadım</button></div>';
+    }
+    el.innerHTML = html;
+  });
+}
+function promoPlay(i, j) {
+  var r = promoHits[i], x = r.sel[j];
+  act("promoPlay", {ref: r.ref, m: x.m, o: x.o, odds: val("promoOdds"), amount: val("promoAmt")}).then(function (res) { if (res && res.ok) closeSheet(); });
+}
 function viewOpportunities() {
   var R = S.radar || {values: [], moves: []}, html = "";
   var inCoupon = {};
@@ -491,6 +542,13 @@ function viewOpportunities() {
         + (inCoupon[v.bookRef + "|" + v.outcome] ? ' <span class="st ok">kuponda</span>' : "")
         + (v.inRange ? "" : ' <span class="st">oran aralığı dışında</span>') + "</span></div></div>";
     }).join("") : '<p class="muted">Son taramada değer taşıyan seçim yok. Bu normaldir: iddaa çoğu maçta marjlıdır.</p>') + "</div>";
+  html += '<div class="card" id="promoCard"><h2>Promosyon / özel oran kontrolü</h2><p class="small muted">Bilyoner\'de "Süper Oran" gibi bir kampanya oranı gördüğünde: maçı ara, seçimi seç, kampanya oranını gir. '
+    + "Uygulama son taramadaki Pinnacle adil oranıyla karşılaştırır (kredi harcamaz), avantaj varsa tutarı söyler. Yalnızca tek seçimli kampanyalar; "
+    + "\"X kazanır ve 2,5 Üst\" gibi birleşik seçimler hesaplanamaz.</p>"
+    + '<input id="promoQ" placeholder="Takım adı (ör. Fenerbahçe)" autocomplete="off" value="' + esc(promoQuery) + '" oninput="promoQuery=this.value;document.getElementById(\'promoList\').innerHTML=promoResults()">'
+    + '<div id="promoList">' + promoResults() + "</div>"
+    + (R.fairsAt ? '<p class="small muted">Adil oranlar: son tam tarama ' + esc(dm(R.fairsAt)) + " " + esc(hm(R.fairsAt)) + " (" + esc(ago(R.fairsAt)) + "). Maça yakınsa önce \"Şimdi tara\".</p>"
+      : '<p class="small muted">Henüz tam tarama yok: önce "Şimdi tara".</p>') + "</div>";
   var minEv = S.settings.minLegEv != null ? S.settings.minLegEv : 0.03;
   var moves = R.moves.filter(function (m) { return m.iddaa != null && m.ev != null && m.ev >= minEv; });
   var hidden = R.moves.length - moves.length;

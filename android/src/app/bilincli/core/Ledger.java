@@ -78,6 +78,8 @@ public final class Ledger {
          * maç öncesi kontrol, otomatik oynama, kapanış ve sonuçlandırma dışında kalır.
          */
         public boolean superseded;
+        /** Kampanya (özel oran) bahsi: kasada ve sonuçta sayılır, kapanış avantajı ölçümüne girmez. */
+        public boolean promo;
     }
 
     public static final class Run {
@@ -215,6 +217,7 @@ public final class Ledger {
         o.put("scale", c.scale);
         o.put("autoPlayed", c.autoPlayed);
         o.put("superseded", c.superseded);
+        o.put("promo", c.promo);
         return o;
     }
 
@@ -252,6 +255,7 @@ public final class Ledger {
             c.scale = Json.dbl(x, "scale", 1.0);
             c.autoPlayed = Json.bool(x, "autoPlayed", false);
             c.superseded = Json.bool(x, "superseded", false);
+            c.promo = Json.bool(x, "promo", false);
             for (Object lo : Json.arr(x.get("legs"))) {
                 Map<String, Object> g = Json.obj(lo);
                 Leg l = new Leg();
@@ -456,6 +460,12 @@ public final class Ledger {
         List<Coupon> out = new ArrayList<>();
         for (Coupon c : coupons) if (c.result == null && !c.superseded) out.add(c);
         return out;
+    }
+
+    /** Kuponu kampanya bahsi olarak işaretler. */
+    public synchronized void markPromo(long couponId) {
+        coupon(couponId).promo = true;
+        save();
     }
 
     public synchronized void markPlayed(long couponId, long stake, List<Double> legOdds) {
