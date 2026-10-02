@@ -101,7 +101,7 @@ public class BasketballTest {
         cfg.oddsApiKey = "k";
         cfg.totals = true;
         List<SharpEvent> ev = new OddsApi(http, cfg).fetchEvents(Collections.singletonList(LEAGUE));
-        assertTrue(urls.get(0), urls.get(0).contains("markets=h2h%2Ctotals&"));
+        assertTrue(urls.get(0), urls.get(0).contains("markets=h2h%2Ctotals%2Cspreads&")); // 2.6: handikap da
         Map<String, Double> bs = ev.get(0).fair.get("BS");
         assertEquals(1.0, bs.get("1") + bs.get("2"), 1e-9);
         assertTrue(bs.get("1") > 0.59 && bs.get("1") < 0.61);

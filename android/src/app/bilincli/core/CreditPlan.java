@@ -31,6 +31,8 @@ public final class CreditPlan {
     public static final class Plan {
         public List<String> leagues = new ArrayList<>();
         public boolean totals;
+        /** Basketbol handikabı (basketbol taramasına +1 kredi; plan daraltmaz, ayardan gelir). */
+        public boolean basketHandicap;
         public int kgEvents, radarScans, coupons, daysLeft;
         /** Kadro saati taraması (her lig günde bir tarama daha). */
         public boolean lineupScans;
@@ -96,7 +98,7 @@ public final class CreditPlan {
         int matches = 0;
         boolean known = active != null;
         for (String l : p.leagues) {
-            w += weight(l, active) * Settings.scanCost(l, p.totals); // basketbol: yalnızca maç sonucu
+            w += weight(l, active) * Settings.scanCost(l, p.totals, p.basketHandicap); // basketbolda handikap açıksa +1
             if (known && !Settings.isBasketball(l)) { // KG yalnızca futbolda
                 Integer n = active.get(l);
                 if (n == null || n < 0) known = false;
@@ -137,6 +139,7 @@ public final class CreditPlan {
                             final Map<String, Integer> active, double avgCoupons) {
         Plan p = new Plan();
         p.totals = cfg.totals;
+        p.basketHandicap = cfg.basketHandicap;
         p.kgEvents = cfg.kgEvents;
         p.radarScans = cfg.radarScans;
         p.lineupScans = cfg.lineupScans;

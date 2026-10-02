@@ -54,12 +54,22 @@ public final class Settings {
      * basketbolda toplam sayı, Pinnacle'ın ana çizgisi).
      */
     public static String markets(String league, boolean totals) {
-        return totals ? "h2h,totals" : "h2h";
+        return markets(league, totals, false);
+    }
+
+    /** handicap: basketbolda Pinnacle'ın handikap (spreads) pazarı da çekilir (2.6). */
+    public static String markets(String league, boolean totals, boolean handicap) {
+        String m = totals ? "h2h,totals" : "h2h";
+        return handicap && isBasketball(league) ? m + ",spreads" : m;
     }
 
     /** Ligin tarama başına kredi maliyeti (pazar sayısı; bölge "eu"). */
     public static int scanCost(String league, boolean totals) {
-        return totals ? 2 : 1;
+        return scanCost(league, totals, false);
+    }
+
+    public static int scanCost(String league, boolean totals, boolean handicap) {
+        return (totals ? 2 : 1) + (handicap && isBasketball(league) ? 1 : 0);
     }
 
     /** 1.7.2 öncesi varsayılan ligler (taşıma için). */
@@ -203,6 +213,8 @@ public final class Settings {
      * ve son taramanın adil oranıyla karşılaştırılır; değerli olan bildirilir.
      */
     public boolean zirve = true;
+    /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
+    public boolean basketHandicap = true;
 
     public int[] radarHours() {
         switch (radarScans) {
@@ -217,7 +229,7 @@ public final class Settings {
     public int estimatedMonthlyCredits() {
         // lig başına günlük çekim x pazar sayısı + KG maç başına + sonuç, kontrol ve kapanış için yaklaşık pay
         int perScan = 0;
-        for (String l : leagues) perScan += scanCost(l, totals);
+        for (String l : leagues) perScan += scanCost(l, totals, basketHandicap);
         return (int) Math.round(30 * perScan * ACTIVE_SHARE * (1 + radarScans + (lineupScans ? 1 : 0))) + 30 * kgEvents + 240;
     }
 
@@ -301,6 +313,7 @@ public final class Settings {
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
         m.put("zirve", zirve);
+        m.put("basketHandicap", basketHandicap);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
         return m;
     }
@@ -349,6 +362,7 @@ public final class Settings {
         s.lineupScans = Json.bool(m, "lineupScans", s.lineupScans);
         s.quietNights = Json.bool(m, "quietNights", s.quietNights);
         s.zirve = Json.bool(m, "zirve", s.zirve);
+        s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
         s.internationals = Json.bool(m, "internationals", s.internationals);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {

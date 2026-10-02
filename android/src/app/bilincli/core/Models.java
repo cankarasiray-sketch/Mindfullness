@@ -45,6 +45,26 @@ public final class Models {
         return 1 - OddsMath.normCdf((line - mean) / sd);
     }
 
+    /** Maçın sayı farkının (ev − deplasman) standart sapması (yaklaşık): NBA 48 dk, diğerleri 40 dk. */
+    static double marginSd(String sportKey) {
+        return "basketball_nba".equals(sportKey) ? 12.5 : 11;
+    }
+
+    /**
+     * Basketbol handikap: ev sahibi homeLine handikapla kazanır mı (ev + çizgi > deplasman). Sayı farkı
+     * normal dağılımlı kabul edilir; ortalama Pinnacle'ın handikap çizgisi ve olasılığından bulunur. Tam
+     * sayı çizgi (iade ihtimali) ve Pinnacle'dan MAX_LINE_GAP'ten uzak çizgi için null.
+     */
+    public static Double coverProb(SharpEvent s, double homeLine) {
+        Map<String, Double> f = s.fair.get("BH");
+        if (f == null || f.get("LINE") == null || f.get("1") == null) return null;
+        if (Math.abs(homeLine - Math.rint(homeLine)) < 1e-9) return null;
+        double base = f.get("LINE"), p = f.get("1");
+        if (Math.abs(homeLine - base) > MAX_LINE_GAP || !(p > 0 && p < 1)) return null;
+        double sd = marginSd(s.sportKey), mean = sd * OddsMath.normInv(p) - base; // P(fark > −çizgi) = p
+        return OddsMath.normCdf((mean + homeLine) / sd);
+    }
+
     /** "BT@161.5" -> "BT" (pazar ailesi: kalibrasyon, marj ve analiz için). */
     public static String family(String market) {
         int i = market.indexOf('@');
@@ -67,6 +87,14 @@ public final class Models {
             m.put("UST", over);
             return m;
         }
+        if (market.startsWith("BH@")) {
+            Double cover = coverProb(s, line(market));
+            if (cover == null) return null;
+            Map<String, Double> m = new LinkedHashMap<>();
+            m.put("1", cover);
+            m.put("2", 1 - cover);
+            return m;
+        }
         return s.fair.get(market);
     }
 
@@ -75,6 +103,10 @@ public final class Models {
         if ("BS".equals(market)) return "Basket MS " + outcome;
         if (market.startsWith("BT@")) {
             return "Basket " + Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
+        }
+        if (market.startsWith("BH@")) { // ev sahibinin çizgisi; deplasman ters işaretle
+            double l = "1".equals(outcome) ? line(market) : -line(market);
+            return "Basket H. " + ("1".equals(outcome) ? "Ev " : "Dep ") + (l > 0 ? "+" : l < 0 ? "−" : "") + Fmt.line(Math.abs(l));
         }
         if ("AU25".equals(market)) return "ALT".equals(outcome) ? "2,5 Alt" : "2,5 Üst";
         if ("KG".equals(market)) return "VAR".equals(outcome) ? "KG Var" : "KG Yok";
@@ -100,6 +132,7 @@ public final class Models {
         if ("CS".equals(market)) return "Çifte Şans";
         if ("BS".equals(market)) return "Basketbol MS";
         if ("BT".equals(family(market))) return "Basketbol Alt/Üst";
+        if ("BH".equals(family(market))) return "Basketbol Handikap";
         return market;
     }
 

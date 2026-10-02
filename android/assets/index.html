@@ -231,6 +231,10 @@ function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
   if (market === "BS") return "Basket MS " + outcome;
   if (market.indexOf("BT@") === 0) return "Basket " + market.slice(3).replace(".", ",") + (outcome === "ALT" ? " Alt" : " Üst");
+  if (market.indexOf("BH@") === 0) {
+    var hl = parseFloat(market.slice(3)) * (outcome === "1" ? 1 : -1);
+    return "Basket H. " + (outcome === "1" ? "Ev " : "Dep ") + (hl > 0 ? "+" : hl < 0 ? "−" : "") + String(Math.abs(hl)).replace(".", ",");
+  }
   if (market === "AU25") return outcome === "ALT" ? "2,5 Alt" : "2,5 Üst";
   if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
   if (market === "CS") return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
@@ -987,7 +991,7 @@ function accuracyCard() {
     + (bins ? '<p class="small muted" style="margin-top:8px">Kalibrasyon: tahmin edilen olasılık ile gerçekleşme sıklığı (en az 20 sonuçlu dilimler)</p><div class="list">' + bins + "</div>" : "")
     + foot;
 }
-var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans", BS: "Basketbol MS", BT: "Basketbol Alt/Üst"};
+var MARKET_NAME = {"*": "Tümü", MS: "Maç Sonucu", AU25: "2,5 Alt/Üst", KG: "Karşılıklı Gol", CS: "Çifte Şans", BS: "Basketbol MS", BT: "Basketbol Alt/Üst", BH: "Basketbol Handikap"};
 function edgeCard() {
   var e = S.edge, all = e && e["*"];
   if (!all) return "";
@@ -1133,6 +1137,9 @@ function viewSettings() {
     + '<p class="small muted basket-extra">' + (extraBasket.length ? "Oran kaynağında şu an aktif ek ligler de seçilebilir (" + extraBasket.length + "). " : "")
     + "iddaa'daki diğer basketbol ligleri (ör. İspanya, İtalya, Almanya, VTB, ABA) oran kaynağında (The Odds API) yoksa Pinnacle fiyatı olmadan değerlendirilemez; "
     + "liste günde bir kez ücretsiz güncellenir, kaynakta açılan lig burada kendiliğinden görünür.</p>"
+    + '<label class="check"><input type="checkbox" id="sHandicap"' + (st.basketHandicap ? " checked" : "") + ">Handikap (Basket H. Ev −4,5 / Dep +4,5)</label>"
+    + '<p class="small muted">Pinnacle\'ın handikap fiyatı iddaa\'nın handikap çizgisine sayı farkı modeliyle çevrilir (en fazla 3 sayı fark, tam sayı çizgiler kullanılmaz). '
+    + "iddaa pazarı, değerin hangi takıma uygulandığı ve seçenek sırası Pinnacle'la otomatik doğrulanır; \"Kaynakları test et\" özetinde Basketbol Handikap ✓ görünmeli. Basketbol taramasına +1 kredi.</p>"
     + '<p class="small muted">Maç sonucu (uzatmalar dahil, beraberlik yok) ve Pazarlar\'da Alt/Üst açıksa toplam sayı Alt/Üst (uzatmalar dahil). '
     + 'Tarama başına 1 kredi, Alt/Üst açıkken 2. Avantajlı seçimler futbolla aynı günün kuponlarına girer ("Basket MS 1", "Basket 161,5 Üst"). '
     + 'Alt/Üst\'te iddaa\'nın çizgisi Pinnacle\'ın ana çizgisinden en fazla 3 sayı farklıysa olasılık o çizgiye çevrilir; tam sayı çizgiler kullanılmaz. '
@@ -1251,6 +1258,8 @@ function collectSettings() {
   st.quietNights = !!(qn && qn.checked);
   var zv = document.getElementById("sZirve");
   st.zirve = !!(zv && zv.checked);
+  var hc = document.getElementById("sHandicap");
+  if (hc) st.basketHandicap = hc.checked;
   var tot = document.getElementById("sTotals");
   st.totals = !!(tot && tot.checked);
   st.kgEvents = parseInt(val("sKg") || "0", 10);

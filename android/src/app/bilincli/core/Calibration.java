@@ -141,6 +141,7 @@ public final class Calibration {
         report.put("CS", doubleChance(book, pairs, notes, memory));
         report.put("BS", basketball(book, pairs, notes, memory));
         report.put("BT", basketTotals(book, pairs, notes, memory));
+        report.put("BH", basketHandicap(book, pairs, notes, memory));
         for (BookEvent b : book) {
             Iterator<String> it = b.odds.keySet().iterator();
             while (it.hasNext()) {
@@ -350,6 +351,111 @@ public final class Calibration {
             }
         }
         String tail = (dropped > 0 ? ", " + dropped + " uyumsuz çizgi ayıklandı" : "");
+        if (how == null) return "önceki eşleme kullanıldı (pazar " + code + ", " + adopted + " çizgi)" + tail;
+        return "doğrulandı (pazar " + code + ", " + adopted + " çizgi, " + how + ")" + tail;
+    }
+
+    /**
+     * Basketbol handikap. iddaa'nın özel değerli iki seçenekli pazarlarından hangisinin maç handikabı
+     * olduğu, değerin hangi takıma uygulandığı (işaret) ve 1. seçeneğin hangi takım olduğu (yön),
+     * Pinnacle'ın handikabına karşı sınanır: dört varsayım (işaret x yön) için iddaa'nın marjı
+     * arındırılmış 1. seçenek olasılığı, Pinnacle'dan sayı farkı modeliyle (Models.coverProb) çevrilen
+     * olasılıkla karşılaştırılır. Yalnızca bilgi taşıyan ölçümler (olasılık %50'den uzak) kullanılır;
+     * en iyi varsayım belirgin değilse son güvenilir eşleme, o da yoksa pazar kullanılmaz. Toplam sayı,
+     * yarı/takım toplamları ve ilk yarı handikabı çizgi farkıyla ya da büyük sapmayla elenir.
+     */
+    static String basketHandicap(List<BookEvent> book, List<Pair> pairs, List<String> notes, Map<String, Object> memory) {
+        boolean any = false;
+        for (BookEvent b : book) any |= Models.BASKETBALL.equals(b.sport);
+        if (!any) return "bültende basketbol yok";
+        Map<String, List<Double>> fit = new LinkedHashMap<>(); // pazar|işaret|yön -> sapmalar
+        int withPinnacle = 0;
+        for (Pair p : pairs) {
+            if (p.sharp.fair.get("BH") == null) continue;
+            withPinnacle++;
+            for (Map.Entry<String, Map<String, Double>> m : p.book.odds.entrySet()) {
+                if (!m.getKey().startsWith(RAW_BT)) continue;
+                Double o1 = m.getValue().get("1"), o2 = m.getValue().get("2");
+                if (o1 == null || o2 == null || o1 <= 1 || o2 <= 1) continue;
+                String mtid = btMtid(m.getKey());
+                double sov = btLine(m.getKey()), first = devig(o1, o2)[0];
+                for (int sign = 0; sign < 2; sign++) { // 0: değer ev sahibinin çizgisi; 1: deplasmanın (ev = −değer)
+                    Double cover = Models.coverProb(p.sharp, sign == 0 ? sov : -sov);
+                    if (cover == null || Math.abs(cover - 0.5) < BT_INFORMATIVE) continue;
+                    for (int dir = 0; dir < 2; dir++) { // 0: 1. seçenek ev sahibi
+                        String k = mtid + "|" + sign + "|" + dir;
+                        if (!fit.containsKey(k)) fit.put(k, new ArrayList<Double>());
+                        fit.get(k).add(Math.abs(first - (dir == 0 ? cover : 1 - cover)));
+                    }
+                }
+            }
+        }
+        String best = null;
+        double bestMad = Double.MAX_VALUE;
+        for (Map.Entry<String, List<Double>> e : fit.entrySet()) {
+            if (e.getValue().size() < MIN_N) continue;
+            double mad = median(e.getValue());
+            if (mad < bestMad) {
+                bestMad = mad;
+                best = e.getKey();
+            }
+        }
+        String decided = null, how = null;
+        if (best != null && bestMad <= MAX_MAD) {
+            boolean clear = true;
+            for (Map.Entry<String, List<Double>> e : fit.entrySet()) {
+                if (e.getKey().equals(best) || e.getValue().size() < MIN_N) continue;
+                if (median(e.getValue()) <= bestMad * 1.5 + 0.02) clear = false;
+            }
+            if (clear) {
+                decided = best;
+                how = fit.get(best).size() + " ölçüm, sapma " + Fmt.pct(bestMad, false);
+                memory.put("BH", decided);
+            } else {
+                notes.add("Basketbol handikap: birden fazla varsayım Pinnacle'a yakın; yanlış eşleme riskine karşı yeni eşleme yapılmadı.");
+            }
+        }
+        if (decided == null) {
+            decided = Json.str(memory, "BH");
+            if (decided == null) {
+                if (withPinnacle == 0) return "Pinnacle handikap verisi yok";
+                if (best == null) return "bilgi taşıyan ölçüm az, kullanılmadı";
+                return "belirsiz, kullanılmadı";
+            }
+        }
+        String[] d = decided.split("\\|");
+        String code = d[0];
+        boolean awaySign = "1".equals(d[1]), firstIsAway = "1".equals(d[2]);
+        int adopted = 0, dropped = 0;
+        for (BookEvent b : book) {
+            for (Map.Entry<String, Map<String, Double>> m : new ArrayList<>(b.odds.entrySet())) {
+                if (!m.getKey().startsWith(RAW_BT) || !btMtid(m.getKey()).equals(code)) continue;
+                double homeLine = awaySign ? -btLine(m.getKey()) : btLine(m.getKey());
+                if (Math.abs(homeLine - Math.rint(homeLine)) < 1e-9) continue; // tam sayı çizgi: iade ihtimali
+                Map<String, Double> o = new LinkedHashMap<>();
+                o.put("1", m.getValue().get(firstIsAway ? "2" : "1"));
+                o.put("2", m.getValue().get(firstIsAway ? "1" : "2"));
+                String target = "BH@" + (homeLine == 0 ? 0.0 : homeLine);
+                b.odds.put(target, o);
+                Integer mbs = b.marketMbs.get(m.getKey());
+                if (mbs != null) b.marketMbs.put(target, mbs);
+                adopted++;
+            }
+        }
+        // maç bazında tutarlılık: dönüştürülmüş Pinnacle olasılığından çok uzak çizgi kullanılmaz
+        for (Pair p : pairs) {
+            for (String k : new ArrayList<>(p.book.odds.keySet())) {
+                if (!k.startsWith("BH@")) continue;
+                Double cover = Models.coverProb(p.sharp, Models.line(k));
+                if (cover == null) continue;
+                Map<String, Double> o = p.book.odds.get(k);
+                if (Math.abs(devig(o.get("1"), o.get("2"))[0] - cover) > MAX_PAIR_DIFF) {
+                    p.book.odds.remove(k);
+                    dropped++;
+                }
+            }
+        }
+        String tail = dropped > 0 ? ", " + dropped + " uyumsuz çizgi ayıklandı" : "";
         if (how == null) return "önceki eşleme kullanıldı (pazar " + code + ", " + adopted + " çizgi)" + tail;
         return "doğrulandı (pazar " + code + ", " + adopted + " çizgi, " + how + ")" + tail;
     }
@@ -630,6 +736,7 @@ public final class Calibration {
         if (String.valueOf(r.get("CS")).startsWith("doğrulandı")) b.append(", ÇŞ ✓");
         if (String.valueOf(r.get("BS")).startsWith("doğrulandı")) b.append(", Basket MS ✓");
         if (String.valueOf(r.get("BT")).startsWith("doğrulandı")) b.append(", Basket A/Ü ✓");
+        if (String.valueOf(r.get("BH")).startsWith("doğrulandı")) b.append(", Basket H. ✓");
         long mis = r.get("mismatched") instanceof Long ? (Long) r.get("mismatched") : 0;
         if (mis > 0) b.append(", ").append(mis).append(" uyumsuz eşleşme ayıklandı");
         long sus = r.get("suspicious") instanceof Long ? (Long) r.get("suspicious") : 0;

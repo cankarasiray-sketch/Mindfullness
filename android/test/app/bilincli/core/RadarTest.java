@@ -161,6 +161,7 @@ public class RadarTest {
     @Test
     public void radarSettings() {
         Settings s = new Settings();
+        s.basketHandicap = false; // lig başına tarama başına 1 kredi
         assertEquals(0, s.radarHours().length);
         int base = s.estimatedMonthlyCredits();
         s.radarScans = 2;

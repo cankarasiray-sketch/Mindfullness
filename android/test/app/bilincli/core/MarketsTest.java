@@ -273,6 +273,9 @@ public class MarketsTest {
         Settings s = new Settings();
         assertEquals("temkinli", s.detectProfile());
         assertEquals(5, s.maxCouponsPerDay);
+        // 2.6: basketbol handikabı açıkken 2 basketbol ligi tarama başına +1 kredi
+        assertEquals(Math.round(30 * (13 + 2) * Settings.ACTIVE_SHARE * 2) + 240, s.estimatedMonthlyCredits());
+        s.basketHandicap = false; // aşağıdaki formüller lig başına 1 kredi
         int base = s.estimatedMonthlyCredits();
         assertEquals(13, s.leagues.size()); // büyük 6 + Avrupa kupaları + Hollanda, Portekiz + EuroLeague, NBA
         assertEquals(Math.round(30 * 13 * Settings.ACTIVE_SHARE * 2) + 240, base); // sabah + kadro saati taraması

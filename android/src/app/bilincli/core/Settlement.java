@@ -30,6 +30,12 @@ public final class Settlement {
             if (total == line) return Models.VOID;
             actual = total > line ? "UST" : "ALT";
         }
+        else if (market.startsWith("BH@")) {
+            // basketbol handikap (uzatmalar dahil): ev sahibinin çizgisi; tam sayı çizgide eşitlik iade
+            double diff = home + Models.line(market) - away;
+            if (diff == 0) return Models.VOID;
+            actual = diff > 0 ? "1" : "2";
+        }
         else if ("BS".equals(market)) {
             // basketbol maç sonucu uzatmalar dahildir; skor eşitse veri eksiktir, bacak iade sayılır
             if (home == away) return Models.VOID;

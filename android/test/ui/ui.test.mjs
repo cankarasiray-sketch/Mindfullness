@@ -975,6 +975,22 @@ test("tutma olasılığı şartı, seyrek rozeti ve ek basketbol ligleri", async
   assert.deepEqual(t.errors, []);
 });
 
+test("basketbol handikap: etiket ve ayar", async () => {
+  const s = clone(baseState);
+  s.settings.basketHandicap = true;
+  const t = boot(s, "#ayarlar");
+  assert.equal(t.w.label("BH@-4.5", "1"), "Basket H. Ev −4,5");
+  assert.equal(t.w.label("BH@-4.5", "2"), "Basket H. Dep +4,5");
+  assert.equal(t.w.label("BH@3.5", "1"), "Basket H. Ev +3,5");
+  assert.equal(t.$("#sHandicap").checked, true);
+  assert.match(t.$("#basketCard").textContent, /Handikap \(Basket H\. Ev −4,5 \/ Dep \+4,5\).*Basketbol taramasına \+1 kredi/);
+  t.$("#sHandicap").checked = false;
+  t.button("Ayarları kaydet").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).payload.settings.basketHandicap, false);
+  assert.deepEqual(t.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

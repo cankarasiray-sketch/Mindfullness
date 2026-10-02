@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.5.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.6.0.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -61,6 +61,21 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
+
+## Basketbol handikap (2.6)
+
+- Pinnacle'ın handikap (spreads) fiyatı çekilir (basketbol taramasına +1 kredi; Ayarlar → Basketbol'dan
+  kapatılabilir) ve ev sahibinin çizgisiyle "BH" olarak saklanır. iddaa'nın çizgisine sayı farkı
+  normal dağılımlı kabul edilerek çevrilir (SS: NBA 12,5, diğerleri 11; en fazla 3 sayı fark; tam sayı
+  çizgiler kullanılmaz). Seçimler "Basket H. Ev −4,5" / "Basket H. Dep +4,5"; sonuç uzatmalar dahil skorla.
+- iddaa'da hangi pazarın maç handikabı olduğu, değerin hangi takıma uygulandığı ve 1. seçeneğin hangi
+  takım olduğu (dört varsayım) Pinnacle'a karşı sınanır: yalnızca bilgi taşıyan ölçümler (olasılık
+  %50'den uzak) kullanılır; en iyi varsayım belirgin değilse son güvenilir eşleme, o da yoksa pazar
+  kullanılmaz. Toplam sayı, yarı/takım toplamları ve ilk yarı handikabı çizgi farkıyla ya da büyük
+  sapmayla elenir. Maç bazında Pinnacle'dan 15 puandan fazla sapan çizgi kullanılmaz.
+  "Kaynakları test et" özetinde "Basketbol Handikap" satırı ve "Basket H. ✓".
+- Tutma olasılığı şartı, kanıt koruması (pazar ailesi "BH"), marj özeti ("basket handikap") ve
+  sonuçlandırma diğer pazarlarla aynıdır.
 
 ## Tutma olasılığı şartı, MBS, ek basketbol ligleri (2.5)
 
@@ -488,7 +503,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.5.0.apk
+./build.sh          # testler + build/BilincliKupon-2.6.0.apk
 ./build.sh test     # yalnızca testler
 ```
 

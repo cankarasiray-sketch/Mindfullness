@@ -190,7 +190,32 @@ public final class OddsApi {
             out.put(k, m);
             return out;
         }
-        if (basket) return null; // basketbolda maç sonucu ve toplam sayı
+        if ("spreads".equals(key) && basket) {
+            // handikap: ev sahibinin çizgisiyle anahtarlanır ("BH@-4.5"; "1" ev sahibi handikapla kazanır)
+            Double hp = null, ap = null, hPoint = null;
+            for (Object o : Json.arr(market.get("outcomes"))) {
+                Map<String, Object> oc = Json.obj(o);
+                Double pt = Json.num(oc, "point"), price = Json.num(oc, "price");
+                String name = Json.str(oc, "name");
+                if (pt == null || price == null || name == null) continue;
+                if (name.equals(home)) {
+                    hp = price;
+                    hPoint = pt;
+                } else if (name.equals(away)) {
+                    ap = price;
+                }
+            }
+            if (hp == null || ap == null || hPoint == null || hp <= 1 || ap <= 1) return null;
+            double[] p = OddsMath.devigPower(new double[] {hp, ap});
+            String k = "BH@" + hPoint;
+            if (overround != null) overround.put(k, implied(hp, ap));
+            Map<String, Double> m = new LinkedHashMap<>();
+            m.put("1", p[0]);
+            m.put("2", p[1]);
+            out.put(k, m);
+            return out;
+        }
+        if (basket) return null; // basketbolda maç sonucu, toplam sayı ve handikap
         if ("h2h".equals(key)) {
             for (Object o : Json.arr(market.get("outcomes"))) {
                 Map<String, Object> oc = Json.obj(o);
@@ -315,7 +340,7 @@ public final class OddsApi {
                         fair.put(e.getKey(), mix);
                         sources.add(e.getKey() + ":" + cfg.preferredBook + "+borsa");
                     }
-                } else if (books.size() >= cfg.minBooks && !e.getKey().startsWith("BT@")) {
+                } else if (books.size() >= cfg.minBooks && !e.getKey().startsWith("BT@") && !e.getKey().startsWith("BH@")) {
                     // (basketbol Alt/Üst yalnızca Pinnacle'ın çizgisinden: çizgiler sitelere göre değişir)
                     Map<String, Double> avg = new LinkedHashMap<>();
                     for (String outcome : books.values().iterator().next().keySet()) {
@@ -343,6 +368,17 @@ public final class OddsApi {
                 bt.put("ALT", f.get("ALT"));
                 bt.put("UST", f.get("UST"));
                 fair.put("BT", bt);
+            }
+            // basketbol handikap: Pinnacle'ın ev sahibi çizgisi ve olasılıkları "BH" olarak; iddaa çizgisine Models.fair çevirir
+            for (String k : new ArrayList<>(fair.keySet())) {
+                if (!k.startsWith("BH@")) continue;
+                Map<String, Double> f = fair.remove(k);
+                if (fair.containsKey("BH")) continue;
+                Map<String, Double> bh = new LinkedHashMap<>();
+                bh.put("LINE", Models.line(k));
+                bh.put("1", f.get("1"));
+                bh.put("2", f.get("2"));
+                fair.put("BH", bh);
             }
             if (fair.isEmpty()) lastParse[2]++;
             if (!fair.isEmpty()) {
@@ -600,7 +636,7 @@ public final class OddsApi {
             }
             Map<String, String> params = new LinkedHashMap<>();
             params.put("regions", cfg.regions);
-            params.put("markets", Settings.markets(league, cfg.totals));
+            params.put("markets", Settings.markets(league, cfg.totals, cfg.basketHandicap));
             params.put("oddsFormat", "decimal");
             params.put("dateFormat", "iso");
             try {
