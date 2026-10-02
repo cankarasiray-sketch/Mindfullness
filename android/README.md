@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.2.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.2.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -94,6 +94,12 @@ bildirim olarak gelir.
   birkaç saniyede bir kendiliğinden yenilenir; ilk değerlendirme tarama bitmeden görünür. Adil
   oranların alındığı tam tarama zamanı kartın üstünde. Güncellemeden sonra eski sürümün kaydı
   10 dakika beklenmeden yeniden okunur.
+- **Nesine'siz hedefli tarama (2.2.3):** Zirve yanıtı maçların tüm normal iddaa oranlarını da
+  içerdiğinden hedefli taramada iddaa tarafı Bilyoner'den kurulur; yalnızca Pinnacle oranı çekilir
+  (Nesine bültenine ulaşılamasa da çalışır, daha hızlı). Eşleme koruması: her pazarda Bilyoner
+  oranlarının marjı arındırılmış olasılığı Pinnacle'ın adil olasılığından 10 puandan fazla saparsa
+  (ör. Alt/Üst ters okunmuş) ya da karşılaştırılacak ikinci seçenek yoksa pazar atılır. Başarısız
+  hedefli tarama 3 saat değil 15 dakika sonra yeniden denenir.
 - **Gerçekçi beklenti:** iddaa marjı ~%22, Zirve artışı ~%2–5; marj ~%17'ye iner ama çoğu zaman
   sıfırın altına inmez. Zirve Oran'lı seçimlerin çoğu "değer yok" çıkar; değerli olanı ara sıra görülür.
 - Keşif aracı (2.1.2–2.1.6) kaldırıldı; "Kaynakları test et" artık Zirve okumasının özetini yazar.
@@ -412,7 +418,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.2.2.apk
+./build.sh          # testler + build/BilincliKupon-2.2.3.apk
 ./build.sh test     # yalnızca testler
 ```
 

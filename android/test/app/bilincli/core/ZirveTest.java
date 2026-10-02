@@ -282,6 +282,62 @@ public class ZirveTest {
     }
 
     @Test
+    public void targetedScanUsesBilyonerOddsAndGuardsMapping() {
+        List<Zirve.Offer> all = Zirve.parseAll(body());
+        java.util.Set<String> target = new java.util.HashSet<>(Arrays.asList("3172993"));
+        List<Models.BookEvent> book = Zirve.books(all, target, new java.util.HashSet<String>());
+        assertEquals(1, book.size());
+        Models.BookEvent b = book.get(0);
+        assertEquals("z3172993", b.ref);
+        assertEquals(KO, b.kickoff);
+        assertEquals(Models.FOOTBALL, b.sport);
+        assertEquals(4.60, b.odds.get("MS").get("X"), 0); // artırılmamış oran da
+        assertEquals(1.80, b.odds.get("KG").get("VAR"), 0);
+        assertEquals(2.00, b.odds.get("AU25").get("UST"), 0);
+        assertEquals(1.05, b.odds.get("CS").get("1X"), 0);
+        assertEquals(4, b.odds.size()); // ilk yarı pazarları alınmaz
+        // Pinnacle'daki İngilizce adlarla eşleşir (iddaa adlarıyla aynı eşleştirici)
+        Map<String, Map<String, Double>> fair = new LinkedHashMap<>(CoreTest.ms(0.70, 0.19, 0.11));
+        Map<String, Double> kg = new LinkedHashMap<>();
+        kg.put("VAR", 0.5);
+        kg.put("YOK", 0.5);
+        fair.put("KG", kg);
+        Models.SharpEvent sharp = new Models.SharpEvent("s1", "soccer_uefa_nations_league", "Belgium", "Turkey", KO, fair, "pinnacle");
+        List<Models.Pair> pairs = Matching.match(book, Arrays.asList(sharp));
+        assertEquals(1, pairs.size());
+        // MS tutarlı kalır; KG tek seçenekli (karşılaştırılamaz) atılır
+        assertEquals(1, Zirve.verify(pairs));
+        assertTrue(b.odds.containsKey("MS"));
+        assertFalse(b.odds.containsKey("KG"));
+        // tablo ve değerlendirme: iddaa oranı Bilyoner'in normal oranı
+        List<Object> table = Promo.table(pairs, NOW);
+        Map<String, Object> v = Zirve.evaluate(Zirve.parse(body()), table, null, new Settings(), 500000, NOW);
+        Map<String, Object> ms = rowFor(v, "MS 1");
+        assertEquals("z3172993", ms.get("ref"));
+        assertEquals(0.70 * 1.40 - 1, Json.dbl(ms, "ev", 0), 1e-9);
+        assertEquals("oynama", ms.get("status"));
+        // ters okunmuş Alt/Üst eşleme korumasına takılır
+        Map<String, Map<String, Double>> odds = new LinkedHashMap<>();
+        Map<String, Double> au = new LinkedHashMap<>();
+        au.put("ALT", 2.46);
+        au.put("UST", 1.30);
+        odds.put("AU25", au);
+        Map<String, Map<String, Double>> f2 = new LinkedHashMap<>();
+        Map<String, Double> auf = new LinkedHashMap<>();
+        auf.put("ALT", 0.62);
+        auf.put("UST", 0.38);
+        f2.put("AU25", auf);
+        Models.Pair swapped = new Models.Pair(new Models.BookEvent("z1", "A", "B", KO, "L", 1, odds, null),
+                new Models.SharpEvent("s2", "soccer_x", "A", "B", KO, f2, "pinnacle"), 1);
+        assertEquals(1, Zirve.verify(Arrays.asList(swapped)));
+        assertTrue(swapped.book.odds.isEmpty());
+        // basketbol maçı basketbol olarak kurulur
+        List<Models.BookEvent> bb = Zirve.books(all, target, target);
+        assertEquals(Models.BASKETBALL, bb.get(0).sport);
+        assertFalse(bb.get(0).odds.containsKey("MS"));
+    }
+
+    @Test
     public void fetchReportsHttpErrors() throws Exception {
         Http ok = new Http() {
             public Response get(String url, Map<String, String> headers) {
@@ -290,7 +346,9 @@ public class ZirveTest {
                 return new Response(200, body(), new LinkedHashMap<String, String>());
             }
         };
-        assertEquals(9, Zirve.fetch(ok).size());
+        List<Zirve.Offer> all = Zirve.fetch(ok);
+        assertEquals(10, all.size()); // artırılmamış MS X de (normal oran hedefli taramada iddaa tarafı)
+        assertEquals(8L, Zirve.evaluate(all, fairs(), null, new Settings(), 500000, NOW).get("offers")); // değerlendirmede yalnızca artırılmışlar
         Http bad = new Http() {
             public Response get(String url, Map<String, String> headers) {
                 return new Response(200, "<html>bakım</html>", new LinkedHashMap<String, String>());

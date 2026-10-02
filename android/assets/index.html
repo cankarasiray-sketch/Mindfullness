@@ -584,7 +584,7 @@ function zirveCard() {
   if (Z.error) html += '<p class="small"><b>Son okuma başarısız:</b> ' + esc(Z.error) + "</p>";
   if (Z.at) html += '<p class="small">Okundu ' + esc(dm(Z.at)) + " " + esc(hm(Z.at)) + " (" + esc(ago(Z.at)) + ") · " + Z.events + " maçta " + Z.offers + " artırılmış oran · adil oranı geçen <b>" + Z.play + "</b></p>";
   var stale = Z.fairsAt && now - Date.parse(Z.fairsAt) > 6 * 3600 * 1000;
-  if (Z.at) html += '<p class="small muted zirve-fairs">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Henüz tam tarama yok.")
+  if (Z.at) html += '<p class="small muted zirve-fairs">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Adil oran listesi henüz boş (sıradaki tam taramada dolar).")
     + (stale ? " <b>Tarama eski.</b>" : "") + " Son taramada olmayan Zirve maçlarının ligi kendiliğinden ayrıca taranır (lig başına ~2 kredi, 3 saatte en fazla bir kez).</p>";
   var groups = [], byEvent = {};
   zirveRows = Z.rows || [];

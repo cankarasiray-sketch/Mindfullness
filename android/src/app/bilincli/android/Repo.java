@@ -343,7 +343,7 @@ final class Repo {
                 st.remove("error");
                 zirveRaw = Json.write(st);
                 try {
-                    if (zirveScan(view, st, notes, now)) view = zirveEvaluate(offers, now); // hedefli taramayla eklenen maçlar
+                    if (zirveScan(offers, view, st, notes, now)) view = zirveEvaluate(offers, now); // hedefli taramayla eklenen maçlar
                 } catch (RuntimeException e) {
                     st.put("error", "hedefli tarama: " + e.getMessage()); // ilk değerlendirme geçerli kalır
                 }
@@ -402,12 +402,17 @@ final class Repo {
         return last;
     }
 
+    /** Başarısız hedefli tarama bu kadar sonra yeniden denenir (bağlantı kesintisi 3 saat beklemesin). */
+    static final long ZIRVE_RETRY_S = 15 * 60;
+
     /**
-     * Son taramada olmayan yakın Zirve maçlarının ligleri hedefli taranır: iddaa bülteni (ücretsiz) ve
-     * yalnızca o liglerin Pinnacle oranı (lig başına ~2 kredi; Karşılıklı Gol'de Zirve oranı varsa maç
-     * başına +1). Lig son 3 saatte tarandıysa tekrar taranmaz. Tablo güncellendiyse true; notes: maç -> açıklama.
+     * Son taramada olmayan yakın Zirve maçlarının ligleri hedefli taranır: yalnızca o liglerin Pinnacle
+     * oranı (lig başına ~2 kredi; Karşılıklı Gol'de Zirve oranı varsa maç başına +1). iddaa tarafı
+     * Bilyoner'in normal oranlarından gelir (Nesine bülteni gerekmez). Lig son 3 saatte tarandıysa tekrar
+     * taranmaz; başarısız deneme 15 dk sonra yinelenir. Tablo güncellendiyse true; notes: maç -> açıklama.
      */
-    private boolean zirveScan(Map<String, Object> view, Map<String, Object> st, Map<String, String> notes, Instant now) {
+    private boolean zirveScan(List<Zirve.Offer> all, Map<String, Object> view, Map<String, Object> st, Map<String, String> notes,
+                              Instant now) {
         Map<String, Map<String, Object>> events = new LinkedHashMap<>();
         Set<String> kgEvents = new LinkedHashSet<>();
         for (Object o : Json.arr(view.get("rows"))) {
@@ -430,7 +435,7 @@ final class Repo {
         Map<String, String> learned = stringMap(st.get("leagues"));
         List<String[]> candidates = new ArrayList<>(java.util.Arrays.asList(Settings.KNOWN_LEAGUES));
         candidates.addAll(internationals());
-        Map<String, String> scans = stringMap(st.get("scans"));
+        Map<String, String> scans = stringMap(st.get("scans")), fails = stringMap(st.get("scanFails"));
         Map<String, String> keyOf = new LinkedHashMap<>();
         Set<String> keys = new LinkedHashSet<>();
         for (Map.Entry<String, Map<String, Object>> e : events.entrySet()) {
@@ -450,6 +455,11 @@ final class Repo {
                 notes.put(e.getKey(), "ligi " + clock(recent) + "'de tarandı; Pinnacle'da bu maç yok ya da adlar eşleşmedi");
                 continue;
             }
+            String failed = fails.get(key);
+            if (failed != null && Instant.parse(failed.substring(0, failed.indexOf('|'))).plusSeconds(ZIRVE_RETRY_S).isAfter(now)) {
+                notes.put(e.getKey(), "hedefli tarama başarısız (" + failed.substring(failed.indexOf('|') + 1) + "); birkaç dakika sonra yeniden denenecek");
+                continue;
+            }
             keys.add(key);
         }
         if (keys.isEmpty()) return false;
@@ -462,33 +472,35 @@ final class Repo {
             }
             return false;
         }
+        Set<String> targets = new LinkedHashSet<>(), basket = new LinkedHashSet<>();
+        for (Map.Entry<String, String> e : keyOf.entrySet()) {
+            if (!keys.contains(e.getValue())) continue;
+            targets.add(e.getKey());
+            if (Settings.isBasketball(e.getValue())) basket.add(e.getKey());
+        }
         boolean merged = false;
         String failure = null;
-        int spent = 0;
+        int spent = 0, dropped = 0;
         synchronized (LOCK) {
             Settings scope = effective();
             scope.leagues = new ArrayList<>(keys);
             Daily.LiveSources src = live(scope);
             src.knownActive = null; // pencere dışındaki (yarınki) maçlar için de oran çekilsin
             try {
-                List<Models.BookEvent> book = src.book();
+                List<Models.BookEvent> book = Zirve.books(all, targets, basket);
                 List<Models.SharpEvent> sharp = src.sharp(keys);
-                for (Models.Pair p : Matching.match(book, sharp)) { // Zirve'de KG oranı varsa o maçın KG adil oranı
-                    for (String ev : kgEvents) {
-                        Map<String, Object> r = events.get(ev);
-                        if (Zirve.sameEvent(Json.str(r, "home"), Json.str(r, "away"), Instant.parse(Json.str(r, "kickoff")),
-                                p.book.home, p.book.away, p.book.kickoff) <= 0) continue;
-                        try {
-                            src.enrich(p.sharp, "btts");
-                        } catch (Http.ProviderException ignored) {
-                            // KG adil oranı alınamazsa o seçim "adil oran yok" kalır
-                        }
-                        break;
+                List<Models.Pair> pairs = Matching.match(book, sharp);
+                for (Models.Pair p : pairs) { // Zirve'de KG oranı varsa o maçın KG adil oranı
+                    if (!kgEvents.contains(p.book.ref.substring(1))) continue;
+                    try {
+                        src.enrich(p.sharp, "btts");
+                    } catch (Http.ProviderException ignored) {
+                        // KG adil oranı alınamazsa o seçim "adil oran yok" kalır
                     }
                 }
-                Calibration.apply(book, sharp, memory);
-                radar.mergeFairs(Matching.match(book, sharp), now);
-                merged = true;
+                dropped = Zirve.verify(pairs);
+                radar.mergeFairs(pairs, now);
+                merged = !pairs.isEmpty();
             } catch (Http.ProviderException | RuntimeException e) {
                 failure = String.valueOf(e.getMessage());
             } finally {
@@ -496,12 +508,20 @@ final class Repo {
                 after(src);
             }
         }
-        for (String k : keys) scans.put(k, now.toString());
+        for (String k : keys) {
+            if (failure == null) {
+                scans.put(k, now.toString());
+                fails.remove(k);
+            } else {
+                fails.put(k, now.toString() + "|" + failure);
+            }
+        }
         st.put("scans", new LinkedHashMap<String, Object>(scans));
-        for (Map.Entry<String, String> e : keyOf.entrySet()) {
-            if (!keys.contains(e.getValue())) continue;
-            notes.put(e.getKey(), failure != null ? "hedefli tarama başarısız: " + failure
-                    : "ligi şimdi tarandı (" + spent + " kredi); Pinnacle'da bu maç yok ya da adlar eşleşmedi");
+        st.put("scanFails", new LinkedHashMap<String, Object>(fails));
+        for (String ev : targets) {
+            notes.put(ev, failure != null ? "hedefli tarama başarısız: " + failure + "; birkaç dakika sonra yeniden denenecek"
+                    : "ligi şimdi tarandı (" + spent + " kredi); Pinnacle'da bu maç yok ya da adlar eşleşmedi"
+                    + (dropped > 0 ? " (" + dropped + " pazar eşleme korumasıyla atıldı)" : ""));
         }
         return merged;
     }

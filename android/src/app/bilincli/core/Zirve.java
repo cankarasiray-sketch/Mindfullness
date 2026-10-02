@@ -46,6 +46,11 @@ public final class Zirve {
         /** Aynı pazarda "MS X" var (basketbolda normal süre üç seçenekli maç sonucu; iki seçenekliyle karıştırılmaz). */
         public final boolean threeWay;
 
+        /** Zirve oranı normal orandan yüksek. */
+        public boolean boosted() {
+            return val > 1 && tval > val;
+        }
+
         Offer(String id, String event, String home, String away, String league, Instant kickoff, String name,
               String marketName, String sov, double val, double tval, boolean threeWay) {
             this.id = id;
@@ -73,12 +78,12 @@ public final class Zirve {
         return h;
     }
 
-    /** Zirve sekmesini indirir. */
+    /** Zirve sekmesini indirir: maçların tüm oranları (artırılmışlar boosted()). */
     public static List<Offer> fetch(Http http) throws Http.ProviderException {
         Http.Response r = http.get(URL, headers());
         if (r.status != 200) throw new Http.ProviderException("Bilyoner Zirve Oran: HTTP " + r.status);
         try {
-            return parse(r.body == null ? "" : r.body);
+            return parseAll(r.body == null ? "" : r.body);
         } catch (RuntimeException e) {
             throw new Http.ProviderException("Bilyoner Zirve Oran: yanıt okunamadı (" + e.getMessage() + ")");
         }
@@ -86,6 +91,16 @@ public final class Zirve {
 
     /** Artırılmış oranlar (tval > val). Yanıt JSON değilse istisna fırlatır. */
     public static List<Offer> parse(String body) {
+        List<Offer> out = new ArrayList<>();
+        for (Offer o : parseAll(body)) if (o.boosted()) out.add(o);
+        return out;
+    }
+
+    /**
+     * Zirve maçlarının tüm oranları (artırılmamışlar da): normal oranlar (val) hedefli taramada iddaa
+     * tarafı olarak kullanılır. Yanıt JSON değilse istisna fırlatır.
+     */
+    public static List<Offer> parseAll(String body) {
         Map<String, Object> root = Json.obj(Json.parse(body));
         List<Offer> out = new ArrayList<>();
         if (root == null) return out;
@@ -111,7 +126,7 @@ public final class Zirve {
             }
             for (Map<String, Object> om : odds) {
                 double val = number(om.get("val")), tval = number(om.get("tval"));
-                if (!(val > 1 && tval > val)) continue;
+                if (!(val > 1)) continue; // kapalı oran ("0")
                 out.add(new Offer(Json.str(om, "id"), Json.str(e, "id"), home, away, Json.str(e, "lgn"), kickoff,
                         clean(Json.str(om, "n")), clean(Json.str(om, "mrn")), Json.str(om, "sov"), val, tval,
                         threeWay.contains(Json.str(om, "mrId"))));
@@ -321,6 +336,74 @@ public final class Zirve {
         return bestScore >= 0.85 ? best : null;
     }
 
+    /** Bilyoner normal oranlarının marjı arındırılmış olasılığı adil olasılıktan bu kadar saparsa pazar atılır. */
+    static final double MAX_FAIR_GAP = 0.10;
+
+    /**
+     * Zirve maçlarının iddaa tarafı, Bilyoner'in normal oranlarından (val): hedefli tarama Nesine bültenine
+     * ihtiyaç duymaz (daha hızlı; Nesine'ye ulaşılamasa da çalışır). Yalnızca events'teki maçlar;
+     * basketball: basketbol maçları (maç sonucu iki seçenekli, toplam sayı iddaa çizgisinde).
+     */
+    public static List<Models.BookEvent> books(List<Offer> all, Set<String> events, Set<String> basketball) {
+        Map<String, Map<String, Map<String, Double>>> odds = new LinkedHashMap<>();
+        Map<String, Offer> first = new LinkedHashMap<>();
+        for (Offer o : all) {
+            if (!events.contains(o.event)) continue;
+            String[] mo = map(o, basketball.contains(o.event));
+            if (mo == null) continue;
+            if (!first.containsKey(o.event)) {
+                first.put(o.event, o);
+                odds.put(o.event, new LinkedHashMap<String, Map<String, Double>>());
+            }
+            Map<String, Double> m = odds.get(o.event).get(mo[0]);
+            if (m == null) odds.get(o.event).put(mo[0], m = new LinkedHashMap<>());
+            m.put(mo[1], o.val);
+        }
+        List<Models.BookEvent> out = new ArrayList<>();
+        for (Map.Entry<String, Offer> e : first.entrySet()) {
+            Offer o = e.getValue();
+            Models.BookEvent b = new Models.BookEvent("z" + o.event, o.home, o.away, o.kickoff, o.league, 1, odds.get(e.getKey()), null);
+            b.sport = basketball.contains(o.event) ? Models.BASKETBALL : Models.FOOTBALL;
+            out.add(b);
+        }
+        return out;
+    }
+
+    /**
+     * Eşleme koruması: her pazarda iddaa olasılıkları (marjı oransal arındırılmış) adil olasılığa yakın
+     * olmalı; değilse (ör. Alt/Üst ters okunmuş) pazar atılır. En az iki sonucu karşılaştırılamayan pazar
+     * da atılır. Atılan pazar sayısını döndürür.
+     */
+    public static int verify(List<Models.Pair> pairs) {
+        int dropped = 0;
+        for (Models.Pair p : pairs) {
+            for (String market : new ArrayList<>(p.book.odds.keySet())) {
+                Map<String, Double> odds = p.book.odds.get(market), fair = Models.fair(p.sharp, market);
+                if (fair == null) continue; // adil oranı yok: tabloya zaten girmez
+                double imp = 0, fsum = 0;
+                int n = 0;
+                for (Map.Entry<String, Double> e : odds.entrySet()) {
+                    Double f = fair.get(e.getKey());
+                    if (f == null || e.getValue() == null || e.getValue() <= 1) continue;
+                    imp += 1 / e.getValue();
+                    fsum += f;
+                    n++;
+                }
+                boolean ok = n >= 2;
+                for (Map.Entry<String, Double> e : odds.entrySet()) {
+                    Double f = fair.get(e.getKey());
+                    if (!ok || f == null || e.getValue() == null || e.getValue() <= 1) continue;
+                    if (Math.abs(1 / e.getValue() * fsum / imp - f) > MAX_FAIR_GAP) ok = false;
+                }
+                if (!ok) {
+                    p.book.odds.remove(market);
+                    dropped++;
+                }
+            }
+        }
+        return dropped;
+    }
+
     /**
      * Zirve oranlarını son tam taramanın adil oranlarıyla değerlendirir. Sonuç (arayüz ve bildirim için):
      * {at, fairsAt, offers, matched, evaluated, play, rows: [...]}. Satır durumu (status): oyna, oynama,
@@ -333,7 +416,7 @@ public final class Zirve {
         Set<String> events = new HashSet<>(), matchedEvents = new HashSet<>();
         int evaluated = 0, play = 0;
         for (Offer o : offers) {
-            if (!o.kickoff.isAfter(now)) continue; // başlamış maç
+            if (!o.boosted() || !o.kickoff.isAfter(now)) continue; // artırılmamış oran ya da başlamış maç
             events.add(o.event);
             Map<String, Object> r = new LinkedHashMap<>();
             r.put("id", o.id);
