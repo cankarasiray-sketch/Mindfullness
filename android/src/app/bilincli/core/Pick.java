@@ -117,13 +117,12 @@ public final class Pick {
         return all;
     }
 
-    /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 40 seçim. */
-    public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, Instant now) {
+    /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 40 seçim, günün seçimi tutarıyla. */
+    public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         List<Object> out = new ArrayList<>();
         for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, now)) {
             if (out.size() >= LIST_SIZE) break;
-            e.put("value", Json.dbl(e, "ev", 0) >= cfg.minLegEv);
-            out.add(e);
+            out.add(withStake(e, cfg, balance));
         }
         return out;
     }

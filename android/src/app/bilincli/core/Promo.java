@@ -56,7 +56,7 @@ public final class Promo {
                     s.put("m", m.getKey());
                     s.put("o", o.getKey());
                     s.put("label", Models.outcomeLabel(m.getKey(), o.getKey()));
-                    s.put("p", prob);
+                    s.put("p", Math.round(prob * 10000) / 10000.0); // 4 hane yeter; tablo her taramada yazılır
                     s.put("i", o.getValue());
                     s.put("mbs", (long) p.book.mbsFor(m.getKey())); // 1 değilse tek oynanamaz
                     if (GoalModel.isModelMarket(m.getKey())) s.put("model", true); // gol modeli, payı düşülmüş

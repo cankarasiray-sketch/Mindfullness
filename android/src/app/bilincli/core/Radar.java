@@ -29,6 +29,19 @@ public final class Radar {
 
     private final Ledger.Storage storage;
     private Map<String, Object> state;
+    /** Her kayıtta artar: arayüz adil oran tablosunu yalnızca değişince yeniden okur (2.11). */
+    private volatile long version;
+
+    private void save() {
+        version++;
+        storage.write(Json.write(state));
+    }
+
+    /** Adil oran tablosunun sürüm anahtarı (tablonun kendisi her ekran yenilemesinde taşınmaz). */
+    public synchronized String fairsKey() {
+        Object f = state.get("fairs");
+        return state.get("fairsAt") + "|" + version + "|" + (f instanceof List ? ((List<?>) f).size() : 0);
+    }
 
     public Radar(Ledger.Storage storage) {
         this.storage = storage;
@@ -41,7 +54,8 @@ public final class Radar {
         v.put("scannedAt", state.get("scannedAt"));
         v.put("values", state.containsKey("values") ? state.get("values") : new ArrayList<Object>());
         v.put("moves", state.containsKey("moves") ? state.get("moves") : new ArrayList<Object>());
-        v.put("fairs", state.containsKey("fairs") ? state.get("fairs") : new ArrayList<Object>());
+        // kopya: tarama tabloyu güncellerken okuyan (arayüz, günün seçimi) eşzamanlı değişiklik hatası almasın
+        v.put("fairs", state.get("fairs") instanceof List ? new ArrayList<Object>((List<?>) state.get("fairs")) : new ArrayList<Object>());
         v.put("fairsAt", state.get("fairsAt"));
         return v;
     }
@@ -51,7 +65,7 @@ public final class Radar {
      * aynı maçın eski satırı değişir, başlamış maçlar atılır, diğer satırlar kalır.
      */
     public synchronized void mergeFairs(List<Pair> pairs, Instant now) {
-        if (mergeInto(pairs, now)) storage.write(Json.write(state));
+        if (mergeInto(pairs, now)) save();
     }
 
     /**
@@ -72,7 +86,7 @@ public final class Radar {
             }
             keep.addAll(sel);
             r.put("sel", keep);
-            storage.write(Json.write(state));
+            save();
             return true;
         }
         return false;
@@ -243,7 +257,7 @@ public final class Radar {
             if (Json.dbl(m, "ev", -1) >= cfg.minLegEv || notified.contains(key)) keep.add(key);
         }
         state.put("notified", keep);
-        storage.write(Json.write(state));
+        save();
         return fresh;
     }
 }

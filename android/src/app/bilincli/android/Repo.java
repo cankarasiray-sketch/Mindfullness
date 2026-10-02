@@ -415,6 +415,18 @@ final class Repo {
 
     /** Arayüzdeki "Fırsatlar" verisi: demo modunda demo özeti, değilse radar durumu. */
     @SuppressWarnings("unchecked")
+    /**
+     * Arayüz durumu için radar: adil oran tablosu yerine sürüm anahtarı (tablo yüzlerce KB olabilir; arayüz
+     * gerekince Bridge.fairs ile okur). Demo modunda küçük tablo olduğu gibi gider.
+     */
+    Map<String, Object> radarState() {
+        Map<String, Object> v = new LinkedHashMap<>(radarView());
+        if (isDemo()) return v;
+        v.remove("fairs");
+        v.put("fairsKey", radar.fairsKey());
+        return v;
+    }
+
     Map<String, Object> radarView() {
         if (isDemo() && demoSummary != null && demoSummary.get("radar") instanceof Map) {
             return (Map<String, Object>) demoSummary.get("radar");
@@ -1091,16 +1103,42 @@ final class Repo {
     }
 
     /** Arayüz için sanal takip (demoda yok). */
+    /**
+     * Günün seçimi ve tek maç listesi önbelleği (2.11): adil oran tablosu, Zirve kaydı, kasa, ayar ya da dakika
+     * değişmedikçe ekran yenilemelerinde yeniden hesaplanmaz.
+     */
+    private final Object pickLock = new Object();
+    private String pickKey;
+    private Map<String, Object> pickValue;
+    private List<Object> singlesValue;
+
+    private void refreshPicks() {
+        Instant now = Instant.now();
+        Settings cfg = Daily.decisionSettings(ledger);
+        long balance = ledger.balance();
+        String raw = zirveRaw;
+        String key = radar.fairsKey() + "|" + (raw == null ? 0 : raw.hashCode()) + "|" + balance + "|" + Json.write(cfg.toMap()).hashCode()
+                + "|" + now.getEpochSecond() / 60;
+        synchronized (pickLock) {
+            if (key.equals(pickKey)) return;
+            List<Object> fairs = Json.arr(radar.view().get("fairs"));
+            Map<String, Object> z = zirveView();
+            pickValue = Pick.choose(fairs, z, cfg, balance, now);
+            singlesValue = Pick.list(fairs, z, cfg, balance, now);
+            pickKey = key;
+            // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
+            if (pickValue != null) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(pickValue), now);
+        }
+    }
+
     /** Günün seçimi (2.9): son taramanın adil oran tablosu ve Zirve Oran'dan; demo ya da kapalıysa null. */
     Map<String, Object> pick() {
         if (isDemo()) return null;
         try {
-            Map<String, Object> rv = radar.view();
-            Instant now = Instant.now();
-            Map<String, Object> p = Pick.choose(Json.arr(rv.get("fairs")), zirveView(), Daily.decisionSettings(ledger), ledger.balance(), now);
-            // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
-            if (p != null) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(p), now);
-            return p;
+            refreshPicks();
+            synchronized (pickLock) {
+                return pickValue;
+            }
         } catch (RuntimeException e) {
             return null; // tablo yazılırken okunduysa bir sonraki çizimde gelir
         }
@@ -1110,7 +1148,10 @@ final class Repo {
     List<Object> singles() {
         if (isDemo()) return null;
         try {
-            return Pick.list(Json.arr(radar.view().get("fairs")), zirveView(), Daily.decisionSettings(ledger), Instant.now());
+            refreshPicks();
+            synchronized (pickLock) {
+                return singlesValue;
+            }
         } catch (RuntimeException e) {
             return null;
         }

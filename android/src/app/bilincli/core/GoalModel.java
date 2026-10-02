@@ -47,8 +47,61 @@ public final class GoalModel {
         return x * x;
     }
 
-    /** En iyi uyan {ev gol beklentisi, deplasman gol beklentisi}. */
+    /**
+     * En iyi uyan {ev gol beklentisi, deplasman gol beklentisi} (en küçük kareler; MS 1, MS 2, 2,5 Üst).
+     * 2.11: ızgara taraması (~6.700 değerlendirme) yerine başlangıç tahmini + daralan adımlı desen araması
+     * (~150 değerlendirme): toplam gol beklentisi 2,5 Üst'ten, ev/deplasman payı MS'den; sonra iki boyutta
+     * adım yarıya inerek iyileştirilir. Sonuç ızgaranın bulduğundan kötü olmaz (ızgara adımı 0,005'ti).
+     */
     static double[] fit(double p1, double p2, double over) {
+        // toplam gol: P(Poisson(λ) ≥ 3) = over (ikiye bölme)
+        double lo = 0.2, hi = 8.0;
+        for (int i = 0; i < 40; i++) {
+            double mid = (lo + hi) / 2, e = Math.exp(-mid), under = e * (1 + mid + mid * mid / 2);
+            if (1 - under < over) lo = mid;
+            else hi = mid;
+        }
+        double total = Math.max(0.2, Math.min(7.9, (lo + hi) / 2));
+        // ev payı: MS'ye en iyi uyan (altın oran araması)
+        double a = 0.02, b = 0.98, g = (Math.sqrt(5) - 1) / 2;
+        for (int i = 0; i < 40; i++) {
+            double c = b - g * (b - a), d = a + g * (b - a);
+            if (msError(c * total, (1 - c) * total, p1, p2) < msError(d * total, (1 - d) * total, p1, p2)) b = d;
+            else a = c;
+        }
+        double share = (a + b) / 2, bh = clamp(share * total), ba = clamp((1 - share) * total);
+        double best = error(bh, ba, p1, p2, over);
+        for (double step = 0.1; step >= 0.0005; step /= 2) {
+            boolean moved = true;
+            for (int guard = 0; moved && guard < 50; guard++) {
+                moved = false;
+                double[][] dirs = {{step, 0}, {-step, 0}, {0, step}, {0, -step}, {step, -step}, {-step, step}};
+                for (double[] dv : dirs) {
+                    double lh = clamp(bh + dv[0]), la = clamp(ba + dv[1]);
+                    double e = error(lh, la, p1, p2, over);
+                    if (e < best - 1e-15) {
+                        best = e;
+                        bh = lh;
+                        ba = la;
+                        moved = true;
+                    }
+                }
+            }
+        }
+        return new double[] {bh, ba};
+    }
+
+    private static double clamp(double l) {
+        return Math.max(0.05, Math.min(5.0, l));
+    }
+
+    private static double msError(double lh, double la, double p1, double p2) {
+        double[] o = outcomes(lh, la);
+        return sq(o[0] - p1) + sq(o[2] - p2);
+    }
+
+    /** Eski ızgara araması (yalnızca karşılaştırma testi için). */
+    static double[] gridFit(double p1, double p2, double over) {
         double bh = 1.3, ba = 1.1, best = Double.MAX_VALUE;
         for (double lh = 0.1; lh <= 4.0; lh += 0.05) {
             for (double la = 0.1; la <= 4.0; la += 0.05) {
@@ -73,6 +126,11 @@ public final class GoalModel {
             }
         }
         return new double[] {bh, ba};
+    }
+
+    /** Uyum hatası (test için). */
+    static double fitError(double[] l, double p1, double p2, double over) {
+        return error(l[0], l[1], p1, p2, over);
     }
 
     /**

@@ -227,7 +227,8 @@ public class SinglesTest {
         Map<String, Object> modelSel = PickTest.sel("AU@1.5", "UST", 0.74, 1.30, 1);
         modelSel.put("model", true);
         fairs.add(PickTest.row("8", "Brighton", 6, modelSel));
-        List<Object> list = Pick.list(fairs, null, new Settings(), NOW);
+        List<Object> list = Pick.list(fairs, null, new Settings(), 500000, NOW);
+        assertEquals(5000L, Json.obj(list.get(0)).get("stake"));
         assertEquals(5, list.size()); // Arsenal MS 1, Liverpool Üst ve KG Var, City MS 1, Brighton 1,5 Üst
         double prev = 9;
         for (Object o : list) {
@@ -238,5 +239,44 @@ public class SinglesTest {
         boolean model = false;
         for (Object o : list) model |= Json.bool(Json.obj(o), "model", false) && "8".equals(Json.obj(o).get("ref"));
         assertTrue(model);
+    }
+
+    @Test
+    public void fastGoalFitIsAsGoodAsTheOldGrid() {
+        Random r = new Random(11);
+        long fast = 0, grid = 0;
+        for (int i = 0; i < 60; i++) {
+            double[] o = GoalModel.outcomes(0.4 + 2.4 * r.nextDouble(), 0.3 + 2.2 * r.nextDouble());
+            double p1 = o[0] + 0.02 * r.nextGaussian(), p2 = o[2] + 0.02 * r.nextGaussian(), ov = o[3] + 0.02 * r.nextGaussian();
+            long t = System.nanoTime();
+            double[] n = GoalModel.fit(p1, p2, ov);
+            fast += System.nanoTime() - t;
+            t = System.nanoTime();
+            double[] g = GoalModel.gridFit(p1, p2, ov);
+            grid += System.nanoTime() - t;
+            assertTrue(i + "", GoalModel.fitError(n, p1, p2, ov) <= GoalModel.fitError(g, p1, p2, ov) + 1e-7);
+            assertEquals(g[0], n[0], 0.01);
+            assertEquals(g[1], n[1], 0.01);
+        }
+        assertTrue(fast * 5 < grid); // en az 5 kat hızlı (ölçülen ~28 kat)
+    }
+
+    @Test
+    public void fairsTableTravelsOnlyWhenChanged() {
+        Radar radar = new Radar(new Ledger.MemoryStorage(null));
+        String k0 = radar.fairsKey();
+        List<Models.Pair> pairs = new ArrayList<>();
+        book(pairs, 3);
+        radar.mergeFairs(pairs, NOW);
+        String k1 = radar.fairsKey();
+        assertFalse(k0.equals(k1));
+        assertEquals(k1, radar.fairsKey()); // değişmedikçe aynı
+        // olasılıklar 4 haneye yuvarlı; görünüm kopyası tabloyu değiştirmez
+        List<Object> f = Json.arr(radar.view().get("fairs"));
+        assertEquals(3, f.size());
+        double p = Json.dbl(Json.obj(Json.arr(Json.obj(f.get(0)).get("sel")).get(0)), "p", 0);
+        assertEquals(Math.round(p * 10000) / 10000.0, p, 0);
+        f.clear();
+        assertEquals(3, Json.arr(radar.view().get("fairs")).size());
     }
 }

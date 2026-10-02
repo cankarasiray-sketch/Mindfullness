@@ -55,7 +55,7 @@ public final class Bridge {
         extra.put("exactAlarm", Scheduler.canExact(activity));
         extra.put("nextRun", Scheduler.nextRun(repo.real().settings(), Instant.now()).toString());
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
-        extra.put("radar", repo.radarView());
+        extra.put("radar", repo.radarState());
         extra.put("zirve", repo.zirveView());
         extra.put("virtual", repo.virtualView());
         extra.put("pick", repo.pick());
@@ -89,6 +89,13 @@ public final class Bridge {
         }
         extra.put("version", version);
         return Json.write(State.build(repo.visible(), repo.isDemo(), extra));
+    }
+
+    /** Adil oran tablosu (2.11: durumda taşınmaz; arayüz Fırsatlar'da, sürüm değişince bir kez okur). */
+    @JavascriptInterface
+    public String fairs() {
+        Object f = repo().radarView().get("fairs");
+        return Json.write(f == null ? new ArrayList<Object>() : f);
     }
 
     @JavascriptInterface

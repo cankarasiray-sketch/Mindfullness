@@ -62,6 +62,20 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Hız ve veri iyileştirmesi (2.11)
+
+- **Gol modeli ~28 kat hızlı:** ek pazarların adil olasılığı için her maçta çözülen model, ızgara
+  taraması (~6.700 hesap) yerine başlangıç tahmini + daralan adımlı aramayla (~150 hesap) çözülür.
+  400 maçta 634 ms → 22 ms (masaüstü ölçümü; telefonda oran benzer). Sonuç eskisiyle aynı ya da daha
+  isabetli (testte karşılaştırılır).
+- **Ekran yenilemesi hafifledi:** adil oran tablosu (gerçek bültende yüzlerce KB) artık her yenilemede
+  arayüze taşınmaz; yalnızca Fırsatlar'daki promosyon kontrolü ve kampanya hesaplayıcı gerektiğinde,
+  tarama değişince bir kez okunur. Olasılıklar tabloda 4 haneye yuvarlanır.
+- Günün seçimi ve tek maç listesi önbellekte: tablo, Zirve, kasa, ayar ya da dakika değişmedikçe
+  yeniden hesaplanmaz. Tek maç listesindeki her satır önerilen tutarı taşır.
+- Tarama tabloyu güncellerken okuyan ekranın eşzamanlı değişiklik hatası almaması için görünüm kopyası.
+- Pas gününde "Günün seçimi" kartı Bugün sekmesinin en üstünde.
+
 ## Tek maç uzmanı (2.10)
 
 - **Yalnızca tek maç:** değerli seçimler de yalnızca tek oynanabilen (MBS 1) maçlardan, tekli kupon

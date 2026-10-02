@@ -138,6 +138,20 @@ p{margin:6px 0}
 // ---- köprü ----------------------------------------------------------------
 var pending = {}, seq = 0, S = null, tab = "bugun", history_ = [], visibleActs = 0;
 function bridge() { return window.Android || window.MockAndroid; }
+/**
+ * Adil oran tablosu (promosyon kontrolü, kampanya hesaplayıcı): 2.11'den itibaren durumda her yenilemede
+ * taşınmaz; köprüden okunur ve taramayla (sürüm anahtarı) değişince yenilenir. Durumda varsa (demo) o kullanılır.
+ */
+var fairsCache = null, fairsCacheKey = null;
+function fairsTable() {
+  var R = (S && S.radar) || {};
+  if (R.fairs) return R.fairs;
+  var key = R.fairsKey || "";
+  if (fairsCache && fairsCacheKey === key) return fairsCache;
+  try { fairsCache = bridge().fairs ? JSON.parse(bridge().fairs()) : []; } catch (e) { fairsCache = []; }
+  fairsCacheKey = key;
+  return fairsCache;
+}
 function act(action, payload, quiet) {
   return new Promise(function (resolve) {
     var id = "c" + (++seq);
@@ -505,11 +519,12 @@ function viewToday() {
     });
   } else {
     var pass = run.decision === "pas";
+    if (pass) html += pickCard(); // pas gününde öneri önce: yapılacak iş üstte
     html += '<div class="card"><div class="kicker">' + (pass ? "BUGÜN" : "KORUMA DEVREDE") + '</div><div class="big">' + (pass ? "Pas" : "Kupon yok")
       + "</div><p>" + esc(run.reason) + "</p>" + summaryHtml(run.summary, pass)
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
-  if (!run || run.decision === "pas") html += pickCard(); // koruma devredeyken (kayıp limiti) öneri yok
+  if (!run) html += pickCard(); // pas gününde yukarıda; koruma devredeyken (kayıp limiti) öneri yok
   if (!S.demo && S.zirve && S.zirve.play > 0) {
     html += '<div class="card" id="zirveHome"><div class="kicker">ZİRVE ORAN</div><p>' + S.zirve.play + " Zirve Oran seçimi adil oranı geçiyor.</p>"
       + '<div class="btns"><button class="b" onclick="show(\'firsat\')">Fırsatlar\'da gör</button></div></div>';
@@ -607,7 +622,7 @@ function singlesCard() {
     + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
     + '<div class="btns" style="flex-wrap:wrap">' + chips + "</div>"
     + (rows.length ? rows.map(function (x) {
-      var i = regPick(Object.assign({}, x, {stake: stake, win: Math.round(stake * x.odds), expected: Math.round(stake * x.ev)}));
+      var i = regPick(x.stake != null ? x : Object.assign({}, x, {stake: stake, win: Math.round(stake * x.odds), expected: Math.round(stake * x.ev)}));
       return '<div class="vrow single-row"><div class="l1"><span>' + esc(dm(x.kickoff)) + " " + esc(hm(x.kickoff)) + (x.league ? " · " + esc(x.league) : "") + "</span><span>"
         + (x.code ? "kod " + esc(x.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(x.home) + " – " + esc(x.away) + "</div>"
         + '<div class="l2"><span>' + pickOdds(x) + ' <span class="small muted">adil ' + odds(x.fair) + " · tutma %" + num(x.p * 100, 0) + "</span></span>"
@@ -687,7 +702,7 @@ function fold(t) {
     .replace(/ç/g, "c").replace(/ö/g, "o").replace(/ü/g, "u").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 function promoResults() {
-  var rows = (S.radar && S.radar.fairs) || [], q = fold(promoQuery).trim(), now = Date.parse(S.now);
+  var rows = fairsTable(), q = fold(promoQuery).trim(), now = Date.parse(S.now);
   // arama yoksa yaklaşan maçlar kendiliğinden (başlamış olanlar hariç); yazınca süzülür
   promoHits = rows.filter(function (r) {
     return Date.parse(r.kickoff) > now && (q.length < 2 || fold(r.home + " " + r.away + " " + (r.league || "")).indexOf(q) >= 0);
@@ -822,7 +837,7 @@ var earlyCache = {};
 /** Kampanyaya göre en değerli 5 seçim ve özet (değerler kuruş). */
 function campResults() {
   var c = CAMP, now = Date.parse(S.now), minOdds = numIn(c.minOdds, 1), amount = numIn(c.amount, 0) * 100, minProb = campMinProb();
-  var rows = ((S.radar && S.radar.fairs) || []).filter(function (r) { return Date.parse(r.kickoff) > now; }), out = [];
+  var rows = fairsTable().filter(function (r) { return Date.parse(r.kickoff) > now; }), out = [];
   var bestFree = 0; // iade bedava bahis olarak gelirse 1 TL'sinin nakit karşılığı
   rows.forEach(function (r) { r.sel.forEach(function (x) { if (x.i >= minOdds) bestFree = Math.max(bestFree, freebetRate(x.p, x.i, false)); }); });
   rows.forEach(function (r) {
