@@ -68,9 +68,8 @@ bildirim olarak gelir.
   taraması (~6.700 hesap) yerine başlangıç tahmini + daralan adımlı aramayla (~150 hesap) çözülür.
   400 maçta 634 ms → 22 ms (masaüstü ölçümü; telefonda oran benzer). Sonuç eskisiyle aynı ya da daha
   isabetli (testte karşılaştırılır).
-- **Ekran yenilemesi hafifledi:** adil oran tablosu (gerçek bültende yüzlerce KB) artık her yenilemede
-  arayüze taşınmaz; yalnızca Fırsatlar'daki promosyon kontrolü ve kampanya hesaplayıcı gerektiğinde,
-  tarama değişince bir kez okunur. Olasılıklar tabloda 4 haneye yuvarlanır.
+- Adil oran tablosunda olasılıklar 4 haneye yuvarlanır (daha küçük kayıt). 2.11.1: tablo yine her
+  ekran yenilemesinde durumla birlikte gelir (Fırsatlar açılınca hazır); tembel yükleme geri alındı.
 - Günün seçimi ve tek maç listesi önbellekte: tablo, Zirve, kasa, ayar ya da dakika değişmedikçe
   yeniden hesaplanmaz. Tek maç listesindeki her satır önerilen tutarı taşır.
 - Tarama tabloyu güncellerken okuyan ekranın eşzamanlı değişiklik hatası almaması için görünüm kopyası.

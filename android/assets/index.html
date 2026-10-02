@@ -138,20 +138,8 @@ p{margin:6px 0}
 // ---- köprü ----------------------------------------------------------------
 var pending = {}, seq = 0, S = null, tab = "bugun", history_ = [], visibleActs = 0;
 function bridge() { return window.Android || window.MockAndroid; }
-/**
- * Adil oran tablosu (promosyon kontrolü, kampanya hesaplayıcı): 2.11'den itibaren durumda her yenilemede
- * taşınmaz; köprüden okunur ve taramayla (sürüm anahtarı) değişince yenilenir. Durumda varsa (demo) o kullanılır.
- */
-var fairsCache = null, fairsCacheKey = null;
-function fairsTable() {
-  var R = (S && S.radar) || {};
-  if (R.fairs) return R.fairs;
-  var key = R.fairsKey || "";
-  if (fairsCache && fairsCacheKey === key) return fairsCache;
-  try { fairsCache = bridge().fairs ? JSON.parse(bridge().fairs()) : []; } catch (e) { fairsCache = []; }
-  fairsCacheKey = key;
-  return fairsCache;
-}
+/** Adil oran tablosu (promosyon kontrolü, kampanya hesaplayıcı): son taramanın, durumla birlikte gelir. */
+function fairsTable() { return (S && S.radar && S.radar.fairs) || []; }
 function act(action, payload, quiet) {
   return new Promise(function (resolve) {
     var id = "c" + (++seq);

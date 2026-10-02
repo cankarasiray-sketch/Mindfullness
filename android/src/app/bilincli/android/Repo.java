@@ -415,18 +415,6 @@ final class Repo {
 
     /** Arayüzdeki "Fırsatlar" verisi: demo modunda demo özeti, değilse radar durumu. */
     @SuppressWarnings("unchecked")
-    /**
-     * Arayüz durumu için radar: adil oran tablosu yerine sürüm anahtarı (tablo yüzlerce KB olabilir; arayüz
-     * gerekince Bridge.fairs ile okur). Demo modunda küçük tablo olduğu gibi gider.
-     */
-    Map<String, Object> radarState() {
-        Map<String, Object> v = new LinkedHashMap<>(radarView());
-        if (isDemo()) return v;
-        v.remove("fairs");
-        v.put("fairsKey", radar.fairsKey());
-        return v;
-    }
-
     Map<String, Object> radarView() {
         if (isDemo() && demoSummary != null && demoSummary.get("radar") instanceof Map) {
             return (Map<String, Object>) demoSummary.get("radar");
