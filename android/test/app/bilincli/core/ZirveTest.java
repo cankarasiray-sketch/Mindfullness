@@ -387,6 +387,25 @@ public class ZirveTest {
     }
 
     @Test
+    public void nearestZirveSelectionWithStakeWhenNothingHasValue() {
+        // MS 1: 0,70 x 1,40 - 1 = −%2 (en yakın); KG −%5; MS 2 çok uzak
+        List<Object> fairs = fairs();
+        Map<String, Object> ms1 = Json.obj(Json.arr(Json.obj(fairs.get(0)).get("sel")).get(0));
+        ms1.put("p", 0.70);
+        Map<String, Object> v = Zirve.evaluate(Zirve.parse(body()), fairs, null, new Settings(), 500000, NOW);
+        assertEquals(0L, v.get("play"));
+        Map<String, Object> near = Json.obj(v.get("nearest"));
+        assertEquals("3172993:83175177:1", near.get("id"));
+        assertEquals("Belçika – Türkiye · MS 1 @ 1,40 (adil 1,43, −%2,0)", near.get("text"));
+        // eşik: 1,03 / 0,70 = 1,4714 -> 1,48; o oranda Kelly payı 0,25 x (0,036 / 0,48) = %1,9 -> 5.000 TL'de 90 TL
+        assertEquals("0 TL — avantaj yok, oynanmaz (yine de 100 TL oynanırsa beklenen kayıp ≈ 2,00 TL). "
+                + "Oran 1,48 ya da üstüne çıkarsa (Zirve oranı yükselirse) önerilen 90,00 TL (kasa payı %1,9).", near.get("stake"));
+        assertTrue(Zirve.summary(v), Zirve.summary(v).contains("  En yakın Zirve seçimi: Belçika – Türkiye · MS 1 @ 1,40"));
+        // değerli Zirve oranı varken gösterilmez
+        assertNull(Zirve.evaluate(Zirve.parse(body()), fairs(), null, new Settings(), 500000, NOW).get("nearest"));
+    }
+
+    @Test
     public void fetchReportsHttpErrors() throws Exception {
         Http ok = new Http() {
             public Response get(String url, Map<String, String> headers) {

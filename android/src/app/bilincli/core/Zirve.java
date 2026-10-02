@@ -540,7 +540,48 @@ public final class Zirve {
         v.put("evaluated", (long) evaluated);
         v.put("play", (long) play);
         v.put("rows", new ArrayList<Object>(rows.subList(0, Math.min(MAX_ROWS, rows.size()))));
+        if (play == 0) {
+            Map<String, Object> near = nearest(rows, cfg, balance);
+            if (near != null) v.put("nearest", near);
+        }
         return v;
+    }
+
+    /**
+     * Değerli Zirve oranı yokken avantaja en yakın olanı (oynanabilir oran aralığındakiler arasından;
+     * yoksa hepsi) ve pas kartındaki gibi tutar satırı: avantaj yoksa 0 TL, 100 TL'de beklenen kayıp,
+     * oynanır olacağı Zirve oranı ve o oranda önerilen tutar.
+     */
+    static Map<String, Object> nearest(List<Map<String, Object>> rows, Settings cfg, long balance) {
+        Map<String, Object> best = null, bestAny = null;
+        for (Map<String, Object> r : rows) {
+            if (!"oynama".equals(Json.str(r, "status")) || r.get("ev") == null || r.get("p") == null) continue;
+            double ev = Json.dbl(r, "ev", -9), odds = Json.dbl(r, "tval", 0);
+            if (bestAny == null || ev > Json.dbl(bestAny, "ev", -9)) bestAny = r;
+            if (odds < cfg.minLegOdds || odds > cfg.maxLegOdds) continue;
+            if (best == null || ev > Json.dbl(best, "ev", -9)) best = r;
+        }
+        Map<String, Object> r = best != null ? best : bestAny;
+        if (r == null) return null;
+        double ev = Json.dbl(r, "ev", 0), p = Json.dbl(r, "p", 0), odds = Json.dbl(r, "tval", 0);
+        Map<String, Object> n = new LinkedHashMap<>();
+        n.put("id", r.get("id"));
+        n.put("event", r.get("event"));
+        n.put("kickoff", r.get("kickoff"));
+        n.put("ev", ev);
+        n.put("text", Json.str(r, "home") + " – " + Json.str(r, "away") + " · " + Json.str(r, "label") + " @ " + Fmt.odds(odds)
+                + " (adil " + Fmt.odds(1 / p) + ", " + Fmt.pct(ev, true) + ")");
+        Map<String, Object> st = new LinkedHashMap<>();
+        st.put("en_yakin_ev", ev);
+        st.put("en_yakin_aralikta", odds >= cfg.minLegOdds && odds <= cfg.maxLegOdds);
+        double[] t = Engine.targetOdds(p, Json.str(r, "m"), cfg);
+        if (t != null) {
+            st.put("en_yakin_hedef", t[0]);
+            st.put("en_yakin_hedef_oran", t[1]);
+        }
+        if (balance > 0) st.put("kasa", balance);
+        n.put("stake", Texts.nearStake(st).replace("(ör. kampanya, oran değişimi)", "(Zirve oranı yükselirse)"));
+        return n;
     }
 
     /**
@@ -601,6 +642,11 @@ public final class Zirve {
                 .append(" artırılmış oran · son taramada eşleşen maç ").append(Json.lng(view, "matched", 0))
                 .append(" · değerlendirilen ").append(Json.lng(view, "evaluated", 0)).append(" · değerli ")
                 .append(Json.lng(view, "play", 0)).append('\n');
+        Map<String, Object> near = Json.obj(view.get("nearest"));
+        if (near != null) {
+            b.append("  En yakın Zirve seçimi: ").append(Json.str(near, "text")).append('\n')
+                    .append("  Önerilen tutar: ").append(Json.str(near, "stake")).append('\n');
+        }
         List<Map<String, Object>> rows = best(view);
         for (Map<String, Object> r : rows.subList(0, Math.min(10, rows.size()))) {
             b.append("  ").append(line(r)).append(" → ").append(statusText(Json.str(r, "status")))

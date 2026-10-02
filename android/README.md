@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.2.6.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.2.7.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -106,6 +106,10 @@ bildirim olarak gelir.
   tabloya eklenir. Son okuma ya da hedefli tarama başarısızsa uygulama açılınca 10 dakika değil 2
   dakika sonra yeniden okunur. Pinnacle'da 2,5 çizgisi olmayan maçlarda (ana çizgi 2,75/3 ya da pazar
   henüz açılmamış) 2,5 Alt/Üst "adil oran yok" kalır; model tahmini kullanılmaz.
+- **En yakın Zirve seçimi (2.2.7):** değerli Zirve oranı yokken kartın üstünde avantaja en yakın
+  Zirve oranı (oynanabilir oran aralığındakiler arasından) ve pas kartındaki gibi tutar satırı:
+  0 TL ve 100 TL'de beklenen kayıp; Zirve oranı hangi seviyeye çıkarsa oynanır ve o zaman önerilecek
+  tutar. Örn. "Hırvatistan – İngiltere · MS 2 @ 1,74 (adil 1,87, −%7,0)".
 - **Gerçekçi beklenti:** iddaa marjı ~%22, Zirve artışı ~%2–5; marj ~%17'ye iner ama çoğu zaman
   sıfırın altına inmez. Zirve Oran'lı seçimlerin çoğu "değer yok" çıkar; değerli olanı ara sıra görülür.
 - Keşif aracı (2.1.2–2.1.6) kaldırıldı; "Kaynakları test et" artık Zirve okumasının özetini yazar.
@@ -429,7 +433,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.2.6.apk
+./build.sh          # testler + build/BilincliKupon-2.2.7.apk
 ./build.sh test     # yalnızca testler
 ```
 

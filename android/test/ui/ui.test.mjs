@@ -749,6 +749,16 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   assert.match(h.$("#zirveHome").textContent, /1 Zirve Oran seçimi adil oranı geçiyor/);
   h.button("Fırsatlar'da gör").click();
   assert.ok(h.$("#zirveCard"));
+  // değerli yokken en yakın Zirve seçimi ve tutarı kartın üstünde
+  const nz = clone(s);
+  nz.zirve.play = 0;
+  nz.zirve.rows = nz.zirve.rows.filter((r) => r.status !== "oyna");
+  nz.zirve.nearest = { id: "1:2:1", kickoff: soon, ev: -0.05, text: "Belçika – Türkiye · KG Var @ 1,90 (adil 2,00, −%5,0)",
+    stake: "0 TL — avantaj yok, oynanmaz (yine de 100 TL oynanırsa beklenen kayıp ≈ 5,00 TL). Oran 2,06 ya da üstüne çıkarsa (Zirve oranı yükselirse) önerilen 30,00 TL (kasa payı %0,7)." };
+  const nt = boot(nz, "#firsat");
+  assert.match(nt.$(".zirve-near").textContent, /En yakın Zirve seçimi: Belçika – Türkiye · KG Var @ 1,90 \(adil 2,00, −%5,0\)Önerilen tutar: 0 TL — avantaj yok/);
+  nz.zirve.nearest.kickoff = past; // başlamış maç gösterilmez
+  assert.equal(boot(nz, "#firsat").$(".zirve-near"), null);
   // okuma sürerken: adım yazılır, düğme kapalı, ekran kendiliğinden yenilenir
   const b = clone(s);
   b.zirve.busy = "Zirve maçlarının ligi taranıyor (UEFA Nations League)…";

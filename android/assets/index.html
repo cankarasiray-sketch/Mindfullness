@@ -588,6 +588,11 @@ function zirveCard() {
   var stale = Z.fairsAt && now - Date.parse(Z.fairsAt) > 6 * 3600 * 1000;
   if (Z.at) html += '<p class="small muted zirve-fairs">' + (Z.fairsAt ? "Adil oranlar: son tam tarama " + esc(dm(Z.fairsAt)) + " " + esc(hm(Z.fairsAt)) + " (" + esc(ago(Z.fairsAt)) + ")." : "Adil oran listesi henüz boş (sıradaki tam taramada dolar).")
     + (stale ? " <b>Tarama eski.</b>" : "") + " Son taramada olmayan Zirve maçlarının ligi kendiliğinden ayrıca taranır (lig başına ~2 kredi, 3 saatte en fazla bir kez).</p>";
+  var near = Z.nearest && Date.parse(Z.nearest.kickoff) > now ? Z.nearest : null;
+  if (near) {
+    html += '<div class="zirve-near"><p class="small"><b>En yakın Zirve seçimi:</b> ' + esc(near.text) + "</p>"
+      + '<p class="small"><b>Önerilen tutar:</b> ' + esc(near.stake) + "</p></div>";
+  }
   var groups = [], byEvent = {};
   zirveRows = Z.rows || [];
   zirveRows.forEach(function (r, i) {
