@@ -576,6 +576,32 @@ test("pas kartında en yakın seçim ve tutarı ayrı satırda", async () => {
   assert.ok(stake, "tutar satırı yok");
   assert.equal(stake.querySelector("b").textContent, "Önerilen tutar:");
   assert.match(stake.textContent, /0 TL — avantaj yok, oynanmaz .* Oran 2,06 ya da üstüne çıkarsa önerilen 30,00 TL/);
+  // Zirve Oran'daki en yakın seçim de karşılaştırılır
+  const zn = { id: "1:1:2", kickoff: new Date(Date.parse(s.now) + 7200000).toISOString(), ev: -0.071,
+    text: "Hırvatistan – İngiltere · MS 2 @ 1,74 (adil 1,87, −%7,1)", stake: "0 TL — avantaj yok, oynanmaz. Oran 1,93 ya da üstüne çıkarsa önerilen 40,00 TL (kasa payı %0,9)." };
+  s.settings.zirve = true;
+  s.zirve = { at: s.now, play: 0, rows: [], nearest: zn };
+  // normal oranlardaki daha yakın (−%2,5): Zirve ikinci satırda
+  const t2 = boot(s);
+  assert.match(t2.text(), /En yakın seçim: 03.10 20:00 Ev – Dep/);
+  assert.match(t2.$(".zirve-pass").textContent, /Zirve Oran'da en yakın: Hırvatistan – İngiltere · MS 2 @ 1,74 \(adil 1,87, −%7,1\) · Önerilen tutar: 0 TL/);
+  // Zirve daha yakınsa öne geçer, normal oranlardaki ikinci sıraya iner
+  s.todayRun.summary = s.todayRun.summary.replace("MS 1 @ 1,95 (adil 2,00, −%2,5)", "MS 1 @ 1,99 (adil 2,25, −%11,7)");
+  const t3 = boot(s);
+  const firstNear = t3.$$("p").find((p) => /^En yakın seçim/.test(p.textContent));
+  assert.match(firstNear.textContent, /^En yakın seçim \(Zirve Oran\): Hırvatistan – İngiltere · MS 2 @ 1,74/);
+  assert.match(t3.text(), /Normal oranlarda en yakın: 03.10 20:00 Ev – Dep · MS 1 @ 1,99 \(adil 2,25, −%11,7\)/);
+  assert.equal(t3.$$(".near-stake").length, 1); // kalın tutar satırı Zirve'nin; normal olanın tutarı sönük
+  assert.match(t3.$(".near-stake").textContent, /Oran 1,93 ya da üstüne çıkarsa önerilen 40,00 TL/);
+  // başlamış Zirve maçı ya da kapalı ayar: karşılaştırılmaz
+  s.zirve.nearest.kickoff = new Date(Date.parse(s.now) - 60000).toISOString();
+  assert.equal(boot(s).$(".zirve-pass"), null);
+  s.zirve.nearest.kickoff = zn.kickoff;
+  s.settings.zirve = false;
+  assert.equal(boot(s).$(".zirve-pass"), null);
+  assert.ok(Math.abs(t3.w.nearEv("x (adil 2,25, −%11,7)") + 0.117) < 1e-9);
+  assert.ok(Math.abs(t3.w.nearEv("x (adil 2,25, +%3,0)") - 0.03) < 1e-9);
+  assert.equal(t3.w.nearEv("bozuk"), null);
 });
 
 test("promosyon kontrolü: adil oranlar kendiliğinden listelenir, karar oran yazılınca görünür", async () => {

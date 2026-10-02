@@ -189,13 +189,43 @@ function hm(iso) { var d = trDate(iso); return String(d.getUTCHours()).padStart(
 function dm(iso) { var d = trDate(iso); return String(d.getUTCDate()).padStart(2, "0") + "." + String(d.getUTCMonth() + 1).padStart(2, "0"); }
 function dayLabel(day) { var p = day.split("-"); return p[2] + "." + p[1] + "." + p[0]; }
 /** Karar özeti: istatistik satırı soluk; pas gününde "En yakın seçim" ayrı satırda. */
-function summaryHtml(summary) {
-  return (summary || "").split("\n").map(function (line) {
-    var near = line.indexOf("En yakın seçim: ") === 0, stake = line.indexOf("Önerilen tutar: ") === 0;
-    return near ? '<p class="small"><b>En yakın seçim:</b> ' + esc(line.slice(16)) + "</p>"
+/** "… (adil 2,25, −%11,7)" satırındaki avantaj; okunamazsa null. */
+function nearEv(line) {
+  var m = /, ([−+-]?)%(\d+(?:,\d+)?)\)\s*$/.exec(line || "");
+  if (!m) return null;
+  var v = parseFloat(m[2].replace(",", ".")) / 100;
+  return m[1] === "−" || m[1] === "-" ? -v : v;
+}
+/** Zirve Oran'da avantaja en yakın seçim (başlamamış maç); yoksa null. */
+function zirveNear() {
+  var Z = S.zirve;
+  if (S.demo || !S.settings.zirve || !Z || !Z.nearest || Date.parse(Z.nearest.kickoff) <= Date.parse(S.now)) return null;
+  return Z.nearest;
+}
+/**
+ * Karar özeti. withZirve (pas kartı): Zirve Oran'daki en yakın seçim de karşılaştırılır; daha yakınsa
+ * "En yakın seçim (Zirve Oran)" olarak öne geçer ve normal oranlardaki ikinci sıraya iner.
+ */
+function summaryHtml(summary, withZirve) {
+  var lines = (summary || "").split("\n"), z = withZirve ? zirveNear() : null;
+  var near = lines.filter(function (l) { return l.indexOf("En yakın seçim: ") === 0; })[0];
+  var ne = near ? nearEv(near) : null, zFirst = !!z && (ne == null || z.ev > ne);
+  var zHtml = z ? '<div class="zirve-pass"><p class="small"><b>En yakın seçim (Zirve Oran):</b> ' + esc(z.text) + "</p>"
+    + '<p class="small near-stake"><b>Önerilen tutar:</b> ' + esc(z.stake) + "</p></div>" : "";
+  var html = lines.map(function (line) {
+    var isNear = line.indexOf("En yakın seçim: ") === 0, stake = line.indexOf("Önerilen tutar: ") === 0;
+    if (isNear && zFirst) return zHtml + '<p class="small muted"><b>Normal oranlarda en yakın:</b> ' + esc(line.slice(16)) + "</p>";
+    if (stake && zFirst) return '<p class="small muted">Önerilen tutar: ' + esc(line.slice(16)) + "</p>";
+    return isNear ? '<p class="small"><b>En yakın seçim:</b> ' + esc(line.slice(16)) + "</p>"
       : stake ? '<p class="small near-stake"><b>Önerilen tutar:</b> ' + esc(line.slice(16)) + "</p>"
       : '<p class="small muted">' + esc(line) + "</p>";
   }).join("");
+  if (z && !zFirst) {
+    html += '<p class="small muted zirve-pass"><b>Zirve Oran\'da en yakın:</b> ' + esc(z.text) + " · Önerilen tutar: " + esc(z.stake) + "</p>";
+  } else if (zFirst && !near) {
+    html += zHtml;
+  }
+  return html;
 }
 function label(market, outcome) {
   if (market === "MS") return "MS " + outcome;
@@ -434,7 +464,7 @@ function viewToday() {
   } else {
     var pass = run.decision === "pas";
     html += '<div class="card"><div class="kicker">' + (pass ? "BUGÜN" : "KORUMA DEVREDE") + '</div><div class="big">' + (pass ? "Pas" : "Kupon yok")
-      + "</div><p>" + esc(run.reason) + "</p>" + summaryHtml(run.summary)
+      + "</div><p>" + esc(run.reason) + "</p>" + summaryHtml(run.summary, pass)
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
   if (!S.demo && S.zirve && S.zirve.play > 0) {
