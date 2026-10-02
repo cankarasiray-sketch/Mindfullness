@@ -70,8 +70,8 @@ bildirim olarak gelir.
   isabetli (testte karşılaştırılır).
 - Adil oran tablosunda olasılıklar 4 haneye yuvarlanır (daha küçük kayıt). 2.11.1: tablo yine her
   ekran yenilemesinde durumla birlikte gelir (Fırsatlar açılınca hazır); tembel yükleme geri alındı.
-- Günün seçimi ve tek maç listesi önbellekte: tablo, Zirve, kasa, ayar ya da dakika değişmedikçe
-  yeniden hesaplanmaz. Tek maç listesindeki her satır önerilen tutarı taşır.
+- Tek maç listesindeki her satır önerilen tutarı taşır. 2.11.2: günün seçimi ve tek maç listesi yine
+  her ekran yenilemesinde baştan hesaplanır (önbellek geri alındı).
 - Tarama tabloyu güncellerken okuyan ekranın eşzamanlı değişiklik hatası almaması için görünüm kopyası.
 - Pas gününde "Günün seçimi" kartı Bugün sekmesinin en üstünde.
 

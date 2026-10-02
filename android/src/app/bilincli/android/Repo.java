@@ -1092,11 +1092,10 @@ final class Repo {
 
     /** Arayüz için sanal takip (demoda yok). */
     /**
-     * Günün seçimi ve tek maç listesi önbelleği (2.11): adil oran tablosu, Zirve kaydı, kasa, ayar ya da dakika
-     * değişmedikçe ekran yenilemelerinde yeniden hesaplanmaz.
+     * Günün seçimi ve tek maç listesi: her ekran yenilemesinde son taramanın tablosu, Zirve, kasa ve ayarlarla
+     * baştan hesaplanır (2.11.1: kullanıcı isteğiyle önbellek yok).
      */
     private final Object pickLock = new Object();
-    private String pickKey;
     private Map<String, Object> pickValue;
     private List<Object> singlesValue;
 
@@ -1104,16 +1103,11 @@ final class Repo {
         Instant now = Instant.now();
         Settings cfg = Daily.decisionSettings(ledger);
         long balance = ledger.balance();
-        String raw = zirveRaw;
-        String key = radar.fairsKey() + "|" + (raw == null ? 0 : raw.hashCode()) + "|" + balance + "|" + Json.write(cfg.toMap()).hashCode()
-                + "|" + now.getEpochSecond() / 60;
         synchronized (pickLock) {
-            if (key.equals(pickKey)) return;
             List<Object> fairs = Json.arr(radar.view().get("fairs"));
             Map<String, Object> z = zirveView();
             pickValue = Pick.choose(fairs, z, cfg, balance, now);
             singlesValue = Pick.list(fairs, z, cfg, balance, now);
-            pickKey = key;
             // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
             if (pickValue != null) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(pickValue), now);
         }
