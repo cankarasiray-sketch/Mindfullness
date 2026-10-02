@@ -483,16 +483,19 @@ function fold(t) {
     .replace(/ç/g, "c").replace(/ö/g, "o").replace(/ü/g, "u").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 function promoResults() {
-  var rows = (S.radar && S.radar.fairs) || [], q = fold(promoQuery).trim();
-  promoHits = [];
-  if (q.length < 2) return "";
-  promoHits = rows.filter(function (r) { return fold(r.home + " " + r.away).indexOf(q) >= 0; }).slice(0, 6);
-  if (!promoHits.length) return '<p class="small muted">Son taramada bu adla eşleşen maç yok (maç taranan liglerde olmayabilir).</p>';
+  var rows = (S.radar && S.radar.fairs) || [], q = fold(promoQuery).trim(), now = Date.parse(S.now);
+  // arama yoksa yaklaşan maçlar kendiliğinden (başlamış olanlar hariç); yazınca süzülür
+  promoHits = rows.filter(function (r) {
+    return Date.parse(r.kickoff) > now && (q.length < 2 || fold(r.home + " " + r.away + " " + (r.league || "")).indexOf(q) >= 0);
+  }).slice(0, q.length < 2 ? 12 : 8);
+  if (!promoHits.length) return '<p class="small muted">' + (q.length < 2 ? "Yaklaşan maç yok: sabah kararı ya da radar taramasından sonra dolar."
+    : "Son taramada bu adla eşleşen maç yok (maç taranan liglerde olmayabilir).") + "</p>";
   return promoHits.map(function (r, i) {
     return '<div class="vrow"><div class="l1"><span>' + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff)) + (r.league ? " · " + esc(r.league) : "") + "</span><span>"
       + (r.code ? "kod " + esc(r.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(r.home) + " – " + esc(r.away) + "</div><div>"
       + r.sel.map(function (x, j) {
-        return '<button class="chip promo-sel" onclick="promoSheet(' + i + "," + j + ')">' + esc(x.label) + ' <span class="small muted">adil ' + odds(1 / x.p) + "</span></button>";
+        return '<button class="chip promo-sel" onclick="promoSheet(' + i + "," + j + ')">' + esc(x.label) + ' <span class="small muted">adil ' + odds(1 / x.p)
+          + " · iddaa " + odds(x.i) + "</span></button>";
       }).join(" ") + "</div></div>";
   }).join("");
 }
@@ -500,22 +503,38 @@ function promoSheet(i, j) {
   var r = promoHits[i], x = r.sel[j];
   openSheet("<h3>" + esc(r.home) + " – " + esc(r.away) + "</h3><p class=\"muted small\">" + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff))
     + " · <b>" + esc(x.label) + "</b> · adil oran " + odds(1 / x.p) + " · iddaa'nın normal oranı " + odds(x.i) + "</p>"
-    + '<label>Kampanya oranı</label><input id="promoOdds" inputmode="decimal" placeholder="ör. 2,40">'
-    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Kapat</button><button class="b" onclick="promoCheck(' + i + "," + j + ')">Kontrol et</button></div>'
-    + '<div id="promoRes"></div>');
+    + '<label>Kampanya oranı</label><input id="promoOdds" inputmode="decimal" placeholder="ör. 2,40" oninput="promoLive(' + i + "," + j + ')">'
+    + '<div id="promoRes"><p class="small muted">Oranı yazınca sonuç burada görünür.</p></div>'
+    + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Kapat</button></div>');
 }
-function promoCheck(i, j) {
-  var r = promoHits[i], x = r.sel[j], o = val("promoOdds");
-  act("promo", {ref: r.ref, m: x.m, o: x.o, odds: o}, true).then(function (res) {
-    var el = document.getElementById("promoRes");
-    if (!el || !res) return;
-    var html = '<p class="small">' + esc(res.message || "") + "</p>";
-    if (res.ok && res.play) {
-      html += '<label>Oynadığın tutar (TL)</label><input id="promoAmt" inputmode="decimal" value="' + esc(res.stake ? String(res.stake / 100) : "") + '">'
-        + '<div class="btns"><button class="b" onclick="promoPlay(' + i + "," + j + ')">Bu tutarla oynadım</button></div>';
-    }
-    el.innerHTML = html;
-  });
+/**
+ * Kampanya oranının değerlendirmesi (Java Promo.evaluate ile aynı kural): kanıt koruması devredeyse
+ * olasılık küçültülür; avantaj eşiği, çeyrek/yarım Kelly ve kupon başına üst sınır ayarlardan.
+ */
+function promoEval(p, market, o) {
+  var st = S.settings, fam = String(market).split("@")[0], seg = S.edge && (S.edge[fam] || S.edge["*"]);
+  var f = st.edgeGuard && seg && seg.factor != null ? seg.factor : 1;
+  var q = f * p + (1 - f) / o, ev = q * o - 1, play = ev >= st.minLegEv && o > 1;
+  var frac = play ? Math.min(st.kellyMultiplier * Math.max(0, ev / (o - 1)), st.maxStakeFraction) : 0;
+  var stake = S.stats.balance > 0 ? Math.floor(S.stats.balance * frac / 1000) * 1000 : 0;
+  return {ev: ev, play: play, fraction: frac, stake: stake};
+}
+function promoLive(i, j) {
+  var r = promoHits[i], x = r.sel[j], el = document.getElementById("promoRes");
+  var o = parseFloat(val("promoOdds").replace(",", "."));
+  if (!el) return;
+  if (!(o > 1)) { el.innerHTML = '<p class="small muted">Oranı yazınca sonuç burada görünür.</p>'; return; }
+  var e = promoEval(x.p, x.m, o);
+  var html = '<p class="small">Kampanya oranı ' + odds(o) + " · adil " + odds(1 / x.p) + ' · avantaj <b class="' + cls(e.ev) + '">' + pct(e.ev, true) + "</b></p>";
+  if (!e.play) {
+    html += "<p><b>Oynama:</b> kampanya oranı adil oranı yeterince geçmiyor (eşik " + pct(S.settings.minLegEv, true) + ").</p>";
+  } else {
+    html += "<p><b>Oyna:</b> önerilen tutar " + (e.stake ? tl(e.stake) : "kasa boş") + " (kasanın " + pct(e.fraction) + "'ü). Kampanyanın en yüksek bahis sınırı varsa onu aşma."
+      + (e.ev > 0.25 ? " Avantaj çok yüksek: kampanya şartlarını (tekli/kombine, maç, seçim) bir daha kontrol et." : "") + "</p>"
+      + '<label>Oynadığın tutar (TL)</label><input id="promoAmt" inputmode="decimal" value="' + esc(e.stake ? String(e.stake / 100) : "") + '">'
+      + '<div class="btns"><button class="b" onclick="promoPlay(' + i + "," + j + ')">Bu tutarla oynadım</button></div>';
+  }
+  el.innerHTML = html;
 }
 function promoPlay(i, j) {
   var r = promoHits[i], x = r.sel[j];
@@ -543,9 +562,9 @@ function viewOpportunities() {
         + (v.inRange ? "" : ' <span class="st">oran aralığı dışında</span>') + "</span></div></div>";
     }).join("") : '<p class="muted">Son taramada değer taşıyan seçim yok. Bu normaldir: iddaa çoğu maçta marjlıdır.</p>') + "</div>";
   html += '<div class="card" id="promoCard"><h2>Promosyon / özel oran kontrolü</h2><p class="small muted">Bilyoner\'de "Süper Oran" gibi bir kampanya oranı gördüğünde: maçı ara, seçimi seç, kampanya oranını gir. '
-    + "Uygulama son taramadaki Pinnacle adil oranıyla karşılaştırır (kredi harcamaz), avantaj varsa tutarı söyler. Yalnızca tek seçimli kampanyalar; "
+    + "Yaklaşan maçların adil oranları aşağıda kendiliğinden listelenir; bir seçime dokunup kampanya oranını yazdığın anda avantaj ve tutar görünür (kredi harcamaz). Yalnızca tek seçimli kampanyalar; "
     + "\"X kazanır ve 2,5 Üst\" gibi birleşik seçimler hesaplanamaz.</p>"
-    + '<input id="promoQ" placeholder="Takım adı (ör. Fenerbahçe)" autocomplete="off" value="' + esc(promoQuery) + '" oninput="promoQuery=this.value;document.getElementById(\'promoList\').innerHTML=promoResults()">'
+    + '<input id="promoQ" placeholder="Süzmek için takım ya da lig adı (isteğe bağlı)" autocomplete="off" value="' + esc(promoQuery) + '" oninput="promoQuery=this.value;document.getElementById(\'promoList\').innerHTML=promoResults()">'
     + '<div id="promoList">' + promoResults() + "</div>"
     + (R.fairsAt ? '<p class="small muted">Adil oranlar: son tam tarama ' + esc(dm(R.fairsAt)) + " " + esc(hm(R.fairsAt)) + " (" + esc(ago(R.fairsAt)) + "). Maça yakınsa önce \"Şimdi tara\".</p>"
       : '<p class="small muted">Henüz tam tarama yok: önce "Şimdi tara".</p>') + "</div>";

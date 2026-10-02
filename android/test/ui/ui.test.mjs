@@ -573,43 +573,57 @@ test("pas kartında en yakın seçim ayrı satırda", async () => {
   assert.ok(t.$$("p.muted").some((p) => p.textContent === "Bülten 650 maç · eşleşen 30"));
 });
 
-test("promosyon kontrolü: ara, seç, kampanya oranını kontrol et, oynandı kaydet", async () => {
+test("promosyon kontrolü: adil oranlar kendiliğinden listelenir, karar oran yazılınca görünür", async () => {
   const s = clone(baseState);
   s.radar = s.radar || { values: [], moves: [] };
   s.radar.fairsAt = s.now;
-  s.radar.fairs = [{ ref: "b9", sref: "s9", sport: "lig", code: "123", home: "Fenerbahçe", away: "Galatasaray",
-    kickoff: new Date(Date.parse(s.now) + 7200000).toISOString(), league: "Süper Lig",
-    sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.5, i: 1.9 }, { m: "MS", o: "2", label: "MS 2", p: 0.25, i: 3.6 }] }];
+  const soon = new Date(Date.parse(s.now) + 7200000).toISOString(), past = new Date(Date.parse(s.now) - 600000).toISOString();
+  s.radar.fairs = [
+    { ref: "b8", sref: "s8", sport: "lig", code: "1", home: "Başlamış", away: "Maç", kickoff: past, league: "Lig", sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.5, i: 1.9 }] },
+    { ref: "b9", sref: "s9", sport: "lig", code: "123", home: "Fenerbahçe", away: "Galatasaray", kickoff: soon, league: "Süper Lig",
+      sel: [{ m: "MS", o: "1", label: "MS 1", p: 0.5, i: 1.9 }, { m: "MS", o: "2", label: "MS 2", p: 0.25, i: 3.6 }] },
+    { ref: "b7", sref: "s7", sport: "lig", code: "7", home: "Arsenal", away: "Chelsea", kickoff: soon, league: "Premier Lig", sel: [{ m: "MS", o: "X", label: "MS X", p: 0.27, i: 3.3 }] },
+  ];
+  Object.assign(s.settings, { minLegEv: 0.03, kellyMultiplier: 0.25, maxStakeFraction: 0.03, edgeGuard: true });
+  s.edge = { "*": { n: 0, factor: 1 } };
+  s.stats.balance = 500000;
   const t = boot(s, "#firsat");
-  assert.match(t.text(), /Promosyon \/ özel oran kontrolü/);
+  // aramadan: yaklaşan maçlar (başlamış maç yok)
+  const list = t.$("#promoList").textContent;
+  assert.match(list, /Fenerbahçe – Galatasaray/);
+  assert.match(list, /Arsenal – Chelsea/);
+  assert.doesNotMatch(list, /Başlamış/);
+  assert.match(list, /MS 1 adil 2,00 · iddaa 1,90/);
+  // süzme
   const q = t.$("#promoQ");
-  q.value = "fener";
-  q.dispatchEvent(new t.w.Event("input"));
-  assert.match(t.$("#promoList").textContent, /Fenerbahçe – Galatasaray/);
-  assert.match(t.$("#promoList").textContent, /MS 1 adil 2,00/);
-  q.value = "besiktas";
-  q.dispatchEvent(new t.w.Event("input"));
-  assert.match(t.$("#promoList").textContent, /eşleşen maç yok/);
   q.value = "GALATA";
   q.dispatchEvent(new t.w.Event("input"));
+  assert.doesNotMatch(t.$("#promoList").textContent, /Arsenal/);
   t.$$(".promo-sel")[0].click();
   assert.match(t.$("#sheet").textContent, /iddaa'nın normal oranı 1,90/);
-  t.$("#promoOdds").value = "2,40";
-  t.w.MockAndroid.act = (action, payload, id) => {
-    t.calls.push({ action, payload: JSON.parse(payload) });
-    setTimeout(() => t.w.onActResult(id, { ok: true, message: "Kampanya oranı 2,40 · avantaj +%20,0. Oyna", play: true, stake: 15000 }), 0);
-  };
-  t.button("Kontrol et").click();
-  await t.tick();
-  await t.tick();
-  assert.deepEqual(t.calls.at(-1), { action: "promo", payload: { ref: "b9", m: "MS", o: "1", odds: "2,40" } });
-  assert.match(t.$("#promoRes").textContent, /Oyna/);
+  assert.ok(!t.$$("#sheet button").some((b) => b.textContent === "Kontrol et")); // düğmesiz
+  const o = t.$("#promoOdds");
+  o.value = "2,02";
+  o.dispatchEvent(new t.w.Event("input"));
+  assert.match(t.$("#promoRes").textContent, /Oynama/);
+  assert.equal(t.$("#promoAmt"), null);
+  o.value = "2,40";
+  o.dispatchEvent(new t.w.Event("input"));
+  const res = t.$("#promoRes").textContent;
+  assert.match(res, /avantaj \+%20,0/); // Java Promo.evaluate ile aynı: +%20, 150 TL
+  assert.match(res, /Oyna: önerilen tutar 150,00 TL \(kasanın %3,0'ü\)/);
   assert.equal(t.$("#promoAmt").value, "150");
+  assert.equal(t.calls.length, 0); // değerlendirme için köprü çağrısı yok
   t.button("Bu tutarla oynadım").click();
   await t.tick();
-  const last = t.calls.at(-1);
-  assert.equal(last.action, "promoPlay");
-  assert.deepEqual(last.payload, { ref: "b9", m: "MS", o: "1", odds: "2,40", amount: "150" });
+  assert.deepEqual(t.calls.at(-1), { action: "promoPlay", payload: { ref: "b9", m: "MS", o: "1", odds: "2,40", amount: "150" } });
+  // kanıt koruması küçültüyorsa avantaj da küçülür
+  s.edge = { "*": { n: 40, factor: 0.5 } };
+  const t2 = boot(s, "#firsat");
+  t2.$$(".promo-sel")[0].click();
+  t2.$("#promoOdds").value = "2,40";
+  t2.$("#promoOdds").dispatchEvent(new t2.w.Event("input"));
+  assert.doesNotMatch(t2.$("#promoRes").textContent, /\+%20,0/);
 });
 
 test("yenilenmiş plandan kalan kupon açık kupon sayılmaz", async () => {

@@ -59,6 +59,38 @@ public final class MainActivity extends Activity {
             Scheduler.runDailyNow(this);
         }
         web.evaluateJavascript("window.refresh && window.refresh()", null);
+        probeInBackground(repo);
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean PROBING = new java.util.concurrent.atomic.AtomicBoolean();
+
+    /**
+     * Bugün hangi liglerin oynadığı bilinmiyorsa (ör. güncellemeden sonra) arka planda ücretsiz
+     * maç listesinden öğrenilir; kredi planı ve ek ligler düğmeye basmadan güncellenir.
+     */
+    private void probeInBackground(final Repo repo) {
+        if (repo.isDemo() || repo.real().settings().oddsApiKey.isEmpty() || repo.active() != null) return;
+        if (!PROBING.compareAndSet(false, true)) return;
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    synchronized (Repo.LOCK) {
+                        repo.probeActive();
+                    }
+                } catch (RuntimeException ignored) {
+                    // bağlantı yoksa bir sonraki açılışta yeniden denenir
+                } finally {
+                    PROBING.set(false);
+                }
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        web.evaluateJavascript("window.refresh && window.refresh()", null);
+                    }
+                });
+            }
+        }, "bilincli-probe").start();
     }
 
     @Override
