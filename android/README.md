@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.1.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.1.4.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -74,6 +74,12 @@ bildirim olarak gelir.
   kanıt koruması ölçümüne (kapanış avantajı) girmez: kampanya oranı piyasa oranı değildir.
   Yalnızca tek seçimli kampanyalar; birleşik seçimler ("X kazanır ve 2,5 Üst") hesaplanamaz.
   Adil oranlar son tam taramadan (sabah kararı, radar ya da "Şimdi tara"); 3 saatten eskiyse uyarır.
+- **Zirve Oran keşfi (2.1.4):** Bilyoner'in kampanyası "Zirve Oran" adını taşıyor (seçilen maçlarda
+  tüm oranlar ~%2–4 artırılmış; ekrandaki örneklerde marj ~%17'den ~%13'e iniyor, Pinnacle'da ~%2).
+  Keşif artık Zirve Oran sayfasından başlar; betiklerde "zirve", "specialOdds" ve "tabType" geçen
+  kod parçalarını, bülten veri yollarını (gamelist/aggregator) ve istek başlığı adaylarını listeler;
+  kullanıcıya özel olmayan aday veri adreslerini dener ve yanıtların yapısını (alan adları, örnek
+  değerler) özetler. Okuyucu bu çıktıya göre yazılacak.
 - **Bilyoner Süper Oran keşfi (2.1.2):** Bilyoner'in kampanya oranlarını hangi adresten ve hangi
   biçimde verdiği bilinmiyor; körlemesine okuma yanlış oran okutabilir. "Kaynakları test et"
   artık telefonda herkese açık Bilyoner iddaa sayfasını ve sitenin ilk birkaç betiğini indirip
@@ -361,7 +367,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.1.3.apk
+./build.sh          # testler + build/BilincliKupon-2.1.4.apk
 ./build.sh test     # yalnızca testler
 ```
 

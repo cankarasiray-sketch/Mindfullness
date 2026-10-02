@@ -10,38 +10,47 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Bilyoner keşfi (Süper Oran için ilk adım). Bilyoner'in kampanya oranlarını hangi adresten ve hangi
- * biçimde verdiği bilinmiyor; körlemesine ayrıştırıcı yanlış oran okutabilir. Bu sınıf telefonda
- * herkese açık iddaa sayfasını ve sayfanın yüklediği ilk betikleri indirir, "Kaynakları test et"
- * çıktısına yapılarının özetini yazar: durum, boyut, gömülü veri, "süper oran" geçen yerler ve
- * API'ye benzeyen adresler. Ayrıştırıcı bu gerçek veriye göre yazılacak. Hesap ya da oturum
- * kullanılmaz, kredi harcanmaz.
+ * Bilyoner keşfi (Zirve Oran'ı otomatik okumak için). Bilyoner kampanya oranlarını ("Zirve Oran")
+ * belgelenmiş bir yerden vermiyor; körlemesine okuma yanlış oran okutabilir. Bu sınıf telefonda
+ * herkese açık iddaa sayfasını ve sitenin betiklerini indirir; Zirve Oran'la ilgili kod parçalarını,
+ * bülten veri yollarını ve istek başlığı adaylarını listeler, aday veri adreslerini dener ve
+ * yanıtların yapısını (alan adları) özetler. Okuyucu bu gerçek veriye göre yazılacak. Hesap ya da
+ * oturum kullanılmaz, kredi harcanmaz.
  */
 public final class BilyonerProbe {
     private BilyonerProbe() {}
 
-    static final String[] PAGES = {"https://www.bilyoner.com/iddaa", "https://m.bilyoner.com/iddaa"};
+    static final String[] PAGES = {"https://www.bilyoner.com/iddaa/zirve-oran", "https://www.bilyoner.com/iddaa"};
     static final int MAX_SCRIPTS = 4;
+    static final int MAX_REQUESTS = 10;
+    static final String[] BASES = {"https://www.bilyoner.com/api", "https://aping.bilyoner.com"};
+    /** Topluluk projelerinde görülen bülten adresi (doğrulanmadı; denenecek). */
+    static final String GUESS = "/v3/mobile/aggregator/gamelist/all/v1?tabType=1&bulletinType=2";
 
-    /** Kampanya metni (yalnızca Türkçe ad; "boost" başka özelliklerde de geçiyor). */
-    private static final Pattern SUPER = Pattern.compile("(?i)(s[üu]per\\s?oran|oran\\s?art[ıi][şs]|art[ıi]r[ıi]lm[ıi][şs]\\s?oran|[öo]zel\\s?oran)");
-    private static final Pattern API = Pattern.compile("(?i)((?:https?:)?//[a-z0-9.-]*bilyoner\\.com)?(/api/[a-z0-9_./?=&{}-]{3,120})");
     private static final Pattern SCRIPT = Pattern.compile("(?i)<script[^>]+src=[\"']([^\"']+)[\"']");
-    private static final Pattern HOST = Pattern.compile("(?i)https?://([a-z0-9-]+(?:\\.[a-z0-9-]+)+)");
-    /** Sürüm numaralı yol: "/sportsbook/v2/events" gibi. */
-    private static final Pattern VERSIONED = Pattern.compile("(?i)[\"'`](/(?:[a-z0-9_-]+/){0,4}v[1-9][0-9]?/[a-z0-9_/{}.$-]{2,80})");
-    /** Oran, bülten ve kampanyayla ilgili yollar. */
-    private static final Pattern TOPIC_PATH = Pattern.compile("(?i)[\"'`](/[a-z0-9_/{}.$-]*(?:bulletin|bulten|program|odds|oran|event|match|market|boost|special|ozel|promo|campaign|kampanya)[a-z0-9_/{}.$-]*)");
-    /** Kampanya oranı alanına benzeyen tanımlayıcılar (ör. boostedOdd, isSpecial, superOdds). */
-    private static final Pattern KEY = Pattern.compile("\\b([a-zA-Z]*(?:[Bb]oost|[Ss]pecial|[Ee]nhanced|[Ii]ncreased|[Ss]uper[A-Z]|[Oo]zel|[Aa]rtir|[Pp]romo)[a-zA-Z]*)\\b");
+    private static final Pattern ZIRVE = Pattern.compile("(?i)zirve");
+    private static final Pattern SPECIAL_ODDS = Pattern.compile("specialOdds[A-Za-z]*");
+    private static final Pattern TAB_TYPE = Pattern.compile("tabType");
+    /** Bülten veri yolları: "/v3/mobile/aggregator/gamelist/events/popular" gibi. */
+    private static final Pattern GAMELIST = Pattern.compile("(?i)[\"'`](/[a-z0-9_/{}.$?=&-]*(?:gamelist|aggregator|bulletin|zirve)[a-z0-9_/{}.$?=&-]*)");
+    /** İstek başlığı adayları. */
+    private static final Pattern HEADER = Pattern.compile("(?i)[\"']((?:x-[a-z0-9-]{3,40})|platform-token|platform-type|client-token|device-id|app-version|channel-type)[\"']");
+    /** Yanıtta aranan alan adları. */
+    private static final Pattern FIELD = Pattern.compile("(?i)(zirve|boost|special|increase|top|odd|oran|price|outcome|market|event|match|home|away)");
 
-    /** Sayfaları ve ilk betikleri indirip özet satırları döndürür; hiçbir durumda istisna fırlatmaz. */
+    /** Sayfaları, betikleri ve aday adresleri inceleyip özet satırları döndürür; istisna fırlatmaz. */
     public static String report(Http http) {
         StringBuilder b = new StringBuilder();
-        for (String page : PAGES) {
-            String html = fetch(http, page, "text/html", b);
-            if (html == null) continue;
-            summarize(page, html, b);
+        String html = null, page = null;
+        for (String p : PAGES) {
+            html = fetch(http, p, "text/html", b);
+            if (html != null) {
+                page = p;
+                break;
+            }
+        }
+        Set<String> paths = new LinkedHashSet<>();
+        if (html != null) {
             List<String> scripts = new ArrayList<>();
             Matcher m = SCRIPT.matcher(html);
             while (m.find() && scripts.size() < MAX_SCRIPTS * 3) scripts.add(absolute(page, m.group(1)));
@@ -51,77 +60,160 @@ public final class BilyonerProbe {
                 if (!hostOf(js).endsWith("bilyoner.com")) continue; // yalnızca sitenin kendi betikleri
                 String body = fetch(http, js, "*/*", b);
                 scanned++;
-                if (body != null) summarize(js, body, b);
+                if (body != null) analyze(body, paths, b);
             }
-            break; // ilk açılan sayfa yeterli
         }
+        probeEndpoints(http, paths, b);
         return b.length() == 0 ? "  (çıktı yok)\n" : b.toString();
     }
 
-    private static String fetch(Http http, String url, String accept, StringBuilder b) {
+    private static Map<String, String> headers(String accept) {
         Map<String, String> h = new LinkedHashMap<>();
         h.put("Accept", accept);
         h.put("Accept-Language", "tr-TR,tr;q=0.9");
+        h.put("Referer", "https://www.bilyoner.com/iddaa/zirve-oran");
         h.put("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36");
+        return h;
+    }
+
+    private static String fetch(Http http, String url, String accept, StringBuilder b) {
         try {
-            Http.Response r = http.get(url, h);
+            Http.Response r = http.get(url, headers(accept));
             String body = r.body == null ? "" : r.body;
             b.append("  ").append(url).append(" -> HTTP ").append(r.status).append(", ").append(body.length()).append(" karakter\n");
             return body;
         } catch (Http.ProviderException | RuntimeException e) {
-            b.append("  ").append(url).append(" -> alınamadı: ").append(String.valueOf(e.getMessage())).append('\n');
+            b.append("  ").append(url).append(" -> alınamadı: ").append(shorten(String.valueOf(e.getMessage()), 160)).append('\n');
             return null;
         }
     }
 
-    static void summarize(String url, String body, StringBuilder b) {
-        if (body.contains("__NEXT_DATA__")) b.append("    gömülü veri: __NEXT_DATA__ var\n");
-        if (body.contains("__NUXT__")) b.append("    gömülü veri: __NUXT__ var\n");
-        if (body.contains("__INITIAL_STATE__") || body.contains("__PRELOADED_STATE__")) b.append("    gömülü veri: başlangıç durumu var\n");
-        Matcher m = SUPER.matcher(body);
-        int count = 0;
-        List<String> snippets = new ArrayList<>();
-        while (m.find()) {
-            count++;
-            if (snippets.size() < 3) {
-                int from = Math.max(0, m.start() - 50), to = Math.min(body.length(), m.end() + 70);
-                snippets.add(body.substring(from, to).replaceAll("\\s+", " ").trim());
-            }
+    /** Betikte Zirve Oran izleri, bülten veri yolları ve başlık adayları. */
+    static void analyze(String body, Set<String> paths, StringBuilder b) {
+        snippets("\"zirve\" geçen yerler", ZIRVE, body, 8, 90, b);
+        snippets("\"specialOdds\" geçen yerler", SPECIAL_ODDS, body, 3, 90, b);
+        snippets("\"tabType\" geçen yerler", TAB_TYPE, body, 4, 70, b);
+        Set<String> found = new LinkedHashSet<>();
+        Matcher g = GAMELIST.matcher(body);
+        while (g.find() && found.size() < 40) found.add(g.group(1));
+        if (!found.isEmpty()) {
+            b.append("    bülten veri yolları (").append(found.size()).append("):\n");
+            for (String s : found) b.append("      ").append(s).append('\n');
+            paths.addAll(found);
         }
-        if (count > 0) {
-            b.append("    kampanya metni (süper oran / oran artışı / özel oran): ").append(count).append('\n');
-            for (String s : snippets) b.append("      … ").append(s).append(" …\n");
-        }
-        list("API adresleri", API, body, 2, 12, b);
-        list("sunucular", HOST, body, 1, 12, b);
-        list("sürümlü veri yolları", VERSIONED, body, 1, 15, b);
-        list("oran / bülten / kampanya yolları", TOPIC_PATH, body, 1, 15, b);
-        list("kampanya alanı adayları", KEY, body, 1, 15, b);
+        Set<String> hs = new LinkedHashSet<>();
+        Matcher h = HEADER.matcher(body);
+        while (h.find() && hs.size() < 20) hs.add(h.group(1));
+        if (!hs.isEmpty()) b.append("    istek başlığı adayları: ").append(String.join(", ", hs)).append('\n');
     }
 
-    /** Desenin eşleşmelerini sıklığa göre (en sık önce) yazar; group: alınacak grup. */
-    private static void list(String title, Pattern p, String body, int group, int max, StringBuilder b) {
-        Map<String, Integer> seen = new LinkedHashMap<>();
+    private static void snippets(String title, Pattern p, String body, int max, int radius, StringBuilder b) {
         Matcher m = p.matcher(body);
-        int guard = 0;
-        while (m.find() && guard++ < 200000) {
-            String v = group == 2 && m.group(1) != null ? m.group(1) + m.group(2) : m.group(group);
-            if (v == null || v.length() < 3) continue;
-            Integer c = seen.get(v);
-            seen.put(v, c == null ? 1 : c + 1);
-        }
-        if (seen.isEmpty()) return;
-        List<Map.Entry<String, Integer>> e = new ArrayList<>(seen.entrySet());
-        java.util.Collections.sort(e, new java.util.Comparator<Map.Entry<String, Integer>>() {
-            @Override
-            public int compare(Map.Entry<String, Integer> x, Map.Entry<String, Integer> y) {
-                return Integer.compare(y.getValue(), x.getValue());
+        int count = 0;
+        List<String> out = new ArrayList<>();
+        while (m.find()) {
+            count++;
+            if (out.size() < max) {
+                int from = Math.max(0, m.start() - radius), to = Math.min(body.length(), m.end() + radius);
+                out.add(body.substring(from, to).replaceAll("\\s+", " ").trim());
             }
-        });
-        b.append("    ").append(title).append(" (").append(seen.size()).append("):\n");
-        for (int i = 0; i < Math.min(max, e.size()); i++) {
-            b.append("      ").append(e.get(i).getKey()).append(e.get(i).getValue() > 1 ? " ×" + e.get(i).getValue() : "").append('\n');
         }
+        if (count == 0) return;
+        b.append("    ").append(title).append(": ").append(count).append('\n');
+        for (String s : out) b.append("      … ").append(s).append(" …\n");
+    }
+
+    /**
+     * Aday veri adresleri: betiklerde bulunan, kullanıcıya özel olmayan (auth içermeyen, değişkensiz)
+     * bülten yolları ve topluluk tahmini; iki olası kök adresle. En fazla MAX_REQUESTS istek.
+     */
+    static void probeEndpoints(Http http, Set<String> found, StringBuilder b) {
+        List<String> candidates = new ArrayList<>();
+        for (String p : found) {
+            if (p.contains("${") || p.contains("/auth/") || !p.contains("gamelist")) continue;
+            if (p.toLowerCase(java.util.Locale.ROOT).contains("zirve")) candidates.add(0, p);
+            else candidates.add(p);
+        }
+        if (!candidates.contains(GUESS)) candidates.add(GUESS);
+        b.append("  Aday veri adresleri\n");
+        int requests = 0;
+        String workingBase = null;
+        for (String path : candidates) {
+            for (String base : BASES) {
+                if (workingBase != null && !workingBase.equals(base)) continue;
+                if (requests++ >= MAX_REQUESTS) return;
+                String url = base + path;
+                try {
+                    Http.Response r = http.get(url, headers("application/json"));
+                    String body = r.body == null ? "" : r.body;
+                    b.append("    ").append(url).append(" -> HTTP ").append(r.status).append(", ").append(body.length()).append(" karakter\n");
+                    describe(body, b);
+                    workingBase = base;
+                    break;
+                } catch (Http.ProviderException | RuntimeException e) {
+                    b.append("    ").append(url).append(" -> ").append(shorten(String.valueOf(e.getMessage()), 140)).append('\n');
+                }
+            }
+        }
+    }
+
+    /** JSON yanıtın yapısı: üst alanlar ve ilgili alan adları (ilk görüldükleri yolla). */
+    static void describe(String body, StringBuilder b) {
+        Object json;
+        try {
+            json = Json.parse(body);
+        } catch (RuntimeException e) {
+            b.append("      JSON değil: ").append(shorten(body.replaceAll("\\s+", " "), 160)).append('\n');
+            return;
+        }
+        if (json instanceof Map) {
+            List<String> top = new ArrayList<>();
+            for (Map.Entry<String, Object> e : Json.obj(json).entrySet()) top.add(e.getKey() + ":" + kind(e.getValue()));
+            b.append("      üst alanlar: ").append(shorten(String.join(", ", top), 300)).append('\n');
+        } else if (json instanceof List) {
+            b.append("      liste, ").append(((List<?>) json).size()).append(" öğe\n");
+        }
+        Map<String, String> fields = new LinkedHashMap<>();
+        walk(json, "", 0, fields);
+        if (!fields.isEmpty()) {
+            b.append("      ilgili alanlar:\n");
+            int n = 0;
+            for (Map.Entry<String, String> e : fields.entrySet()) {
+                if (n++ >= 30) break;
+                b.append("        ").append(e.getValue()).append('\n');
+            }
+        }
+    }
+
+    private static String kind(Object v) {
+        if (v instanceof Map) return "nesne";
+        if (v instanceof List) return "liste(" + ((List<?>) v).size() + ")";
+        if (v instanceof String) return "metin";
+        if (v instanceof Number) return "sayı";
+        if (v instanceof Boolean) return "mantık";
+        return "boş";
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void walk(Object o, String path, int depth, Map<String, String> out) {
+        if (depth > 7 || out.size() >= 60) return;
+        if (o instanceof Map) {
+            for (Map.Entry<String, Object> e : ((Map<String, Object>) o).entrySet()) {
+                String p = path.isEmpty() ? e.getKey() : path + "." + e.getKey();
+                if (FIELD.matcher(e.getKey()).find() && !out.containsKey(e.getKey())) {
+                    Object v = e.getValue();
+                    String sample = v instanceof Map || v instanceof List ? kind(v) : shorten(String.valueOf(v), 40);
+                    out.put(e.getKey(), p + " = " + sample);
+                }
+                walk(e.getValue(), p, depth + 1, out);
+            }
+        } else if (o instanceof List && !((List<Object>) o).isEmpty()) {
+            walk(((List<Object>) o).get(0), path + "[0]", depth + 1, out);
+        }
+    }
+
+    private static String shorten(String s, int max) {
+        return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 
     static String hostOf(String url) {

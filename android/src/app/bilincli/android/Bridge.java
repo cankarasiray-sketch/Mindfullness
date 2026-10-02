@@ -500,8 +500,8 @@ public final class Bridge {
             for (int i = 0; i < Math.min(12, lines.length); i++) b.append(lines[i]).append('\n');
             if (lines.length > 12) b.append("(+").append(lines.length - 12).append(" pazar kodu daha)\n");
         }
-        progress("Bilyoner sayfası inceleniyor (Süper Oran keşfi, kredi harcamaz)…");
-        b.append("\nBilyoner keşfi (Süper Oran için; bu bölümü paylaşırsan okuma eklenir)\n")
+        progress("Bilyoner inceleniyor (Zirve Oran keşfi, kredi harcamaz)…");
+        b.append("\nBilyoner keşfi (Zirve Oran için; bu bölümü paylaşırsan okuma eklenir)\n")
                 .append(app.bilincli.core.BilyonerProbe.report(new AndroidHttp(activity)));
         String binv = app.bilincli.core.Nesine.lastBasketInventory;
         if (binv != null && !binv.isEmpty()) {
