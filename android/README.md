@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.1.2.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.1.3.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -80,7 +80,9 @@ bildirim olarak gelir.
   yapılarını özetler (durum, boyut, gömülü veri, "süper oran" geçen yerler, API'ye benzeyen
   adresler). Bu bölüm paylaşılınca Süper Oranlar gerçek veriye göre otomatik okunacak ve
   promosyon kontrolüne kendiliğinden düşecek. Oturum ya da hesap kullanılmaz, kredi harcanmaz;
-  Bilyoner istekleri Nesine gibi önce VPN dışı ağdan denenir.
+  Bilyoner istekleri Nesine gibi önce VPN dışı ağdan denenir. 2.1.3'ten beri sunucu adları, sürüm
+  numaralı veri yolları, oran/bülten/kampanya yolları ve kampanya alanı adayları da listelenir;
+  test çıktısı "Çıktıyı paylaş" ile metin olarak gönderilebilir.
 - **Bugünün maçları kendiliğinden (2.1.1):** Uygulama açıldığında bugün hangi liglerin oynadığı
   bilinmiyorsa (ör. güncellemeden sonra) arka planda ücretsiz maç listesinden öğrenilir; kredi
   planı ve ek ligler düğmeye basmadan güncellenir.
@@ -359,7 +361,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.1.2.apk
+./build.sh          # testler + build/BilincliKupon-2.1.3.apk
 ./build.sh test     # yalnızca testler
 ```
 

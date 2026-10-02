@@ -119,10 +119,12 @@ public class PromoTest {
                 if (url.equals("https://www.bilyoner.com/iddaa")) {
                     return new Response(200, "<html><script id=\"__NEXT_DATA__\">{}</script>"
                             + "<script src=\"/_next/static/app.js\"></script><script src=\"https://cdn.other.com/x.js\"></script>"
+                            + "<script src=\"https://bundles.efilli.com/bilyoner.com.prod.js\"></script>"
                             + "<a>Süper Oran</a> fetch('https://www.bilyoner.com/api/v3/mobile/bulletin?x=1')</html>", new LinkedHashMap<String, String>());
                 }
                 if (url.equals("https://www.bilyoner.com/_next/static/app.js")) {
-                    return new Response(200, "var a='/api/v2/super-odds/list';var b='superOdds';", new LinkedHashMap<String, String>());
+                    return new Response(200, "var a='/api/v2/super-odds/list';var b='superOdds';var c=\"https://sportsbook.bilyoner.com\";"
+                            + "var d='/sportsbook/v3/events/{id}';var e='/program/odds/today';n.isBoosted;n.isBoosted;csp_coupon_boost", new LinkedHashMap<String, String>());
                 }
                 throw new ProviderException(url + " -> bağlantı hatası");
             }
@@ -130,7 +132,12 @@ public class PromoTest {
         String r = BilyonerProbe.report(http);
         assertTrue(r, r.contains("https://www.bilyoner.com/iddaa -> HTTP 200"));
         assertTrue(r, r.contains("gömülü veri: __NEXT_DATA__ var"));
-        assertTrue(r, r.contains("\"süper oran\" geçen yer: 1"));
+        assertTrue(r, r.contains("kampanya metni (süper oran / oran artışı / özel oran): 1"));
+        assertTrue(r, r.contains("sunucular") && r.contains("sportsbook.bilyoner.com"));
+        assertTrue(r, r.contains("sürümlü veri yolları") && r.contains("/sportsbook/v3/events/{id}"));
+        assertTrue(r, r.contains("oran / bülten / kampanya yolları") && r.contains("/program/odds/today"));
+        assertTrue(r, r.contains("kampanya alanı adayları") && r.contains("isBoosted ×2") && r.contains("superOdds"));
+        assertFalse(urls.contains("https://bundles.efilli.com/bilyoner.com.prod.js")); // adında bilyoner geçen başka site
         assertTrue(r, r.contains("https://www.bilyoner.com/api/v3/mobile/bulletin?x=1"));
         assertTrue(r, r.contains("/api/v2/super-odds/list"));
         assertFalse(urls.contains("https://cdn.other.com/x.js")); // yalnızca sitenin kendi betikleri

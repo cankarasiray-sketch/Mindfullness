@@ -339,6 +339,19 @@ public final class Bridge {
                 });
                 return "Yedek paylaşım ekranı açıldı.";
             }
+            case "shareText": {
+                final String text = String.valueOf(Json.str(p, "text"));
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain")
+                                .putExtra(Intent.EXTRA_SUBJECT, "Bilinçli Kupon test çıktısı " + Fmt.dayKey(Instant.now()))
+                                .putExtra(Intent.EXTRA_TEXT, text);
+                        activity.startActivity(Intent.createChooser(send, "Çıktıyı paylaş"));
+                    }
+                });
+                return "";
+            }
             case "import": {
                 requireReal(repo);
                 synchronized (Repo.LOCK) {

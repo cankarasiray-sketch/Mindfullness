@@ -770,7 +770,8 @@ function viewSettings() {
       + (S.credits.keys ? "<br>" + S.credits.keys.map(function (k) {
         return esc(k.label) + ": " + (k.remaining == null ? "henüz kullanılmadı" : k.remaining === 0 ? "0 (bitti ya da geçersiz)" : k.remaining);
       }).join(" · ") : "") + "</p>" : "")
-    + '<div class="btns"><button class="b" onclick="checkSources()">Kaynakları test et</button></div><pre class="out" id="checkOut" style="display:none"></pre></div>';
+    + '<div class="btns"><button class="b" onclick="checkSources()">Kaynakları test et</button></div><pre class="out" id="checkOut"' + (lastCheck ? "" : ' style="display:none"') + ">" + esc(lastCheck) + "</pre>"
+    + (lastCheck ? '<div class="btns"><button class="b ghost" onclick="act(\'shareText\',{text:lastCheck},true)">Çıktıyı paylaş</button></div>' : "") + "</div>";
   html += '<div class="card"><h2>Pazarlar</h2><p class="small muted">Daha çok pazar, daha çok değerli fırsat demektir. Her pazar, iddaa bülteniyle Pinnacle '
     + "karşılaştırılarak otomatik doğrulanır; eşleşme belirsizse kullanılmaz.</p>"
     + '<label class="check"><input type="checkbox" checked disabled>Maç Sonucu (1-X-2)</label>'
@@ -919,6 +920,7 @@ function collectSettings() {
 function saveSettings() {
   try { act("saveSettings", {settings: collectSettings()}); } catch (e) { toast(e.message, true); }
 }
+var lastCheck = "";
 function checkSources() {
   var out = document.getElementById("checkOut");
   var save;
@@ -926,8 +928,8 @@ function checkSources() {
   act("saveSettings", {settings: save}, true).then(function (r) {
     if (!r.ok) return;
     act("check").then(function (res) {
-      var o = document.getElementById("checkOut");
-      if (o) { o.style.display = "block"; o.textContent = res.message; }
+      lastCheck = res.message || "";
+      render(); // çıktı ve "Çıktıyı paylaş" düğmesi
     });
   });
 }

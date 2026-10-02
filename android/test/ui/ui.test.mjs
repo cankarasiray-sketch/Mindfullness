@@ -684,6 +684,13 @@ test("uzun sonuç balonu kaplamaz, ayrıntı kutuda; dokununca kapanır", async 
   const toast = t.$("#toast");
   assert.equal(toast.textContent, "iddaa bülteni (Nesine): 639 maç (ayrıntı ekranda)");
   assert.equal(t.$("#checkOut").textContent, long);
+  // metin olarak paylaşılabilir (ekran görüntüsü gerekmez)
+  const calls = [];
+  t.w.MockAndroid.act = (action, payload, id) => { calls.push({ action, payload: JSON.parse(payload) }); setTimeout(() => t.w.onActResult(id, { ok: true, message: "" }), 0); };
+  t.button("Çıktıyı paylaş").click();
+  await t.tick();
+  assert.deepEqual(calls.at(-1), { action: "shareText", payload: { text: long } });
+  assert.equal(t.$("#checkOut").textContent, long); // yeniden çizimde çıktı kaybolmaz
   toast.click();
   assert.equal(toast.className, "");
   // başlıklı çıktı: ilk anlamlı satır

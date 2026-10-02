@@ -21,11 +21,19 @@ public final class BilyonerProbe {
     private BilyonerProbe() {}
 
     static final String[] PAGES = {"https://www.bilyoner.com/iddaa", "https://m.bilyoner.com/iddaa"};
-    static final int MAX_SCRIPTS = 3;
+    static final int MAX_SCRIPTS = 4;
 
-    private static final Pattern BOOST = Pattern.compile("(?i)(s[üu]per\\s?oran|superoran|super-oran|superodds|super_odds|boost|oran\\s?art[ıi]r)");
+    /** Kampanya metni (yalnızca Türkçe ad; "boost" başka özelliklerde de geçiyor). */
+    private static final Pattern SUPER = Pattern.compile("(?i)(s[üu]per\\s?oran|oran\\s?art[ıi][şs]|art[ıi]r[ıi]lm[ıi][şs]\\s?oran|[öo]zel\\s?oran)");
     private static final Pattern API = Pattern.compile("(?i)((?:https?:)?//[a-z0-9.-]*bilyoner\\.com)?(/api/[a-z0-9_./?=&{}-]{3,120})");
     private static final Pattern SCRIPT = Pattern.compile("(?i)<script[^>]+src=[\"']([^\"']+)[\"']");
+    private static final Pattern HOST = Pattern.compile("(?i)https?://([a-z0-9-]+(?:\\.[a-z0-9-]+)+)");
+    /** Sürüm numaralı yol: "/sportsbook/v2/events" gibi. */
+    private static final Pattern VERSIONED = Pattern.compile("(?i)[\"'`](/(?:[a-z0-9_-]+/){0,4}v[1-9][0-9]?/[a-z0-9_/{}.$-]{2,80})");
+    /** Oran, bülten ve kampanyayla ilgili yollar. */
+    private static final Pattern TOPIC_PATH = Pattern.compile("(?i)[\"'`](/[a-z0-9_/{}.$-]*(?:bulletin|bulten|program|odds|oran|event|match|market|boost|special|ozel|promo|campaign|kampanya)[a-z0-9_/{}.$-]*)");
+    /** Kampanya oranı alanına benzeyen tanımlayıcılar (ör. boostedOdd, isSpecial, superOdds). */
+    private static final Pattern KEY = Pattern.compile("\\b([a-zA-Z]*(?:[Bb]oost|[Ss]pecial|[Ee]nhanced|[Ii]ncreased|[Ss]uper[A-Z]|[Oo]zel|[Aa]rtir|[Pp]romo)[a-zA-Z]*)\\b");
 
     /** Sayfaları ve ilk betikleri indirip özet satırları döndürür; hiçbir durumda istisna fırlatmaz. */
     public static String report(Http http) {
@@ -40,7 +48,7 @@ public final class BilyonerProbe {
             int scanned = 0;
             for (String js : scripts) {
                 if (scanned >= MAX_SCRIPTS) break;
-                if (!js.contains("bilyoner")) continue; // yalnızca sitenin kendi betikleri
+                if (!hostOf(js).endsWith("bilyoner.com")) continue; // yalnızca sitenin kendi betikleri
                 String body = fetch(http, js, "*/*", b);
                 scanned++;
                 if (body != null) summarize(js, body, b);
@@ -70,7 +78,7 @@ public final class BilyonerProbe {
         if (body.contains("__NEXT_DATA__")) b.append("    gömülü veri: __NEXT_DATA__ var\n");
         if (body.contains("__NUXT__")) b.append("    gömülü veri: __NUXT__ var\n");
         if (body.contains("__INITIAL_STATE__") || body.contains("__PRELOADED_STATE__")) b.append("    gömülü veri: başlangıç durumu var\n");
-        Matcher m = BOOST.matcher(body);
+        Matcher m = SUPER.matcher(body);
         int count = 0;
         List<String> snippets = new ArrayList<>();
         while (m.find()) {
@@ -81,16 +89,46 @@ public final class BilyonerProbe {
             }
         }
         if (count > 0) {
-            b.append("    \"süper oran\" geçen yer: ").append(count).append('\n');
+            b.append("    kampanya metni (süper oran / oran artışı / özel oran): ").append(count).append('\n');
             for (String s : snippets) b.append("      … ").append(s).append(" …\n");
         }
-        Set<String> apis = new LinkedHashSet<>();
-        Matcher a = API.matcher(body);
-        while (a.find() && apis.size() < 15) apis.add((a.group(1) == null ? "" : a.group(1)) + a.group(2));
-        if (!apis.isEmpty()) {
-            b.append("    API adresleri (").append(apis.size()).append("):\n");
-            for (String s : apis) b.append("      ").append(s).append('\n');
+        list("API adresleri", API, body, 2, 12, b);
+        list("sunucular", HOST, body, 1, 12, b);
+        list("sürümlü veri yolları", VERSIONED, body, 1, 15, b);
+        list("oran / bülten / kampanya yolları", TOPIC_PATH, body, 1, 15, b);
+        list("kampanya alanı adayları", KEY, body, 1, 15, b);
+    }
+
+    /** Desenin eşleşmelerini sıklığa göre (en sık önce) yazar; group: alınacak grup. */
+    private static void list(String title, Pattern p, String body, int group, int max, StringBuilder b) {
+        Map<String, Integer> seen = new LinkedHashMap<>();
+        Matcher m = p.matcher(body);
+        int guard = 0;
+        while (m.find() && guard++ < 200000) {
+            String v = group == 2 && m.group(1) != null ? m.group(1) + m.group(2) : m.group(group);
+            if (v == null || v.length() < 3) continue;
+            Integer c = seen.get(v);
+            seen.put(v, c == null ? 1 : c + 1);
         }
+        if (seen.isEmpty()) return;
+        List<Map.Entry<String, Integer>> e = new ArrayList<>(seen.entrySet());
+        java.util.Collections.sort(e, new java.util.Comparator<Map.Entry<String, Integer>>() {
+            @Override
+            public int compare(Map.Entry<String, Integer> x, Map.Entry<String, Integer> y) {
+                return Integer.compare(y.getValue(), x.getValue());
+            }
+        });
+        b.append("    ").append(title).append(" (").append(seen.size()).append("):\n");
+        for (int i = 0; i < Math.min(max, e.size()); i++) {
+            b.append("      ").append(e.get(i).getKey()).append(e.get(i).getValue() > 1 ? " ×" + e.get(i).getValue() : "").append('\n');
+        }
+    }
+
+    static String hostOf(String url) {
+        int start = url.indexOf("://");
+        if (start < 0) return "";
+        int end = url.indexOf('/', start + 3);
+        return url.substring(start + 3, end < 0 ? url.length() : end).toLowerCase(java.util.Locale.ROOT);
     }
 
     static String absolute(String page, String src) {
