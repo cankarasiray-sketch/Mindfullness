@@ -487,7 +487,7 @@ test("birden fazla API anahtarı: alanlar, kayıt ve anahtar başına kredi", as
   const t = boot(s, "#ayarlar");
   assert.equal(t.$("#sKey0").value, "anahtar-bir-1111");
   assert.equal(t.$("#sKey1").value, "anahtar-iki-2222");
-  assert.equal(t.$$(".apikey").length, 7);
+  assert.equal(t.$$(".apikey").length, 10);
   assert.match(t.text(), /Kalan API kredisi: 780/);
   assert.match(t.text(), /…1111: 480 · …2222: 300 · …3333: henüz kullanılmadı/);
   t.$("#sKey2").value = " anahtar-uc-3333 ";

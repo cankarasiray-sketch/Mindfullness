@@ -6,7 +6,7 @@ telefonda tutar.
 
 ## Kurulum (telefon)
 
-1. `BilincliKupon-2.2.4.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
+1. `BilincliKupon-2.2.5.apk` dosyasını telefona indir ve aç. Android "bilinmeyen kaynak" izni
    isterse bu kaynağa (tarayıcı ya da dosya yöneticisi) izin ver.
 2. Uygulamayı aç, bildirim iznini onayla.
 3. **Ayarlar** sekmesinde The Odds API anahtarını gir ([ücretsiz](https://the-odds-api.com)),
@@ -166,8 +166,8 @@ bildirim olarak gelir.
   önceden bunlar için 09:00'a, maç bittikten sonraya tarama konuyordu.
 - **Gece sessizliği:** 00:00–08:00 arası bildirimler sessiz kanaldan gelir (ses, titreşim, ekran
   yok; sabah bildirim alanında durur). Ayarlar → Zamanlama'dan kapatılabilir.
-- **7 anahtar:** Veri kaynağı'na en fazla 7 The Odds API anahtarı girilebilir (7 × 500 = ayda
-  3.500 kredi).
+- **7 anahtar (2.2.5'te 10):** Veri kaynağı'na en fazla 10 The Odds API anahtarı girilebilir
+  (10 × 500 = ayda 5.000 kredi).
 
 ## Basketbol (1.9)
 
@@ -304,7 +304,7 @@ kısmaz. Ücretsiz anahtarda daraltma, kredinin ay ortasında bitip uygulamanın
 içindir. İstersen Ayarlar → Kredi planı'ndan kapatabilirsin; kredi biterse oranlar alınamaz ve yenilenene kadar
 kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
 
-**Birden fazla anahtar (1.9.1, 2.0'dan beri 7):** Ayarlar → Veri kaynağı'na en fazla 7 anahtar girilebilir (ör.
+**Birden fazla anahtar (1.9.1; 2.0'da 7, 2.2.5'ten beri 10):** Ayarlar → Veri kaynağı'na en fazla 10 anahtar girilebilir (ör.
 arkadaşlarının kendi hesaplarından, kendi rızalarıyla verdikleri). Her sorguda önce hiç ölçülmemiş,
 sonra kalan kredisi en çok olan anahtar kullanılır; böylece yük anahtarlara yayılır. Kredisi biten
 ya da geçersiz anahtar (HTTP 401) ve istek sınırına takılan anahtar (429) o çalışmada atlanır,
@@ -424,7 +424,7 @@ Android SDK ya da Gradle gerekmez. Linux veya macOS'ta JDK 17+, python3 ve curl 
 
 ```bash
 cd android
-./build.sh          # testler + build/BilincliKupon-2.2.4.apk
+./build.sh          # testler + build/BilincliKupon-2.2.5.apk
 ./build.sh test     # yalnızca testler
 ```
 

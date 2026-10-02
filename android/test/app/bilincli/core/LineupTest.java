@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 
-/** 2.0: kadro saati taraması, gece maçları, 7 anahtar ve gece sessizliği ayarları. */
+/** 2.0: kadro saati taraması, gece maçları, çoklu anahtar (10) ve gece sessizliği ayarları. */
 public class LineupTest {
     static final Instant NOW = CoreTest.NOW;
 
@@ -104,11 +104,11 @@ public class LineupTest {
         Settings back = Settings.fromMap(m);
         assertFalse(back.lineupScans);
         assertFalse(back.quietNights);
-        // 7 anahtar
+        // 10 anahtar (2.2.5'ten beri)
         List<String> keys = new ArrayList<>();
-        for (int i = 1; i <= 7; i++) keys.add("anahtar" + i);
+        for (int i = 1; i <= 10; i++) keys.add("anahtar" + i);
         d.oddsApiKey = String.join("\n", keys);
         assertNull(d.validate());
-        assertEquals(7, Settings.fromMap(d.toMap()).apiKeys().size());
+        assertEquals(10, Settings.fromMap(d.toMap()).apiKeys().size());
     }
 }

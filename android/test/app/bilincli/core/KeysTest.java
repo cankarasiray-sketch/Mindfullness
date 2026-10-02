@@ -49,10 +49,10 @@ public class KeysTest {
         assertEquals(A + "\n" + B + "\n" + C, s.oddsApiKey);
         assertEquals("…1111", Settings.keyLabel(A));
         assertNull(s.validate());
-        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7";
-        assertNull(s.validate()); // 7 anahtar kabul
-        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8";
-        assertTrue(s.validate().contains("En fazla 7"));
+        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8 k9 k10";
+        assertNull(s.validate()); // 10 anahtar kabul
+        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11";
+        assertTrue(s.validate().contains("En fazla 10"));
         assertEquals(Collections.singletonList("abc123"), cfg(" abc123 ").apiKeys()); // tek anahtar eskisi gibi
     }
 

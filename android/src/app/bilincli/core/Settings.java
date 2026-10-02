@@ -81,7 +81,7 @@ public final class Settings {
     public String oddsApiKey = "";
 
     /** En fazla bu kadar anahtar. */
-    public static final int MAX_KEYS = 7;
+    public static final int MAX_KEYS = 10;
 
     /** Girilen anahtarlar (boşluk, satır, virgül ya da noktalı virgülle ayrılmış; tekrarlar atılır). */
     public List<String> apiKeys() {
