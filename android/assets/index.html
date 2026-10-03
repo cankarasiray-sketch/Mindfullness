@@ -1275,7 +1275,7 @@ var FIELDS = [
   ["maxCouponsPerDay", "Günde en fazla kupon (1-5)", false], ["maxDailyExposure", "Günlük toplam en fazla kasa (%)", true],
   ["weeklyLossLimit", "Haftalık kayıp limiti (%)", true], ["chaseCooldownHours", "Kovalama beklemesi (saat)", false]
 ];
-var MAX_KEYS = 10;
+var MAX_KEYS = 15;
 function keyInputs(joined) {
   var keys = (joined || "").split(/[\s,;]+/).filter(function (k) { return k; }), html = "";
   for (var i = 0; i < MAX_KEYS; i++) {

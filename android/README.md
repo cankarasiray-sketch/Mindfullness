@@ -62,6 +62,13 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## 15 API anahtarı (2.14)
+
+- Ayarlar → Veri kaynağı'na en fazla **15** The Odds API anahtarı girilebilir (önce 10). Her istek
+  kredisi en çok kalan anahtardan gider; kredisi biten ya da geçersiz anahtar o çalışmada atlanır,
+  kalan krediler toplanır. 15 ücretsiz anahtar ≈ ayda 7.500 kredi: kredi planı daha az daraltır,
+  radar günde 8 tarama ve ek ligler daha sık sığar.
+
 ## Tutma olasılığı ve kârlılık dengesi (2.13)
 
 - **Denge puanı:** günün seçimi ve tek maç listesi artık yalnızca beklenen değere göre değil, beklenen
@@ -562,7 +569,7 @@ kısmaz. Ücretsiz anahtarda daraltma, kredinin ay ortasında bitip uygulamanın
 içindir. İstersen Ayarlar → Kredi planı'ndan kapatabilirsin; kredi biterse oranlar alınamaz ve yenilenene kadar
 kupon üretilemez. Nesine bülteni ücretsizdir ve kredi harcamaz.
 
-**Birden fazla anahtar (1.9.1; 2.0'da 7, 2.2.5'ten beri 10):** Ayarlar → Veri kaynağı'na en fazla 10 anahtar girilebilir (ör.
+**Birden fazla anahtar (1.9.1; 2.0'da 7, 2.2.5'te 10, 2.14'ten beri 15):** Ayarlar → Veri kaynağı'na en fazla 15 anahtar girilebilir (ör.
 arkadaşlarının kendi hesaplarından, kendi rızalarıyla verdikleri). Her sorguda önce hiç ölçülmemiş,
 sonra kalan kredisi en çok olan anahtar kullanılır; böylece yük anahtarlara yayılır. Kredisi biten
 ya da geçersiz anahtar (HTTP 401) ve istek sınırına takılan anahtar (429) o çalışmada atlanır,
