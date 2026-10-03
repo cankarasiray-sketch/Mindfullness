@@ -62,6 +62,16 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Zirve Oran tek maç listesinde (2.14.1)
+
+- Zirve Oran'ın tek oynanabilir artırılmış oranları tek maç listesinde her zaman yer alır (tutma %30'un
+  üstündeyse; normal seçimlerde şart %50) ve aynı seçimin normal oranının yerine geçer ("Zirve Oran"
+  rozeti, normal oran üstü çizili). Sıra yine denge puanıyla.
+- Süzgece **Zirve** eklendi: yalnızca Zirve seçimleri. Kartta durum satırı: kaç artırılmış oranın listede
+  olduğu, kaçının seçili süzgeçte göründüğü ve dışarıda kalanların nedeni (MBS 2+ tek oynanamaz, adil oran
+  yok, oran değişmiş, başlamak üzere, %30'dan az tutar). Zirve seçimleri çoğu zaman %50–65 tuttuğu için
+  varsayılan %65+ süzgecinde görünmeyebilir.
+
 ## 15 API anahtarı (2.14)
 
 - Ayarlar → Veri kaynağı'na en fazla **15** The Odds API anahtarı girilebilir (önce 10). Her istek

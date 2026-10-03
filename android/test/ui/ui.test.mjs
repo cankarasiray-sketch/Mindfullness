@@ -1222,6 +1222,34 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   assert.deepEqual(f.errors, []);
 });
 
+test("tek maç fırsatları: Zirve süzgeci ve Zirve durum satırı", async () => {
+  const s = clone(baseState);
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  const soon = new Date(Date.parse(s.now) + 10 * 60000).toISOString();
+  const base = { kickoff: ko, league: "Nations League", mbs: 1, stake: 2500, win: 4000, expected: -200 };
+  s.singles = [
+    Object.assign({}, base, { source: "iddaa", ref: "a", m: "MS", o: "1", label: "MS 1", home: "İsviçre", away: "Slovenya", odds: 1.16, p: 0.76, fair: 1.32, ev: -0.12, score: -0.12 }),
+    Object.assign({}, base, { source: "zirve", ref: "b", m: "MS", o: "2", label: "MS 2", home: "Hırvatistan", away: "İngiltere", odds: 1.61, normalOdds: 1.55, p: 0.56, fair: 1.78, ev: -0.094, score: -0.095 }),
+  ];
+  s.zirve = { at: s.now, events: 4, offers: 5, play: 0, rows: [
+    { status: "oynama", kickoff: ko, mbs: 1, p: 0.56 },
+    { status: "oynama", kickoff: ko, mbs: 2, p: 0.6 },
+    { status: "mac", kickoff: ko, mbs: 1 },
+    { status: "degisti", kickoff: ko, mbs: 1, p: 0.5 },
+    { status: "oynama", kickoff: soon, mbs: 1, p: 0.7 } ] };
+  const f = boot(s, "#firsat");
+  const note = f.$(".zirve-singles").textContent;
+  assert.match(note, /5 artırılmış oranın 1'i tek maç listesinde \(0'i bu süzgeçte; hepsi için "Zirve"\)/);
+  assert.match(note, /1'i MBS 2\+ \(tek oynanamaz\), 1'inin adil oranı yok, 1'inde oran değişmiş \(tara\), 1'i başlamak üzere/);
+  assert.equal(f.$$("#singlesCard .single-row").length, 1); // %65+: yalnızca İsviçre
+  f.button("Zirve").click();
+  const rows = f.$$("#singlesCard .single-row");
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].textContent, /Hırvatistan – İngiltere.*MS 2.*1,61.*Zirve Oran/);
+  assert.match(f.$("#singlesCard .chip.main").textContent, /Zirve/);
+  assert.deepEqual(f.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

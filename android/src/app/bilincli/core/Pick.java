@@ -161,12 +161,23 @@ public final class Pick {
     /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 100 seçim, günün seçimi tutarıyla. */
     public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         List<Object> out = new ArrayList<>();
-        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), now)) {
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        double f = fraction(cfg, balance);
+        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, f, now)) {
             if (out.size() >= LIST_SIZE) break;
             out.add(withStake(e, cfg, balance));
+            seen.add(Json.str(e, "ref") + "|" + Json.str(e, "m") + "|" + Json.str(e, "o"));
+        }
+        // 2.14.1: Zirve Oran'ın tek oynanabilir artırılmış oranları her zaman listede (tutma %30'un üstündeyse;
+        // sıra yine denge puanıyla, arayüzde "Zirve" süzgeci)
+        for (Map<String, Object> e : singles(new ArrayList<Object>(), zirve, cfg, ZIRVE_LIST_MIN_PROB, f, now)) {
+            if (seen.add(Json.str(e, "ref") + "|" + Json.str(e, "m") + "|" + Json.str(e, "o"))) out.add(withStake(e, cfg, balance));
         }
         return out;
     }
+
+    /** Zirve Oran seçimlerinin listeye girmesi için en az tutma olasılığı (normal seçimlerde %50). */
+    static final double ZIRVE_LIST_MIN_PROB = 0.30;
 
     private static Map<String, Object> withStake(Map<String, Object> e, Settings cfg, long balance) {
         Map<String, Object> pick = new LinkedHashMap<>(e);

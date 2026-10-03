@@ -617,21 +617,47 @@ function bandsHtml() {
       + (on ? '<span class="st ok">en iyi denge</span> ' : "") + '<b class="' + cls(b.bestEv) + '">' + pct(b.bestEv, true) + "</b></span></div>";
   }).join("") + '<p class="small muted">Her bantta adil orana en yakın seçimin beklenen değeri; "en iyi denge" tutma ve ödemeyi birlikte tartan puanda öndeki bant.</p></div>';
 }
+/**
+ * Zirve Oran'ın tek maç listesindeki durumu (2.14.1): kaç artırılmış oran listede, kaçı süzgecin altında,
+ * kaçı neden dışarıda (MBS 2+, adil oran yok, oran değişmiş, maç başlamak üzere).
+ */
+function zirveSinglesNote(all, min) {
+  var Z = S.zirve, zr = (Z && Z.rows) || [];
+  if (S.demo || !zr.length) return "";
+  var inList = all.filter(function (x) { return x.source === "zirve"; }), shown = min === "zirve" ? inList.length
+    : inList.filter(function (x) { return x.p >= min - 1e-9; }).length;
+  var soon = Date.parse(S.now) + 30 * 60000, mbs = 0, noFair = 0, changed = 0, late = 0, lowp = 0;
+  zr.forEach(function (r) {
+    if (Date.parse(r.kickoff) < soon) late++;
+    else if (r.status === "degisti") changed++;
+    else if (r.status === "mac" || r.status === "secim" || r.status === "pazar") noFair++;
+    else if ((r.mbs || 1) > 1) mbs++;
+    else if ((r.p || 0) < 0.3) lowp++;
+  });
+  var out = [];
+  if (mbs) out.push(mbs + "'i MBS 2+ (tek oynanamaz)");
+  if (noFair) out.push(noFair + "'inin adil oranı yok");
+  if (changed) out.push(changed + "'inde oran değişmiş (tara)");
+  if (late) out.push(late + "'i başlamak üzere");
+  if (lowp) out.push(lowp + "'i %30'dan az tutar");
+  return '<p class="small zirve-singles"><b>Zirve Oran:</b> ' + zr.length + " artırılmış oranın " + inList.length + "'i tek maç listesinde"
+    + (min === "zirve" ? "" : " (" + shown + "'i bu süzgeçte; hepsi için \"Zirve\")") + (out.length ? "; " + out.join(", ") : "") + ".</p>";
+}
 var singlesMin = null;
 /** Tek maç fırsatlarında varsayılan süzgeç: tutma olasılığı %65 ve üstü (kullanıcı isteği). */
 var SINGLES_DEFAULT_MIN = 0.65;
 function singlesCard() {
   if (S.demo) return "";
-  var all = S.singles || [], min = singlesMin != null ? singlesMin : SINGLES_DEFAULT_MIN;
-  var rows = all.filter(function (x) { return x.p >= min - 1e-9; }).slice(0, 25);
+  var all = S.singles || [], min = singlesMin != null ? singlesMin : SINGLES_DEFAULT_MIN, zOnly = min === "zirve";
+  var rows = all.filter(function (x) { return zOnly ? x.source === "zirve" : x.p >= min - 1e-9; }).slice(0, 25);
   var chips = [0.5, 0.6, 0.65, 0.7, 0.8].map(function (v) {
-    return '<button class="chip' + (Math.abs(v - min) < 1e-9 ? " main" : "") + '" onclick="singlesMin=' + v + ';render()">%' + Math.round(v * 100) + "+</button>";
-  }).join(" ");
+    return '<button class="chip' + (!zOnly && Math.abs(v - min) < 1e-9 ? " main" : "") + '" onclick="singlesMin=' + v + ';render()">%' + Math.round(v * 100) + "+</button>";
+  }).join(" ") + ' <button class="chip' + (zOnly ? " main" : "") + '" onclick="singlesMin=\'zirve\';render()">Zirve</button>';
   var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
   return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
     + "ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; adil orana en yakın üstte. "
     + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
-    + bandsHtml()
+    + bandsHtml() + zirveSinglesNote(all, min)
     + '<div class="btns" style="flex-wrap:wrap">' + chips + "</div>"
     + (rows.length ? rows.map(function (x) {
       var i = regPick(x.stake != null ? x : Object.assign({}, x, {stake: stake, win: Math.round(stake * x.odds), expected: Math.round(stake * x.ev)}));

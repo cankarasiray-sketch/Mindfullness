@@ -237,4 +237,54 @@ public class PickTest {
         s.pickMaxLoss = 0.08;
         assertEquals(0.08, Settings.fromMap(s.toMap()).pickMaxLoss, 0);
     }
+
+    @Test
+    public void zirveOffersAlwaysInSinglesList() {
+        Map<String, Object> zirve = new LinkedHashMap<>();
+        List<Object> rows = new ArrayList<>();
+        // Arsenal MS 2: Zirve 6,00 (normal 5,50), tutma %15: %30'un altında, listeye girmez
+        Map<String, Object> low = new LinkedHashMap<>(Json.obj(fairs().get(0)));
+        low.remove("sel");
+        low.put("m", "MS");
+        low.put("o", "2");
+        low.put("label", "MS 2");
+        low.put("p", 0.15);
+        low.put("tval", 6.0);
+        low.put("val", 5.5);
+        low.put("mbs", 1L);
+        low.put("status", "oynama");
+        rows.add(low);
+        // Arsenal MS X: Zirve 2,60, tutma %40 (normal listede %50 şartına takılırdı) -> listede, Zirve olarak
+        Map<String, Object> draw = new LinkedHashMap<>(low);
+        draw.put("o", "X");
+        draw.put("label", "MS X");
+        draw.put("p", 0.40);
+        draw.put("tval", 2.60);
+        draw.put("val", 2.45);
+        rows.add(draw);
+        // Liverpool KG Var: Zirve 1,82 (normal 1,75) -> normal satırın yerine Zirve
+        Map<String, Object> kg = new LinkedHashMap<>(Json.obj(fairs().get(2)));
+        kg.remove("sel");
+        kg.put("m", "KG");
+        kg.put("o", "VAR");
+        kg.put("label", "KG Var");
+        kg.put("p", 0.55);
+        kg.put("tval", 1.82);
+        kg.put("val", 1.75);
+        kg.put("mbs", 1L);
+        kg.put("status", "oynama");
+        rows.add(kg);
+        zirve.put("rows", rows);
+        List<Object> list = Pick.list(fairs(), zirve, new Settings(), 500000, NOW);
+        Map<String, Map<String, Object>> z = new LinkedHashMap<>();
+        for (Object o : list) {
+            Map<String, Object> e = Json.obj(o);
+            if ("zirve".equals(e.get("source"))) z.put(e.get("m") + " " + e.get("o"), e);
+            assertFalse("KG VAR".equals(e.get("m") + " " + e.get("o")) && "iddaa".equals(e.get("source"))); // normal kopyası yok
+        }
+        assertEquals(new java.util.HashSet<>(java.util.Arrays.asList("KG VAR", "MS X")), z.keySet()); // MS 2 (%15) yok
+        assertEquals(1.82, Json.dbl(z.get("KG VAR"), "odds", 0), 0);
+        assertEquals(1.75, Json.dbl(z.get("KG VAR"), "normalOdds", 0), 0);
+        assertTrue(z.get("MS X").get("stake") != null);
+    }
 }
