@@ -116,6 +116,12 @@ public final class Texts {
         if (r.blocked != null) return new String[] {"Bugün kupon yok · koruma devrede", r.blocked};
         if (r.decision == null) return null;
         if (r.decision.isPass()) {
+            if (pick != null && Json.bool(pick, "skip", false)) {
+                return new String[] {"Bugün oynama · en iyi tek maç bile " + Fmt.pct(Json.dbl(pick, "ev", 0), true),
+                        "Adil orana en yakın, sık tutan tek maç bile beklenen kayıp sınırını aşıyor (sınır "
+                                + Fmt.pct(-Json.dbl(pick, "maxLoss", 0.06), true) + "): oynamamak bugün en kârlı karar.\n"
+                                + Pick.line(pick) + "\n\n" + r.decision.reason};
+            }
             if (pick != null) {
                 String head = Json.str(pick, "home") + " – " + Json.str(pick, "away") + " · " + Json.str(pick, "label") + " @ "
                         + Fmt.odds(Json.dbl(pick, "odds", 0));

@@ -25,11 +25,42 @@ public final class Pick {
     /** Tutar ayarı 0 ise kasanın bu payı (10 TL'ye aşağı yuvarlı, en az 10 TL). */
     static final double DEFAULT_SHARE = 0.01;
 
-    /** Günün seçiminin tutarı (kuruş). */
+    /** Günün seçiminin temel tutarı (kuruş). */
     public static long stake(Settings cfg, long balance) {
         if (cfg.pickStake > 0) return Math.round(cfg.pickStake * 100);
         if (balance <= 0) return 0;
         return Math.max(1000, (long) (balance * DEFAULT_SHARE) / 1000 * 1000);
+    }
+
+    /**
+     * 2.13 kademeli tutar (kuruş): kâr için kayıp beklenen günlerde daha az, çok kötü günlerde hiç oynanmaz.
+     * Değerliyse (beklenen ≥ cfg.minLegEv) temel tutar ile Kelly tutarının büyüğü; beklenen kayıp
+     * cfg.pickMaxLoss'un yarısına kadarsa temel tutar; pickMaxLoss'a kadarsa yarısı; daha kötüyse 0 (oynama).
+     */
+    public static long stakeFor(double p, double odds, Settings cfg, long balance) {
+        long base = stake(cfg, balance);
+        if (base <= 0) return 0;
+        double ev = p * odds - 1;
+        if (ev >= cfg.minLegEv) return Math.max(base, (long) (balance * Engine.stakeFraction(p, odds, cfg)) / 1000 * 1000);
+        if (ev >= -cfg.pickMaxLoss / 2) return base;
+        if (ev >= -cfg.pickMaxLoss) return Math.max(1000, base / 2 / 100 * 100); // yarım tutar (TL'ye yuvarlı)
+        return 0;
+    }
+
+    /**
+     * Denge puanı: tutma olasılığı ile ödemeyi birlikte tartan beklenen log büyüme (Kelly ölçütü), kasanın
+     * f payı oynanırken TL başına. Beklenen değer aynıysa sık tutan, tutma aynıysa ödemesi iyi olan öne geçer;
+     * uzun vadede kasayı en çok büyüten (en az küçülten) seçim en yüksek puanı alır.
+     */
+    static double score(double p, double odds, double f) {
+        f = Math.max(0.002, Math.min(0.2, f));
+        return (p * Math.log(1 + f * (odds - 1)) + (1 - p) * Math.log(1 - f)) / f;
+    }
+
+    /** Puanlamada kullanılan kasa payı (günün seçimi temel tutarı / kasa; kasa boşsa %1). */
+    static double fraction(Settings cfg, long balance) {
+        long base = stake(cfg, balance);
+        return balance > 0 && base > 0 ? (double) base / balance : DEFAULT_SHARE;
     }
 
     private static Map<String, Object> entry(Map<String, Object> row, String source, String m, String o, String label,
@@ -56,6 +87,10 @@ public final class Pick {
         return e;
     }
 
+    private static void scored(Map<String, Object> e, double f) {
+        e.put("score", score(Json.dbl(e, "p", 0), Json.dbl(e, "odds", 1), f));
+    }
+
     /** Tek maç seçimlerinde en düşük oran (2.10: her oran değerlendirilir; 1,05 altı anlamsız). */
     static final double MIN_ODDS = 1.05;
     /** Tek maç fırsatları listesi: en az bu tutma olasılığı ve en fazla bu kadar satır. */
@@ -76,6 +111,11 @@ public final class Pick {
      * düşülmüş gelir (Models.fair) ve "model" işaretlidir.
      */
     public static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, Instant now) {
+        return singles(fairs, zirve, cfg, minProb, DEFAULT_SHARE, now);
+    }
+
+    /** f: denge puanında kasa payı (Pick.fraction). Sıra: denge puanı (2.13), eşitlikte sık tutan. */
+    public static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f, Instant now) {
         Map<String, Map<String, Object>> best = new LinkedHashMap<>(); // ref|m|o -> en iyi oran
         for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
             Map<String, Object> r = Json.obj(o);
@@ -107,10 +147,11 @@ public final class Pick {
             }
         }
         List<Map<String, Object>> all = new ArrayList<>(best.values());
+        for (Map<String, Object> e : all) scored(e, f);
         Collections.sort(all, new Comparator<Map<String, Object>>() {
             @Override
             public int compare(Map<String, Object> a, Map<String, Object> b) {
-                int c = Double.compare(Json.dbl(b, "ev", 0), Json.dbl(a, "ev", 0));
+                int c = Double.compare(Json.dbl(b, "score", 0), Json.dbl(a, "score", 0));
                 return c != 0 ? c : Double.compare(Json.dbl(b, "p", 0), Json.dbl(a, "p", 0));
             }
         });
@@ -120,7 +161,7 @@ public final class Pick {
     /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 100 seçim, günün seçimi tutarıyla. */
     public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         List<Object> out = new ArrayList<>();
-        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, now)) {
+        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), now)) {
             if (out.size() >= LIST_SIZE) break;
             out.add(withStake(e, cfg, balance));
         }
@@ -129,8 +170,9 @@ public final class Pick {
 
     private static Map<String, Object> withStake(Map<String, Object> e, Settings cfg, long balance) {
         Map<String, Object> pick = new LinkedHashMap<>(e);
-        long stake = stake(cfg, balance);
         double ev = Json.dbl(pick, "ev", 0);
+        long stake = stakeFor(Json.dbl(pick, "p", 0), Json.dbl(pick, "odds", 1), cfg, balance);
+        if (stake == 0 && stake(cfg, balance) > 0) pick.put("skip", true); // beklenen kayıp sınırı aşıyor: oynama
         pick.put("stake", stake);
         pick.put("win", Math.round(stake * Json.dbl(pick, "odds", 1)));
         pick.put("expected", Math.round(stake * ev));
@@ -149,13 +191,14 @@ public final class Pick {
      */
     public static Map<String, Object> choose(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         if (!cfg.dailyPick) return null;
-        List<Map<String, Object>> all = singles(fairs, zirve, cfg, cfg.pickMinProb, now);
+        List<Map<String, Object>> all = singles(fairs, zirve, cfg, cfg.pickMinProb, fraction(cfg, balance), now);
         if (all.isEmpty()) return null;
         Map<String, Object> pick = withStake(all.get(0), cfg, balance);
         List<Object> alt = new ArrayList<>();
         for (int i = 1; i < all.size() && alt.size() < 3; i++) alt.add(all.get(i));
         pick.put("alternatives", alt);
         pick.put("candidates", (long) all.size());
+        pick.put("maxLoss", cfg.pickMaxLoss);
         int highCount = 0;
         Map<String, Object> high = null;
         for (Map<String, Object> e : all) {
@@ -167,6 +210,39 @@ public final class Pick {
         if (high == all.get(0)) pick.put("isHigh", true);
         else if (high != null) pick.put("high", withStake(high, cfg, balance));
         return pick;
+    }
+
+    /** Tutma olasılığı bantları (2.13): her bantta seçim sayısı ve en iyi beklenen değer. */
+    static final double[] BANDS = {0.50, 0.60, 0.65, 0.70, 0.80, 1.01};
+
+    /**
+     * Bugünün tek maç seçimlerinde olasılık bandına göre iddaa'nın kesintisi: {from, to, n, bestEv, bestScore}.
+     * Hangi tutma aralığında kâra (en az kayba) en yakın seçim olduğunu gösterir.
+     */
+    public static List<Object> bands(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
+        List<Map<String, Object>> all = singles(fairs, zirve, cfg, BANDS[0], fraction(cfg, balance), now);
+        List<Object> out = new ArrayList<>();
+        for (int b = 0; b + 1 < BANDS.length; b++) {
+            long n = 0;
+            Map<String, Object> best = null;
+            for (Map<String, Object> e : all) {
+                double p = Json.dbl(e, "p", 0);
+                if (p < BANDS[b] || p >= BANDS[b + 1]) continue;
+                n++;
+                if (best == null) best = e; // liste puana göre sıralı
+            }
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("from", BANDS[b]);
+            r.put("to", Math.min(1.0, BANDS[b + 1]));
+            r.put("n", n);
+            if (best != null) {
+                r.put("bestEv", Json.dbl(best, "ev", 0));
+                r.put("bestScore", Json.dbl(best, "score", 0));
+                r.put("label", Json.str(best, "home") + " – " + Json.str(best, "away") + " · " + Json.str(best, "label"));
+            }
+            out.add(r);
+        }
+        return out;
     }
 
     /** Sanal takip kaydı için seçim (Engine.selection biçimi). */

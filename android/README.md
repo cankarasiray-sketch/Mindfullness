@@ -62,6 +62,24 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Tutma olasılığı ve kârlılık dengesi (2.13)
+
+- **Denge puanı:** günün seçimi ve tek maç listesi artık yalnızca beklenen değere göre değil, beklenen
+  log büyümeye (Kelly ölçütü) göre sıralanır: kasanın oynanan payı f iken
+  `[p·ln(1 + f(o − 1)) + (1 − p)·ln(1 − f)] / f`. Tutma olasılığı ile ödemeyi birlikte tartar: beklenen
+  değer aynıysa sık tutan, tutma yakınsa ödemesi iyi olan öne geçer; uzun vadede kasayı en az küçülten
+  (değerliyse en çok büyüten) seçim üstte.
+- **Kademeli tutar:** beklenen kayıp sınırın (Ayarlar → Tek maç → En kötü beklenen kayıp, varsayılan %6)
+  yarısına kadarsa tam tutar, sınıra kadarsa yarım tutar, daha kötüyse o gün **oynanmaz** (kart "Bugün
+  oynama", sabah bildirimi de öyle; sanal takip o gün bahis saymaz). Değerli seçimde (beklenen ≥ maç
+  başına eşik) Kelly tutarı, temel tutardan az olmamak üzere. iddaa marjı (~%22) yüzünden çoğu seçim eksi
+  beklenir; kârlılığı artıran asıl şey kötü günleri oynamamak ve kayıp beklenen günlerde tutarı küçültmek.
+  Örnek: 50 TL temel tutarla en iyi seçim −%12 olan gün eski kural ~6 TL kaybettirirdi, yenisi oynamaz;
+  −%4'lük günde 25 TL ile ~1 TL.
+- **Denge tablosu (Fırsatlar):** bugünün tek maç seçimleri tutma bandına göre (%50–60, 60–65, 65–70,
+  70–80, 80+): her bantta seçim sayısı ve adil orana en yakın seçimin beklenen değeri; "en iyi denge"
+  işaretli.
+
 ## Basketbol kapsamı (2.12)
 
 - Basketbol için Pinnacle fiyatı oran kaynağındaki (The Odds API) liglerden gelir: EuroLeague, NBA ve

@@ -1178,6 +1178,49 @@ test("tek maç: %70+ katmanı, tek maç fırsatları süzgeci, yeni bahis türle
   assert.deepEqual(f.errors, []);
 });
 
+test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "Bugün pas.", summary: "", couponId: null };
+  s.coupons = s.coupons.filter((c) => !c.pick);
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  s.settings.dailyPick = true;
+  s.settings.pickMinProb = 0.6;
+  s.settings.pickMaxLoss = 0.06;
+  s.pick = { source: "iddaa", ref: "b9", m: "DEPG@0.5", o: "ALT", label: "Dep 0,5 Alt", home: "Belarus", away: "San Marino", kickoff: ko, odds: 1.09, p: 0.81, fair: 1 / 0.81,
+    ev: 0.81 * 1.09 - 1, mbs: 1, model: true, stake: 0, win: 0, expected: 0, monthly: 0, skip: true, candidates: 12, alternatives: [], maxLoss: 0.06 };
+  s.singles = [Object.assign({}, s.pick)];
+  s.bands = [{ from: 0.5, to: 0.6, n: 4, bestEv: -0.071, bestScore: -0.072 }, { from: 0.6, to: 0.65, n: 3, bestEv: -0.052, bestScore: -0.053 },
+    { from: 0.65, to: 0.7, n: 0 }, { from: 0.7, to: 0.8, n: 5, bestEv: -0.12, bestScore: -0.12 }, { from: 0.8, to: 1, n: 2, bestEv: -0.117, bestScore: -0.117 }];
+  const t = boot(s);
+  const card = t.$("#pickCard");
+  assert.match(card.textContent, /BUGÜN OYNAMA/);
+  assert.match(card.textContent, /12 seçimin en iyisi bile −%11,7 \(sınır −%6,0\)/);
+  assert.equal(t.$$("#pickCard button").filter((b) => b.textContent === "Oynadım").length, 0);
+  // oynanabilir gün: kademe açıklaması
+  const ok = clone(s);
+  Object.assign(ok.pick, { skip: false, odds: 1.58, p: 0.61, ev: 0.61 * 1.58 - 1, stake: 2500, win: 3950, expected: -90, monthly: -2715, label: "2,5 Üst", m: "AU25", o: "UST", model: false });
+  const t2 = boot(ok);
+  assert.match(t2.$("#pickCard").textContent, /denge puanıyla/);
+  assert.match(t2.$("#pickCard").textContent, /−%3,0'e kadar tam, −%6,0'ya kadar yarım/);
+  assert.match(t2.$("#pickCard").textContent, /25,00 TL → tutarsa 39,50 TL/);
+  // Fırsatlar: denge tablosu ve oynama işareti
+  const f = boot(clone(s), "#firsat");
+  const rows = f.$$(".band-row");
+  assert.equal(rows.length, 4); // boş bant gösterilmez
+  assert.match(f.$(".band-row.on").textContent, /Tutma %60–65 · 3 seçim.*en iyi denge.*−%5,2/);
+  f.button("%80+").click();
+  assert.match(f.$("#singlesCard .single-row").textContent, /oynama/);
+  // ayar
+  const st = boot(clone(s), "#ayarlar");
+  assert.equal(st.$("#sPickLoss").value, "6,0");
+  st.$("#sPickLoss").value = "8";
+  st.button("Ayarları kaydet").click();
+  await st.tick();
+  assert.equal(st.calls.at(-1).payload.settings.pickMaxLoss, 0.08);
+  assert.deepEqual(t.errors, []);
+  assert.deepEqual(f.errors, []);
+});
+
 let failed = 0;
 for (const [name, fn] of tests) {
   try {

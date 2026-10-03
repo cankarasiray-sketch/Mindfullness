@@ -1101,6 +1101,7 @@ final class Repo {
     private final Object pickLock = new Object();
     private Map<String, Object> pickValue;
     private List<Object> singlesValue;
+    private List<Object> bandsValue;
 
     private void refreshPicks() {
         Instant now = Instant.now();
@@ -1111,8 +1112,10 @@ final class Repo {
             Map<String, Object> z = zirveView();
             pickValue = Pick.choose(fairs, z, cfg, balance, now);
             singlesValue = Pick.list(fairs, z, cfg, balance, now);
+            bandsValue = Pick.bands(fairs, z, cfg, balance, now);
             // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
-            if (pickValue != null) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(pickValue), now);
+            // "oynama" günü (beklenen kayıp sınırı aşıyor) sanal bahis de yok: strateji o gün oynamıyor
+            if (pickValue != null && !Json.bool(pickValue, "skip", false)) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(pickValue), now);
         }
     }
 
@@ -1126,6 +1129,19 @@ final class Repo {
             }
         } catch (RuntimeException e) {
             return null; // tablo yazılırken okunduysa bir sonraki çizimde gelir
+        }
+    }
+
+    /** Tutma olasılığı bantlarına göre bugünün en iyi tek maç seçimi (2.13 denge tablosu). */
+    List<Object> bands() {
+        if (isDemo()) return null;
+        try {
+            refreshPicks();
+            synchronized (pickLock) {
+                return bandsValue;
+            }
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 

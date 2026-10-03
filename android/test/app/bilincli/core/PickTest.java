@@ -76,10 +76,12 @@ public class PickTest {
         assertEquals(2L, p.get("candidates")); // Arsenal MS 1 ve Liverpool 2,5 Üst
         assertFalse(Json.bool(p, "value", true));
         // tutar: kasanın %1'i, 10 TL'ye yuvarlı (5.000 TL -> 50 TL)
-        assertEquals(5000L, p.get("stake"));
-        assertEquals(7900L, p.get("win"));
-        assertEquals(Math.round(5000 * (0.61 * 1.58 - 1)), p.get("expected"));
-        assertEquals(Math.round(30 * 5000 * (0.61 * 1.58 - 1)), p.get("monthly"));
+        // 2.13 kademe: beklenen −%3,6 (sınır −%6'nın yarısından kötü) -> yarım tutar
+        assertEquals(2500L, p.get("stake"));
+        assertEquals(3950L, p.get("win"));
+        assertEquals(Math.round(2500 * (0.61 * 1.58 - 1)), p.get("expected"));
+        assertEquals(Math.round(30 * 2500 * (0.61 * 1.58 - 1)), p.get("monthly"));
+        assertFalse(Json.bool(p, "skip", false));
         assertEquals(1, Json.arr(p.get("alternatives")).size());
         assertEquals("soccer_epl", p.get("sport"));
         assertEquals("s3", p.get("sref"));
@@ -88,7 +90,11 @@ public class PickTest {
         cfg.pickMinProb = 0.63;
         p = Pick.choose(fairs(), null, cfg, 500000, NOW);
         assertEquals("1", p.get("ref"));
-        assertEquals(2500L, p.get("stake"));
+        assertEquals(0L, p.get("stake")); // −%6,5: sınırı aşıyor, oynanmaz
+        assertTrue(Json.bool(p, "skip", false));
+        cfg.pickMaxLoss = 0.10;
+        assertEquals(1200L, Pick.choose(fairs(), null, cfg, 500000, NOW).get("stake")); // sınır −%10: yarım (25 TL / 2)
+        cfg.pickMaxLoss = 0.06;
         assertEquals(0L, Json.arr(p.get("alternatives")).size());
         // kapalı ya da aday yok
         cfg.dailyPick = false;
@@ -151,7 +157,7 @@ public class PickTest {
         String[] t = Texts.notification(null, r, p);
         assertEquals("Günün seçimi · Liverpool – Dep 3 · 2,5 Üst @ 1,58", t[0]);
         assertTrue(t[1], t[1].contains("Değerli seçim yok"));
-        assertTrue(t[1], t[1].contains("Beklenen sonuç -1,81 TL"));
+        assertTrue(t[1], t[1].contains("Beklenen sonuç " + Fmt.tl(Math.round(2500 * (0.61 * 1.58 - 1)))));
         assertTrue(Texts.notification(null, r, null)[0].startsWith("Bugün pas"));
     }
 
@@ -185,5 +191,50 @@ public class PickTest {
         Settings back = Settings.fromMap(s.toMap());
         assertEquals(0.7, back.pickMinProb, 0);
         assertEquals(30, back.pickStake, 0);
+    }
+
+    @Test
+    public void balanceScoreTieredStakeSkipAndBands() {
+        Settings cfg = new Settings();
+        long bal = 500000;
+        // kademe: değerli -> Kelly (temel tutardan az değil), −%3'e kadar tam, −%6'ya kadar yarım, daha kötüsü 0
+        assertTrue(Pick.stakeFor(0.55, 2.0, cfg, bal) >= 5000);
+        assertEquals(5000L, Pick.stakeFor(0.62, 1.58, cfg, bal)); // −%2,0
+        assertEquals(2500L, Pick.stakeFor(0.60, 1.58, cfg, bal)); // −%5,2
+        assertEquals(0L, Pick.stakeFor(0.80, 1.09, cfg, bal)); // −%12,8
+        // denge puanı: aynı beklenen değerde sık tutan önde; tutma farkı küçükse beklenen değer belirler
+        double f = 0.01;
+        assertTrue(Pick.score(0.80, 1.20, f) > Pick.score(0.32, 3.0, f)); // ikisi de −%4
+        assertTrue(Pick.score(0.60, 1.63, f) > Pick.score(0.75, 1.25, f)); // −%2,2 > −%6,3
+        assertEquals(0.80 * 1.20 - 1, Pick.score(0.80, 1.20, 0.002), 0.001); // küçük payda ≈ beklenen değer
+        // bütün seçimler sınırın altında: kart "oynama", bildirim de öyle
+        List<Object> bad = new ArrayList<>();
+        bad.add(row("9", "Belarus", 8, sel("DEPG@0.5", "ALT", 0.81, 1.09, 1), sel("MS", "1", 0.76, 1.16, 1)));
+        Map<String, Object> p = Pick.choose(bad, null, cfg, bal, NOW);
+        assertTrue(Json.bool(p, "skip", false));
+        assertEquals(0L, p.get("stake"));
+        assertEquals(0L, p.get("monthly"));
+        Daily.Result r = new Daily.Result();
+        r.day = "2026-10-01";
+        r.decision = Engine.decide(new ArrayList<Models.BookEvent>(), new ArrayList<Models.SharpEvent>(), NOW, cfg);
+        String[] t = Texts.notification(null, r, p);
+        assertTrue(t[0], t[0].startsWith("Bugün oynama · en iyi tek maç bile −%"));
+        assertTrue(t[1], t[1].contains("sınır −%6,0"));
+        // bant tablosu: her tutma aralığında sayı ve en iyi beklenen
+        List<Object> bands = Pick.bands(fairs(), null, cfg, bal, NOW);
+        assertEquals(5, bands.size());
+        Map<String, Object> b60 = Json.obj(bands.get(1)); // %60–65
+        assertEquals(0.60, Json.dbl(b60, "from", 0), 0);
+        assertEquals(2L, b60.get("n")); // Arsenal MS 1 %64,5, Liverpool Üst %61
+        assertEquals(0.61 * 1.58 - 1, Json.dbl(b60, "bestEv", 0), 1e-9);
+        assertEquals(0L, Json.obj(bands.get(3)).get("n")); // %70–80 boş
+        assertNull(Json.obj(bands.get(3)).get("bestEv"));
+        // ayar
+        Settings s = new Settings();
+        assertEquals(0.06, s.pickMaxLoss, 0);
+        s.pickMaxLoss = 0.5;
+        assertTrue(s.validate().contains("en kötü beklenen"));
+        s.pickMaxLoss = 0.08;
+        assertEquals(0.08, Settings.fromMap(s.toMap()).pickMaxLoss, 0);
     }
 }
