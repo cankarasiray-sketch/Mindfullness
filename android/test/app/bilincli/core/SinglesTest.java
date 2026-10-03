@@ -208,6 +208,7 @@ public class SinglesTest {
         // %78 tutan 1,22: −%4,8 (yüksek katmanın en iyisi); 1,05 altı yine alınmaz
         fairs.add(PickTest.row("7", "City", 5, PickTest.sel("MS", "1", 0.78, 1.22, 1), PickTest.sel("CS", "1X", 0.97, 1.04, 1)));
         Settings cfg = new Settings();
+        cfg.pickMaxLoss = 0.06; // 2.13 kademeleri
         Map<String, Object> p = Pick.choose(fairs, null, cfg, 500000, NOW);
         assertEquals("3", p.get("ref")); // ana seçim: %61, −%3,6
         Map<String, Object> high = Json.obj(p.get("high"));
@@ -227,7 +228,9 @@ public class SinglesTest {
         Map<String, Object> modelSel = PickTest.sel("AU@1.5", "UST", 0.74, 1.30, 1);
         modelSel.put("model", true);
         fairs.add(PickTest.row("8", "Brighton", 6, modelSel));
-        List<Object> list = Pick.list(fairs, null, new Settings(), 500000, NOW);
+        Settings tiers = new Settings();
+        tiers.pickMaxLoss = 0.06;
+        List<Object> list = Pick.list(fairs, null, tiers, 500000, NOW);
         assertEquals(2500L, Json.obj(list.get(0)).get("stake"));
         assertEquals(5, list.size()); // Arsenal MS 1, Liverpool Üst ve KG Var, City MS 1, Brighton 1,5 Üst
         double prev = 9;

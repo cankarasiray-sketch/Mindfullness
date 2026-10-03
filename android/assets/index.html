@@ -556,7 +556,7 @@ function pickBlock(x, title) {
     + '<div class="sum"><div><span>Tutma</span><b>%' + num(x.p * 100, 0) + "</b></div><div><span>Adil oran</span><b>" + odds(x.fair) + "</b></div><div><span>Beklenen</span><b class=\"" + cls(x.ev) + "\">"
     + pct(x.ev, true) + "</b></div></div>"
     + '<p class="small"><b>Tutar:</b> ' + (x.stake ? tl(x.stake) + " → tutarsa " + tl(x.win) + " · beklenen sonuç <span class=\"" + cls(x.expected) + "\">" + tl(x.expected) + "</span>"
-      : x.skip ? "<b class=\"neg\">oynama</b> — beklenen " + pct(x.ev, true) + ", sınır " + pct(-(S.settings.pickMaxLoss || 0.06), true) : "kasa boş") + "</p>"
+      : x.skip ? "<b class=\"neg\">oynama</b> — beklenen " + pct(x.ev, true) + ", sınır " + pct(-(S.settings.pickMaxLoss || 0.15), true) : "kasa boş") + "</p>"
     + (x.skip ? "" : '<div class="btns"><button class="b" onclick="pickSheet(' + i + ')">Oynadım</button></div>') + "</div>";
 }
 function pickCard() {
@@ -573,7 +573,7 @@ function pickCard() {
     return '<div class="small muted">' + esc(dm(a.kickoff)) + " " + esc(hm(a.kickoff)) + " " + esc(a.home) + " – " + esc(a.away) + " · " + esc(a.label) + " " + odds(a.odds)
       + (a.source === "zirve" ? " (Zirve)" : "") + (a.model ? " (model)" : "") + " · tutma %" + num(a.p * 100, 0) + " · " + pct(a.ev, true) + "</div>";
   }).join("");
-  var lim = S.settings.pickMaxLoss || 0.06;
+  var lim = S.settings.pickMaxLoss || 0.15;
   if (p.skip) {
     return '<div class="card" id="pickCard"><div class="kicker">GÜNÜN SEÇİMİ · BUGÜN OYNAMA</div>'
       + '<p>Tek maç oynanabilen ve en az %' + num(S.settings.pickMinProb * 100, 0) + " tutan " + p.candidates + " seçimin en iyisi bile <b class=\"neg\">" + pct(p.ev, true)
@@ -638,7 +638,7 @@ function singlesCard() {
       return '<div class="vrow single-row"><div class="l1"><span>' + esc(dm(x.kickoff)) + " " + esc(hm(x.kickoff)) + (x.league ? " · " + esc(x.league) : "") + "</span><span>"
         + (x.code ? "kod " + esc(x.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(x.home) + " – " + esc(x.away) + "</div>"
         + '<div class="l2"><span>' + pickOdds(x) + ' <span class="small muted">adil ' + odds(x.fair) + " · tutma %" + num(x.p * 100, 0) + "</span></span>"
-        + '<span><b class="' + cls(x.ev) + '">' + pct(x.ev, true) + "</b>" + (x.skip ? ' <span class="small muted">oynama</span>' : "") + ' <button class="b ghost" style="padding:4px 10px" onclick="pickSheet(' + i + ')">Oynadım</button></span></div></div>';
+        + '<span><b class="' + cls(x.ev) + '">' + pct(x.ev, true) + "</b>" + (x.skip ? ' <span class="small muted">oynama</span>' : x.stake ? ' <b>' + tl(x.stake) + "</b>" : "") + ' <button class="b ghost" style="padding:4px 10px" onclick="pickSheet(' + i + ')">Oynadım</button></span></div></div>';
     }).join("") : '<p class="small muted">Bu olasılıkla tek oynanabilen seçim yok' + (all.length ? "" : " (önce \"Şimdi tara\")") + ".</p>") + "</div>";
 }
 /** Geçmiş: oynanan günün seçimlerinin gerçek sonucu ve beklenenle karşılaştırma. */
@@ -1345,7 +1345,7 @@ function viewSettings() {
     + '<p class="small muted">Değerli seçim olmayan günlerde: tek oynanabilen, aşağıdaki olasılıkla tutan seçimler (her pazar, her oran; normal oran ve Zirve Oran) arasında adil orana en yakın olan. '
     + "Beklenen sonuç çoğu gün eksidir ve kartta yazar; tutar Kelly değil, sabittir.</p>"
     + '<label>En az tutma olasılığı (%)</label><input id="sPickProb" inputmode="decimal" value="' + esc(num(st.pickMinProb * 100, 0)) + '">'
-    + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.06) * 100, 1)) + '">'
+    + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.15) * 100, 1)) + '">'
     + '<p class="small muted">Günün seçiminde beklenen kayıp bunun yarısına kadarsa tam tutar, bu kadarsa yarım tutar; daha kötüyse o gün oynanmaz.</p>'
     + '<label>Yüksek olasılık katmanı (%)</label><input id="sPickHigh" inputmode="decimal" value="' + esc(num((st.pickHighProb || 0.7) * 100, 0)) + '">'
     + '<label>Tutar (TL; 0 = kasanın %1\'i)</label><input id="sPickStake" inputmode="decimal" value="' + esc(String(st.pickStake || 0)) + '"></div>';
@@ -1458,7 +1458,7 @@ function collectSettings() {
     st.dailyPick = pk.checked;
     st.pickMinProb = numIn(val("sPickProb"), 60) / 100;
     st.pickHighProb = numIn(val("sPickHigh"), 70) / 100;
-    st.pickMaxLoss = numIn(val("sPickLoss"), 6) / 100;
+    st.pickMaxLoss = numIn(val("sPickLoss"), 15) / 100;
     st.pickStake = numIn(val("sPickStake"), 0);
     st.singlesOnly = !!(document.getElementById("sSingles") || {}).checked;
   }

@@ -119,7 +119,7 @@ public final class Texts {
             if (pick != null && Json.bool(pick, "skip", false)) {
                 return new String[] {"Bugün oynama · en iyi tek maç bile " + Fmt.pct(Json.dbl(pick, "ev", 0), true),
                         "Adil orana en yakın, sık tutan tek maç bile beklenen kayıp sınırını aşıyor (sınır "
-                                + Fmt.pct(-Json.dbl(pick, "maxLoss", 0.06), true) + "): oynamamak bugün en kârlı karar.\n"
+                                + Fmt.pct(-Json.dbl(pick, "maxLoss", 0.15), true) + "): oynamamak bugün en kârlı karar.\n"
                                 + Pick.line(pick) + "\n\n" + r.decision.reason};
             }
             if (pick != null) {

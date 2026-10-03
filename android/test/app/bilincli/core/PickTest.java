@@ -65,6 +65,7 @@ public class PickTest {
     @Test
     public void choosesClosestToFairAmongFrequentSingles() {
         Settings cfg = new Settings();
+        cfg.pickMaxLoss = 0.06; // 2.13 kademeleri (2.15 varsayılanı %15: maxLoss15Default)
         Map<String, Object> p = Pick.choose(fairs(), null, cfg, 500000, NOW);
         assertEquals("3", p.get("ref"));
         assertEquals("AU25", p.get("m"));
@@ -149,6 +150,7 @@ public class PickTest {
     @Test
     public void passNotificationLeadsWithPick() {
         Settings cfg = new Settings();
+        cfg.pickMaxLoss = 0.06;
         Map<String, Object> p = Pick.choose(fairs(), null, cfg, 500000, NOW);
         Engine.Decision d = Engine.decide(new ArrayList<Models.BookEvent>(), new ArrayList<Models.SharpEvent>(), NOW, cfg);
         Daily.Result r = new Daily.Result();
@@ -196,6 +198,7 @@ public class PickTest {
     @Test
     public void balanceScoreTieredStakeSkipAndBands() {
         Settings cfg = new Settings();
+        cfg.pickMaxLoss = 0.06;
         long bal = 500000;
         // kademe: değerli -> Kelly (temel tutardan az değil), −%3'e kadar tam, −%6'ya kadar yarım, daha kötüsü 0
         assertTrue(Pick.stakeFor(0.55, 2.0, cfg, bal) >= 5000);
@@ -231,10 +234,35 @@ public class PickTest {
         assertNull(Json.obj(bands.get(3)).get("bestEv"));
         // ayar
         Settings s = new Settings();
-        assertEquals(0.06, s.pickMaxLoss, 0);
+        assertEquals(0.15, s.pickMaxLoss, 0);
         s.pickMaxLoss = 0.5;
         assertTrue(s.validate().contains("en kötü beklenen"));
         s.pickMaxLoss = 0.08;
         assertEquals(0.08, Settings.fromMap(s.toMap()).pickMaxLoss, 0);
+    }
+    @Test
+    public void maxLoss15Default() {
+        // 2.15: adil oranın %15 altına kadar tutar verilir (beklenen −%15); yarısına kadar tam, sonra yarım
+        Settings cfg = new Settings();
+        assertEquals(0.15, cfg.pickMaxLoss, 0);
+        long bal = 500000; // temel tutar 50 TL
+        assertEquals(5000L, Pick.stakeFor(0.645, 1.45, cfg, bal)); // −%6,5: tam
+        assertEquals(5000L, Pick.stakeFor(0.50, 1.85, cfg, bal)); // −%7,5 (sınırın yarısı): tam
+        assertEquals(2500L, Pick.stakeFor(0.50, 1.80, cfg, bal)); // −%10: yarım
+        assertEquals(2500L, Pick.stakeFor(0.50, 1.70, cfg, bal)); // −%15 (adil 2,00 x 0,85): yarım
+        assertEquals(0L, Pick.stakeFor(0.50, 1.68, cfg, bal)); // −%16: oynama
+        // liste: −%6,5'lik Arsenal MS 1 artık tutarla
+        Map<String, Object> ars = null;
+        for (Object o : Pick.list(fairs(), null, cfg, bal, NOW)) if ("1".equals(Json.obj(o).get("ref")) && "MS".equals(Json.obj(o).get("m"))) ars = Json.obj(o);
+        assertEquals(5000L, ars.get("stake"));
+        assertFalse(Json.bool(ars, "skip", false));
+        // eski kayıt (%6 ya da elle girilmiş başka değer) bir kez %15'e taşınır; sonradan değiştirilen korunur
+        Map<String, Object> old = new Settings().toMap();
+        old.put("v", 7L);
+        old.put("pickMaxLoss", 0.06);
+        Settings moved = Settings.fromMap(old);
+        assertEquals(0.15, moved.pickMaxLoss, 0);
+        moved.pickMaxLoss = 0.10;
+        assertEquals(0.10, Settings.fromMap(moved.toMap()).pickMaxLoss, 0);
     }
 }

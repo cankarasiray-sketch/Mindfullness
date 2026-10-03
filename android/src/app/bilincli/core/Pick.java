@@ -42,8 +42,9 @@ public final class Pick {
         if (base <= 0) return 0;
         double ev = p * odds - 1;
         if (ev >= cfg.minLegEv) return Math.max(base, (long) (balance * Engine.stakeFraction(p, odds, cfg)) / 1000 * 1000);
-        if (ev >= -cfg.pickMaxLoss / 2) return base;
-        if (ev >= -cfg.pickMaxLoss) return Math.max(1000, base / 2 / 100 * 100); // yarım tutar (TL'ye yuvarlı)
+        // 1e-9: tam sınırdaki oran (ör. adil 2,00 / 1,70 = −%15) kayan nokta yüzünden dışarıda kalmasın
+        if (ev >= -cfg.pickMaxLoss / 2 - 1e-9) return base;
+        if (ev >= -cfg.pickMaxLoss - 1e-9) return Math.max(1000, base / 2 / 100 * 100); // yarım tutar (TL'ye yuvarlı)
         return 0;
     }
 

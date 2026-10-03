@@ -62,6 +62,15 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Adil oranın %15 altına kadar tutar (2.15)
+
+- Tek maç seçimlerinde tutar artık oran adil oranın **%15 altına kadar** verilir (beklenen −%15; önce
+  −%6). Kademe aynı: beklenen −%7,5'e kadar tam tutar, −%15'e kadar yarım tutar, daha kötüsü "oynama".
+  Eski kurulumlar bir kez %15'e taşınır; Ayarlar → Tek maç → En kötü beklenen kayıp'tan değiştirilebilir.
+- Fırsatlar → Tek maç fırsatları'nda her satırda **oynanacak TL** yazar ("Oynadım" da bu tutarla açılır).
+- Dürüst not: −%15 beklenen, oynanan her 100 TL'de ortalama 15 TL kayıp demektir; tutar bu yüzden
+  −%7,5'ten sonra yarıya iner.
+
 ## 15 API anahtarı (2.14)
 
 - Ayarlar → Veri kaynağı'na en fazla **15** The Odds API anahtarı girilebilir (önce 10). Her istek
@@ -76,7 +85,7 @@ bildirim olarak gelir.
   `[p·ln(1 + f(o − 1)) + (1 − p)·ln(1 − f)] / f`. Tutma olasılığı ile ödemeyi birlikte tartar: beklenen
   değer aynıysa sık tutan, tutma yakınsa ödemesi iyi olan öne geçer; uzun vadede kasayı en az küçülten
   (değerliyse en çok büyüten) seçim üstte.
-- **Kademeli tutar:** beklenen kayıp sınırın (Ayarlar → Tek maç → En kötü beklenen kayıp, varsayılan %6)
+- **Kademeli tutar:** beklenen kayıp sınırın (Ayarlar → Tek maç → En kötü beklenen kayıp, varsayılan %6; 2.15'ten beri %15)
   yarısına kadarsa tam tutar, sınıra kadarsa yarım tutar, daha kötüyse o gün **oynanmaz** (kart "Bugün
   oynama", sabah bildirimi de öyle; sanal takip o gün bahis saymaz). Değerli seçimde (beklenen ≥ maç
   başına eşik) Kelly tutarı, temel tutardan az olmamak üzere. iddaa marjı (~%22) yüzünden çoğu seçim eksi

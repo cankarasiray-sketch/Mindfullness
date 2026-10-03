@@ -1211,6 +1211,14 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   assert.match(f.$(".band-row.on").textContent, /Tutma %60–65 · 3 seçim.*en iyi denge.*−%5,2/);
   f.button("%80+").click();
   assert.match(f.$("#singlesCard .single-row").textContent, /oynama/);
+  // 2.15: satırda oynanacak tutar
+  const okf = clone(ok);
+  okf.singles = [Object.assign({}, ok.pick)];
+  const f2 = boot(okf, "#firsat");
+  f2.button("%50+").click();
+  assert.match(f2.$("#singlesCard .single-row").textContent, /25,00 TL/);
+  assert.doesNotMatch(f2.$("#singlesCard .single-row").textContent, /oynama/);
+  assert.deepEqual(f2.errors, []);
   // ayar
   const st = boot(clone(s), "#ayarlar");
   assert.equal(st.$("#sPickLoss").value, "6,0");

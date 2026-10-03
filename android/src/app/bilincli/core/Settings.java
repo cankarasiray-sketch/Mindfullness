@@ -238,8 +238,9 @@ public final class Settings {
     /**
      * Günün seçiminde kabul edilen en kötü beklenen kayıp (2.13): bunun yarısına kadar tam tutar, buna
      * kadar yarım tutar, daha kötüyse o gün oynanmaz. Kâr için kötü günler atlanır.
+     * 2.15: %6 -> %15 (kullanıcı isteği: adil oranın %15 altına kadar oynanacak tutar verilsin).
      */
-    public double pickMaxLoss = 0.06;
+    public double pickMaxLoss = 0.15;
     /**
      * Yalnızca tek maç (2.10): değerli kuponlar tek seçimli kurulur ve yalnızca tek oynanabilen (MBS 1)
      * maçlar alınır. Kombine yok: iddaa marjı her bacakta yeniden ödenir.
@@ -376,7 +377,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 7L);
+        m.put("v", 8L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -470,6 +471,10 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 7) {
             // 2.10: kullanıcı tek maç uzmanlığı istedi: yalnızca tekli kupon (Ayarlar'dan kapatılabilir)
             s.singlesOnly = true;
+        }
+        if (Json.lng(m, "v", 1) < 8) {
+            // 2.15: kullanıcı istedi: adil oranın %15 altına kadar (beklenen −%15) tutar verilir
+            s.pickMaxLoss = 0.15;
         }
         s.profile = s.detectProfile();
         return s;
