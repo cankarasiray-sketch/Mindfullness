@@ -524,9 +524,19 @@ function viewToday() {
     var first = Math.min.apply(null, c.legs.map(function (l) { return Date.parse(l.kickoff); }));
     if (c.played || (!c.superseded && first > Date.parse(S.now))) html += couponCard(c, "Açık kupon");
   });
-  if (!S.demo) html += '<div class="btns"><button class="b ghost" onclick="act(\'settle\')">Sonuç kontrolü</button>'
+  if (!S.demo) html += '<div class="btns"><button class="b ghost" onclick="settleNow()">Sonuç kontrolü</button>'
     + '<button class="b ghost" onclick="regenerate()">Güncel oranlarla yeni kupon</button></div>';
   return html;
+}
+/** Sonuç kontrolü (2.15.1): uzun yanıt (birden çok maç) bildirim şeridine sığmaz, sayfada gösterilir. */
+function settleNow() {
+  return act("settle").then(function (res) {
+    if (res && res.message && res.message.length > 280) {
+      openSheet("<h3>Sonuç kontrolü</h3><p class=\"small\">" + esc(res.message).replace(/\n/g, "<br>") + "</p>"
+        + '<div class="btns"><button class="b ghost" onclick="closeSheet()">Kapat</button></div>');
+    }
+    return res;
+  });
 }
 // ---- Günün seçimi (2.9) -------------------------------------------------------------
 // Değerli seçim olmayan günlerde de tek öneri: tek maç oynanabilen (MBS 1), sık tutan (en az %60), adil
@@ -588,8 +598,8 @@ function pickCard() {
       : "Değerli seçim yok (iddaa oranları adil oranın altında). Bu, tek maç oynanabilen ve en az %" + num(S.settings.pickMinProb * 100, 0)
         + " tutan " + p.candidates + " seçim (her pazar, her oran) arasında adil orana en yakın olanı"
         + (p.highCount ? "; %" + num(high * 100, 0) + "+ tutan " + p.highCount + " seçim var" : "") + ". Her gün oynanırsa ayda beklenen ≈ " + tl(p.monthly) + ". ")
-    + "Seçim denge puanıyla yapılır (tutma olasılığı ve ödeme birlikte: kasayı uzun vadede en az küçülten). Tutar kademeli: beklenen kayıp "
-    + pct(-lim / 2, true) + "'e kadar tam, " + pct(-lim, true) + "'ya kadar yarım, daha kötüsünde oynanmaz (Ayarlar → Tek maç); kaybı telafi için artırma.</p>"
+    + "Seçim denge puanıyla yapılır (tutma olasılığı ve ödeme birlikte: kasayı uzun vadede en az küçülten). Tutar: beklenen kayıp "
+    + pct(-lim, true) + " sınırına kadar (adil oranın %" + num(lim * 100, 0) + " altına kadar) tam, daha kötüsünde oynanmaz (Ayarlar → Tek maç); kaybı telafi için artırma.</p>"
     + (alt ? '<details><summary class="small">Diğer adaylar</summary>' + alt + "</details>" : "")
     + '<div class="btns"><button class="b ghost" onclick="show(\'firsat\')">Tüm tek maç fırsatları</button><button class="b ghost" onclick="act(\'openUrl\',{url:\'https://www.bilyoner.com/\'},true)">Bilyoner\'i aç</button></div></div>';
 }
@@ -1346,7 +1356,7 @@ function viewSettings() {
     + "Beklenen sonuç çoğu gün eksidir ve kartta yazar; tutar Kelly değil, sabittir.</p>"
     + '<label>En az tutma olasılığı (%)</label><input id="sPickProb" inputmode="decimal" value="' + esc(num(st.pickMinProb * 100, 0)) + '">'
     + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.15) * 100, 1)) + '">'
-    + '<p class="small muted">Günün seçiminde beklenen kayıp bunun yarısına kadarsa tam tutar, bu kadarsa yarım tutar; daha kötüyse o gün oynanmaz.</p>'
+    + '<p class="small muted">Tek maç seçimlerinde beklenen kayıp bu sınıra kadarsa (oran adil oranın bu kadar altına kadar) tam tutar; daha kötüyse oynanmaz.</p>'
     + '<label>Yüksek olasılık katmanı (%)</label><input id="sPickHigh" inputmode="decimal" value="' + esc(num((st.pickHighProb || 0.7) * 100, 0)) + '">'
     + '<label>Tutar (TL; 0 = kasanın %1\'i)</label><input id="sPickStake" inputmode="decimal" value="' + esc(String(st.pickStake || 0)) + '"></div>';
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'

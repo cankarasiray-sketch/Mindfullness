@@ -96,7 +96,7 @@ public final class Virtual {
         Set<String> out = new LinkedHashSet<>();
         for (Map<String, Object> r : rows) {
             if (r.get("result") != null) continue;
-            if (!Instant.parse(Json.str(r, "kickoff")).plusSeconds(Settlement.RESULT_DELAY_S).isAfter(now)) out.add(Json.str(r, "sport"));
+            if (!Settlement.resultDue(Json.str(r, "kickoff"), Json.str(r, "sport")).isAfter(now)) out.add(Json.str(r, "sport"));
         }
         return out;
     }
@@ -110,7 +110,7 @@ public final class Virtual {
         for (Map<String, Object> r : rows) {
             if (r.get("result") != null) continue;
             Instant ko = Instant.parse(Json.str(r, "kickoff"));
-            if (ko.plusSeconds(Settlement.RESULT_DELAY_S).isAfter(now)) continue;
+            if (Settlement.resultDue(Json.str(r, "kickoff"), Json.str(r, "sport")).isAfter(now)) continue;
             ScoreResult s = scores == null ? null : scores.get(Json.str(r, "sref"));
             if (s != null && s.completed && s.home != null && s.away != null) {
                 r.put("result", Settlement.legResult(Json.str(r, "market"), Json.str(r, "outcome"), s.home, s.away));

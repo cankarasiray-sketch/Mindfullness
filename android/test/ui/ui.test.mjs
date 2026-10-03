@@ -739,6 +739,27 @@ test("uzun işlemde geçen süre, arka plana alma ve sıradaki işlem", async ()
   assert.deepEqual(t.errors, []);
 });
 
+test("sonuç kontrolü: kısa yanıt balonda, uzun yanıt (bekleyen maçlar) sayfada", async () => {
+  const s = clone(baseState);
+  const t = boot(s);
+  let reply = "Sonuç bekleyen oynanmış kupon yok.";
+  t.w.MockAndroid.act = (action, payload, id) => { t.calls.push({ action }); setTimeout(() => t.w.onActResult(id, { ok: true, message: reply }), 0); };
+  t.button("Sonuç kontrolü").click();
+  await t.tick();
+  assert.equal(t.calls.at(-1).action, "settle");
+  assert.equal(t.$("#toast").textContent, reply);
+  assert.ok(!t.$("#sheetBg").classList.contains("show"));
+  const lines = [];
+  for (let i = 1; i <= 6; i++) lines.push("#" + i + " Takım " + i + " – Rakip " + i + ": maç bitmedi, sonuç 04.10 22:40 sonrası alınır.");
+  reply = lines.join("\n");
+  t.button("Sonuç kontrolü").click();
+  await t.tick();
+  assert.match(t.$("#toast").textContent, /\(ayrıntı ekranda\)/);
+  assert.ok(t.$("#sheetBg").classList.contains("show"));
+  assert.match(t.$("#sheet").textContent, /#6 Takım 6 – Rakip 6: maç bitmedi/);
+  assert.deepEqual(t.errors, []);
+});
+
 test("uzun sonuç balonu kaplamaz, ayrıntı kutuda; dokununca kapanır", async () => {
   const s = clone(baseState);
   const t = boot(s, "#ayarlar");
@@ -1202,7 +1223,8 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   Object.assign(ok.pick, { skip: false, odds: 1.58, p: 0.61, ev: 0.61 * 1.58 - 1, stake: 2500, win: 3950, expected: -90, monthly: -2715, label: "2,5 Üst", m: "AU25", o: "UST", model: false });
   const t2 = boot(ok);
   assert.match(t2.$("#pickCard").textContent, /denge puanıyla/);
-  assert.match(t2.$("#pickCard").textContent, /−%3,0'e kadar tam, −%6,0'ya kadar yarım/);
+  assert.match(t2.$("#pickCard").textContent, /−%6,0 sınırına kadar \(adil oranın %6 altına kadar\) tam, daha kötüsünde oynanmaz/);
+  assert.doesNotMatch(t2.$("#pickCard").textContent, /yarım/);
   assert.match(t2.$("#pickCard").textContent, /25,00 TL → tutarsa 39,50 TL/);
   // Fırsatlar: denge tablosu ve oynama işareti
   const f = boot(clone(s), "#firsat");

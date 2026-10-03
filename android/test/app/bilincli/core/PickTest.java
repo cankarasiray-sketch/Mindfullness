@@ -77,11 +77,11 @@ public class PickTest {
         assertEquals(2L, p.get("candidates")); // Arsenal MS 1 ve Liverpool 2,5 Üst
         assertFalse(Json.bool(p, "value", true));
         // tutar: kasanın %1'i, 10 TL'ye yuvarlı (5.000 TL -> 50 TL)
-        // 2.13 kademe: beklenen −%3,6 (sınır −%6'nın yarısından kötü) -> yarım tutar
-        assertEquals(2500L, p.get("stake"));
-        assertEquals(3950L, p.get("win"));
-        assertEquals(Math.round(2500 * (0.61 * 1.58 - 1)), p.get("expected"));
-        assertEquals(Math.round(30 * 2500 * (0.61 * 1.58 - 1)), p.get("monthly"));
+        // 2.15.1: beklenen −%3,6 sınırın içinde -> tam tutar (yarım kademe yok)
+        assertEquals(5000L, p.get("stake"));
+        assertEquals(7900L, p.get("win"));
+        assertEquals(Math.round(5000 * (0.61 * 1.58 - 1)), p.get("expected"));
+        assertEquals(Math.round(30 * 5000 * (0.61 * 1.58 - 1)), p.get("monthly"));
         assertFalse(Json.bool(p, "skip", false));
         assertEquals(1, Json.arr(p.get("alternatives")).size());
         assertEquals("soccer_epl", p.get("sport"));
@@ -94,7 +94,7 @@ public class PickTest {
         assertEquals(0L, p.get("stake")); // −%6,5: sınırı aşıyor, oynanmaz
         assertTrue(Json.bool(p, "skip", false));
         cfg.pickMaxLoss = 0.10;
-        assertEquals(1200L, Pick.choose(fairs(), null, cfg, 500000, NOW).get("stake")); // sınır −%10: yarım (25 TL / 2)
+        assertEquals(2500L, Pick.choose(fairs(), null, cfg, 500000, NOW).get("stake")); // sınır −%10: tam (25 TL)
         cfg.pickMaxLoss = 0.06;
         assertEquals(0L, Json.arr(p.get("alternatives")).size());
         // kapalı ya da aday yok
@@ -159,7 +159,7 @@ public class PickTest {
         String[] t = Texts.notification(null, r, p);
         assertEquals("Günün seçimi · Liverpool – Dep 3 · 2,5 Üst @ 1,58", t[0]);
         assertTrue(t[1], t[1].contains("Değerli seçim yok"));
-        assertTrue(t[1], t[1].contains("Beklenen sonuç " + Fmt.tl(Math.round(2500 * (0.61 * 1.58 - 1)))));
+        assertTrue(t[1], t[1].contains("Beklenen sonuç " + Fmt.tl(Math.round(5000 * (0.61 * 1.58 - 1)))));
         assertTrue(Texts.notification(null, r, null)[0].startsWith("Bugün pas"));
     }
 
@@ -200,10 +200,10 @@ public class PickTest {
         Settings cfg = new Settings();
         cfg.pickMaxLoss = 0.06;
         long bal = 500000;
-        // kademe: değerli -> Kelly (temel tutardan az değil), −%3'e kadar tam, −%6'ya kadar yarım, daha kötüsü 0
+        // değerli -> Kelly (temel tutardan az değil), sınıra (−%6) kadar tam, daha kötüsü 0
         assertTrue(Pick.stakeFor(0.55, 2.0, cfg, bal) >= 5000);
         assertEquals(5000L, Pick.stakeFor(0.62, 1.58, cfg, bal)); // −%2,0
-        assertEquals(2500L, Pick.stakeFor(0.60, 1.58, cfg, bal)); // −%5,2
+        assertEquals(5000L, Pick.stakeFor(0.60, 1.58, cfg, bal)); // −%5,2: 2.15.1'den beri tam
         assertEquals(0L, Pick.stakeFor(0.80, 1.09, cfg, bal)); // −%12,8
         // denge puanı: aynı beklenen değerde sık tutan önde; tutma farkı küçükse beklenen değer belirler
         double f = 0.01;
@@ -242,14 +242,14 @@ public class PickTest {
     }
     @Test
     public void maxLoss15Default() {
-        // 2.15: adil oranın %15 altına kadar tutar verilir (beklenen −%15); yarısına kadar tam, sonra yarım
+        // 2.15: adil oranın %15 altına kadar tutar verilir (beklenen −%15); 2.15.1: hep tam tutar
         Settings cfg = new Settings();
         assertEquals(0.15, cfg.pickMaxLoss, 0);
         long bal = 500000; // temel tutar 50 TL
         assertEquals(5000L, Pick.stakeFor(0.645, 1.45, cfg, bal)); // −%6,5: tam
-        assertEquals(5000L, Pick.stakeFor(0.50, 1.85, cfg, bal)); // −%7,5 (sınırın yarısı): tam
-        assertEquals(2500L, Pick.stakeFor(0.50, 1.80, cfg, bal)); // −%10: yarım
-        assertEquals(2500L, Pick.stakeFor(0.50, 1.70, cfg, bal)); // −%15 (adil 2,00 x 0,85): yarım
+        assertEquals(5000L, Pick.stakeFor(0.50, 1.85, cfg, bal)); // −%7,5: tam
+        assertEquals(5000L, Pick.stakeFor(0.50, 1.80, cfg, bal)); // −%10: tam (yarım kademe yok)
+        assertEquals(5000L, Pick.stakeFor(0.50, 1.70, cfg, bal)); // −%15 (adil 2,00 x 0,85): tam
         assertEquals(0L, Pick.stakeFor(0.50, 1.68, cfg, bal)); // −%16: oynama
         // liste: −%6,5'lik Arsenal MS 1 artık tutarla
         Map<String, Object> ars = null;

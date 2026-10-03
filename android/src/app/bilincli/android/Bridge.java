@@ -268,12 +268,13 @@ public final class Bridge {
             }
             case "settle": {
                 requireReal(repo);
-                List<String> msgs;
                 progress("Biten maçların sonuçları kontrol ediliyor…");
                 synchronized (Repo.LOCK) {
-                    msgs = Daily.settle(repo.real(), repo.live(), repo.forecasts, repo.virtual);
+                    Daily.LiveSources src = repo.live();
+                    List<String> msgs = Daily.settle(repo.real(), src, repo.forecasts, repo.virtual);
+                    // 2.15.1: sonuçlanmayan maçın nedeni ve skoru alınamayan lig de yazılır
+                    return app.bilincli.core.Settlement.report(msgs, src.warnings(), repo.real(), Instant.now());
                 }
-                return msgs.isEmpty() ? "Sonuçlanacak maç yok." : String.join("\n", msgs);
             }
             case "generate": {
                 requireReal(repo);

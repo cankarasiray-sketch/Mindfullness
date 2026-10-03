@@ -236,9 +236,8 @@ public final class Settings {
     /** Günün seçiminde ikinci katman: en az bu tutma olasılığı (2.10; "%70+ seçimi"). */
     public double pickHighProb = 0.70;
     /**
-     * Günün seçiminde kabul edilen en kötü beklenen kayıp (2.13): bunun yarısına kadar tam tutar, buna
-     * kadar yarım tutar, daha kötüyse o gün oynanmaz. Kâr için kötü günler atlanır.
-     * 2.15: %6 -> %15 (kullanıcı isteği: adil oranın %15 altına kadar oynanacak tutar verilsin).
+     * Günün seçiminde ve tek maç listesinde kabul edilen en kötü beklenen kayıp: buna kadar tam tutar, daha
+     * kötüyse oynanmaz. 2.15: %6 -> %15 (adil oranın %15 altına kadar); 2.15.1: yarım tutar kademesi yok.
      */
     public double pickMaxLoss = 0.15;
     /**

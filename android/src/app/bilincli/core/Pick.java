@@ -33,9 +33,9 @@ public final class Pick {
     }
 
     /**
-     * 2.13 kademeli tutar (kuruş): kâr için kayıp beklenen günlerde daha az, çok kötü günlerde hiç oynanmaz.
-     * Değerliyse (beklenen ≥ cfg.minLegEv) temel tutar ile Kelly tutarının büyüğü; beklenen kayıp
-     * cfg.pickMaxLoss'un yarısına kadarsa temel tutar; pickMaxLoss'a kadarsa yarısı; daha kötüyse 0 (oynama).
+     * Tutar (kuruş): değerliyse (beklenen ≥ cfg.minLegEv) temel tutar ile Kelly tutarının büyüğü; beklenen
+     * kayıp cfg.pickMaxLoss'a kadarsa (adil oranın %15 altına kadar) temel tutar; daha kötüyse 0 (oynama).
+     * 2.15.1: kullanıcı isteğiyle yarım tutar kademesi kaldırıldı, sınıra kadar hep tam tutar.
      */
     public static long stakeFor(double p, double odds, Settings cfg, long balance) {
         long base = stake(cfg, balance);
@@ -43,9 +43,7 @@ public final class Pick {
         double ev = p * odds - 1;
         if (ev >= cfg.minLegEv) return Math.max(base, (long) (balance * Engine.stakeFraction(p, odds, cfg)) / 1000 * 1000);
         // 1e-9: tam sınırdaki oran (ör. adil 2,00 / 1,70 = −%15) kayan nokta yüzünden dışarıda kalmasın
-        if (ev >= -cfg.pickMaxLoss / 2 - 1e-9) return base;
-        if (ev >= -cfg.pickMaxLoss - 1e-9) return Math.max(1000, base / 2 / 100 * 100); // yarım tutar (TL'ye yuvarlı)
-        return 0;
+        return ev >= -cfg.pickMaxLoss - 1e-9 ? base : 0;
     }
 
     /**

@@ -260,6 +260,43 @@ public class CoreTest {
         assertTrue(msgs.get(0).contains("#" + c2) && msgs.get(0).contains("elle"));
     }
 
+    @Test
+    public void manualSettleExplainsWaitingMatches() throws Exception {
+        // 2.15.1: sonuç kontrolü boş dönmesin; futbolda skor 1 sa 55 dk sonra sorulur (basketbolda 2 sa 15 dk)
+        assertEquals(NOW.plusSeconds(6900), Settlement.resultDue(NOW.toString(), "soccer_epl"));
+        assertEquals(NOW.plusSeconds(8100), Settlement.resultDue(NOW.toString(), "basketball_nba"));
+        ledger.deposit(100000, "");
+        List<Candidate> legs = new ArrayList<>();
+        legs.add(leg(1, 2.2, 0.5, 1)); // 01.10 07:00
+        long cid = ledger.addCoupon(new Proposal(legs, 2.2, 0.5, 0.02, 0.001), "2026-10-01", 2000);
+        ledger.markPlayed(cid, 2000, null);
+        final Map<String, ScoreResult> scores = new HashMap<>();
+        final List<Set<String>> calls = new ArrayList<>();
+        Settlement.ScoreFetcher fetch = new Settlement.ScoreFetcher() {
+            @Override
+            public Map<String, ScoreResult> fetch(Set<String> sportKeys) {
+                calls.add(sportKeys);
+                return scores;
+            }
+        };
+        List<String> none = new ArrayList<>();
+        // maç sürüyor: ne zaman bakılacağı yazılır, skor sorulmaz
+        String r = Settlement.report(Settlement.settleOpen(ledger, fetch, NOW), none, ledger, NOW);
+        assertEquals("#" + cid + " Ev 1 – Dep 1: maç bitmedi, sonuç 01.10 08:55 sonrası alınır.", r);
+        assertTrue(calls.isEmpty());
+        // maç bitti, skor henüz yok; skoru alınamayan lig de yazılır
+        Instant t = NOW.plusSeconds(3600 + 6900);
+        r = Settlement.report(Settlement.settleOpen(ledger, fetch, t), java.util.Arrays.asList("lig skorları alınamadı: HTTP 500"), ledger, t);
+        assertEquals(1, calls.size());
+        assertTrue(r, r.startsWith("Uyarı: lig skorları alınamadı: HTTP 500\n"));
+        assertTrue(r, r.contains("skor henüz yayımlanmadı"));
+        // skor geldi: sonuçlanır, bekleyen yok
+        scores.put("s1", new ScoreResult(true, 1, 0));
+        r = Settlement.report(Settlement.settleOpen(ledger, fetch, t), none, ledger, t);
+        assertTrue(r, r.contains("TUTTU") && !r.contains("bekl"));
+        assertEquals("Sonuç bekleyen oynanmış kupon yok.", Settlement.report(Settlement.settleOpen(ledger, fetch, t), none, ledger, t));
+    }
+
     // ---- koruma -------------------------------------------------------------
     @Test
     public void weekStartIsMonday0600() {

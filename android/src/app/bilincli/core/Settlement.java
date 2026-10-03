@@ -18,8 +18,19 @@ public final class Settlement {
         Map<String, ScoreResult> fetch(Set<String> sportKeys) throws Exception;
     }
 
+    /** Basketbol: maç başlangıcından bu kadar sonra skor sorulur. */
     static final long RESULT_DELAY_S = 2 * 3600 + 15 * 60;
+    /**
+     * Futbol (2.15.1): 90 dk + devre arası + uzatma ≈ 1 sa 53 dk; maç biter bitmez yapılan sonuç kontrolü
+     * boşa dönmesin diye 2 sa 15 dk yerine 1 sa 55 dk. Skor henüz yayımlanmadıysa sonraki kontrolde.
+     */
+    static final long FOOTBALL_RESULT_DELAY_S = 3600 + 55 * 60;
     static final long MANUAL_AFTER_S = 3 * 24 * 3600;
+
+    /** Maçın skorunun sorulabileceği an. */
+    public static Instant resultDue(String kickoff, String sportKey) {
+        return Instant.parse(kickoff).plusSeconds(Settings.isBasketball(sportKey) ? RESULT_DELAY_S : FOOTBALL_RESULT_DELAY_S);
+    }
 
     public static String legResult(String market, String outcome, int home, int away) {
         String actual;
@@ -70,7 +81,7 @@ public final class Settlement {
         List<Object[]> due = new ArrayList<>();
         for (Coupon c : coupons) {
             for (Leg l : c.legs) {
-                if (l.result == null && !Instant.parse(l.kickoff).plusSeconds(RESULT_DELAY_S).isAfter(now)) {
+                if (l.result == null && !resultDue(l.kickoff, l.sportKey).isAfter(now)) {
                     due.add(new Object[] {c, l});
                 }
             }
@@ -109,5 +120,36 @@ public final class Settlement {
             }
         }
         return messages;
+    }
+
+    /**
+     * Elle sonuç kontrolü (2.15.1): oynanan açık kuponlarda sonucu henüz işlenmeyen maçlar ve nedeni
+     * (maç bitmedi -> ne zaman sorulacağı; bitti ama skor yayımlanmadı -> biraz sonra yeniden dene).
+     */
+    public static List<String> waiting(Ledger ledger, Instant now) {
+        List<String> out = new ArrayList<>();
+        for (Coupon c : ledger.openCoupons()) {
+            if (!c.played) continue;
+            for (Leg l : c.legs) {
+                if (l.result != null) continue;
+                Instant due = resultDue(l.kickoff, l.sportKey);
+                String head = "#" + c.id + " " + l.home + " – " + l.away + ": ";
+                if (due.isAfter(now)) out.add(head + "maç bitmedi, sonuç " + Fmt.localTime(due.toString()) + " sonrası alınır.");
+                else if (l.sportKey == null) out.add(head + "maçın ligi bilinmiyor; sonucu kuponda elle gir.");
+                else out.add(head + "skor henüz yayımlanmadı, birkaç dakika sonra yeniden dene.");
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Sonuç kontrolü düğmesinin mesajı: sonuçlananlar, skor çekilemeyen ligler ve (hiçbir şey
+     * sonuçlanmadıysa) bekleyen maçların nedeni. Eskiden bu durumların hepsi "Sonuçlanacak maç yok" idi.
+     */
+    public static String report(List<String> settled, List<String> warnings, Ledger ledger, Instant now) {
+        List<String> out = new ArrayList<>(settled);
+        for (String w : warnings) out.add("Uyarı: " + w);
+        if (settled.isEmpty()) out.addAll(waiting(ledger, now));
+        return out.isEmpty() ? "Sonuç bekleyen oynanmış kupon yok." : String.join("\n", out);
     }
 }

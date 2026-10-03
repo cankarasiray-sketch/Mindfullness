@@ -62,14 +62,24 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Sonuç kontrolü düzeltmesi, %15'e kadar hep tam tutar (2.15.1)
+
+- **Yarım tutar kaldırıldı:** oran adil oranın %15 altına kadar (beklenen −%15'e kadar) her tek maç
+  seçiminde **tam tutar** (kasanın %1'i ya da Ayarlar'daki sabit tutar); daha kötüsünde "oynama".
+  Değerli seçimde Kelly tutarı (temel tutardan az değil) aynen.
+- **Sonuç kontrolü:** futbolda skor maç başlangıcından **1 sa 55 dk** sonra sorulur (önce 2 sa 15 dk;
+  maç biter bitmez basınca hiçbir şey olmuyordu). Basketbolda 2 sa 15 dk. Düğme artık sonuç çıkmadığında
+  nedenini yazar: maç bitmediyse sonucun ne zaman alınacağı, bittiyse "skor henüz yayımlanmadı, birkaç
+  dakika sonra yeniden dene", skoru alınamayan lig varsa uyarı. Önceden bunların hepsi "Sonuçlanacak maç
+  yok" idi. Uzun yanıt sayfada açılır.
+
 ## Adil oranın %15 altına kadar tutar (2.15)
 
 - Tek maç seçimlerinde tutar artık oran adil oranın **%15 altına kadar** verilir (beklenen −%15; önce
-  −%6). Kademe aynı: beklenen −%7,5'e kadar tam tutar, −%15'e kadar yarım tutar, daha kötüsü "oynama".
-  Eski kurulumlar bir kez %15'e taşınır; Ayarlar → Tek maç → En kötü beklenen kayıp'tan değiştirilebilir.
+  −%6). Eski kurulumlar bir kez %15'e taşınır; Ayarlar → Tek maç → En kötü beklenen kayıp'tan
+  değiştirilebilir.
 - Fırsatlar → Tek maç fırsatları'nda her satırda **oynanacak TL** yazar ("Oynadım" da bu tutarla açılır).
-- Dürüst not: −%15 beklenen, oynanan her 100 TL'de ortalama 15 TL kayıp demektir; tutar bu yüzden
-  −%7,5'ten sonra yarıya iner.
+- Dürüst not: −%15 beklenen, oynanan her 100 TL'de ortalama 15 TL kayıp demektir.
 
 ## 15 API anahtarı (2.14)
 
