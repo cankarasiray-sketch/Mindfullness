@@ -62,10 +62,17 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Tek maç tutarı kasanın %3'ü (2.15.2)
+
+- Tutar ayarı 0 iken tek maç tutarı kasanın **%3'ü** (önce %1; 10 TL'ye aşağı yuvarlı, en az 10 TL).
+  5.947 TL kasada 170 TL. Ayarlar → Tek maç → Tutar'a sabit TL girilirse o geçerli.
+- Dürüst not: seçimler çoğunlukla adil oranın altında; tutar 3 katına çıkınca beklenen kayıp da 3 katına
+  çıkar (−%10'luk seçimde 170 TL ile ≈ −17 TL).
+
 ## Sonuç kontrolü düzeltmesi, %15'e kadar hep tam tutar (2.15.1)
 
 - **Yarım tutar kaldırıldı:** oran adil oranın %15 altına kadar (beklenen −%15'e kadar) her tek maç
-  seçiminde **tam tutar** (kasanın %1'i ya da Ayarlar'daki sabit tutar); daha kötüsünde "oynama".
+  seçiminde **tam tutar** (kasanın %1'i, 2.15.2'den beri %3'ü, ya da Ayarlar'daki sabit tutar); daha kötüsünde "oynama".
   Değerli seçimde Kelly tutarı (temel tutardan az değil) aynen.
 - **Sonuç kontrolü:** futbolda skor maç başlangıcından **1 sa 55 dk** sonra sorulur (önce 2 sa 15 dk;
   maç biter bitmez basınca hiçbir şey olmuyordu). Basketbolda 2 sa 15 dk. Düğme artık sonuç çıkmadığında

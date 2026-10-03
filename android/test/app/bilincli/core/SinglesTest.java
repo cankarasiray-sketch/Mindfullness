@@ -215,8 +215,8 @@ public class SinglesTest {
         assertNotNull(high);
         assertEquals("7", high.get("ref"));
         assertEquals("MS 1", high.get("label"));
-        assertEquals(5000L, high.get("stake")); // −%4,8: tam tutar (2.15.1)
-        assertEquals(Math.round(5000 * 1.22), high.get("win"));
+        assertEquals(15000L, high.get("stake")); // −%4,8: tam tutar (2.15.1), kasanın %3'ü (2.15.2)
+        assertEquals(Math.round(15000 * 1.22), high.get("win"));
         assertEquals(1L, p.get("highCount"));
         // ana seçim zaten %70+ ise ayrı katman yok
         cfg.pickMinProb = 0.75;
@@ -231,7 +231,7 @@ public class SinglesTest {
         Settings tiers = new Settings();
         tiers.pickMaxLoss = 0.06;
         List<Object> list = Pick.list(fairs, null, tiers, 500000, NOW);
-        assertEquals(5000L, Json.obj(list.get(0)).get("stake"));
+        assertEquals(15000L, Json.obj(list.get(0)).get("stake"));
         assertEquals(5, list.size()); // Arsenal MS 1, Liverpool Üst ve KG Var, City MS 1, Brighton 1,5 Üst
         double prev = 9;
         for (Object o : list) { // 2.13: denge puanına göre (tutma ve ödeme birlikte)

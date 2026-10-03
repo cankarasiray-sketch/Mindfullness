@@ -231,7 +231,7 @@ public final class Settings {
     public boolean dailyPick = true;
     /** Günün seçiminde en az tutma olasılığı. */
     public double pickMinProb = 0.60;
-    /** Günün seçiminin tutarı (TL); 0 = kasanın %1'i. */
+    /** Günün seçiminin tutarı (TL); 0 = kasanın %3'ü (2.15.2; önce %1). */
     public double pickStake = 0;
     /** Günün seçiminde ikinci katman: en az bu tutma olasılığı (2.10; "%70+ seçimi"). */
     public double pickHighProb = 0.70;

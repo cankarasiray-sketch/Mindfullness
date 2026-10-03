@@ -23,7 +23,7 @@ public final class Pick {
     /** Seçim en az bu kadar sonra başlamalı (oynamaya vakit kalsın). */
     static final long LEAD_S = 30 * 60;
     /** Tutar ayarı 0 ise kasanın bu payı (10 TL'ye aşağı yuvarlı, en az 10 TL). */
-    static final double DEFAULT_SHARE = 0.01;
+    static final double DEFAULT_SHARE = 0.03; // 2.15.2: kullanıcı isteğiyle %1 -> %3
 
     /** Günün seçiminin temel tutarı (kuruş). */
     public static long stake(Settings cfg, long balance) {

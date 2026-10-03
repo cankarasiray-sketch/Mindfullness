@@ -1358,7 +1358,7 @@ function viewSettings() {
     + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.15) * 100, 1)) + '">'
     + '<p class="small muted">Tek maç seçimlerinde beklenen kayıp bu sınıra kadarsa (oran adil oranın bu kadar altına kadar) tam tutar; daha kötüyse oynanmaz.</p>'
     + '<label>Yüksek olasılık katmanı (%)</label><input id="sPickHigh" inputmode="decimal" value="' + esc(num((st.pickHighProb || 0.7) * 100, 0)) + '">'
-    + '<label>Tutar (TL; 0 = kasanın %1\'i)</label><input id="sPickStake" inputmode="decimal" value="' + esc(String(st.pickStake || 0)) + '"></div>';
+    + '<label>Tutar (TL; 0 = kasanın %3\'ü)</label><input id="sPickStake" inputmode="decimal" value="' + esc(String(st.pickStake || 0)) + '"></div>';
   html += '<div class="card"><h2>Zamanlama</h2><label>Günlük karar saati (Türkiye)</label><input id="sTime" type="time" value="'
     + String(st.runHour).padStart(2, "0") + ":" + String(st.runMinute).padStart(2, "0") + '"><p class="small muted">Sonraki çalışma: '
     + esc(dm(S.nextRun)) + " " + esc(hm(S.nextRun)) + ". Biten maçlar 3 saatte bir kontrol edilir.</p>"
