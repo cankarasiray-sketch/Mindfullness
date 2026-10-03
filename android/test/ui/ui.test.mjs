@@ -982,9 +982,19 @@ test("tutma olasılığı şartı, seyrek rozeti ve ek basketbol ligleri", async
   const s = clone(baseState);
   s.settings.minLegProb = 0.4;
   s.basketLeagues = [["basketball_wnba", "WNBA (basketbol)"], ["basketball_nbl", "NBL (basketbol)"]];
+  // 2.12: aktif ek ligler kendiliğinden taranır; kapatılırsa elle seçilir
+  const auto = boot(clone(s), "#ayarlar");
+  assert.ok(auto.$("#sBasketExtras").checked);
+  assert.match(auto.$("#basketCard").textContent, /kendiliğinden tara \(şu an 2: WNBA, NBL\)/);
+  assert.equal(auto.$$(".lg").filter((x) => x.value === "basketball_wnba").length, 0);
+  assert.match(auto.$(".basket-extra").textContent, /maçı olduğu gün taranır.*İspanya, İtalya, Almanya/);
+  auto.$("#sBasketExtras").checked = false;
+  auto.button("Ayarları kaydet").click();
+  await auto.tick();
+  assert.equal(auto.calls.at(-1).payload.settings.basketExtras, false);
+  s.settings.basketExtras = false;
   const a = boot(s, "#ayarlar");
   assert.match(a.$("#basketCard").textContent, /WNBA \(basketbol\)NBL \(basketbol\)/);
-  assert.match(a.$(".basket-extra").textContent, /ek ligler de seçilebilir \(2\).*İspanya, İtalya, Almanya/);
   assert.equal(a.$("#f_minLegProb").value, "40");
   a.$$(".lg").find((x) => x.value === "basketball_wnba").checked = true;
   a.$("#f_minLegProb").value = "50";

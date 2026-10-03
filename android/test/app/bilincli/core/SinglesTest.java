@@ -279,4 +279,22 @@ public class SinglesTest {
         f.clear();
         assertEquals(3, Json.arr(radar.view().get("fairs")).size());
     }
+
+    @Test
+    public void summaryCountsBasketballMatchesAndExtrasAreOnByDefault() {
+        List<Models.Pair> pairs = new ArrayList<>();
+        List<BookEvent> book = new ArrayList<>(book(pairs, 2));
+        List<SharpEvent> sharp = sharpsOf(pairs);
+        SharpEvent bs = HandicapTest.sharp(3);
+        book.add(HandicapTest.book(3, bs, false, false));
+        sharp.add(bs);
+        Engine.Decision d = Engine.decide(book, sharp, NOW, new Settings());
+        assertEquals(3L, d.stats.get("eslesen"));
+        assertEquals(1L, d.stats.get("eslesen_basket"));
+        assertTrue(Texts.statsLine(d.stats), Texts.statsLine(d.stats).contains("eşleşen 3 (basketbol 1)"));
+        Settings s = new Settings();
+        assertTrue(s.basketExtras);
+        s.basketExtras = false;
+        assertFalse(Settings.fromMap(s.toMap()).basketExtras);
+    }
 }

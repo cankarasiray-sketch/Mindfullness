@@ -201,6 +201,9 @@ public final class Engine {
         stats.put("iddaa_mac", (long) book.size());
         stats.put("keskin_mac", (long) sharp.size());
         stats.put("eslesen", (long) pairs.size());
+        long basket = 0;
+        for (Pair p : pairs) if (Settings.isBasketball(p.sharp.sportKey)) basket++;
+        stats.put("eslesen_basket", basket); // özet: kaç basketbol maçı Pinnacle'la eşleşti
         stats.put("karsilastirilan_secim", (long) all.size());
         stats.put("avantajli_secim", (long) cands.size());
         Map<String, Object> margins = new LinkedHashMap<>();

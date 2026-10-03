@@ -179,6 +179,11 @@ public final class Settings {
      * harcamaz.
      */
     public boolean internationals = true;
+    /**
+     * Oran kaynağında aktif ek basketbol ligleri (ör. NBA hazırlık, WNBA, Avustralya NBL) taramaya
+     * kendiliğinden eklenir (2.12; önce elle seçilmesi gerekiyordu). Maçı olmayan lig kredi harcamaz.
+     */
+    public boolean basketExtras = true;
 
     /** Keşfedilen turnuvaların görünen adları (kod -> ad); süreç boyu önbellek. */
     public static final Map<String, String> EXTRA_NAMES = new java.util.concurrent.ConcurrentHashMap<>();
@@ -364,6 +369,7 @@ public final class Settings {
         m.put("runMinute", (long) runMinute);
         m.put("edgeGuard", edgeGuard);
         m.put("internationals", internationals);
+        m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
         m.put("v", 7L);
         m.put("radarScans", (long) radarScans);
@@ -432,6 +438,7 @@ public final class Settings {
         s.singlesOnly = Json.bool(m, "singlesOnly", s.singlesOnly);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
         s.internationals = Json.bool(m, "internationals", s.internationals);
+        s.basketExtras = Json.bool(m, "basketExtras", s.basketExtras);
         if (Json.lng(m, "v", 1) < 2 && s.maxCouponsPerDay == 3) {
             // 1.4 → 1.5: profiller günde 5 kupona çıktı (ortak Kelly); profil kullanıcısını taşı
             s.maxCouponsPerDay = 5;

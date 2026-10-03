@@ -223,6 +223,9 @@ final class Repo {
         if (s.internationals) {
             for (String[] r : internationals()) if (!s.leagues.contains(r[0])) s.leagues.add(r[0]);
         }
+        if (s.basketExtras) { // 2.12: kaynakta aktif ek basketbol ligleri (NBA hazırlık, WNBA, NBL...)
+            for (String[] r : basketLeagues()) if (!s.leagues.contains(r[0])) s.leagues.add(r[0]);
+        }
         return s;
     }
 

@@ -17,7 +17,7 @@ public final class Texts {
     public static String statsLine(Map<String, Object> stats) {
         List<String> parts = new ArrayList<>();
         parts.add("Bülten " + stats.get("iddaa_mac") + " maç");
-        parts.add("eşleşen " + stats.get("eslesen"));
+        parts.add("eşleşen " + stats.get("eslesen") + (stats.get("eslesen_basket") != null ? " (basketbol " + stats.get("eslesen_basket") + ")" : ""));
         parts.add("karşılaştırılan " + stats.get("karsilastirilan_secim") + " seçim");
         parts.add("avantajlı " + stats.get("avantajli_secim"));
         if (stats.get("dogrulama") != null && !String.valueOf(stats.get("dogrulama")).isEmpty()) {

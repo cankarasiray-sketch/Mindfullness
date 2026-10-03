@@ -1290,8 +1290,11 @@ function viewSettings() {
   html += '<div class="card"><h2>Ligler</h2>' + S.knownLeagues.filter(function (l) { return !isBasket(l); }).map(lgBox).join("")
     + '<p class="small muted">Seçili lig yalnızca maçı olduğu gün kredi harcar (tarama başına 1, Alt/Üst açıkken 2). Maç listesi sorgusu ücretsizdir.</p></div>';
   var extraBasket = (S.basketLeagues || []).filter(function (l) { return !S.knownLeagues.some(function (k) { return k[0] === l[0]; }); });
-  html += '<div class="card" id="basketCard"><h2>Basketbol</h2>' + S.knownLeagues.filter(isBasket).map(lgBox).join("") + extraBasket.map(lgBox).join("")
-    + '<p class="small muted basket-extra">' + (extraBasket.length ? "Oran kaynağında şu an aktif ek ligler de seçilebilir (" + extraBasket.length + "). " : "")
+  html += '<div class="card" id="basketCard"><h2>Basketbol</h2>' + S.knownLeagues.filter(isBasket).map(lgBox).join("")
+    + '<label class="check"><input type="checkbox" id="sBasketExtras"' + (st.basketExtras !== false ? " checked" : "") + ">Oran kaynağında aktif ek ligleri kendiliğinden tara"
+    + (extraBasket.length ? " (şu an " + extraBasket.length + ": " + esc(extraBasket.map(function (l) { return l[1].replace(" (basketbol)", ""); }).join(", ")) + ")" : "") + "</label>"
+    + (st.basketExtras === false ? extraBasket.map(lgBox).join("") : "")
+    + '<p class="small muted basket-extra">' + (extraBasket.length ? "NBA hazırlık, WNBA, NBL gibi ek ligler açıkken maçı olduğu gün taranır (maçsız lig kredi harcamaz). " : "")
     + "iddaa'daki diğer basketbol ligleri (ör. İspanya, İtalya, Almanya, VTB, ABA) oran kaynağında (The Odds API) yoksa Pinnacle fiyatı olmadan değerlendirilemez; "
     + "liste günde bir kez ücretsiz güncellenir, kaynakta açılan lig burada kendiliğinden görünür.</p>"
     + '<label class="check"><input type="checkbox" id="sHandicap"' + (st.basketHandicap ? " checked" : "") + ">Handikap (Basket H. Ev −4,5 / Dep +4,5)</label>"
@@ -1440,6 +1443,8 @@ function collectSettings() {
   var au = document.getElementById("sAuto"), ca = document.getElementById("sCreditAuto"), eg = document.getElementById("sEdge"), ni = document.getElementById("sIntl");
   st.autoTrack = !!(au && au.checked);
   st.internationals = !!(ni && ni.checked);
+  var bx = document.getElementById("sBasketExtras");
+  if (bx) st.basketExtras = bx.checked;
   st.edgeGuard = !!(eg && eg.checked);
   st.creditAuto = !!(ca && ca.checked);
   var ce = document.getElementById("sCreditExpand");

@@ -62,6 +62,17 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Basketbol kapsamı (2.12)
+
+- Basketbol için Pinnacle fiyatı oran kaynağındaki (The Odds API) liglerden gelir: EuroLeague, NBA ve
+  dönemine göre NBA hazırlık, WNBA, Avustralya NBL gibi ligler. Türkiye BSL, İspanya, İtalya, Almanya,
+  VTB, ABA gibi iddaa'daki diğer ligler kaynakta olmadığından değerlendirilemez.
+- Önceden yalnızca EuroLeague ve NBA taranıyordu; kaynakta aktif ek basketbol ligleri elle
+  işaretlenmedikçe taranmıyordu. Artık **kendiliğinden taranır** (Ayarlar → Basketbol; maçı olmayan lig
+  kredi harcamaz, kredi yetmezse plan en az fırsat çıkaran ligi önce çıkarır).
+- Özet satırı eşleşen basketbol maçı sayısını gösterir ("eşleşen 22 (basketbol 0)"): basketbol
+  önerisi yoksa nedeni o gün kaynakta eşleşen maç olmamasıdır (ör. EuroLeague hafta içi oynar).
+
 ## Hız ve veri iyileştirmesi (2.11)
 
 - **Gol modeli ~28 kat hızlı:** ek pazarların adil olasılığı için her maçta çözülen model, ızgara
