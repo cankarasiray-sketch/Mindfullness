@@ -1147,7 +1147,10 @@ test("tek maç: %70+ katmanı, tek maç fırsatları süzgeci, yeni bahis türle
   // Fırsatlar: tek maç listesi, olasılık süzgeci
   const f = boot(clone(s), "#firsat");
   let rows = f.$$("#singlesCard .single-row");
-  assert.equal(rows.length, 2); // varsayılan %60+
+  assert.equal(rows.length, 1); // varsayılan %65+
+  assert.match(f.$("#singlesCard .chip.main").textContent, /%65\+/);
+  f.button("%60+").click();
+  assert.equal(f.$$("#singlesCard .single-row").length, 2);
   f.button("%50+").click();
   rows = f.$$("#singlesCard .single-row");
   assert.equal(rows.length, 3);

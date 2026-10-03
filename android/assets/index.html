@@ -597,11 +597,13 @@ function pickPlay(i) {
 // ---- Tek maç fırsatları (2.10) --------------------------------------------------------------
 // Son taramanın tüm tek oynanabilen seçimleri (her pazar, her oran; Zirve dahil), adil orana yakınlığa göre.
 var singlesMin = null;
+/** Tek maç fırsatlarında varsayılan süzgeç: tutma olasılığı %65 ve üstü (kullanıcı isteği). */
+var SINGLES_DEFAULT_MIN = 0.65;
 function singlesCard() {
   if (S.demo) return "";
-  var all = S.singles || [], min = singlesMin != null ? singlesMin : Math.max(0.5, S.settings.pickMinProb || 0.6);
+  var all = S.singles || [], min = singlesMin != null ? singlesMin : SINGLES_DEFAULT_MIN;
   var rows = all.filter(function (x) { return x.p >= min - 1e-9; }).slice(0, 25);
-  var chips = [0.5, 0.6, 0.7, 0.8].map(function (v) {
+  var chips = [0.5, 0.6, 0.65, 0.7, 0.8].map(function (v) {
     return '<button class="chip' + (Math.abs(v - min) < 1e-9 ? " main" : "") + '" onclick="singlesMin=' + v + ';render()">%' + Math.round(v * 100) + "+</button>";
   }).join(" ");
   var stake = S.pick && S.pick.stake ? S.pick.stake : 0;

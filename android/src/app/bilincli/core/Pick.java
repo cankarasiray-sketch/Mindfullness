@@ -60,7 +60,7 @@ public final class Pick {
     static final double MIN_ODDS = 1.05;
     /** Tek maç fırsatları listesi: en az bu tutma olasılığı ve en fazla bu kadar satır. */
     public static final double LIST_MIN_PROB = 0.50;
-    static final int LIST_SIZE = 40;
+    static final int LIST_SIZE = 100; // %65+ gibi süzgeçlerde de liste dolsun
 
     private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, Instant now) {
         if (kickoff == null || !(p > 0 && p < 1) || mbs > 1) return false;
@@ -117,7 +117,7 @@ public final class Pick {
         return all;
     }
 
-    /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 40 seçim, günün seçimi tutarıyla. */
+    /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 100 seçim, günün seçimi tutarıyla. */
     public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         List<Object> out = new ArrayList<>();
         for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, now)) {

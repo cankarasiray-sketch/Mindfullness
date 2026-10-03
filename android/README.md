@@ -109,7 +109,8 @@ bildirim olarak gelir.
   arasında adil orana en yakın seçim ve ayrıca **%70+ seçimi** (daha sık tutar, ödemesi küçük). Eşikler
   Ayarlar → Tek maç'tan değişir.
 - **Tek maç fırsatları (Fırsatlar):** son taramanın bütün tek oynanabilen seçimleri (her pazar, Zirve
-  dahil), adil orana yakınlığa göre; %50+ / %60+ / %70+ / %80+ süzgeci ve her satırda "Oynadım".
+  dahil), adil orana yakınlığa göre; %50+ / %60+ / %65+ / %70+ / %80+ süzgeci (2.12.1: varsayılan %65+,
+  liste 100 seçime kadar) ve her satırda "Oynadım".
   Yeşil beklenen değer gerçek fırsattır.
 - Bütün yeni pazarlar maç sonucuna göre otomatik sonuçlanır (x,5 çizgide iade yok; handikapta eşitlik X).
 
