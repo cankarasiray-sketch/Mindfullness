@@ -34,6 +34,8 @@ public class MaxProfitTest {
         assertTrue(rich.lineupScans);
         assertTrue(rich.cost <= rich.budget);
         // tek anahtar: plan önce kadro taramasını, sonra radarı 8 -> 6 -> 4 ... diye azaltır
+        // (KG plan tarafından kısılmaz, 2.15.3; tek anahtarda kullanıcı Ayarlar'dan kapatır)
+        y.kgEvents = 0;
         CreditPlan.Plan one = CreditPlan.plan(y, 450L, 50L, day, null);
         assertTrue(one.narrowed);
         assertTrue(one.radarScans < 8);

@@ -152,8 +152,11 @@ public final class Settings {
     // pazarlar
     /** 2,5 Alt/Üst: Pinnacle "totals" verisi gerekir, lig başına kredi iki katına çıkar. */
     public boolean totals = false;
-    /** Karşılıklı Gol: maç bazında çekilir; günde en fazla bu kadar maç (maç başına 1 kredi). 0 = kapalı. */
-    public int kgEvents = 0;
+    /**
+     * Karşılıklı Gol: maç bazında çekilir; günde en fazla bu kadar maç (maç başına 1 kredi). 0 = kapalı.
+     * 2.15.3: varsayılan 12 ve kredi planı bunu kısmaz (kullanıcı isteği: kredi bol, KG kapatılmasın).
+     */
+    public int kgEvents = 12;
 
     // limitler
     public double weeklyLossLimit = 0.15;
@@ -376,7 +379,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 8L);
+        m.put("v", 9L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -474,6 +477,10 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 8) {
             // 2.15: kullanıcı istedi: adil oranın %15 altına kadar (beklenen −%15) tutar verilir
             s.pickMaxLoss = 0.15;
+        }
+        if (Json.lng(m, "v", 1) < 9 && s.kgEvents == 0) {
+            // 2.15.3: kullanıcı istedi: Karşılıklı Gol açık (günde 12 maç), kredi planı kısmaz
+            s.kgEvents = 12;
         }
         s.profile = s.detectProfile();
         return s;

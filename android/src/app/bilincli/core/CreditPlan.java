@@ -13,8 +13,9 @@ import java.util.Map;
  * Kredi planlayıcı: The Odds API kredisi ay sonuna kadar yetecek şekilde günlük kapsamı daraltır.
  *
  * Günlük bütçe = (kalan kredi - yedek) / yenilenmeye kalan gün. Tahmini günlük maliyet bütçeyi
- * aşarsa, kredi başına en az fırsat getiren kalemden başlayarak kısılır:
- * Karşılıklı Gol (maç başına 1 kredi) → kadro saati taraması → radar taramaları → günlük kupon 5→3 (her kupon maç öncesi
+ * aşarsa, kredi başına en az fırsat getiren kalemden başlayarak kısılır (2.15.3: Karşılıklı Gol hiç kısılmaz,
+ * kullanıcı isteği; ayardaki maç sayısı her gün aynen):
+ * kadro saati taraması → radar taramaları → günlük kupon 5→3 (her kupon maç öncesi
  * kontrol ve kapanış oranı için kredi harcar; simülasyonda 3 kupon 5'in getirisinin çoğunu verdi)
  * → 2,5 Alt/Üst → en az değerli fırsat çıkaran lig → son çare kupon 3→1.
  *
@@ -168,7 +169,6 @@ public final class CreditPlan {
             }
         });
         int[] radarSteps = Settings.RADAR_STEPS;
-        int[] kgSteps = {12, 8, 4, 0};
         while (cost(p, active, avgCoupons) > p.budget) {
             int droppable = -1; // bugün maçı olan, en az fırsat çıkaran lig (maçsız lig kredi harcamaz)
             for (int i = p.leagues.size() - 1; i >= 0 && p.leagues.size() > 1; i--) {
@@ -177,10 +177,7 @@ public final class CreditPlan {
                     break;
                 }
             }
-            if (p.kgEvents > 0) {
-                p.kgEvents = next(kgSteps, p.kgEvents);
-                note(p, "kg", p.kgEvents > 0 ? "Karşılıklı Gol en fazla " + p.kgEvents + " maç" : "Karşılıklı Gol bugünlük kapatıldı");
-            } else if (p.lineupScans) {
+            if (p.lineupScans) { // 2.15.3: Karşılıklı Gol kısılmaz (kullanıcı isteği)
                 p.lineupScans = false;
                 note(p, "kadro", "Kadro saati taraması bugünlük kapatıldı");
             } else if (p.radarScans > 0) {

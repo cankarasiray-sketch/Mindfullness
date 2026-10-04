@@ -76,6 +76,7 @@ public class BankrollTest {
     @Test
     public void creditPlanKeepsEverythingWhenBudgetAllows() {
         Settings s = new Settings(); // 13 lig (günde ~%40'ı oynar), yalnız MS, 5 kupon: günde ~5,2 + 16 kredi
+        s.kgEvents = 0; // KG kısılmaz (2.15.3); bu test diğer kalemler için
         CreditPlan.Plan p = CreditPlan.plan(s, 900L, 100L, LocalDate.of(2026, 10, 1), null);
         assertFalse(p.narrowed);
         assertEquals(13, p.leagues.size());
@@ -94,7 +95,7 @@ public class BankrollTest {
     public void creditPlanCutsLowestValueFirst() {
         Settings s = new Settings();
         s.totals = true;
-        s.kgEvents = 8;
+        s.kgEvents = 0; // KG ayrı: kısılmaz (aşağıda)
         s.radarScans = 2;
         Map<String, Double> yield = new LinkedHashMap<>();
         yield.put("soccer_turkey_super_league", 3.0);
@@ -103,7 +104,6 @@ public class BankrollTest {
         // kalan 330 kredi, 21 gün: günde 15 kredi (3 kupon gideri 12 + 3 lig)
         CreditPlan.Plan p = CreditPlan.plan(s, 330L, 170L, LocalDate.of(2026, 10, 11), yield);
         assertTrue(p.narrowed);
-        assertEquals(0, p.kgEvents);
         assertEquals(0, p.radarScans);
         assertFalse(p.totals);
         assertTrue(p.cost <= p.budget);
@@ -112,16 +112,31 @@ public class BankrollTest {
         assertTrue(p.leagues.contains("soccer_epl"));
         assertEquals(7, p.leagues.size()); // günde 15 kredi: 12 gider + 7 lig x 0,4
         // her kalem için yalnızca son durum, okunur lig adıyla
-        assertEquals(Arrays.asList("Karşılıklı Gol bugünlük kapatıldı", "Kadro saati taraması bugünlük kapatıldı",
+        assertEquals(Arrays.asList("Kadro saati taraması bugünlük kapatıldı",
                 "Radar bugünlük kapatıldı", "Günde en fazla 3 kupon", "2,5 Alt/Üst bugünlük kapatıldı",
-                "Fransa Ligue 1 bugünlük çıkarıldı (en az fırsat çıkaran lig)"), p.notes.subList(0, 6));
+                "Fransa Ligue 1 bugünlük çıkarıldı (en az fırsat çıkaran lig)"), p.notes.subList(0, 5));
         assertFalse(p.lineupScans);
         assertFalse(CreditPlan.effective(s, p).lineupScans);
         Settings eff = CreditPlan.effective(s, p);
         assertEquals(p.leagues, eff.leagues);
         assertFalse(eff.totals);
         assertTrue(s.totals); // kullanıcının ayarı değişmez
-        // yalnızca gerektiği kadar kısar: bol kredide KG korunur
+        // 2.15.3: Karşılıklı Gol hiç kısılmaz (kullanıcı isteği); kredi dar olsa da diğer kalemler kısılır
+        s.kgEvents = 8;
+        CreditPlan.Plan kg = CreditPlan.plan(s, 330L, 170L, LocalDate.of(2026, 10, 11), yield);
+        assertTrue(kg.narrowed);
+        assertEquals(8, kg.kgEvents);
+        assertEquals(8, CreditPlan.effective(s, kg).kgEvents);
+        for (String n : kg.notes) assertFalse(n, n.contains("Karşılıklı Gol"));
+        // kapalı KG'li eski kayıt bir kez 12 maça taşınır; sonradan kapatan kullanıcının seçimi korunur
+        Map<String, Object> v8 = new Settings().toMap();
+        v8.put("v", 8L);
+        v8.put("kgEvents", 0L);
+        Settings moved = Settings.fromMap(v8);
+        assertEquals(12, moved.kgEvents);
+        moved.kgEvents = 0;
+        assertEquals(0, Settings.fromMap(moved.toMap()).kgEvents);
+        // yalnızca gerektiği kadar kısar
         CreditPlan.Plan rich = CreditPlan.plan(s, 2000L, 0L, LocalDate.of(2026, 10, 11), yield);
         assertFalse(rich.narrowed);
         assertEquals(8, rich.kgEvents);
@@ -146,20 +161,20 @@ public class BankrollTest {
         assertEquals(4, light.kgEvents);
         assertTrue(light.lineupScans);
         assertEquals(1 * 2 * 2 + 4 + 5, light.cost, 1e-9); // Uluslar Ligi x2 (Alt/Üst) x2 (sabah + kadro saati) + 4 KG + gider (3 + 2x1)
-        // eski tahminle (her lig %40, her gün 5 kupon) aynı gün Alt/Üst ve KG kapanıyordu
+        // eski tahminle (her lig %40, her gün 5 kupon) aynı gün Alt/Üst kapanıyordu (KG 2.15.3'ten beri kısılmaz)
         CreditPlan.Plan old = CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null);
         assertTrue(old.narrowed);
-        assertEquals(0, old.kgEvents);
-        // yoğun gün: hepsi oynuyor; önce KG, sonra Alt/Üst, sonra en az fırsat çıkaran ligler
+        assertEquals(4, old.kgEvents);
+        // yoğun gün: hepsi oynuyor; KG kısılmaz, önce Alt/Üst, sonra en az fırsat çıkaran ligler
         for (String l : s.leagues) active.put(l, 8);
         active.put("soccer_france_ligue_one", 0); // maçı olmayan lig "çıkarılmaz" (kredi harcamaz zaten)
         CreditPlan.Plan heavy = CreditPlan.plan(s, 494L, 6L, LocalDate.of(2026, 10, 1), null, active, 1.0);
         assertTrue(heavy.narrowed);
-        assertEquals(0, heavy.kgEvents);
+        assertEquals(4, heavy.kgEvents);
         assertFalse(heavy.totals);
         assertTrue(heavy.cost <= heavy.budget);
         assertTrue(heavy.leagues.contains("soccer_france_ligue_one"));
-        assertEquals(11, heavy.leagues.size()); // 12 lig: 11 oynayan, 1 maçsız; oynayanlardan 10'u kalır
+        assertEquals(7, heavy.leagues.size()); // maçsız lig kalır; KG (4 kredi) kısılmadığından oynayanlardan 6'sı kalır (önce 10)
         // KG maliyeti penceredeki maç sayısını aşmaz
         for (String l : s.leagues) active.put(l, 0);
         active.put("soccer_uefa_nations_league", 2);

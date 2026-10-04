@@ -62,6 +62,14 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Karşılıklı Gol hep açık (2.15.3)
+
+- Karşılıklı Gol (KG Var / KG Yok) varsayılan olarak **günde 12 maç** açık; kapalı olan kurulumlar bir kez
+  12'ye taşınır. Ayarlar → Pazarlar'dan 4/8/12 ya da Kapalı seçilebilir.
+- **Kredi planı KG'yi artık hiç kısmaz:** kredi daralırsa önce kadro saati taraması, radar, kupon sayısı,
+  Alt/Üst ve en az fırsat çıkaran ligler kısılır. KG maç başına 1 kredi (12 maçta ayda ~360 kredi).
+- Ücretsiz ön eleme aynen: iddaa'nın KG oranı avantaj veremeyecek kadar düşükse o maç sorulmaz.
+
 ## Tek maç tutarı kasanın %3'ü (2.15.2)
 
 - Tutar ayarı 0 iken tek maç tutarı kasanın **%3'ü** (önce %1; 10 TL'ye aşağı yuvarlı, en az 10 TL).
