@@ -56,7 +56,20 @@ public final class Pick {
         return (p * Math.log(1 + f * (odds - 1)) + (1 - p) * Math.log(1 - f)) / f;
     }
 
-    /** Puanlamada kullanılan kasa payı (günün seçimi temel tutarı / kasa; kasa boşsa %1). */
+    /**
+     * Fırsat sıralaması (2.15.4, kullanıcı isteği: kâr amaçlı oran ve tutma olasılığı öncelikli). Negatifse a önce.
+     * 1) kârlı olanlar (beklenen ≥ 0: oran adil oranı geçiyor) en üstte; 2) sonra denge puanı: kâr ile tutma
+     * olasılığı birlikte (kasanın f payı oynanırken beklenen log büyüme); 3) eşitlikte sık tutan.
+     * Tek maç fırsatları, günün seçimi, Değerli oranlar ve Zirve Oran listesi bu sırayla dizilir.
+     */
+    public static int rank(double evA, double pA, double oddsA, double evB, double pB, double oddsB, double f) {
+        boolean ga = evA >= 0, gb = evB >= 0;
+        if (ga != gb) return ga ? -1 : 1;
+        int c = Double.compare(score(pB, oddsB, f), score(pA, oddsA, f));
+        return c != 0 ? c : Double.compare(pB, pA);
+    }
+
+    /** Puanlamada kullanılan kasa payı (günün seçimi temel tutarı / kasa; kasa boşsa %3). */
     static double fraction(Settings cfg, long balance) {
         long base = stake(cfg, balance);
         return balance > 0 && base > 0 ? (double) base / balance : DEFAULT_SHARE;
@@ -113,8 +126,9 @@ public final class Pick {
         return singles(fairs, zirve, cfg, minProb, DEFAULT_SHARE, now);
     }
 
-    /** f: denge puanında kasa payı (Pick.fraction). Sıra: denge puanı (2.13), eşitlikte sık tutan. */
+    /** f: denge puanında kasa payı (Pick.fraction). Sıra: {@link #rank} (kârlı önce, sonra denge puanı, sonra sık tutan). */
     public static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f, Instant now) {
+        final double fs = f;
         Map<String, Map<String, Object>> best = new LinkedHashMap<>(); // ref|m|o -> en iyi oran
         for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
             Map<String, Object> r = Json.obj(o);
@@ -150,8 +164,8 @@ public final class Pick {
         Collections.sort(all, new Comparator<Map<String, Object>>() {
             @Override
             public int compare(Map<String, Object> a, Map<String, Object> b) {
-                int c = Double.compare(Json.dbl(b, "score", 0), Json.dbl(a, "score", 0));
-                return c != 0 ? c : Double.compare(Json.dbl(b, "p", 0), Json.dbl(a, "p", 0));
+                return rank(Json.dbl(a, "ev", 0), Json.dbl(a, "p", 0), Json.dbl(a, "odds", 1),
+                        Json.dbl(b, "ev", 0), Json.dbl(b, "p", 0), Json.dbl(b, "odds", 1), fs);
             }
         });
         return all;

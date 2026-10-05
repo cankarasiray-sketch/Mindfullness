@@ -270,4 +270,48 @@ public class PickTest {
         moved.pickMaxLoss = 0.10;
         assertEquals(0.10, Settings.fromMap(moved.toMap()).pickMaxLoss, 0);
     }
+
+    @Test
+    public void profitableFirstThenBalanceScore() {
+        // 2.15.4: önce kârlı (adil oranı geçen), sonra denge puanı (kâr + tutma), eşitlikte sık tutan
+        double f = 0.03;
+        assertTrue(Pick.score(0.60, 1.67, f) < Pick.score(0.90, 1.11, f)); // puanda −%0,1'lik sık tutan önde...
+        assertTrue(Pick.rank(0.60 * 1.67 - 1, 0.60, 1.67, 0.90 * 1.11 - 1, 0.90, 1.11, f) < 0); // ...ama +%0,2 kârlı olan önce
+        assertTrue(Pick.rank(0.85 * 1.15 - 1, 0.85, 1.15, 0.85 * 1.17 - 1, 0.85, 1.17, f) > 0); // ikisi de kayıpta: puan
+        assertTrue(Pick.rank(0.0, 0.5, 2.0, 0.0, 0.5, 2.0, f) == 0);
+        List<Object> fx = new ArrayList<>();
+        fx.add(row("1", "Arsenal", 8, sel("MS", "1", 0.90, 1.11, 1)));
+        fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.60, 1.67, 1)));
+        fx.add(row("3", "Liverpool", 10, sel("CS", "1X", 0.85, 1.15, 1)));
+        Settings cfg = new Settings();
+        List<Object> list = Pick.list(fx, null, cfg, 500000, NOW);
+        assertEquals("2", Json.obj(list.get(0)).get("ref")); // kârlı
+        assertEquals("1", Json.obj(list.get(1)).get("ref"));
+        assertEquals("3", Json.obj(list.get(2)).get("ref"));
+        assertEquals("2", Pick.choose(fx, null, cfg, 500000, NOW).get("ref")); // günün seçimi de kârlıyı alır
+        // Zirve listesi: maçlar en iyi seçimine göre; oynanabilir maç, erken başlayan kayıptaki maçın önünde
+        List<Map<String, Object>> z = new ArrayList<>();
+        z.add(zrow("e1", "2026-10-01T12:00:00Z", "oynama", -0.03, 0.70, 1.38));
+        z.add(zrow("e2", "2026-10-01T18:00:00Z", "oynama", -0.08, 0.60, 1.53));
+        z.add(zrow("e2", "2026-10-01T18:00:00Z", "oyna", 0.04, 0.55, 1.89));
+        z.add(zrow("e3", "2026-10-01T10:00:00Z", "mac", null, 0, 1.5));
+        z.add(zrow("e1", "2026-10-01T12:00:00Z", "oynama", -0.01, 0.80, 1.26));
+        Zirve.sortByValue(z);
+        StringBuilder order = new StringBuilder();
+        for (Map<String, Object> r : z) order.append(r.get("event")).append(":").append(r.get("status")).append(r.get("ev") == null ? "" : "@" + r.get("ev")).append(" ");
+        assertEquals("e2:oyna@0.04 e2:oynama@-0.08 e1:oynama@-0.01 e1:oynama@-0.03 e3:mac ", order.toString());
+    }
+
+    static Map<String, Object> zrow(String event, String kickoff, String status, Double ev, double p, double tval) {
+        Map<String, Object> r = new LinkedHashMap<>();
+        r.put("event", event);
+        r.put("kickoff", kickoff);
+        r.put("status", status);
+        if (ev != null) {
+            r.put("ev", ev);
+            r.put("p", p);
+        }
+        r.put("tval", tval);
+        return r;
+    }
 }

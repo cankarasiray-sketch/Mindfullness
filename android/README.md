@@ -62,6 +62,20 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Fırsat sıralaması: kâr ve tutma olasılığı öncelikli (2.15.4)
+
+Fırsatlar'daki listeler (Tek maç fırsatları, Zirve Oran, Değerli oranlar) ve günün seçimi aynı kuralla
+sıralanır:
+
+1. **Kârlı olanlar önce:** oranı adil oranı geçen (beklenen ≥ 0) seçimler en üstte. Önceden uzun oranlı
+   kârlı bir seçim, denge puanı düşük diye kayıptaki sık tutan seçimin altında kalabiliyordu.
+2. **Sonra denge puanı:** kâr ile tutma olasılığı birlikte (kasanın %3'ü oynanırken beklenen log büyüme);
+   aynı beklenen değerde sık tutan önde.
+3. Eşitlikte tutma olasılığı yüksek olan.
+
+Zirve Oran'da maçlar en iyi seçimlerine göre dizilir (önce oynanabilir maç), maç içinde seçimler de aynı
+sırayla; Değerli oranlar artık yalnız avantaja göre değil, tutma olasılığıyla birlikte sıralanır.
+
 ## Karşılıklı Gol hep açık (2.15.3)
 
 - Karşılıklı Gol (KG Var / KG Yok) varsayılan olarak **günde 12 maç** açık; kapalı olan kurulumlar bir kez

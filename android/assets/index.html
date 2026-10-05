@@ -598,7 +598,7 @@ function pickCard() {
       : "Değerli seçim yok (iddaa oranları adil oranın altında). Bu, tek maç oynanabilen ve en az %" + num(S.settings.pickMinProb * 100, 0)
         + " tutan " + p.candidates + " seçim (her pazar, her oran) arasında adil orana en yakın olanı"
         + (p.highCount ? "; %" + num(high * 100, 0) + "+ tutan " + p.highCount + " seçim var" : "") + ". Her gün oynanırsa ayda beklenen ≈ " + tl(p.monthly) + ". ")
-    + "Seçim denge puanıyla yapılır (tutma olasılığı ve ödeme birlikte: kasayı uzun vadede en az küçülten). Tutar: beklenen kayıp "
+    + "Seçimde önce kâr (adil oranı geçen seçim varsa o), sonra denge puanıyla (tutma olasılığı ve ödeme birlikte: kasayı uzun vadede en az küçülten). Tutar: beklenen kayıp "
     + pct(-lim, true) + " sınırına kadar (adil oranın %" + num(lim * 100, 0) + " altına kadar) tam, daha kötüsünde oynanmaz (Ayarlar → Tek maç); kaybı telafi için artırma.</p>"
     + (alt ? '<details><summary class="small">Diğer adaylar</summary>' + alt + "</details>" : "")
     + '<div class="btns"><button class="b ghost" onclick="show(\'firsat\')">Tüm tek maç fırsatları</button><button class="b ghost" onclick="act(\'openUrl\',{url:\'https://www.bilyoner.com/\'},true)">Bilyoner\'i aç</button></div></div>';
@@ -639,7 +639,7 @@ function singlesCard() {
   }).join(" ");
   var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
   return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
-    + "ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; adil orana en yakın üstte. "
+    + "ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran. Sıra: önce kârlı olanlar (adil oranı geçen), sonra kâr ve tutma olasılığı birlikte (denge puanı). "
     + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
     + bandsHtml()
     + '<div class="btns" style="flex-wrap:wrap">' + chips + "</div>"
@@ -989,7 +989,7 @@ function zirveCard() {
   var Z = S.zirve, html = '<div class="card" id="zirveCard"><h2>Zirve Oran (Bilyoner)</h2>';
   if (!S.settings.zirve) return html + '<p class="small muted">Kapalı. Açmak için Ayarlar → Radar → "Bilyoner Zirve Oran\'ı kontrol et".</p></div>';
   html += '<p class="small muted">Bilyoner\'in artırılmış oranları kendiliğinden okunur (açılışta, taramalardan sonra, 3 saatte bir; kredi harcamaz) ve Pinnacle\'ın adil oranıyla karşılaştırılır. '
-    + "Adil oranı geçen olursa bildirim gelir. Artış genelde %2–5'tir; çoğu zaman adil oranı geçmez, bu normaldir.</p>";
+    + "Adil oranı geçen olursa bildirim gelir. Artış genelde %2–5'tir; çoğu zaman adil oranı geçmez, bu normaldir. Sıra: oynanabilir (adil oranı geçen) maçlar önce, sonra kâr ve tutma olasılığına göre.</p>";
   if (!Z) return html + '<p class="small muted">Henüz okunmadı.</p><div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')">Şimdi oku</button></div></div>';
   var now = Date.parse(S.now);
   if (Z.busy) html += '<p class="small zirve-busy"><b>' + esc(Z.busy) + "</b> Bitince liste kendiliğinden yenilenir.</p>";
@@ -1053,7 +1053,7 @@ function viewOpportunities() {
   html += zirveCard();
   html += campaignCard();
   html += '<div class="card"><h2>Değerli oranlar</h2><p class="small muted">iddaa oranının, Pinnacle\'ın marjı arındırılmış adil oranından yüksek olduğu seçimler. '
-    + "Örnek: gerçek olasılığı %50 olan sonuca 2,20 oran → 0,50 × 2,20 − 1 = +%10 avantaj. Kupon motoru bunların arasından MBS ve risk kurallarına uyan en iyi kombinasyonu seçer.</p>"
+    + "Örnek: gerçek olasılığı %50 olan sonuca 2,20 oran → 0,50 × 2,20 − 1 = +%10 avantaj. Sıra: kâr ve tutma olasılığı birlikte (denge puanı; aynı avantajda sık tutan önde). Kupon motoru bunların arasından MBS ve risk kurallarına uyan en iyi kombinasyonu seçer.</p>"
     + (R.values.length ? R.values.map(function (v) {
       return '<div class="vrow"><div class="l1"><span>' + esc(dm(v.kickoff)) + " " + esc(hm(v.kickoff)) + (v.league ? " · " + esc(v.league) : "") + "</span><span>"
         + (v.code ? "kod " + esc(v.code) + " · " : "") + "MBS " + v.mbs + "</span></div>"

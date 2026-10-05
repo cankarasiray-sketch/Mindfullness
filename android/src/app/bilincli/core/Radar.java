@@ -180,7 +180,8 @@ public final class Radar {
             Collections.sort(value, new Comparator<Candidate>() {
                 @Override
                 public int compare(Candidate a, Candidate b) {
-                    return Double.compare(b.ev(), a.ev());
+                    // 2.15.4: kâr ve tutma olasılığı birlikte (önce yalnız avantaj)
+                    return Pick.rank(a.ev(), a.prob, a.odds, b.ev(), b.prob, b.odds, Pick.DEFAULT_SHARE);
                 }
             });
             List<Object> rows = new ArrayList<>();

@@ -1222,7 +1222,7 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   const ok = clone(s);
   Object.assign(ok.pick, { skip: false, odds: 1.58, p: 0.61, ev: 0.61 * 1.58 - 1, stake: 2500, win: 3950, expected: -90, monthly: -2715, label: "2,5 Üst", m: "AU25", o: "UST", model: false });
   const t2 = boot(ok);
-  assert.match(t2.$("#pickCard").textContent, /denge puanıyla/);
+  assert.match(t2.$("#pickCard").textContent, /önce kâr \(adil oranı geçen seçim varsa o\), sonra denge puanıyla/);
   assert.match(t2.$("#pickCard").textContent, /−%6,0 sınırına kadar \(adil oranın %6 altına kadar\) tam, daha kötüsünde oynanmaz/);
   assert.doesNotMatch(t2.$("#pickCard").textContent, /yarım/);
   assert.match(t2.$("#pickCard").textContent, /25,00 TL → tutarsa 39,50 TL/);

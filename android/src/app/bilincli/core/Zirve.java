@@ -541,16 +541,7 @@ public final class Zirve {
             r.put("status", status);
             rows.add(r);
         }
-        Collections.sort(rows, new Comparator<Map<String, Object>>() {
-            @Override
-            public int compare(Map<String, Object> a, Map<String, Object> b) {
-                int k = Json.str(a, "kickoff").compareTo(Json.str(b, "kickoff"));
-                if (k != 0) return k;
-                k = Json.str(a, "event").compareTo(Json.str(b, "event"));
-                if (k != 0) return k;
-                return Double.compare(Json.dbl(b, "ev", -9), Json.dbl(a, "ev", -9));
-            }
-        });
+        sortByValue(rows);
         Map<String, Object> v = new LinkedHashMap<>();
         v.put("v", (long) VIEW_VERSION);
         v.put("at", now.toString());
@@ -697,21 +688,57 @@ public final class Zirve {
             Map<String, Object> r = Json.obj(x);
             if (r != null) rows.add(r);
         }
-        Collections.sort(rows, new Comparator<Map<String, Object>>() {
-            @Override
-            public int compare(Map<String, Object> a, Map<String, Object> b) {
-                int k = Integer.compare(rank(Json.str(a, "status")), rank(Json.str(b, "status")));
-                return k != 0 ? k : Double.compare(Json.dbl(b, "ev", -9), Json.dbl(a, "ev", -9));
-            }
-        });
+        Collections.sort(rows, BY_VALUE);
         return rows;
     }
 
-    private static int rank(String status) {
+    /**
+     * 2.15.4 satır sırası (kâr ve tutma olasılığı öncelikli): oynanabilir (adil oranı geçen, tek oynanabilen),
+     * sonra değerlendirilen diğerleri {@link Pick#rank} ile (kârlı önce, sonra denge puanı), sonra oranı
+     * değişmiş, en son adil oranı olmayanlar.
+     */
+    static final Comparator<Map<String, Object>> BY_VALUE = new Comparator<Map<String, Object>>() {
+        @Override
+        public int compare(Map<String, Object> a, Map<String, Object> b) {
+            int k = Integer.compare(tier(Json.str(a, "status")), tier(Json.str(b, "status")));
+            if (k != 0) return k;
+            if (a.get("ev") == null || b.get("ev") == null) return 0;
+            return Pick.rank(Json.dbl(a, "ev", 0), Json.dbl(a, "p", 0), Json.dbl(a, "tval", 1),
+                    Json.dbl(b, "ev", 0), Json.dbl(b, "p", 0), Json.dbl(b, "tval", 1), Pick.DEFAULT_SHARE);
+        }
+    };
+
+    private static int tier(String status) {
         if ("oyna".equals(status)) return 0;
-        if ("mbs".equals(status) || "dusuk".equals(status)) return 1;
-        if ("oynama".equals(status)) return 2;
-        if ("degisti".equals(status)) return 3;
-        return 4;
+        if ("oynama".equals(status) || "dusuk".equals(status) || "mbs".equals(status)) return 1;
+        if ("degisti".equals(status)) return 2;
+        return 3;
     }
+
+    /**
+     * Görünüm satırları: maçlar en iyi seçimlerine göre (BY_VALUE), maç içinde seçimler aynı sırayla;
+     * arayüz maç maç grupladığından en değerli maç en üstte görünür. Eşitlikte erken başlayan önce.
+     */
+    static void sortByValue(List<Map<String, Object>> rows) {
+        final Map<String, Map<String, Object>> top = new java.util.HashMap<>();
+        for (Map<String, Object> r : rows) {
+            String e = Json.str(r, "event");
+            Map<String, Object> t = top.get(e);
+            if (t == null || BY_VALUE.compare(r, t) < 0) top.put(e, r);
+        }
+        Collections.sort(rows, new Comparator<Map<String, Object>>() {
+            @Override
+            public int compare(Map<String, Object> a, Map<String, Object> b) {
+                String ea = Json.str(a, "event"), eb = Json.str(b, "event");
+                if (!ea.equals(eb)) {
+                    int k = BY_VALUE.compare(top.get(ea), top.get(eb));
+                    if (k != 0) return k;
+                    k = Json.str(a, "kickoff").compareTo(Json.str(b, "kickoff"));
+                    return k != 0 ? k : ea.compareTo(eb);
+                }
+                return BY_VALUE.compare(a, b);
+            }
+        });
+    }
+
 }
