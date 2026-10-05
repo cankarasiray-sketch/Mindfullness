@@ -1119,6 +1119,29 @@ final class Repo {
         }
     }
 
+    /**
+     * Kârlı seçim bildirimi (2.15.5): tek maç listesinde adil oranı geçen ve henüz bildirilmemiş seçimler varsa
+     * {başlık, metin}; yoksa null. Bildirilenler kalıcı hatırlanır (aynı seçim aynı oranla bir kez).
+     */
+    String[] profitCheck() {
+        if (isDemo()) return null;
+        try {
+            Settings cfg = Daily.decisionSettings(ledger);
+            List<Object> list = Pick.list(Json.arr(radar.view().get("fairs")), zirveView(), cfg, ledger.balance(), Instant.now());
+            synchronized (LOCK) {
+                List<Object> notified = new ArrayList<>(Json.arr(memory.get("profitNotified")));
+                String[] n = Pick.profitNotice(list, notified);
+                if (n != null) {
+                    memory.put("profitNotified", notified);
+                    memoryStore.write(Json.write(memory));
+                }
+                return n;
+            }
+        } catch (RuntimeException e) {
+            return null; // tablo yazılırken okunduysa bir sonraki işte
+        }
+    }
+
     /** Günün seçimi (2.9): son taramanın adil oran tablosu ve Zirve Oran'dan; demo ya da kapalıysa null. */
     Map<String, Object> pick() {
         if (isDemo()) return null;

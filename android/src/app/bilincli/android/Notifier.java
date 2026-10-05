@@ -25,6 +25,8 @@ final class Notifier {
     private static final int ID_DAILY = 10;
     private static final int ID_RESULT = 11;
     static final int ID_ZIRVE = 16;
+    /** Kârlı seçim (2.15.5): tek maç listesinde adil oranı geçen. */
+    static final int ID_PROFIT = 17;
 
     private Notifier() {}
 

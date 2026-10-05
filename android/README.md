@@ -62,6 +62,15 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Kârlı seçim bildirimi (2.15.5)
+
+- Tek maç fırsatlarında oranı adil oranı geçen (beklenen ≥ 0) bir seçim çıkınca bildirim gelir: maç, saat,
+  seçim, oran (Zirve Oran ise belirtilir), tutma olasılığı, adil oran, beklenen ve oynanacak tutar.
+- Kontrol: her radar taramasından, saatlik Zirve Oran okumasından, sabah kararından ve 3 saatlik işten
+  sonra; uygulamada "Şimdi tara", "Kupon üret" ve Zirve "Yeniden oku"dan sonra da.
+- Aynı seçim aynı oranla bir kez bildirilir; oran yükselirse yeniden. Zirve Oran'ın "oyna" seçimleri zaten
+  Zirve bildirimiyle geldiği için tekrarlanmaz. Gece (00–08) bildirimler sessiz kanala düşer.
+
 ## Fırsat sıralaması: kâr ve tutma olasılığı öncelikli (2.15.4)
 
 Fırsatlar'daki listeler (Tek maç fırsatları, Zirve Oran, Değerli oranlar) ve günün seçimi aynı kuralla

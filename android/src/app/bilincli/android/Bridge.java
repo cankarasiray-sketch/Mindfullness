@@ -150,6 +150,12 @@ public final class Bridge {
                 + (Json.lng(z, "play", 0) > 0 ? Json.lng(z, "play", 0) + " değerli (Fırsatlar)." : "değerli yok.");
     }
 
+    /** Kârlı seçim bildirimi (2.15.5): taramadan sonra adil oranı geçen yeni tek maç seçimi varsa. */
+    private void profitNotify(Repo repo) {
+        String[] n = repo.profitCheck();
+        if (n != null) Notifier.show(activity, "kupon", Notifier.ID_PROFIT, n[0], n[1]);
+    }
+
     private static void requireReal(Repo repo) {
         if (repo.isDemo()) throw new Ledger.LedgerException("Demo modunda işlem yapılamaz. Önce demodan çık.");
     }
@@ -207,6 +213,7 @@ public final class Bridge {
                 }
                 Scheduler.scheduleNextEvent(activity);
                 String credit = creditNote(repo.lastSpent, repo.lastRemaining) + zirveNote(repo);
+                profitNotify(repo);
                 if (r.newCouponId != null) return "Güncel oranlarla yeni kupon bulundu: #" + r.newCouponId + "." + credit;
                 if (r.blocked != null) return "Tarama tamam. Yeni kupon yok: " + r.blocked + credit;
                 return "Tarama tamam. " + r.moves.size() + " yeni düşen oran fırsatı." + credit;
@@ -293,6 +300,7 @@ public final class Bridge {
                 }
                 Scheduler.scheduleNextEvent(activity);
                 Scheduler.scheduleNextRadar(activity);
+                if (r.error == null) profitNotify(repo);
                 if (r.error != null) throw new IllegalStateException("Veri alınamadı: " + r.error + credit);
                 if (r.skipped) return "Bugünün kararı zaten verilmiş.";
                 if (r.blocked != null) return r.blocked + credit;
@@ -360,6 +368,7 @@ public final class Bridge {
                 requireReal(repo);
                 if (!repo.real().settings().zirve) throw new IllegalStateException("Zirve Oran kontrolü kapalı (Ayarlar → Radar).");
                 String note = zirveNote(repo);
+                profitNotify(repo);
                 Map<String, Object> z = repo.zirveView();
                 if (z != null && z.get("error") != null) throw new IllegalStateException("Zirve Oran okunamadı: " + z.get("error"));
                 return note.trim().isEmpty() ? "Zirve Oran okundu." : note.trim();

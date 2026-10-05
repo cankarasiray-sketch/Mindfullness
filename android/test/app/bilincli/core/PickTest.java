@@ -314,4 +314,47 @@ public class PickTest {
         r.put("tval", tval);
         return r;
     }
+
+    @Test
+    public void profitableSelectionsAreNotifiedOnce() {
+        // 2.15.5: adil oranı geçen (beklenen ≥ 0) tek maç seçimleri bildirilir; aynı oranla bir kez
+        List<Object> fx = new ArrayList<>();
+        fx.add(row("1", "Arsenal", 8, sel("MS", "1", 0.60, 1.70, 1))); // +%2: kârlı
+        fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.80, 1.20, 1))); // −%4
+        Map<String, Object> zirve = new LinkedHashMap<>();
+        List<Object> zr = new ArrayList<>();
+        zr.add(zirveRow("3", "Liverpool", 10, "AU25", "UST", 0.55, 1.95, "oyna")); // Zirve bildirimi zaten gider
+        zr.add(zirveRow("4", "Everton", 11, "KG", "VAR", 0.50, 2.02, "oynama")); // +%1: Zirve "oyna" değil ama kârlı
+        zirve.put("rows", zr);
+        Settings cfg = new Settings();
+        List<Object> list = Pick.list(fx, zirve, cfg, 500000, NOW);
+        List<Object> notified = new ArrayList<>();
+        String[] n = Pick.profitNotice(list, notified);
+        assertEquals("2 kârlı seçim", n[0]);
+        assertTrue(n[1], n[1].contains("01.10 14:00 Arsenal – Dep 1 · MS 1 @ 1,70 · tutma %60 · adil 1,67 · beklenen +%2,0 · 150,00 TL (tutarsa 255,00 TL)"));
+        assertTrue(n[1], n[1].contains("Everton – Dep 4 · KG Var @ 2,02 (Zirve Oran)"));
+        assertFalse(n[1], n[1].contains("Liverpool") || n[1].contains("Chelsea"));
+        assertTrue(n[1], n[1].endsWith("Oynamadan önce oranın Bilyoner'de hâlâ aynı olduğunu kontrol et."));
+        assertEquals(2, notified.size());
+        assertNull(Pick.profitNotice(list, notified)); // aynı oran: tekrar yok
+        // oran yükselirse yeniden; tek seçimde başlıkta maç
+        Json.obj(Json.arr(Json.obj(fx.get(0)).get("sel")).get(0)).put("i", 1.75);
+        n = Pick.profitNotice(Pick.list(fx, zirve, cfg, 500000, NOW), notified);
+        assertEquals("Kârlı seçim · Arsenal – Dep 1", n[0]);
+        assertNull(Pick.profitNotice(new ArrayList<Object>(), notified));
+    }
+
+    static Map<String, Object> zirveRow(String ref, String home, long hours, String m, String o, double p, double tval, String status) {
+        Map<String, Object> z = new LinkedHashMap<>(row(ref, home, hours));
+        z.remove("sel");
+        z.put("m", m);
+        z.put("o", o);
+        z.put("label", Models.outcomeLabel(m, o));
+        z.put("p", p);
+        z.put("tval", tval);
+        z.put("val", tval - 0.05);
+        z.put("mbs", 1L);
+        z.put("status", status);
+        return z;
+    }
 }

@@ -156,7 +156,9 @@ public final class Pick {
                 String key = Json.str(z, "ref") + "|" + Json.str(z, "m") + "|" + Json.str(z, "o");
                 Map<String, Object> old = best.get(key);
                 if (old != null && Json.dbl(old, "odds", 0) >= odds) continue;
-                best.put(key, entry(z, "zirve", Json.str(z, "m"), Json.str(z, "o"), Json.str(z, "label"), odds, Json.dbl(z, "val", 0), p, mbs));
+                Map<String, Object> e = entry(z, "zirve", Json.str(z, "m"), Json.str(z, "o"), Json.str(z, "label"), odds, Json.dbl(z, "val", 0), p, mbs);
+                e.put("zstatus", st); // "oyna" ise Zirve bildirimi zaten gider (profitNotice tekrarlamaz)
+                best.put(key, e);
             }
         }
         List<Map<String, Object>> all = new ArrayList<>(best.values());
@@ -267,10 +269,45 @@ public final class Pick {
     /** Bildirim ve özet satırı: "Günün seçimi: Ev – Dep · MS 1 @ 1,53 (Zirve) · tutma %60 · adil 1,67 · beklenen −%8,4 · 50,00 TL". */
     public static String line(Map<String, Object> p) {
         if (p == null) return null;
-        return "Günün seçimi: " + Fmt.localTime(Json.str(p, "kickoff")) + " " + Json.str(p, "home") + " – " + Json.str(p, "away") + " · "
+        return "Günün seçimi: " + body(p);
+    }
+
+    private static String body(Map<String, Object> p) {
+        return Fmt.localTime(Json.str(p, "kickoff")) + " " + Json.str(p, "home") + " – " + Json.str(p, "away") + " · "
                 + Json.str(p, "label") + " @ " + Fmt.odds(Json.dbl(p, "odds", 0)) + ("zirve".equals(Json.str(p, "source")) ? " (Zirve Oran)" : "")
                 + " · tutma %" + Fmt.num(Json.dbl(p, "p", 0) * 100, 0) + " · adil " + Fmt.odds(Json.dbl(p, "fair", 0))
                 + " · beklenen " + Fmt.pct(Json.dbl(p, "ev", 0), true)
                 + (Json.lng(p, "stake", 0) > 0 ? " · " + Fmt.tl(Json.lng(p, "stake", 0)) + " (tutarsa " + Fmt.tl(Json.lng(p, "win", 0)) + ")" : "");
+    }
+
+    /** Kârlı seçim bildiriminde hatırlanan en fazla anahtar. */
+    static final int MAX_NOTIFIED = 300;
+
+    /**
+     * Kârlı seçim bildirimi (2.15.5): tek maç listesinde (Pick.list) oranı adil oranı geçen (beklenen ≥ 0) ve bu
+     * oranla daha önce bildirilmemiş seçimler. Zirve Oran'ın "oyna" satırları Zirve bildirimiyle zaten gelir,
+     * tekrarlanmaz. notified: bildirilen anahtarlar (ref|pazar|sonuç@oran), yerinde güncellenir; oran
+     * yükselirse yeniden bildirilir. Yeni yoksa null; varsa {başlık, metin}.
+     */
+    public static String[] profitNotice(List<Object> list, List<Object> notified) {
+        List<Map<String, Object>> fresh = new ArrayList<>();
+        for (Object o : list == null ? new ArrayList<Object>() : list) {
+            Map<String, Object> e = Json.obj(o);
+            if (e == null || Json.dbl(e, "ev", -1) < 0 || "oyna".equals(Json.str(e, "zstatus"))) continue;
+            String key = Json.str(e, "ref") + "|" + Json.str(e, "m") + "|" + Json.str(e, "o") + "@" + Json.dbl(e, "odds", 0);
+            if (notified.contains(key)) continue;
+            notified.add(key);
+            fresh.add(e);
+        }
+        while (notified.size() > MAX_NOTIFIED) notified.remove(0);
+        if (fresh.isEmpty()) return null;
+        StringBuilder b = new StringBuilder();
+        for (Map<String, Object> e : fresh.subList(0, Math.min(5, fresh.size()))) b.append(body(e)).append('\n');
+        if (fresh.size() > 5) b.append('+').append(fresh.size() - 5).append(" seçim daha: Fırsatlar → Tek maç fırsatları.\n");
+        b.append("Oran adil oranı geçiyor (beklenen artıda). Oynamadan önce oranın Bilyoner'de hâlâ aynı olduğunu kontrol et.");
+        Map<String, Object> first = fresh.get(0);
+        String title = fresh.size() == 1 ? "Kârlı seçim · " + Json.str(first, "home") + " – " + Json.str(first, "away")
+                : fresh.size() + " kârlı seçim";
+        return new String[] {title, b.toString()};
     }
 }

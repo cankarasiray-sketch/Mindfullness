@@ -23,7 +23,10 @@ public final class DailyJob extends JobService {
                 try {
                     Repo repo = Repo.get(DailyJob.this);
                     if (zirveOnly) {
-                        if (Zirve.backgroundHour(java.time.Instant.now())) zirve(repo, false); // 10 dk sınırı geçerli
+                        if (Zirve.backgroundHour(java.time.Instant.now())) {
+                            zirve(repo, false); // 10 dk sınırı geçerli
+                            profit(repo);
+                        }
                         return;
                     }
                     if (radar) {
@@ -40,6 +43,7 @@ public final class DailyJob extends JobService {
                             // tarama bir sonraki saatte tekrarlanır
                         }
                         zirve(repo, true); // taze adil oranlarla
+                        profit(repo);
                         return;
                     }
                     if (event || !daily) {
@@ -58,6 +62,7 @@ public final class DailyJob extends JobService {
                     } else {
                         zirve(repo, false); // diğer işlerde 10 dk aralıkla
                     }
+                    profit(repo);
                 } catch (RuntimeException e) {
                     if (daily) Notifier.show(DailyJob.this, "kupon", 12, "Günlük çalışma başarısız", String.valueOf(e.getMessage()));
                 } finally {
@@ -69,6 +74,12 @@ public final class DailyJob extends JobService {
             }
         }, "bilincli-job").start();
         return true;
+    }
+
+    /** Kârlı seçim (2.15.5): tek maç listesinde adil oranı geçen yeni seçim varsa bildirilir. */
+    private void profit(Repo repo) {
+        String[] n = repo.profitCheck();
+        if (n != null) Notifier.show(this, "kupon", Notifier.ID_PROFIT, n[0], n[1]);
     }
 
     /** Bilyoner Zirve Oran kontrolü (kredi harcamaz); yeni değerli oran bildirilir. */
