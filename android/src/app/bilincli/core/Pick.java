@@ -108,10 +108,24 @@ public final class Pick {
     /** Tek maç fırsatları listesi: en az bu tutma olasılığı ve en fazla bu kadar satır. */
     public static final double LIST_MIN_PROB = 0.50;
     static final int LIST_SIZE = 100; // %65+ gibi süzgeçlerde de liste dolsun
+    /**
+     * 2.15.6: ilk 100'e girmese de her bahis türünün (MS, ÇŞ, Alt/Üst, KG, handikap, takım golü, basketbol)
+     * en iyi bu kadar seçimi listede olur; arayüzdeki bahis türü süzgecinde MS 2 ya da 1,5 Üst kaybolmasın.
+     */
+    static final int PER_GROUP = 25;
+
+    /** Bahis türü grubu (tek maç listesi süzgeci; arayüzde aynı eşleme). */
+    public static String group(String m) {
+        if ("MS".equals(m) || "CS".equals(m) || "KG".equals(m)) return m;
+        if ("AU25".equals(m) || m.startsWith("AU@")) return "AU";
+        if (m.startsWith("HMS@")) return "HMS";
+        if (m.startsWith("EVG@") || m.startsWith("DEPG@")) return "TG";
+        return "BASKET"; // BS, BT@, BH@
+    }
 
     private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, Instant now) {
         if (kickoff == null || !(p > 0 && p < 1) || mbs > 1) return false;
-        if (p < minProb || odds < MIN_ODDS) return false;
+        if (p < minProb || odds < Math.max(MIN_ODDS, cfg.pickMinOdds)) return false; // 2.15.6: ayardan (varsayılan 1,18)
         Instant ko = Instant.parse(kickoff);
         return !ko.isBefore(now.plusSeconds(LEAD_S)) && !ko.isAfter(now.plusSeconds(Math.round(cfg.windowHours * 3600)));
     }
@@ -173,11 +187,18 @@ public final class Pick {
         return all;
     }
 
-    /** Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 100 seçim, günün seçimi tutarıyla. */
+    /**
+     * Arayüzdeki "Tek maç fırsatları" listesi: en az %50 tutan ilk 100 seçim ve ayrıca her bahis türünün en iyi
+     * PER_GROUP seçimi (sıra {@link #rank}), günün seçimi tutarıyla.
+     */
     public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         List<Object> out = new ArrayList<>();
+        Map<String, Integer> per = new java.util.HashMap<>();
         for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), now)) {
-            if (out.size() >= LIST_SIZE) break;
+            String g = group(Json.str(e, "m"));
+            int n = per.containsKey(g) ? per.get(g) : 0;
+            if (out.size() >= LIST_SIZE && n >= PER_GROUP) continue;
+            per.put(g, n + 1);
             out.add(withStake(e, cfg, balance));
         }
         return out;

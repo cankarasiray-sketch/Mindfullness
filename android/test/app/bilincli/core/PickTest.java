@@ -199,6 +199,7 @@ public class PickTest {
     public void balanceScoreTieredStakeSkipAndBands() {
         Settings cfg = new Settings();
         cfg.pickMaxLoss = 0.06;
+        cfg.pickMinOdds = 1.05; // düşük oranlı örnekler (2.15.6 varsayılanı 1,18 ayrı testte)
         long bal = 500000;
         // değerli -> Kelly (temel tutardan az değil), sınıra (−%6) kadar tam, daha kötüsü 0
         assertTrue(Pick.stakeFor(0.55, 2.0, cfg, bal) >= 15000);
@@ -284,6 +285,7 @@ public class PickTest {
         fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.60, 1.67, 1)));
         fx.add(row("3", "Liverpool", 10, sel("CS", "1X", 0.85, 1.15, 1)));
         Settings cfg = new Settings();
+        cfg.pickMinOdds = 1.05; // düşük oranlı örnekler
         List<Object> list = Pick.list(fx, null, cfg, 500000, NOW);
         assertEquals("2", Json.obj(list.get(0)).get("ref")); // kârlı
         assertEquals("1", Json.obj(list.get(1)).get("ref"));
@@ -356,5 +358,55 @@ public class PickTest {
         z.put("mbs", 1L);
         z.put("status", status);
         return z;
+    }
+
+    @Test
+    public void everyBetTypeKeepsItsBestInTheList() {
+        // 2.15.6: ilk 100'ü Çifte Şans doldursa da MS 2 ve 1,5 Üst listede (bahis türü süzgeci için)
+        List<Object> fx = new ArrayList<>();
+        for (int k = 0; k < 110; k++) fx.add(row("c" + k, "Takım " + k, 2 + k % 18, sel("CS", "1X", 0.80, 1.22, 1)));
+        fx.add(row("m", "Lazio", 5, sel("MS", "2", 0.55, 1.70, 1)));
+        Map<String, Object> au = sel("AU@1.5", "UST", 0.72, 1.25, 1);
+        au.put("model", true);
+        fx.add(row("u", "Roma", 6, au));
+        List<Object> list = Pick.list(fx, null, new Settings(), 500000, NOW);
+        assertEquals(102, list.size()); // ilk 100 + MS 2 + 1,5 Üst
+        int cs = 0;
+        for (Object o : list) if ("CS".equals(Json.obj(o).get("m"))) cs++;
+        assertEquals(100, cs);
+        Map<String, Object> ms = Json.obj(list.get(100)), u = Json.obj(list.get(101));
+        assertEquals("MS 2", ms.get("label"));
+        assertEquals("1,5 Üst", u.get("label"));
+        assertTrue(Json.bool(u, "model", false));
+        assertEquals("MS", Pick.group("MS"));
+        assertEquals("AU", Pick.group("AU25"));
+        assertEquals("AU", Pick.group("AU@3.5"));
+        assertEquals("TG", Pick.group("DEPG@0.5"));
+        assertEquals("HMS", Pick.group("HMS@-1.0"));
+        assertEquals("BASKET", Pick.group("BT@161.5"));
+    }
+
+    @Test
+    public void minOddsDefault118() {
+        // 2.15.6: kullanıcı isteği: tek maçta 1,18'in altındaki oranlar listelenmez, önerilmez, bildirilmez
+        Settings cfg = new Settings();
+        assertEquals(1.18, cfg.pickMinOdds, 0);
+        List<Object> fx = new ArrayList<>();
+        fx.add(row("1", "Arsenal", 8, sel("CS", "1X", 0.88, 1.17, 1))); // 1,17: alınmaz (+%3 kârlı olsa da)
+        fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.82, 1.18, 1))); // 1,18: alınır
+        List<Object> list = Pick.list(fx, null, cfg, 500000, NOW);
+        assertEquals(1, list.size());
+        assertEquals("2", Json.obj(list.get(0)).get("ref"));
+        assertEquals("2", Pick.choose(fx, null, cfg, 500000, NOW).get("ref"));
+        assertNull(Pick.profitNotice(list, new ArrayList<Object>())); // 1,17'lik kârlı seçim bildirilmez
+        cfg.pickMinOdds = 1.10;
+        assertEquals(2, Pick.list(fx, null, cfg, 500000, NOW).size());
+        assertEquals(1.10, Settings.fromMap(cfg.toMap()).pickMinOdds, 0);
+        cfg.pickMinOdds = 1.0;
+        assertTrue(cfg.validate().contains("en düşük oran"));
+        // eski kayıtta alan yok: 1,18 gelir
+        Map<String, Object> old = new Settings().toMap();
+        old.remove("pickMinOdds");
+        assertEquals(1.18, Settings.fromMap(old).pickMinOdds, 0);
     }
 }

@@ -62,6 +62,19 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Tek maç: bahis türü süzgeci, en düşük oran 1,18 (2.15.6)
+
+- MS 1/X/2, Çifte Şans, Alt/Üst (2,5 Pinnacle'dan; 0,5–1,5–3,5–4,5 gol modelinden), Karşılıklı Gol,
+  handikaplı MS, takım golü ve basketbol zaten değerlendiriliyordu; ama liste ilk 25 satırla kesildiği ve
+  üst sıraları çoğunlukla Çifte Şans ile düşük oranlı Alt/Üst doldurduğu için MS 2 ya da 1,5 Üst görünmüyordu.
+- Tek maç fırsatlarında **bahis türü süzgeci** (Tümü, Maç sonucu, Çifte şans, Alt/Üst, Karşılıklı gol,
+  Handikap, Takım golü, Basketbol; yalnızca listede olanlar) tutma süzgeciyle birlikte çalışır.
+- Liste ilk 100 seçimin yanında **her bahis türünün en iyi 25 seçimini** de taşır; "Daha fazla göster" ile
+  25'er satır açılır.
+- **En düşük oran 1,18** (Ayarlar → Tek maç → En düşük oran): tek maç listesi, günün seçimi ve kârlı seçim
+  bildirimi bunun altındaki oranları almaz. Çok düşük oranda bir kayıp birkaç kazancı siler: başa baş için
+  gereken tutma = 1 / oran (1,10'da %91, 1,18'de %85, 1,25'te %80, 1,40'ta %71).
+
 ## Kârlı seçim bildirimi (2.15.5)
 
 - Tek maç fırsatlarında oranı adil oranı geçen (beklenen ≥ 0) bir seçim çıkınca bildirim gelir: maç, saat,

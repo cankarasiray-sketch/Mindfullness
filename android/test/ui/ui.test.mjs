@@ -739,6 +739,40 @@ test("uzun işlemde geçen süre, arka plana alma ve sıradaki işlem", async ()
   assert.deepEqual(t.errors, []);
 });
 
+test("tek maç: bahis türü süzgeci (MS 2, 1,5 Üst) ve daha fazla göster", async () => {
+  const s = clone(baseState);
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  const mk = (i, m, o, label, p, odds) => ({ source: "iddaa", ref: "r" + i, m, o, label, home: "Ev " + i, away: "Dep " + i, kickoff: ko, odds, p, fair: 1 / p,
+    ev: p * odds - 1, mbs: 1, stake: 17000, win: Math.round(17000 * odds), expected: Math.round(17000 * (p * odds - 1)) });
+  s.singles = [];
+  for (let i = 0; i < 30; i++) s.singles.push(mk(i, "CS", "1X", "ÇŞ 1-X", 0.8, 1.22));
+  s.singles.push(mk(40, "MS", "2", "MS 2", 0.68, 1.38));
+  s.singles.push(Object.assign(mk(41, "AU@1.5", "UST", "1,5 Üst", 0.74, 1.27), { model: true }));
+  s.singles.push(mk(42, "AU25", "UST", "2,5 Üst", 0.66, 1.42));
+  const f = boot(s, "#firsat");
+  assert.equal(f.$$("#singlesCard .single-row").length, 25); // Tümü: ilk 25
+  assert.match(f.$("#singlesCard").textContent, /Daha fazla göster \(8 seçim daha\)/);
+  const types = f.$$("#singlesTypes button").map((b) => b.textContent);
+  assert.deepEqual(types, ["Tümü", "Maç sonucu", "Çifte şans", "Alt/Üst"]); // yalnızca listede olan türler
+  f.button("Maç sonucu").click();
+  let rows = f.$$("#singlesCard .single-row");
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].textContent, /MS 2/);
+  f.button("Alt/Üst").click();
+  rows = f.$$("#singlesCard .single-row");
+  assert.equal(rows.length, 2);
+  assert.match(rows[0].textContent, /1,5 Üst/);
+  assert.match(rows[0].textContent, /model/);
+  f.button("%70+").click(); // tür seçimi korunur
+  assert.equal(f.$$("#singlesCard .single-row").length, 1);
+  f.button("Tümü").click();
+  f.button("%65+").click();
+  f.button("Daha fazla göster (8 seçim daha)").click();
+  assert.equal(f.$$("#singlesCard .single-row").length, 33);
+  assert.ok(!/Daha fazla göster/.test(f.$("#singlesCard").textContent));
+  assert.deepEqual(f.errors, []);
+});
+
 test("sonuç kontrolü: kısa yanıt balonda, uzun yanıt (bekleyen maçlar) sayfada", async () => {
   const s = clone(baseState);
   const t = boot(s);
@@ -1245,9 +1279,13 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   const st = boot(clone(s), "#ayarlar");
   assert.equal(st.$("#sPickLoss").value, "6,0");
   st.$("#sPickLoss").value = "8";
+  assert.equal(st.$("#sPickMinOdds").value, "1,18"); // 2.15.6: tek maçta en düşük oran
+  assert.match(st.$("#pickSettings").textContent, /1,25'te %80 \(5'te 4 tutarsa ancak başa baş\)/);
+  st.$("#sPickMinOdds").value = "1,25";
   st.button("Ayarları kaydet").click();
   await st.tick();
   assert.equal(st.calls.at(-1).payload.settings.pickMaxLoss, 0.08);
+  assert.equal(st.calls.at(-1).payload.settings.pickMinOdds, 1.25);
   assert.deepEqual(t.errors, []);
   assert.deepEqual(f.errors, []);
 });

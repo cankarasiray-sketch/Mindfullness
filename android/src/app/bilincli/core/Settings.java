@@ -239,6 +239,11 @@ public final class Settings {
     /** Günün seçiminde ikinci katman: en az bu tutma olasılığı (2.10; "%70+ seçimi"). */
     public double pickHighProb = 0.70;
     /**
+     * Tek maç listesi, günün seçimi ve kârlı seçim bildiriminde en düşük oran (2.15.6, kullanıcı isteği: çok düşük
+     * oranda bir kayıp birkaç kazancı siler). Başa baş tutma = 1 / oran: 1,18'de %85, 1,25'te %80.
+     */
+    public double pickMinOdds = 1.18;
+    /**
      * Günün seçiminde ve tek maç listesinde kabul edilen en kötü beklenen kayıp: buna kadar tam tutar, daha
      * kötüyse oynanmaz. 2.15: %6 -> %15 (adil oranın %15 altına kadar); 2.15.1: yarım tutar kademesi yok.
      */
@@ -389,6 +394,7 @@ public final class Settings {
         m.put("pickMinProb", pickMinProb);
         m.put("pickStake", pickStake);
         m.put("pickHighProb", pickHighProb);
+        m.put("pickMinOdds", pickMinOdds);
         m.put("pickMaxLoss", pickMaxLoss);
         m.put("singlesOnly", singlesOnly);
         m.put("estimatedCredits", (long) estimatedMonthlyCredits());
@@ -444,6 +450,7 @@ public final class Settings {
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
         s.pickStake = Json.dbl(m, "pickStake", s.pickStake);
         s.pickHighProb = Json.dbl(m, "pickHighProb", s.pickHighProb);
+        s.pickMinOdds = Json.dbl(m, "pickMinOdds", s.pickMinOdds);
         s.pickMaxLoss = Json.dbl(m, "pickMaxLoss", s.pickMaxLoss);
         s.singlesOnly = Json.bool(m, "singlesOnly", s.singlesOnly);
         s.edgeGuard = Json.bool(m, "edgeGuard", s.edgeGuard);
@@ -512,6 +519,7 @@ public final class Settings {
         if (pickMinProb < 0.30 || pickMinProb > 0.95) return "Günün seçiminde tutma olasılığı %30-95 olmalı";
         if (pickStake < 0) return "Günün seçimi tutarı negatif olamaz";
         if (pickMaxLoss < 0.005 || pickMaxLoss > 0.30) return "Günün seçiminde en kötü beklenen kayıp %0,5–30 olmalı";
+        if (!(pickMinOdds >= 1.01 && pickMinOdds <= 3.0)) return "Tek maçta en düşük oran 1,01 ile 3,00 arasında olmalı";
         if (pickHighProb < pickMinProb || pickHighProb > 0.97) return "Yüksek olasılık katmanı, en az tutma olasılığından küçük olamaz (en fazla %97)";
         return null;
     }
