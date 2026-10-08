@@ -5,34 +5,40 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Sun rays -->
-    <path
-        android:pathData="M45,25L45,29M30.6,30.6L33.4,33.4M59.4,30.6L56.6,33.4M26,44L30,44"
-        android:strokeWidth="3"
-        android:strokeColor="#FFFFC233"
-        android:strokeLineCap="round" />
-    <!-- Sun -->
-    <path
-        android:fillColor="#FFFFC940"
-        android:pathData="M33,44a12,12 0,1 0,24 0a12,12 0,1 0,-24 0z" />
-    <!-- Cloud -->
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M39,74L71,74A9,9 0,0 0,71 56L39,56A9,9 0,0 0,39 74Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M44,54a15,15 0,1 0,30 0a15,15 0,1 0,-30 0z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M32,60a10,10 0,1 0,20 0a10,10 0,1 0,-20 0z" />
-    <!-- Warning badge -->
-    <path
-        android:fillColor="#FFFF922B"
-        android:pathData="M64,74a10,10 0,1 0,20 0a10,10 0,1 0,-20 0z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M72.6,67.5L75.4,67.5L75,75.5L73,75.5Z" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M72.5,79a1.5,1.5 0,1 0,3 0a1.5,1.5 0,1 0,-3 0z" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.85"
+        android:scaleY="0.85">
+        <!-- Sun rays -->
+        <path
+            android:pathData="M45,25L45,29M30.6,30.6L33.4,33.4M59.4,30.6L56.6,33.4M26,44L30,44"
+            android:strokeWidth="3"
+            android:strokeColor="#FFFFC233"
+            android:strokeLineCap="round" />
+        <!-- Sun -->
+        <path
+            android:fillColor="#FFFFC940"
+            android:pathData="M33,44a12,12 0,1 0,24 0a12,12 0,1 0,-24 0z" />
+        <!-- Cloud -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M39,74L71,74A9,9 0,0 0,71 56L39,56A9,9 0,0 0,39 74Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M44,54a15,15 0,1 0,30 0a15,15 0,1 0,-30 0z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M32,60a10,10 0,1 0,20 0a10,10 0,1 0,-20 0z" />
+        <!-- Warning badge -->
+        <path
+            android:fillColor="#FFFF922B"
+            android:pathData="M64,74a10,10 0,1 0,20 0a10,10 0,1 0,-20 0z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M72.6,67.5L75.4,67.5L75,75.5L73,75.5Z" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M72.5,79a1.5,1.5 0,1 0,3 0a1.5,1.5 0,1 0,-3 0z" />
+    </group>
 </vector>

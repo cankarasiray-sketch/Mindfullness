@@ -127,12 +127,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         locateJob?.cancel()
         locateJob = viewModelScope.launch {
             locating.value = true
+            // Show the last known location's cached forecast while the new fix comes in.
+            val lastKnown = currentPlace.value
+            val cached = if (lastKnown != null && _home.value.place?.isCurrentLocation != true) {
+                withContext(Dispatchers.IO) { repository.cached(lastKnown) }
+            } else {
+                null
+            }
             _home.update {
-                it.copy(
-                    isLocating = true,
-                    isRefreshing = userRefresh,
-                    place = if (it.place?.isCurrentLocation == true) it.place else currentPlace.value ?: it.place,
-                )
+                val base = if (cached != null) HomeUiState(place = lastKnown, content = ForecastContent.from(cached)) else it
+                // With something on screen, the pull-to-refresh spinner signals the location lookup.
+                base.copy(isLocating = true, isRefreshing = base.content != null)
             }
             val place = try {
                 location.currentPlace()
@@ -256,7 +261,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val next = store.places.value.firstOrNull()
             when {
                 next != null -> select(next)
-                currentPlace.value != null -> show(currentPlace.value!!)
+                currentPlace.value != null -> {
+                    store.selectedId = Place.CURRENT_LOCATION_ID
+                    show(currentPlace.value!!)
+                }
                 else -> {
                     loadJob?.cancel()
                     _home.value = HomeUiState(needsOnboarding = true)
