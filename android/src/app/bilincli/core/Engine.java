@@ -49,8 +49,13 @@ public final class Engine {
 
     /** [0] = filtreyi geçen adaylar (avantaja göre azalan), [1] = karşılaştırılan tüm seçimler. */
     static List<List<Candidate>> buildCandidates(List<Pair> pairs, Instant now, Settings cfg) {
+        return buildCandidates(pairs, now, cfg, cfg.windowHours);
+    }
+
+    /** hours: pencere (kupon kararı windowHours; Fırsatlar'daki Değerli oranlar scanHours, 2.15.7). */
+    static List<List<Candidate>> buildCandidates(List<Pair> pairs, Instant now, Settings cfg, double hours) {
         Instant earliest = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60));
-        Instant latest = now.plusSeconds(Math.round(cfg.windowHours * 3600));
+        Instant latest = now.plusSeconds(Math.round(hours * 3600));
         List<Candidate> all = new ArrayList<>(), good = new ArrayList<>();
         for (Pair p : pairs) {
             if (p.book.kickoff.isBefore(earliest) || p.book.kickoff.isAfter(latest)) continue;

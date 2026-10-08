@@ -123,11 +123,11 @@ public final class Pick {
         return "BASKET"; // BS, BT@, BH@
     }
 
-    private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, Instant now) {
+    private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, double hours, Instant now) {
         if (kickoff == null || !(p > 0 && p < 1) || mbs > 1) return false;
         if (p < minProb || odds < Math.max(MIN_ODDS, cfg.pickMinOdds)) return false; // 2.15.6: ayardan (varsayılan 1,18)
         Instant ko = Instant.parse(kickoff);
-        return !ko.isBefore(now.plusSeconds(LEAD_S)) && !ko.isAfter(now.plusSeconds(Math.round(cfg.windowHours * 3600)));
+        return !ko.isBefore(now.plusSeconds(LEAD_S)) && !ko.isAfter(now.plusSeconds(Math.round(hours * 3600)));
     }
 
     /**
@@ -142,6 +142,12 @@ public final class Pick {
 
     /** f: denge puanında kasa payı (Pick.fraction). Sıra: {@link #rank} (kârlı önce, sonra denge puanı, sonra sık tutan). */
     public static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f, Instant now) {
+        return singles(fairs, zirve, cfg, minProb, f, cfg.windowHours, now);
+    }
+
+    /** hours: başlangıca en fazla bu kadar saat kalan maçlar (günün seçimi: windowHours; Fırsatlar: scanHours, 2.15.7). */
+    static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f,
+                                             double hours, Instant now) {
         final double fs = f;
         Map<String, Map<String, Object>> best = new LinkedHashMap<>(); // ref|m|o -> en iyi oran
         for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
@@ -152,7 +158,7 @@ public final class Pick {
                 if (s == null) continue;
                 double odds = Json.dbl(s, "i", 0), p = Json.dbl(s, "p", 0);
                 int mbs = (int) Json.lng(s, "mbs", 1);
-                if (!eligible(Json.str(r, "kickoff"), odds, p, mbs, minProb, cfg, now)) continue;
+                if (!eligible(Json.str(r, "kickoff"), odds, p, mbs, minProb, cfg, hours, now)) continue;
                 Map<String, Object> e = entry(r, "iddaa", Json.str(s, "m"), Json.str(s, "o"), Json.str(s, "label"), odds, 0, p, mbs);
                 if (Json.bool(s, "model", false)) e.put("model", true);
                 best.put(Json.str(r, "ref") + "|" + Json.str(s, "m") + "|" + Json.str(s, "o"), e);
@@ -166,7 +172,7 @@ public final class Pick {
                 if (z == null || !("oyna".equals(st) || "oynama".equals(st) || "dusuk".equals(st)) || Json.str(z, "ref") == null) continue;
                 double odds = Json.dbl(z, "tval", 0), p = Json.dbl(z, "p", 0);
                 int mbs = (int) Json.lng(z, "mbs", 1);
-                if (!eligible(Json.str(z, "kickoff"), odds, p, mbs, minProb, cfg, now)) continue;
+                if (!eligible(Json.str(z, "kickoff"), odds, p, mbs, minProb, cfg, hours, now)) continue;
                 String key = Json.str(z, "ref") + "|" + Json.str(z, "m") + "|" + Json.str(z, "o");
                 Map<String, Object> old = best.get(key);
                 if (old != null && Json.dbl(old, "odds", 0) >= odds) continue;
@@ -194,7 +200,7 @@ public final class Pick {
     public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         List<Object> out = new ArrayList<>();
         Map<String, Integer> per = new java.util.HashMap<>();
-        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), now)) {
+        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now)) {
             String g = group(Json.str(e, "m"));
             int n = per.containsKey(g) ? per.get(g) : 0;
             if (out.size() >= LIST_SIZE && n >= PER_GROUP) continue;
@@ -256,7 +262,7 @@ public final class Pick {
      * Hangi tutma aralığında kâra (en az kayba) en yakın seçim olduğunu gösterir.
      */
     public static List<Object> bands(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
-        List<Map<String, Object>> all = singles(fairs, zirve, cfg, BANDS[0], fraction(cfg, balance), now);
+        List<Map<String, Object>> all = singles(fairs, zirve, cfg, BANDS[0], fraction(cfg, balance), cfg.scanHours(), now);
         List<Object> out = new ArrayList<>();
         for (int b = 0; b + 1 < BANDS.length; b++) {
             long n = 0;

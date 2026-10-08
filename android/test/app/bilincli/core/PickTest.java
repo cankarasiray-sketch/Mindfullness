@@ -231,8 +231,9 @@ public class PickTest {
         assertEquals(0.60, Json.dbl(b60, "from", 0), 0);
         assertEquals(2L, b60.get("n")); // Arsenal MS 1 %64,5, Liverpool Üst %61
         assertEquals(0.61 * 1.58 - 1, Json.dbl(b60, "bestEv", 0), 1e-9);
-        assertEquals(0L, Json.obj(bands.get(3)).get("n")); // %70–80 boş
-        assertNull(Json.obj(bands.get(3)).get("bestEv"));
+        // %70–80: yalnızca 30 saat sonraki Fulham MS 1 (Fırsatlar penceresi 48 saat, 2.15.7)
+        assertEquals(1L, Json.obj(bands.get(3)).get("n"));
+        assertEquals(0.70 * 1.48 - 1, Json.dbl(Json.obj(bands.get(3)), "bestEv", 0), 1e-9);
         // ayar
         Settings s = new Settings();
         assertEquals(0.15, s.pickMaxLoss, 0);
@@ -408,5 +409,31 @@ public class PickTest {
         Map<String, Object> old = new Settings().toMap();
         old.remove("pickMinOdds");
         assertEquals(1.18, Settings.fromMap(old).pickMinOdds, 0);
+    }
+
+    @Test
+    public void opportunitiesCoverTwoDays() {
+        // 2.15.7: Fırsatlar 48 saat (kullanıcı isteği); günün seçimi ve kupon kararı 24 saatte kalır
+        Settings cfg = new Settings();
+        assertEquals(48, cfg.opportunityHours, 0);
+        assertEquals(48, cfg.scanHours(), 0);
+        List<Object> fx = new ArrayList<>();
+        fx.add(row("1", "Arsenal", 8, sel("MS", "1", 0.62, 1.55, 1)));
+        fx.add(row("2", "Chelsea", 40, sel("MS", "1", 0.66, 1.50, 1))); // yarından sonra, 40 saat
+        fx.add(row("3", "Everton", 50, sel("MS", "1", 0.66, 1.50, 1))); // 48 saatin dışında
+        List<Object> list = Pick.list(fx, null, cfg, 500000, NOW);
+        assertEquals(2, list.size());
+        assertEquals("2", Json.obj(list.get(0)).get("ref")); // daha iyi seçim 40 saat sonra
+        assertEquals("1", Pick.choose(fx, null, cfg, 500000, NOW).get("ref")); // günün seçimi: yalnızca 24 saat
+        cfg.opportunityHours = 24;
+        assertEquals(1, Pick.list(fx, null, cfg, 500000, NOW).size());
+        cfg.opportunityHours = 72;
+        assertEquals(3, Pick.list(fx, null, cfg, 500000, NOW).size());
+        assertEquals(72, Settings.fromMap(cfg.toMap()).opportunityHours, 0);
+        cfg.opportunityHours = 100;
+        assertTrue(cfg.validate().contains("Fırsatlar penceresi"));
+        Map<String, Object> old = new Settings().toMap();
+        old.remove("opportunityHours");
+        assertEquals(48, Settings.fromMap(old).opportunityHours, 0); // eski kayıt: 2 gün
     }
 }

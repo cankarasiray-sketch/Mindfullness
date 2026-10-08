@@ -174,7 +174,7 @@ public final class Radar {
         if (full) {
             state.put("fairs", Promo.table(pairs, now)); // promosyon kontrolü için (kredi harcamadan)
             state.put("fairsAt", now.toString());
-            List<Candidate> all = Engine.buildCandidates(pairs, now, cfg).get(1);
+            List<Candidate> all = Engine.buildCandidates(pairs, now, cfg, cfg.scanHours()).get(1); // Fırsatlar penceresi (2.15.7)
             List<Candidate> value = new ArrayList<>();
             for (Candidate c : all) if (c.ev() >= cfg.minLegEv) value.add(c);
             Collections.sort(value, new Comparator<Candidate>() {

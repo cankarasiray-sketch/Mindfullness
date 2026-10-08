@@ -751,6 +751,8 @@ test("tek maç: bahis türü süzgeci (MS 2, 1,5 Üst) ve daha fazla göster", a
   s.singles.push(mk(42, "AU25", "UST", "2,5 Üst", 0.66, 1.42));
   const f = boot(s, "#firsat");
   assert.equal(f.$$("#singlesCard .single-row").length, 25); // Tümü: ilk 25
+  assert.match(f.$("#singlesCard").textContent, /Önümüzdeki 2 gün içinde tek oynanabilen/);
+  assert.match(f.text(), /Fırsatlar penceresi: önümüzdeki 2 gün\./);
   assert.match(f.$("#singlesCard").textContent, /Daha fazla göster \(8 seçim daha\)/);
   const types = f.$$("#singlesTypes button").map((b) => b.textContent);
   assert.deepEqual(types, ["Tümü", "Maç sonucu", "Çifte şans", "Alt/Üst"]); // yalnızca listede olan türler
@@ -1282,10 +1284,13 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   assert.equal(st.$("#sPickMinOdds").value, "1,18"); // 2.15.6: tek maçta en düşük oran
   assert.match(st.$("#pickSettings").textContent, /1,25'te %80 \(5'te 4 tutarsa ancak başa baş\)/);
   st.$("#sPickMinOdds").value = "1,25";
+  assert.equal(st.$("#sOppHours").value, "48"); // 2.15.7: Fırsatlar 2 gün
+  st.$("#sOppHours").value = "72";
   st.button("Ayarları kaydet").click();
   await st.tick();
   assert.equal(st.calls.at(-1).payload.settings.pickMaxLoss, 0.08);
   assert.equal(st.calls.at(-1).payload.settings.pickMinOdds, 1.25);
+  assert.equal(st.calls.at(-1).payload.settings.opportunityHours, 72);
   assert.deepEqual(t.errors, []);
   assert.deepEqual(f.errors, []);
 });

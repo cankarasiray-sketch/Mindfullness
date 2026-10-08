@@ -232,7 +232,7 @@ public class SinglesTest {
         tiers.pickMaxLoss = 0.06;
         List<Object> list = Pick.list(fairs, null, tiers, 500000, NOW);
         assertEquals(15000L, Json.obj(list.get(0)).get("stake"));
-        assertEquals(5, list.size()); // Arsenal MS 1, Liverpool Üst ve KG Var, City MS 1, Brighton 1,5 Üst
+        assertEquals(6, list.size()); // Arsenal MS 1, Liverpool Üst ve KG Var, City MS 1, Brighton 1,5 Üst, Fulham MS 1 (30 saat sonra; 2.15.7: 48 saat)
         double prev = 9;
         for (Object o : list) { // 2.13: denge puanına göre (tutma ve ödeme birlikte)
             double sc = Json.dbl(Json.obj(o), "score", 0);

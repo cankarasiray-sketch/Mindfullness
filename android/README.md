@@ -62,6 +62,16 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Fırsatlar 2 günlük (2.15.7)
+
+- Fırsatlar sekmesi (Tek maç fırsatları, denge tablosu, Değerli oranlar) ve kârlı seçim bildirimi artık
+  **önümüzdeki 48 saatin** maçlarını kapsar (önce 24). Ayarlar → Tek maç → Fırsatlar penceresi: 1/2/3 gün.
+- Günün kuponu ve günün seçimi 24 saatte kalır (Zamanlama → zaman penceresi).
+- Tarama, iki pencerenin büyüğünde maçı olan ligleri çeker: yalnızca yarın oynayan lig de taranır (lig
+  başına tarama başına ~1–2 kredi daha). Pinnacle zaten birkaç günlük oran verdiği için aynı istekte gelir.
+- Karşılıklı Gol adil oranı (maç başına kredi) yine 24 saatteki maçlar için çekilir; yarının KG satırları
+  ertesi gün gelir.
+
 ## Tek maç: bahis türü süzgeci, en düşük oran 1,18 (2.15.6)
 
 - MS 1/X/2, Çifte Şans, Alt/Üst (2,5 Pinnacle'dan; 0,5–1,5–3,5–4,5 gol modelinden), Karşılıklı Gol,

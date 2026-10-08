@@ -138,8 +138,9 @@ public class AccuracyTest {
         api.diagnose = true;
         assertTrue(api.fetchEvents(Arrays.asList("soccer_turkey_super_league", "soccer_epl"), NOW).isEmpty());
         assertEquals(Collections.singletonList("soccer_turkey_super_league"), api.idle);
-        assertEquals("Türkiye Süper Lig: 24 saatte maç yok, sıradaki 03.10 20:00", api.report.get(0));
-        assertEquals("İngiltere Premier Lig: 24 saatte 1 maç; oran yanıtı 1 maç, kullanılabilir 0, bahis sitesi olmayan 1",
+        // 2.15.7: tarama penceresi = kupon (24) ile Fırsatlar (48) penceresinin büyüğü
+        assertEquals("Türkiye Süper Lig: 48 saatte maç yok, sıradaki 03.10 20:00", api.report.get(0));
+        assertEquals("İngiltere Premier Lig: 48 saatte 1 maç; oran yanıtı 1 maç, kullanılabilir 0, bahis sitesi olmayan 1",
                 api.report.get(1));
         assertEquals(1, api.spent);
         // tanı kapalıyken sıradaki maç sorulmaz

@@ -30,12 +30,12 @@ public final class OddsApi {
     /** Önceden (ücretsiz listeyle) öğrenilmiş pencere maç sayıları: tekrar sorulmaz. */
     public Map<String, Integer> knownInWindow;
 
-    /** Liglerin karar penceresindeki maç sayıları (kota harcamaz; alınamazsa -1). */
+    /** Liglerin tarama penceresindeki (kupon ve Fırsatlar pencerelerinin büyüğü) maç sayıları (kota harcamaz; alınamazsa -1). */
     public Map<String, Integer> activeCounts(java.util.Collection<String> leagues, Instant now) {
         Map<String, Integer> out = new LinkedHashMap<>();
         for (String l : leagues) {
             out.put(l, eventsInWindow(l, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
-                    now.plusSeconds(Math.round(cfg.windowHours * 3600))));
+                    now.plusSeconds(Math.round(cfg.scanHours() * 3600))));
         }
         return out;
     }
@@ -623,13 +623,13 @@ public final class OddsApi {
             if (progress != null) progress.step("Pinnacle oranları " + index + "/" + leagues.size() + ": " + name);
             int inWindow = now == null ? -1 : knownInWindow != null && knownInWindow.containsKey(league) ? knownInWindow.get(league)
                     : eventsInWindow(league, now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)),
-                    now.plusSeconds(Math.round(cfg.windowHours * 3600)));
+                    now.plusSeconds(Math.round(cfg.scanHours() * 3600)));
             if (inWindow == 0) {
                 idle.add(league);
                 ok++;
                 if (diagnose) {
                     Instant next = nextEvent(league, now);
-                    report.add(name + ": 24 saatte maç yok" + (next == null ? " (listede maç yok)"
+                    report.add(name + ": " + Fmt.num(cfg.scanHours(), 0) + " saatte maç yok" + (next == null ? " (listede maç yok)"
                             : ", sıradaki " + next.atOffset(Fmt.TR).format(DM)));
                 }
                 continue;
@@ -644,7 +644,7 @@ public final class OddsApi {
                 events.addAll(parsed);
                 ok++;
                 int[] s = lastParse;
-                report.add(name + ": " + (inWindow >= 0 ? "24 saatte " + inWindow + " maç; " : "")
+                report.add(name + ": " + (inWindow >= 0 ? Fmt.num(cfg.scanHours(), 0) + " saatte " + inWindow + " maç; " : "")
                         + "oran yanıtı " + s[0] + " maç, kullanılabilir " + parsed.size()
                         + (s[1] > 0 ? ", bahis sitesi olmayan " + s[1] : "")
                         + (s[3] > 0 ? ", Pinnacle-borsa ayrışması " + s[3] : "")

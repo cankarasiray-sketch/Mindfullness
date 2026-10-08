@@ -639,6 +639,11 @@ function singleGroup(m) {
   if (m.indexOf("EVG@") === 0 || m.indexOf("DEPG@") === 0) return "TG";
   return "BASKET";
 }
+/** Fırsatlar penceresi metni (2.15.7): "2 gün" gibi. */
+function oppText() {
+  var h = (S.settings && S.settings.opportunityHours) || 48;
+  return h % 24 === 0 ? h / 24 + " gün" : h + " saat";
+}
 function singlesCard() {
   if (S.demo) return "";
   var all = S.singles || [], min = singlesMin != null ? singlesMin : SINGLES_DEFAULT_MIN;
@@ -653,7 +658,7 @@ function singlesCard() {
     return '<button class="chip' + ((singlesGroup || "") === g[0] ? " main" : "") + '" onclick="singlesGroup=' + (g[0] ? "\'" + g[0] + "\'" : "null") + ';singlesShow=25;render()">' + g[1] + "</button>";
   }).join(" ");
   var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
-  return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
+  return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Önümüzdeki ' + oppText() + ' içinde tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
     + "ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; oran en az " + odds(S.settings.pickMinOdds || 1.18) + " (Ayarlar → Tek maç); bahis türüne göre süzülebilir (ör. Maç sonucu → MS 2, Alt/Üst → 1,5 Üst). Sıra: önce kârlı olanlar (adil oranı geçen), sonra kâr ve tutma olasılığı birlikte (denge puanı). "
     + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
     + bandsHtml()
@@ -1064,7 +1069,7 @@ function viewOpportunities() {
   if (tc) tc.legs.forEach(function (l) { inCoupon[l.bookRef + "|" + l.outcome] = true; });
   html += '<div class="card"><div class="kicker">PİYASA TARAMASI</div><p class="small muted">'
     + (R.scannedAt ? "Son tarama " + esc(dm(R.scannedAt)) + " " + esc(hm(R.scannedAt)) + " (" + esc(ago(R.scannedAt)) + ")." : "Henüz tarama yok.")
-    + " Otomatik radar: " + (S.settings.radarScans ? "günde " + S.settings.radarScans + " kez" : "kapalı") + ".</p>"
+    + " Otomatik radar: " + (S.settings.radarScans ? "günde " + S.settings.radarScans + " kez" : "kapalı") + ". Fırsatlar penceresi: önümüzdeki " + oppText() + ".</p>"
     + (S.demo ? "" : '<div class="btns"><button class="b" onclick="act(\'radarScan\')">Şimdi tara</button><button class="b ghost" onclick="show(\'ayarlar\')">Radar ayarı</button></div>')
     + "</div>";
   html += singlesCard();
@@ -1375,6 +1380,10 @@ function viewSettings() {
     + '<label>En az tutma olasılığı (%)</label><input id="sPickProb" inputmode="decimal" value="' + esc(num(st.pickMinProb * 100, 0)) + '">'
     + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.15) * 100, 1)) + '">'
     + '<p class="small muted">Tek maç seçimlerinde beklenen kayıp bu sınıra kadarsa (oran adil oranın bu kadar altına kadar) tam tutar; daha kötüyse oynanmaz.</p>'
+    + '<label>Fırsatlar penceresi</label><select id="sOppHours">' + [[24, "1 gün (24 saat)"], [48, "2 gün (48 saat)"], [72, "3 gün (72 saat)"]].map(function (o) {
+      return '<option value="' + o[0] + '"' + ((st.opportunityHours || 48) === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
+    }).join("") + "</select>"
+    + '<p class="small muted">Tek maç fırsatları, denge tablosu, Değerli oranlar ve kârlı seçim bildirimi bu kadar ilerideki maçları da kapsar. Günün kuponu ve günün seçimi 24 saatte kalır.</p>'
     + '<label>En düşük oran</label><input id="sPickMinOdds" inputmode="decimal" value="' + esc(num(st.pickMinOdds || 1.18, 2)) + '">'
     + '<p class="small muted">Tek maç listesi, günün seçimi ve kârlı seçim bildirimi bu orandan düşükleri almaz. Başa baş için gereken tutma = 1 / oran: '
     + "1,18'de %85, 1,25'te %80 (5'te 4 tutarsa ancak başa baş), 1,40'ta %71.</p>"
@@ -1492,6 +1501,7 @@ function collectSettings() {
     st.pickMaxLoss = numIn(val("sPickLoss"), 15) / 100;
     st.pickStake = numIn(val("sPickStake"), 0);
     st.pickMinOdds = numIn(val("sPickMinOdds"), 1.18);
+    st.opportunityHours = parseInt(val("sOppHours") || "48", 10);
     st.singlesOnly = !!(document.getElementById("sSingles") || {}).checked;
   }
   var hc = document.getElementById("sHandicap");

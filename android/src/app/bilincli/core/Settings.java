@@ -127,6 +127,16 @@ public final class Settings {
 
     // strateji
     public double windowHours = 24;
+    /**
+     * Fırsatlar sekmesinin penceresi (saat): tek maç listesi, denge tablosu, Değerli oranlar ve kârlı seçim
+     * bildirimi (2.15.7, kullanıcı isteği: 2 gün). Kupon kararı ve günün seçimi windowHours ile kalır.
+     */
+    public double opportunityHours = 48;
+
+    /** Taramada bakılan pencere: kupon penceresi ile Fırsatlar penceresinin büyüğü. */
+    public double scanHours() {
+        return Math.max(windowHours, opportunityHours);
+    }
     public double minLeadMinutes = 30;
     public double minLegEv = 0.03;
     public double minCouponEv = 0.05;
@@ -355,6 +365,7 @@ public final class Settings {
         m.put("preferredBook", preferredBook);
         m.put("minBooks", (long) minBooks);
         m.put("windowHours", windowHours);
+        m.put("opportunityHours", opportunityHours);
         m.put("minLeadMinutes", minLeadMinutes);
         m.put("minLegEv", minLegEv);
         m.put("minCouponEv", minCouponEv);
@@ -416,6 +427,7 @@ public final class Settings {
         if (preferred != null && !preferred.trim().isEmpty()) s.preferredBook = preferred.trim();
         s.minBooks = (int) Json.lng(m, "minBooks", s.minBooks);
         s.windowHours = Json.dbl(m, "windowHours", s.windowHours);
+        s.opportunityHours = Json.dbl(m, "opportunityHours", s.opportunityHours);
         s.minLeadMinutes = Json.dbl(m, "minLeadMinutes", s.minLeadMinutes);
         s.minLegEv = Json.dbl(m, "minLegEv", s.minLegEv);
         s.minCouponEv = Json.dbl(m, "minCouponEv", s.minCouponEv);
@@ -503,6 +515,7 @@ public final class Settings {
         if (minWinProb < 0 || minWinProb >= 1) return "En düşük tutma olasılığı %0-99 arasında olmalı";
         if (minLegProb < 0 || minLegProb >= 1) return "Maç başına en az tutma olasılığı %0-99 arasında olmalı";
         if (windowHours <= 0 || windowHours > 72) return "Zaman penceresi 1-72 saat olmalı";
+        if (opportunityHours < 12 || opportunityHours > 72) return "Fırsatlar penceresi 12-72 saat olmalı";
         if (minCouponAmount < 0) return "Asgari kupon tutarı negatif olamaz";
         if (weeklyLossLimit < 0 || weeklyLossLimit >= 1) return "Haftalık kayıp limiti %0-99 arasında olmalı";
         if (chaseCooldownHours < 0 || chaseCooldownHours > 24 * 14) return "Kovalama beklemesi 0-336 saat olmalı";
