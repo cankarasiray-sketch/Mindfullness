@@ -8,7 +8,13 @@ veya ilçenin hava durumuna da bakabilirsiniz.
 
 - **Dikkat edilmesi gerekenler** – önümüzdeki 48 saat saat saat taranır; yağmur, kuvvetli yağış/sel riski,
   kar, dondurucu yağmur, gizli buzlanma, gök gürültülü fırtına ve dolu, kuvvetli rüzgar/fırtına, sis,
-  sıcak hava, don/ayaz, yüksek UV ve ani sıcaklık düşüşü için uyarı üretilir.
+  sıcak hava, don/ayaz, yüksek UV, ani sıcaklık düşüşü, kötü hava kalitesi ve çöl tozu için uyarı üretilir.
+  - **Güven derecesi** – uyarılar ECMWF, DWD ICON ve NOAA GFS modelleriyle karşılaştırılır;
+    "Güven: Yüksek · 3/3 model" gibi modellerin ne kadar hemfikir olduğu gösterilir.
+  - **Fırtına riski** – atmosferin kararsızlığı (CAPE) yüksek ve sağanak olasılığı varsa, hava kodu henüz
+    göstermese de gök gürültülü sağanak riski bildirilir.
+  - **Sel ve taşkın riski** – dün dahil 3 günde biriken yağış (toprağın suya doyması) ayrıca değerlendirilir.
+  - **Hava kalitesi ve çöl tozu** – Copernicus CAMS tahminiyle; toz taşınımında çamur yağmuru uyarısı.
   - Her uyarıda **ne zaman** (ör. "Bugün 15:00–21:00"), **ne kadar** (mm, km/sa, °C) ve
     MGM'nin kullandığı renk ölçeğiyle **seviye** (Bilgi · Sarı · Turuncu · Kırmızı) gösterilir.
   - **"Ne yapmalı?"** bölümü seviyeye göre somut önlemler sıralar.
@@ -17,14 +23,21 @@ veya ilçenin hava durumuna da bakabilirsiniz.
 - **Yanınıza alın** – şemsiye, mont, güneş kremi, su şişesi gibi kısa öneriler.
 - **Arama ve kayıtlı yerler** – Türkçe yer adı araması (il, ilçe, dünya genelinde şehirler); baktığınız
   yerler listede kalır, anlık sıcaklık ve varsa uyarı rozetiyle görünür.
-- **Bildirimler** – seçtiğiniz konum için ~3 saatte bir arka planda kontrol; sarı ve üzeri (veya yalnızca
+- **Bildirimler** – seçtiğiniz konum için arka planda düzenli kontrol; sarı ve üzeri (veya yalnızca
   turuncu/kırmızı) uyarılarda bildirim. İsteğe bağlı 07:00 **sabah özeti**.
+- **Yağmur başlamadan haber ver** – yağmur veya kar 1–2 saat içinde başlayacaksa kısa bir bildirim
+  (saatlik kontrol, her yağış için bir kez).
+- **Ana ekran widget'ı** – anlık sıcaklık, hava durumu, en yüksek/en düşük ve en önemli uyarı; bildirim
+  konumunu (yoksa cihaz konumunu) gösterir, saatte bir güncellenir.
+- **Uyarıyı paylaş** – uyarıyı önerileriyle birlikte mesajlaşma uygulamalarıyla paylaşın.
+- Aşağı çekerek yenileme, hava kalitesi kutucuğu, "maske" önerisi.
 - Saatlik (36 saat) ve 10 günlük tahmin, hissedilen sıcaklık, nem, rüzgar yönü/hamle, UV, görüş,
   basınç, gün doğumu/batımı.
 - Çevrimdışı açılış: son başarılı tahmin önbellekte tutulur.
 - Hava durumuna göre değişen arka plan ve elle çizilmiş renkli hava ikonları.
 
-Veriler [Open-Meteo](https://open-meteo.com) üzerinden alınır (API anahtarı gerekmez, CC BY 4.0).
+Veriler [Open-Meteo](https://open-meteo.com) üzerinden alınır (API anahtarı gerekmez, CC BY 4.0):
+tahmin, ECMWF/ICON/GFS model karşılaştırması ve CAMS hava kalitesi.
 Uyarılar tahmin modellerine dayalı otomatik değerlendirmelerdir; resmî uyarılar için MGM ve AFAD'ı takip edin.
 
 ## APK'yı indirme
@@ -66,9 +79,9 @@ Kod düzeni:
 
 | Klasör | İçerik |
 | --- | --- |
-| `domain/` | Uyarı motoru (`AlertEngine`), öneriler (`Insights`), modeller, Türkçe tarih/saat metinleri |
+| `domain/` | Uyarı motoru (`AlertEngine`), model uyumu (`ModelAgreement`), öneriler (`Insights`), modeller, Türkçe tarih/saat metinleri |
 | `data/` | Open-Meteo istemcisi, JSON ayrıştırma, önbellekli depo |
-| `platform/` | Konum, ayarlar, bildirimler, `JobScheduler` görevleri |
+| `platform/` | Konum, ayarlar, bildirimler, `JobScheduler` görevleri, ana ekran widget'ı |
 | `ui/` | Ekranlar (`HomeView`, `PlacesView`, `SettingsView`), durum yönetimi (`AppController`), çizimler |
 | `tools/` | İkon üretici (`generate_icons.py`) ve çevrimdışı APK derleyici |
 
