@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="window_background">#FF0F2C63</color>
+    <color name="accent">#FF8AB4FF</color>
 </resources>

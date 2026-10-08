@@ -1,7 +1,7 @@
 package com.mindfullness.weather.platform
 
 import android.Manifest
-import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -9,16 +9,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.core.app.NotificationCompat
-import androidx.core.app.NotificationManagerCompat
-import androidx.core.content.ContextCompat
-import androidx.compose.ui.graphics.toArgb
 import com.mindfullness.weather.MainActivity
 import com.mindfullness.weather.R
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
 import com.mindfullness.weather.domain.WeatherAlert
-import com.mindfullness.weather.ui.theme.AppColors
+import com.mindfullness.weather.ui.Palette
 import java.time.LocalDateTime
 
 object Notifier {
@@ -40,13 +36,15 @@ object Notifier {
         )
     }
 
+    fun hasPermission(context: Context): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
     fun canNotify(context: Context): Boolean {
-        val permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        return permitted && NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val manager = context.getSystemService(NotificationManager::class.java) ?: return false
+        return hasPermission(context) && manager.areNotificationsEnabled()
     }
 
-    @SuppressLint("MissingPermission")
     fun showAlert(context: Context, place: Place, alert: WeatherAlert, now: LocalDateTime) {
         if (!canNotify(context)) return
         val marker = when (alert.severity) {
@@ -59,37 +57,43 @@ object Notifier {
             append(alert.whenText(now)).append(" · ").append(alert.detail)
             alert.advice.take(2).forEach { append("\n• ").append(it) }
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ALERTS)
+        val notification = Notification.Builder(context, CHANNEL_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_weather)
-            .setColor(AppColors.severity(alert.severity).toArgb())
+            .setColor(Palette.severity(alert.severity))
             .setContentTitle("$marker ${alert.title} · ${place.name}")
             .setContentText("${alert.whenText(now)} · ${alert.detail}")
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
-            .setPriority(if (alert.severity >= Severity.ORANGE) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
-            .setCategory(NotificationCompat.CATEGORY_RECOMMENDATION)
+            .setStyle(Notification.BigTextStyle().bigText(body))
+            .setCategory(Notification.CATEGORY_RECOMMENDATION)
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(alert.key.hashCode(), notification)
+        notify(context, alert.key.hashCode(), notification)
     }
 
-    @SuppressLint("MissingPermission")
     fun showMorningSummary(context: Context, place: Place, text: String, importantAlerts: Int) {
         if (!canNotify(context)) return
         val title = buildString {
             append("Günaydın · ").append(place.name)
             if (importantAlerts > 0) append(" · $importantAlerts uyarı")
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_DAILY)
+        val notification = Notification.Builder(context, CHANNEL_DAILY)
             .setSmallIcon(R.drawable.ic_stat_weather)
-            .setColor(AppColors.Primary.toArgb())
+            .setColor(Palette.ACCENT)
             .setContentTitle(title)
             .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setStyle(Notification.BigTextStyle().bigText(text))
             .setContentIntent(openApp(context))
             .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(MORNING_ID, notification)
+        notify(context, MORNING_ID, notification)
+    }
+
+    private fun notify(context: Context, id: Int, notification: Notification) {
+        try {
+            context.getSystemService(NotificationManager::class.java)?.notify(id, notification)
+        } catch (e: SecurityException) {
+            // Permission was revoked between the check and the call; nothing to do.
+        }
     }
 
     private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(

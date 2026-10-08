@@ -1,0 +1,8 @@
+-dontobfuscate
+-dontoptimize
+-dontpreverify
+-keepattributes SourceFile,LineNumberTable,Signature,InnerClasses,EnclosingMethod,*Annotation*
+-keep class !kotlin.**,!org.intellij.**,!org.jetbrains.** { *; }
+-dontwarn kotlin.**
+-dontwarn org.jetbrains.annotations.**
+-dontnote **

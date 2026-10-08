@@ -1,12 +1,10 @@
 package com.mindfullness.weather.domain
 
-import kotlinx.serialization.Serializable
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
-@Serializable
 data class Place(
     val id: Long,
     val name: String,

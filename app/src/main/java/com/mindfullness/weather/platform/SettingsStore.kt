@@ -1,16 +1,11 @@
 package com.mindfullness.weather.platform
 
 import android.content.Context
-import androidx.core.content.edit
-import com.mindfullness.weather.data.AppJson
+import com.mindfullness.weather.data.PlaceJson
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
+import org.json.JSONArray
+import org.json.JSONObject
 
 data class AppSettings(
     val alertsEnabled: Boolean,
@@ -23,79 +18,88 @@ data class AppSettings(
 class SettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("hava_uyari", Context.MODE_PRIVATE)
 
-    private val _places = MutableStateFlow(readPlaces())
-    val places: StateFlow<List<Place>> = _places.asStateFlow()
+    val places: List<Place>
+        get() = prefs.getString(KEY_PLACES, null)?.let { json ->
+            runCatching {
+                val array = JSONArray(json)
+                (0 until array.length()).map { PlaceJson.fromJson(array.getJSONObject(it)) }
+            }.getOrNull()
+        }.orEmpty()
 
-    private val _settings = MutableStateFlow(readSettings())
-    val settings: StateFlow<AppSettings> = _settings.asStateFlow()
+    val settings: AppSettings
+        get() = AppSettings(
+            alertsEnabled = prefs.getBoolean(KEY_ALERTS, false),
+            minSeverity = prefs.getString(KEY_MIN_SEVERITY, null)
+                ?.let { name -> Severity.values().firstOrNull { it.name == name } } ?: Severity.YELLOW,
+            morningSummary = prefs.getBoolean(KEY_MORNING, false),
+            notificationPlace = readPlace(KEY_NOTIFY_PLACE),
+        )
 
     /** [Place.CURRENT_LOCATION_ID], a saved place id, or null before the first choice. */
     var selectedId: Long?
         get() = if (prefs.contains(KEY_SELECTED)) prefs.getLong(KEY_SELECTED, 0) else null
-        set(value) = prefs.edit { if (value == null) remove(KEY_SELECTED) else putLong(KEY_SELECTED, value) }
-
-    /** Last resolved device location, used offline and by the background worker. */
-    var lastCurrentPlace: Place?
-        get() = prefs.getString(KEY_CURRENT_PLACE, null)?.let { decodePlace(it) }
-        set(value) = prefs.edit {
-            if (value == null) remove(KEY_CURRENT_PLACE) else putString(KEY_CURRENT_PLACE, AppJson.encodeToString(Place.serializer(), value))
+        set(value) {
+            val editor = prefs.edit()
+            if (value == null) editor.remove(KEY_SELECTED) else editor.putLong(KEY_SELECTED, value)
+            editor.apply()
         }
 
+    /** Last resolved device location, used offline and by background jobs. */
+    var lastCurrentPlace: Place?
+        get() = readPlace(KEY_CURRENT_PLACE)
+        set(value) = writePlace(KEY_CURRENT_PLACE, value)
+
     fun addPlace(place: Place) {
-        val updated = (listOf(place) + _places.value.filter { it.id != place.id }).take(MAX_PLACES)
-        writePlaces(updated)
+        writePlaces((listOf(place) + places.filter { it.id != place.id }).take(MAX_PLACES))
     }
 
     fun removePlace(id: Long) {
-        writePlaces(_places.value.filter { it.id != id })
+        writePlaces(places.filter { it.id != id })
         if (selectedId == id) selectedId = null
     }
 
     fun update(transform: (AppSettings) -> AppSettings) {
-        val next = transform(_settings.value)
-        prefs.edit {
-            putBoolean(KEY_ALERTS, next.alertsEnabled)
-            putString(KEY_MIN_SEVERITY, next.minSeverity.name)
-            putBoolean(KEY_MORNING, next.morningSummary)
-            val place = next.notificationPlace
-            if (place == null) remove(KEY_NOTIFY_PLACE) else putString(KEY_NOTIFY_PLACE, AppJson.encodeToString(Place.serializer(), place))
-        }
-        _settings.value = next
+        val next = transform(settings)
+        prefs.edit()
+            .putBoolean(KEY_ALERTS, next.alertsEnabled)
+            .putString(KEY_MIN_SEVERITY, next.minSeverity.name)
+            .putBoolean(KEY_MORNING, next.morningSummary)
+            .apply()
+        writePlace(KEY_NOTIFY_PLACE, next.notificationPlace)
     }
 
     /**
      * Records that [key] was notified. Returns false if it already was within the last few days,
      * so the same storm is not announced again on every background check.
      */
+    @Synchronized
     fun markNotified(key: String, nowMillis: Long = System.currentTimeMillis()): Boolean {
-        val serializer = MapSerializer(String.serializer(), Long.serializer())
-        val existing = prefs.getString(KEY_NOTIFIED, null)
-            ?.let { runCatching { AppJson.decodeFromString(serializer, it) }.getOrNull() }
-            .orEmpty()
-            .filterValues { nowMillis - it < NOTIFIED_TTL_MILLIS }
-        if (key in existing) return false
-        prefs.edit { putString(KEY_NOTIFIED, AppJson.encodeToString(serializer, existing + (key to nowMillis))) }
+        val stored = prefs.getString(KEY_NOTIFIED, null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
+        val fresh = JSONObject()
+        stored.keys().forEach { k ->
+            val at = stored.optLong(k)
+            if (nowMillis - at < NOTIFIED_TTL_MILLIS) fresh.put(k, at)
+        }
+        if (fresh.has(key)) return false
+        fresh.put(key, nowMillis)
+        prefs.edit().putString(KEY_NOTIFIED, fresh.toString()).commit()
         return true
     }
 
-    private fun readSettings() = AppSettings(
-        alertsEnabled = prefs.getBoolean(KEY_ALERTS, false),
-        minSeverity = prefs.getString(KEY_MIN_SEVERITY, null)
-            ?.let { name -> Severity.entries.firstOrNull { it.name == name } } ?: Severity.YELLOW,
-        morningSummary = prefs.getBoolean(KEY_MORNING, false),
-        notificationPlace = prefs.getString(KEY_NOTIFY_PLACE, null)?.let { decodePlace(it) },
-    )
+    private fun readPlace(key: String): Place? =
+        prefs.getString(key, null)?.let { runCatching { PlaceJson.fromJson(JSONObject(it)) }.getOrNull() }
 
-    private fun readPlaces(): List<Place> = prefs.getString(KEY_PLACES, null)
-        ?.let { runCatching { AppJson.decodeFromString(ListSerializer(Place.serializer()), it) }.getOrNull() }
-        .orEmpty()
-
-    private fun writePlaces(places: List<Place>) {
-        prefs.edit { putString(KEY_PLACES, AppJson.encodeToString(ListSerializer(Place.serializer()), places)) }
-        _places.value = places
+    private fun writePlace(key: String, place: Place?) {
+        val editor = prefs.edit()
+        if (place == null) editor.remove(key) else editor.putString(key, PlaceJson.toJson(place).toString())
+        editor.apply()
     }
 
-    private fun decodePlace(json: String): Place? = runCatching { AppJson.decodeFromString(Place.serializer(), json) }.getOrNull()
+    private fun writePlaces(places: List<Place>) {
+        val array = JSONArray()
+        places.forEach { array.put(PlaceJson.toJson(it)) }
+        prefs.edit().putString(KEY_PLACES, array.toString()).apply()
+    }
 
     private companion object {
         const val KEY_PLACES = "places"
