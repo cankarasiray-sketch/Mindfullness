@@ -31,8 +31,11 @@ data class WeatherAlert(
     /** Day-level alert without meaningful start/end hours. */
     val allDay: Boolean = outlook,
 ) {
-    /** Stable across forecast refreshes, used to avoid notifying twice for the same event. */
-    val key: String get() = "${type}_${start.toLocalDate()}_$severity"
+    /**
+     * Identifies the event across forecast refreshes: episodes are built from the whole day's data,
+     * so the start stays the same while the event is in progress. Severity is tracked separately.
+     */
+    val key: String get() = "${type}_$start"
 
     /** "Bugün 15:00–21:00", "Şimdi – 18:00" or "Cumartesi, 10 Ekim" for day-level alerts. */
     fun whenText(now: LocalDateTime): String =
@@ -51,30 +54,40 @@ object AlertEngine {
     fun evaluate(forecast: Forecast, now: LocalDateTime): List<WeatherAlert> {
         val startHour = now.truncatedTo(ChronoUnit.HOURS)
         val windowEnd = startHour.plusHours(DETAIL_HOURS)
-        val window = forecast.hourly.filter { !it.time.isBefore(startHour) && it.time.isBefore(windowEnd) }
+        // Episodes are detected on everything up to the window end, including the earlier hours of
+        // today, so an event that is already under way keeps its real start (and its key), and the
+        // black-ice check can see rain that has already stopped.
+        val hours = forecast.hourly.filter { !it.time.isAfter(windowEnd) }
 
-        val alerts = buildList {
-            addAll(precipitation(window))
-            addAll(thunderstorm(window))
-            addAll(wind(window))
-            addAll(heat(window))
-            val freezing = freezingRain(window)
+        val freezing = freezingRain(hours)
+        val hourlyAlerts = buildList {
+            addAll(precipitation(hours))
+            addAll(thunderstorm(hours))
+            addAll(wind(hours))
+            addAll(heat(hours))
             addAll(freezing)
-            addAll(cold(window))
-            if (freezing.isEmpty()) addAll(blackIce(window))
-            addAll(fog(window))
-            addAll(uv(window))
-            addAll(temperatureDrop(forecast.daily, now.toLocalDate()))
+            addAll(cold(hours))
+            addAll(blackIce(hours).filter { ice -> freezing.none { it.start < ice.end && ice.start < it.end } })
+            addAll(fog(hours))
+            addAll(uv(hours))
+        }.filter { it.end.isAfter(now) && it.start.isBefore(windowEnd) }
+        val alerts = hourlyAlerts + temperatureDrop(forecast.daily, now.toLocalDate())
+
+        // Day-level heads-ups are dropped for days the hourly alerts already cover at the same or a
+        // higher level; a partial-day hourly alert must not hide a stronger outlook for that day.
+        val covered = HashMap<Pair<AlertType, LocalDate>, Severity>()
+        alerts.forEach { alert ->
+            var day = alert.start.toLocalDate()
+            val last = alert.end.minusMinutes(1).toLocalDate()
+            while (!day.isAfter(last)) {
+                val key = alert.type to day
+                val existing = covered[key]
+                if (existing == null || alert.severity > existing) covered[key] = alert.severity
+                day = day.plusDays(1)
+            }
         }
-        // Skip day-level heads-ups for days the hourly window already covers with the same hazard.
-        val covered = alerts.flatMap { alert ->
-            generateSequence(alert.start.toLocalDate()) { it.plusDays(1) }
-                .takeWhile { !it.isAfter(alert.end.minusMinutes(1).toLocalDate()) }
-                .map { alert.type to it }
-                .toList()
-        }.toSet()
         val outlook = outlook(forecast.daily, windowEnd.toLocalDate(), now.toLocalDate())
-            .filter { (it.type to it.start.toLocalDate()) !in covered }
+            .filter { alert -> covered[alert.type to alert.start.toLocalDate()]?.let { alert.severity > it } ?: true }
         return (alerts + outlook).sortedWith(
             compareBy<WeatherAlert> { it.outlook }
                 .thenByDescending { it.severity }
@@ -93,17 +106,24 @@ object AlertEngine {
     internal fun isSnowy(h: HourlyPoint): Boolean =
         h.snowfall >= 0.1 || h.weatherCode in WeatherCodes.SNOW
 
-    private fun precipitation(window: List<HourlyPoint>): List<WeatherAlert> {
-        val rain = episodes(window) { isWet(it) && !isSnowy(it) && it.weatherCode !in WeatherCodes.FREEZING }
+    /** Liquid precipitation that freezes on contact: freezing-rain codes or rain at or below 0°C. */
+    internal fun isFreezing(h: HourlyPoint): Boolean =
+        h.weatherCode in WeatherCodes.FREEZING || (h.liquid >= 0.1 && h.temperature <= 0)
+
+    /** Rain amount of an hour; in mixed hours only the liquid part counts. */
+    private fun rainAmount(h: HourlyPoint): Double = if (isSnowy(h)) h.liquid else h.precipitation
+
+    private fun precipitation(hours: List<HourlyPoint>): List<WeatherAlert> {
+        val rain = episodes(hours) { isWet(it) && !isFreezing(it) && (!isSnowy(it) || it.liquid >= 0.2) }
             .map(::rainAlert)
-        val snow = episodes(window) { isSnowy(it) && (isWet(it) || it.snowfall >= 0.1) }
+        val snow = episodes(hours) { isSnowy(it) && (isWet(it) || it.snowfall >= 0.1) }
             .map(::snowAlert)
         return rain + snow
     }
 
     private fun rainAlert(hours: List<HourlyPoint>): WeatherAlert {
-        val total = hours.sumOf { it.precipitation }
-        val peak = hours.maxOf { it.precipitation }
+        val total = hours.sumOf(::rainAmount)
+        val peak = hours.maxOf(::rainAmount)
         val probability = hours.mapNotNull { it.precipitationProbability }.maxOrNull()
         val heavyCode = hours.any { it.weatherCode == 65 || it.weatherCode == 82 }
         val severity = when {
@@ -149,7 +169,7 @@ object AlertEngine {
                 "AFAD ve MGM duyurularını takip edin; acil durumda 112'yi arayın.",
             )
         }
-        return WeatherAlert(AlertType.RAIN, severity, title, hours.first().time, endOf(hours), detail, advice)
+        return WeatherAlert(AlertType.RAIN, severity, title, accumulationStart(hours), accumulationEnd(hours), detail, advice)
     }
 
     private fun snowAlert(hours: List<HourlyPoint>): WeatherAlert {
@@ -189,7 +209,7 @@ object AlertEngine {
                 "Yol durumu için KGM ve valilik duyurularını takip edin.",
             )
         }
-        return WeatherAlert(AlertType.SNOW, severity, title, hours.first().time, endOf(hours), detail, advice)
+        return WeatherAlert(AlertType.SNOW, severity, title, accumulationStart(hours), accumulationEnd(hours), detail, advice)
     }
 
     // endregion
@@ -353,15 +373,15 @@ object AlertEngine {
         }
 
     private fun freezingRain(window: List<HourlyPoint>): List<WeatherAlert> =
-        episodes(window) { it.weatherCode in WeatherCodes.FREEZING || (it.liquid >= 0.1 && it.temperature <= 0) }
+        episodes(window, predicate = ::isFreezing)
             .map { hours ->
                 val total = hours.sumOf { it.precipitation }
                 WeatherAlert(
                     type = AlertType.ICE,
                     severity = if (total >= 5) Severity.RED else Severity.ORANGE,
                     title = "Dondurucu yağmur · Buzlanma",
-                    start = hours.first().time,
-                    end = endOf(hours),
+                    start = accumulationStart(hours),
+                    end = accumulationEnd(hours),
                     detail = "Yağmur yere düştüğü anda donabilir; yollar buz tutar",
                     advice = listOf(
                         "Zorunlu değilse araç kullanmayın.",
@@ -557,7 +577,13 @@ object AlertEngine {
         return result
     }
 
+    /** Instant values (temperature, wind, visibility, UV) describe the hour that starts at their timestamp. */
     private fun endOf(hours: List<HourlyPoint>): LocalDateTime = hours.last().time.plusHours(1)
+
+    /** Open-Meteo accumulations (precipitation, rain, snowfall) cover the hour before their timestamp. */
+    private fun accumulationStart(hours: List<HourlyPoint>): LocalDateTime = hours.first().time.minusHours(1)
+
+    private fun accumulationEnd(hours: List<HourlyPoint>): LocalDateTime = hours.last().time
 
     internal fun formatAmount(value: Double): String =
         if (value < 10) ((value * 10).roundToInt() / 10.0).toString().replace('.', ',').removeSuffix(",0")

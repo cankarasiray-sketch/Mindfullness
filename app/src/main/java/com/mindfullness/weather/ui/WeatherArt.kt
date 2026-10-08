@@ -90,7 +90,8 @@ object WeatherArt {
                 rain(canvas, s, 4)
             }
             Condition.SHOWERS -> {
-                if (isDay) celestial(canvas, true, .66f * s, .26f * s, .15f * s)
+                // Placed so the top ray (1.85 r plus its round cap) stays inside the view.
+                if (isDay) celestial(canvas, true, .66f * s, .30f * s, .14f * s)
                 cloud(canvas, .08f * s, .1f * s, .74f * s, CLOUD_GREY)
                 rain(canvas, s, 3)
             }

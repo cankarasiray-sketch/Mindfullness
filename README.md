@@ -29,11 +29,12 @@ Uyarılar tahmin modellerine dayalı otomatik değerlendirmelerdir; resmî uyar�
 
 ## APK'yı indirme
 
-Her push'ta GitHub Actions uygulamayı derler ve **Releases** sayfasına `HavaUyari-1.0.N.apk` olarak koyar:
+Her push'ta GitHub Actions uygulamayı derler ve **Releases** sayfasına `HavaUyari-1.0.N.apk` olarak koyar
+(varsayılan dal dışındaki dallar "pre-release" olarak yayımlanır):
 
-1. Telefonda deponun **Releases** sayfasını açın, en son sürümdeki `.apk` dosyasını indirin.
+1. Telefonda deponun **Releases** sayfasını açın, en yeni sürümdeki `.apk` dosyasını indirin.
 2. Dosyayı açın; istenirse "Bilinmeyen kaynaklardan yükleme" iznini verin.
-3. Uygulama her sürümde aynı anahtarla imzalandığı için yeni sürümler eskisinin üzerine kurulur.
+3. Sürüm numarası (`N`) commit sayısıdır; aynı anahtarla imzalanan her yeni sürüm eskisinin üzerine kurulur.
 
 ## Geliştirme
 
@@ -49,15 +50,17 @@ Her push'ta GitHub Actions uygulamayı derler ve **Releases** sayfasına `HavaUy
 ### Google depolarına erişim olmadan derleme
 
 Android SDK'nın ve Google Maven'ın indirilemediği ortamlarda APK, Ubuntu paketlerindeki araçlarla
-derlenebilir (`apt install aapt dalvik-exchange apksigner zipalign`):
+derlenebilir (JDK 17+ gerekir):
 
 ```bash
-gradle -p tools/offline-apk assembleApk -PversionCode=3
+sudo apt install aapt dalvik-exchange apksigner zipalign
+./gradlew -p tools/offline-apk assembleApk
 # çıktı: tools/offline-apk/build/apk/app-release.apk
 ```
 
 Bu yol Android 14 framework sınıflarını Maven Central'daki Robolectric `android-all` paketinden alır,
 ProGuard ile Kotlin standart kütüphanesini küçültür, `dx` ile dex üretir ve depodaki anahtarla imzalar.
+Sürüm numarası CI ile aynı şekilde commit sayısından hesaplanır.
 
 Kod düzeni:
 

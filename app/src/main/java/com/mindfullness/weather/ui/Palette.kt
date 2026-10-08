@@ -17,13 +17,16 @@ object Palette {
     /** Text and translucent "glass" surfaces on top of the sky gradient. */
     val TEXT = Color.WHITE
     val TEXT_SECONDARY = Color.argb(199, 255, 255, 255)
-    val TEXT_TERTIARY = Color.argb(153, 255, 255, 255)
+    val TEXT_TERTIARY = Color.argb(214, 255, 255, 255)
     val GLASS = Color.argb(28, 255, 255, 255)
     val GLASS_STRONG = Color.argb(38, 255, 255, 255)
     val GLASS_BORDER = Color.argb(41, 255, 255, 255)
     val DIVIDER = Color.argb(20, 255, 255, 255)
 
     val RAIN = Color.parseColor("#6CC4FF")
+
+    /** Lighter rain tint for small text, readable on the glass cards. */
+    val RAIN_TEXT = Color.parseColor("#B3E0FF")
     val SUN = Color.parseColor("#FFC940")
     val GOOD = Color.parseColor("#5DD39E")
     val WARNING_SURFACE = Color.argb(51, 255, 146, 43)
@@ -35,14 +38,13 @@ object Palette {
         Severity.RED -> Color.parseColor("#FF5A5F")
     }
 
-    /** Text colour that stays readable on top of [severity]. */
-    fun onSeverity(severity: Severity): Int =
-        if (severity == Severity.RED) Color.WHITE else Color.parseColor("#1A1300")
+    /** Dark text that stays readable on every severity colour (at least 6:1, red included). */
+    val ON_SEVERITY = Color.parseColor("#1A1300")
 
     fun withAlpha(color: Int, alpha: Float): Int =
         Color.argb((alpha * 255).toInt(), Color.red(color), Color.green(color), Color.blue(color))
 
-    /** Background gradient matching the sky. Every variant keeps white text above 4.5:1. */
+    /** Background gradient matching the sky; opaque white text stays above 4.5:1 on every variant. */
     fun sky(weatherCode: Int?, isDay: Boolean): IntArray {
         val hex = when (weatherCode?.let(WeatherCodes::condition)) {
             null -> listOf("#1D3B6A", "#0F1F3D", "#070F21")

@@ -126,7 +126,7 @@ class DeviceLocationProvider(context: Context) {
     private fun describe(location: Location, callback: (Place?) -> Unit) {
         Async.run({ reverseGeocode(location.latitude, location.longitude) }) { result ->
             val address = result.getOrNull()
-            val name = address?.subAdminArea ?: address?.locality ?: address?.adminArea ?: "Mevcut konum"
+            val name = address?.subAdminArea ?: address?.locality ?: address?.adminArea ?: GENERIC_NAME
             callback(
                 Place(
                     id = Place.CURRENT_LOCATION_ID,
@@ -166,7 +166,9 @@ class DeviceLocationProvider(context: Context) {
         }
     }
 
-    private companion object {
-        const val TIMEOUT_MILLIS = 12_000L
+    companion object {
+        /** Name used when reverse geocoding is unavailable (e.g. offline). */
+        const val GENERIC_NAME = "Mevcut konum"
+        private const val TIMEOUT_MILLIS = 12_000L
     }
 }

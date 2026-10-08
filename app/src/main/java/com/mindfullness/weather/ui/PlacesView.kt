@@ -10,6 +10,7 @@ import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
@@ -42,6 +43,10 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
     private val list = context.vertical()
     private var insetTop = 0
     private var insetBottom = 0
+    private var touching = false
+    private var pendingState: PlacesState? = null
+    private var renderedQuery: String? = null
+    private var renderedResults: List<Place>? = null
 
     init {
         orientation = VERTICAL
@@ -95,17 +100,25 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
         addView(scroll, LayoutParams(MATCH, 0, 1f))
 
         setOnApplyWindowInsetsListener { _, insets ->
+            val left: Int
+            val right: Int
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime())
-                insetTop = insets.getInsets(WindowInsets.Type.systemBars()).top
-                insetBottom = bars.bottom
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
+                insetTop = bars.top
+                insetBottom = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.ime()).bottom
+                left = bars.left
+                right = bars.right
             } else {
                 @Suppress("DEPRECATION")
                 insetTop = insets.systemWindowInsetTop
                 @Suppress("DEPRECATION")
                 insetBottom = insets.systemWindowInsetBottom
+                @Suppress("DEPRECATION")
+                left = insets.systemWindowInsetLeft
+                @Suppress("DEPRECATION")
+                right = insets.systemWindowInsetRight
             }
-            setPadding(0, insetTop, 0, 0)
+            setPadding(left, insetTop, right, 0)
             list.setPadding(dp(16), dp(4), dp(16), insetBottom + dp(24))
             insets
         }
@@ -128,8 +141,29 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
         field.clearFocus()
     }
 
+    /** Rebuilding rows mid-tap would cancel the tap, so updates wait until the finger lifts. */
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> touching = true
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                touching = false
+                pendingState?.let { state -> post { if (!touching) render(state) } }
+            }
+        }
+        return super.dispatchTouchEvent(event)
+    }
+
     fun render(state: PlacesState) {
-        val scrollY = scroll.scrollY
+        if (touching) {
+            pendingState = state
+            return
+        }
+        pendingState = null
+        // Keep the scroll position only while the same list is being refreshed.
+        val sameList = state.query == renderedQuery && state.results == renderedResults
+        renderedQuery = state.query
+        renderedResults = state.results
+        val scrollY = if (sameList) scroll.scrollY else 0
         list.removeAllViews()
         if (state.query.isBlank()) {
             list.addView(currentLocationRow(state).params(top = 4, bottom = 8))
@@ -219,21 +253,24 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
     private fun savedRow(summary: PlaceSummary, selected: Boolean, notifies: Boolean): View =
         rowContainer(selected) { actions.select(summary.place) }.apply {
             val texts = context.vertical()
-            val titleRow = context.horizontal()
-            titleRow.addView(context.text(summary.place.name, 16f, Palette.ON_SURFACE, Fonts.medium, maxLines = 1).params(WRAP, WRAP))
+            val name = context.text(summary.place.name, 16f, Palette.ON_SURFACE, Fonts.medium, maxLines = 1)
             if (notifies) {
-                titleRow.addView(
-                    context.icon(R.drawable.ic_bell, Palette.ACCENT, 15).apply { contentDescription = "Bildirim konumu" }
-                        .params(dp(15), dp(15), start = 6),
-                )
+                // As part of the text, the bell stays visible when a long name is ellipsized.
+                val bell = context.getDrawable(R.drawable.ic_bell)?.mutate()?.apply {
+                    setTint(Palette.ACCENT)
+                    setBounds(0, 0, dp(15), dp(15))
+                }
+                name.setCompoundDrawables(null, null, bell, null)
+                name.compoundDrawablePadding = dp(6)
+                name.contentDescription = "${summary.place.name}, bildirim konumu"
             }
-            texts.addView(titleRow)
+            texts.addView(name.params(WRAP, WRAP))
             if (summary.place.subtitle.isNotBlank()) {
                 texts.addView(context.text(summary.place.subtitle, 12f, Palette.ON_SURFACE_MUTED, maxLines = 1).params(top = 2))
             }
             summary.topAlert?.takeIf { it.severity >= Severity.YELLOW }?.let { alert ->
                 texts.addView(
-                    context.pill(alert.title, Palette.severity(alert.severity), Palette.onSeverity(alert.severity)).params(WRAP, WRAP, top = 6),
+                    context.pill(alert.title, Palette.severity(alert.severity), Palette.ON_SEVERITY).params(WRAP, WRAP, top = 6),
                 )
             }
             addView(texts, LayoutParams(0, WRAP, 1f))

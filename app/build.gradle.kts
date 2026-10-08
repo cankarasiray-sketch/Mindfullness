@@ -3,8 +3,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
 }
 
-// CI build number becomes the versionCode so every APK can be installed over the previous one.
-val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+// The commit count gives every build of a commit the same, ever-increasing versionCode, whether it
+// comes from CI or from tools/offline-apk, so each new APK installs over the previous one.
+val buildNumber: Int = runCatching {
+    providers.exec { commandLine("git", "rev-list", "--count", "HEAD") }.standardOutput.asText.get().trim().toInt()
+}.getOrDefault(1)
 
 android {
     namespace = "com.mindfullness.weather"

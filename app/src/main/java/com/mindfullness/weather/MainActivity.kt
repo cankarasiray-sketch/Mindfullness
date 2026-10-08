@@ -2,15 +2,19 @@ package com.mindfullness.weather
 
 import android.Manifest
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.Toast
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
+import com.mindfullness.weather.platform.Async
+import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.ui.AppController
 import com.mindfullness.weather.ui.HomeView
 import com.mindfullness.weather.ui.Palette
@@ -27,6 +31,12 @@ class MainActivity : Activity() {
     private lateinit var settingsView: SettingsView
     private var screen = Screen.HOME
     private var pendingNotificationAction: (() -> Unit)? = null
+    private var permissionRequestInFlight = false
+    private var renderPosted = false
+
+    // Kept in fields so onDestroy only clears callbacks that still belong to this instance.
+    private val renderCallback: () -> Unit = { scheduleRender() }
+    private val messageCallback: (String) -> Unit = { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -39,21 +49,39 @@ class MainActivity : Activity() {
         placesView = PlacesView(this, placesActions)
         settingsView = SettingsView(this, settingsActions)
 
-        controller.onChange = { render() }
-        controller.onMessage = { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+        controller.onChange = renderCallback
+        controller.onMessage = messageCallback
         val restored = savedInstanceState?.getString(KEY_SCREEN)?.let { name -> Screen.values().firstOrNull { it.name == name } }
         show(restored ?: Screen.HOME, animate = false)
         controller.start()
+        if (savedInstanceState == null) openNotificationTarget(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        openNotificationTarget(intent)
+    }
+
+    /** A tapped weather notification opens the home screen for the place it was about. */
+    private fun openNotificationTarget(intent: Intent?) {
+        val placeId = intent?.takeIf { it.hasExtra(Notifier.EXTRA_PLACE_ID) }?.getLongExtra(Notifier.EXTRA_PLACE_ID, 0) ?: return
+        intent.removeExtra(Notifier.EXTRA_PLACE_ID)
+        if (screen != Screen.HOME) goHome()
+        controller.openPlace(placeId)
     }
 
     override fun onResume() {
         super.onResume()
         controller.onResume()
+        // Notification permission may have changed in system settings while we were away.
+        render()
     }
 
     override fun onDestroy() {
-        controller.onChange = null
-        controller.onMessage = null
+        if (controller.onChange === renderCallback) controller.onChange = null
+        if (controller.onMessage === messageCallback) controller.onMessage = null
+        Async.main.removeCallbacks(renderRunnable)
         super.onDestroy()
     }
 
@@ -105,6 +133,8 @@ class MainActivity : Activity() {
             }
         }
         if (target == Screen.PLACES) {
+            // A fresh screen starts with an empty search box, so the controller's query must match.
+            controller.clearQuery()
             controller.refreshSummaries()
             placesView.onShown(hasSavedPlaces = controller.places.saved.isNotEmpty())
         }
@@ -117,6 +147,19 @@ class MainActivity : Activity() {
             controller.clearQuery()
         }
         show(Screen.HOME)
+    }
+
+    private val renderRunnable = Runnable {
+        renderPosted = false
+        render()
+    }
+
+    /** Coalesces bursts of state changes (e.g. several place summaries arriving) into one render. */
+    private fun scheduleRender() {
+        if (!renderPosted) {
+            renderPosted = true
+            Async.main.post(renderRunnable)
+        }
     }
 
     private fun render() {
@@ -132,7 +175,8 @@ class MainActivity : Activity() {
     private fun requestLocation() {
         if (controller.hasLocationPermission()) {
             controller.useCurrentLocation()
-        } else {
+        } else if (!permissionRequestInFlight) {
+            permissionRequestInFlight = true
             requestPermissions(
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION),
                 REQUEST_LOCATION,
@@ -142,25 +186,40 @@ class MainActivity : Activity() {
 
     /** Runs [action] once notifications are allowed (Android 13+ asks at runtime). */
     private fun withNotificationPermission(action: () -> Unit) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        ) {
-            action()
-        } else {
-            pendingNotificationAction = action
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+        when {
+            !Notifier.hasPermission(this) -> {
+                if (permissionRequestInFlight) return
+                permissionRequestInFlight = true
+                pendingNotificationAction = action
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
+            }
+            !Notifier.canNotify(this) -> {
+                // The permission is there but the user switched the app's notifications off.
+                controller.message("Bildirimler telefon ayarlarından kapalı. Açmak için ayarlar açılıyor.")
+                openNotificationSettings()
+            }
+            else -> action()
         }
+    }
+
+    private fun openNotificationSettings() {
+        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        runCatching { startActivity(intent) }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        permissionRequestInFlight = false
+        // An empty result means the request was interrupted, not that the user said no.
+        if (grantResults.isEmpty()) return
         val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
         when (requestCode) {
             REQUEST_LOCATION -> if (granted) controller.useCurrentLocation() else controller.onLocationDenied()
             REQUEST_NOTIFICATIONS -> {
-                if (granted) pendingNotificationAction?.invoke()
-                else controller.message("Bildirim izni verilmedi. İzni telefon ayarlarından açabilirsiniz.")
+                val action = pendingNotificationAction
                 pendingNotificationAction = null
+                if (granted) action?.let(::withNotificationPermission)
+                else controller.message("Bildirim izni verilmedi. İzni telefon ayarlarından açabilirsiniz.")
                 render()
             }
         }
@@ -210,6 +269,8 @@ class MainActivity : Activity() {
         }
 
         override fun useViewingPlaceForNotifications() = withNotificationPermission { controller.useViewingPlaceForNotifications() }
+
+        override fun openNotificationSettings() = this@MainActivity.openNotificationSettings()
 
         override fun back() = goHome()
     }

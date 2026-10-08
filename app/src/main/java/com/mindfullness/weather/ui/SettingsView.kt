@@ -22,6 +22,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         fun setMinSeverity(severity: Severity)
         fun setMorningSummary(enabled: Boolean)
         fun useViewingPlaceForNotifications()
+        fun openNotificationSettings()
         fun back()
     }
 
@@ -41,17 +42,25 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         addView(scroll, LayoutParams(MATCH, 0, 1f))
         setOnApplyWindowInsetsListener { _, insets ->
             val top: Int
+            val left: Int
+            val right: Int
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 top = bars.top
                 insetBottom = bars.bottom
+                left = bars.left
+                right = bars.right
             } else {
                 @Suppress("DEPRECATION")
                 top = insets.systemWindowInsetTop
                 @Suppress("DEPRECATION")
                 insetBottom = insets.systemWindowInsetBottom
+                @Suppress("DEPRECATION")
+                left = insets.systemWindowInsetLeft
+                @Suppress("DEPRECATION")
+                right = insets.systemWindowInsetRight
             }
-            setPadding(0, top, 0, 0)
+            setPadding(left, top, right, 0)
             body.setPadding(dp(16), dp(8), dp(16), insetBottom + dp(24))
             insets
         }
@@ -62,6 +71,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         body.removeAllViews()
 
         body.addView(sectionLabel("Bildirimler"))
+        if (state.notificationsBlocked) body.addView(blockedWarning().params(bottom = 12))
         val notifications = section()
         notifications.addView(
             switchRow(
@@ -112,6 +122,18 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         }
         body.addView(about)
         scroll.post { scroll.scrollTo(0, scrollY) }
+    }
+
+    /** Shown when notifications are on in the app but blocked by the system. */
+    private fun blockedWarning(): View = context.horizontal().apply {
+        background = ripple(rounded(Palette.WARNING_SURFACE, dp(16).toFloat()), radius = dp(16).toFloat())
+        setPadding(dp(16), dp(14), dp(16), dp(14))
+        setOnClickListener { actions.openNotificationSettings() }
+        addView(context.icon(R.drawable.ic_alert, Palette.severity(Severity.ORANGE), 22))
+        val texts = context.vertical()
+        texts.addView(context.text("Bildirimler telefon ayarlarından kapalı", 15f, Palette.ON_SURFACE, Fonts.medium))
+        texts.addView(context.text("Uyarılar gönderilemiyor. Açmak için dokunun.", 14f, Palette.ON_SURFACE_MUTED).params(top = 2))
+        addView(texts, LayoutParams(0, WRAP, 1f).apply { marginStart = dp(14) })
     }
 
     private fun sectionLabel(text: String): View =
@@ -191,6 +213,8 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
                 context.text("${viewing.name} için bildirim al", 14f, Palette.ACCENT, Fonts.medium).apply {
                     background = ripple(null, radius = dp(18).toFloat())
                     setPadding(dp(12), dp(10), dp(12), dp(10))
+                    minHeight = dp(48)
+                    gravity = Gravity.CENTER_VERTICAL
                     setOnClickListener { actions.useViewingPlaceForNotifications() }
                 }.params(WRAP, WRAP, start = 24, top = 6),
             )

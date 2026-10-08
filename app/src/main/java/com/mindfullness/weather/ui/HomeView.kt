@@ -8,6 +8,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
@@ -17,6 +18,7 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
+import android.widget.TextView
 import com.mindfullness.weather.R
 import com.mindfullness.weather.domain.AlertEngine
 import com.mindfullness.weather.domain.CurrentWeather
@@ -56,6 +58,10 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
     private var insetTop = 0
     private var insetBottom = 0
+    private var insetLeft = 0
+    private var insetRight = 0
+    private var locateButton: View? = null
+    private var locateLabel: TextView? = null
     private var renderedContent: ForecastContent? = null
     private var renderedPlaceId: Long? = null
     private var overlayKey: String? = null
@@ -76,14 +82,20 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         addView(topBar, LayoutParams(MATCH, WRAP, Gravity.TOP))
         setOnApplyWindowInsetsListener { _, insets ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                val bars = insets.getInsets(WindowInsets.Type.systemBars())
+                val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
                 insetTop = bars.top
                 insetBottom = bars.bottom
+                insetLeft = bars.left
+                insetRight = bars.right
             } else {
                 @Suppress("DEPRECATION")
                 insetTop = insets.systemWindowInsetTop
                 @Suppress("DEPRECATION")
                 insetBottom = insets.systemWindowInsetBottom
+                @Suppress("DEPRECATION")
+                insetLeft = insets.systemWindowInsetLeft
+                @Suppress("DEPRECATION")
+                insetRight = insets.systemWindowInsetRight
             }
             applyInsets()
             insets
@@ -104,9 +116,15 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         placeIcon.visibility = if (state.place?.isCurrentLocation == true) View.VISIBLE else View.GONE
         setSpinning(state.isRefreshing || state.isLocating || (state.isLoading && state.content != null))
 
+        if (state.place?.id != renderedPlaceId) expanded.clear()
         val data = state.content
         when {
-            state.needsOnboarding -> showOverlay("welcome-${state.isLocating}") { welcome(state.isLocating) }
+            state.needsOnboarding -> {
+                showOverlay("welcome") { welcome() }
+                locateLabel?.text = if (state.isLocating) "Konum bulunuyor…" else "Konumumu kullan"
+                locateButton?.isEnabled = !state.isLocating
+                locateButton?.alpha = if (state.isLocating) 0.7f else 1f
+            }
             data == null && (state.isLoading || state.isLocating) -> showOverlay("loading-${state.isLocating}") {
                 loading(if (state.isLocating) "Konumunuz bulunuyor…" else "Hava durumu yükleniyor…")
             }
@@ -147,10 +165,10 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     }
 
     private fun applyInsets() {
-        topBar.setPadding(dp(8), insetTop + dp(6), dp(4), dp(10))
-        content.setPadding(dp(16), insetTop + dp(76), dp(16), insetBottom + dp(28))
+        topBar.setPadding(insetLeft + dp(8), insetTop + dp(6), insetRight + dp(4), dp(10))
+        content.setPadding(insetLeft + dp(16), insetTop + dp(76), insetRight + dp(16), insetBottom + dp(28))
         for (i in 0 until overlay.childCount) {
-            overlay.getChildAt(i).setPadding(dp(24), insetTop + dp(24), dp(24), insetBottom + dp(24))
+            overlay.getChildAt(i).setPadding(insetLeft + dp(24), insetTop + dp(24), insetRight + dp(24), insetBottom + dp(24))
         }
     }
 
@@ -178,10 +196,15 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         content.removeAllViews()
         content.addView(banner)
         val gap = 18
+        if (forecast.hoursFrom(now, 1).isEmpty()) {
+            // A cache older than its 10-day range would otherwise read as "nothing to worry about".
+            content.addView(outdatedCard())
+            return
+        }
         content.addView(hero(forecast.current, today).params(bottom = gap, top = 4))
         content.addView(alertsSection(data.alerts, now).params(bottom = gap))
         if (data.tips.isNotEmpty()) content.addView(tipsSection(data.tips).params(bottom = gap))
-        content.addView(precipitationCard(data.precipitation, forecast.hoursFrom(now, 24)).params(bottom = gap))
+        content.addView(precipitationCard(data.precipitation, forecast.precipitationHours(now, 24)).params(bottom = gap))
         content.addView(hourlyCard(forecast.hoursFrom(now, 36), forecast.current).params(bottom = gap))
         content.addView(
             dailyCard(forecast.daily.filter { !it.date.isBefore(now.toLocalDate()) }, now.toLocalDate(), alertDays(data.alerts))
@@ -205,9 +228,18 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             GradientDrawable.Orientation.TOP_BOTTOM,
             intArrayOf(Color.argb(90, 0, 0, 0), Color.TRANSPARENT),
         )
+        // The chevron is part of the title so ellipsizing a long name keeps room for it.
+        val chevron = context.getDrawable(R.drawable.ic_chevron_down)?.mutate()?.apply {
+            setTint(Palette.TEXT_SECONDARY)
+            setBounds(0, 0, dp(20), dp(20))
+        }
+        title.setCompoundDrawables(null, null, chevron, null)
+        title.compoundDrawablePadding = dp(4)
         val placeBlock = context.horizontal().apply {
             background = ripple(null, radius = dp(16).toFloat())
             setPadding(dp(8), dp(6), dp(8), dp(6))
+            minimumHeight = dp(48)
+            contentDescription = "Konum değiştir"
             setOnClickListener { actions.openPlaces() }
             addView(placeIcon)
             addView(context.space(widthDp = 6))
@@ -215,7 +247,6 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             texts.addView(title)
             texts.addView(subtitle.params(top = 2))
             addView(texts, LinearLayout.LayoutParams(WRAP, WRAP))
-            addView(context.icon(R.drawable.ic_chevron_down, Palette.TEXT_SECONDARY, 20).params(dp(20), dp(20), start = 4))
         }
         placeIcon.layoutParams = LinearLayout.LayoutParams(dp(16), dp(16))
         val placeHolder = FrameLayout(context)
@@ -253,7 +284,13 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private fun hero(current: CurrentWeather, today: DailyPoint?): View = context.vertical().apply {
         setPadding(dp(8), 0, dp(8), 0)
         val row = context.horizontal()
-        row.addView(context.text(current.temperature.deg(), 96f, Palette.TEXT, Fonts.thin), LinearLayout.LayoutParams(0, WRAP, 1f))
+        val temperature = context.text(current.temperature.deg(), 96f, Palette.TEXT, Fonts.thin, maxLines = 1).apply {
+            // Shrinks "-12°" on narrow screens or large font scales instead of wrapping the "°".
+            ellipsize = null
+            gravity = Gravity.CENTER_VERTICAL
+            setAutoSizeTextTypeUniformWithConfiguration(40, 96, 2, TypedValue.COMPLEX_UNIT_SP)
+        }
+        row.addView(temperature, LinearLayout.LayoutParams(0, dp(120), 1f))
         row.addView(WeatherIconView(context, current.weatherCode, current.isDay), LinearLayout.LayoutParams(dp(120), dp(120)))
         addView(row)
         addView(context.text(WeatherCodes.describe(current.weatherCode), 22f, Palette.TEXT, Fonts.medium))
@@ -304,7 +341,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     }
 
     private fun alertCard(alert: WeatherAlert, now: LocalDateTime, defaultExpanded: Boolean): View {
-        val key = "alert-${alert.key}"
+        val key = "alert-${alert.key}-${alert.end}"
         val accent = Palette.severity(alert.severity)
         val radius = dp(24).toFloat()
         val card = context.vertical().apply {
@@ -324,7 +361,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         titles.addView(context.text(alert.whenText(now), 12f, Palette.TEXT_SECONDARY).params(top = 3))
         header.addView(titles, LinearLayout.LayoutParams(0, WRAP, 1f))
         header.addView(context.space(widthDp = 8))
-        header.addView(context.pill(alert.severity.shortLabel, accent, Palette.onSeverity(alert.severity)))
+        header.addView(context.pill(alert.severity.shortLabel, accent, Palette.ON_SEVERITY))
         body.addView(header)
         body.addView(context.text(alert.detail, 14f, Palette.TEXT_SECONDARY).params(top = 10))
 
@@ -443,7 +480,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         addView(context.text(hour.temperature.deg(), 16f, Palette.TEXT, Fonts.medium).params(WRAP, WRAP, top = 6))
         val probability = hour.precipitationProbability ?: 0
         addView(
-            context.text(if (probability >= 20) "%$probability" else " ", 11f, Palette.RAIN, Fonts.medium).params(WRAP, WRAP, top = 4),
+            context.text(if (probability >= 20) "%$probability" else " ", 11f, Palette.RAIN_TEXT, Fonts.medium).params(WRAP, WRAP, top = 4),
         )
     }
 
@@ -477,7 +514,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         row.addView(WeatherIconView(context, day.weatherCode, true), LinearLayout.LayoutParams(dp(30), dp(30)))
         val probability = day.precipitationProbabilityMax ?: 0
         row.addView(
-            context.text(if (probability >= 20) "%$probability" else "", 12f, Palette.RAIN, Fonts.medium).apply { gravity = Gravity.CENTER },
+            context.text(if (probability >= 20) "%$probability" else "", 12f, Palette.RAIN_TEXT, Fonts.medium).apply { gravity = Gravity.CENTER },
             LinearLayout.LayoutParams(dp(46), WRAP),
         )
         row.addView(
@@ -633,7 +670,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         addView(secondaryButton("Başka bir yer ara", R.drawable.ic_search) { actions.openPlaces() }.params(MATCH, dp(52), top = 10))
     }
 
-    private fun welcome(isLocating: Boolean): View = ScrollView(context).apply {
+    private fun welcome(): View = ScrollView(context).apply {
         isFillViewport = true
         isVerticalScrollBarEnabled = false
         val column = context.vertical().apply { gravity = Gravity.CENTER_VERTICAL }
@@ -651,14 +688,24 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         features.addView(feature("Saat saat yağış", "Yağmurun ne zaman başlayıp biteceğini grafikte görün.").params(top = 12))
         features.addView(feature("Her yeri arayın", "İstediğiniz şehir veya ilçenin hava durumuna bakın, kaydedin.").params(top = 12))
         column.addView(features.params(top = 24))
-        val locate = primaryButton(if (isLocating) "Konum bulunuyor…" else "Konumumu kullan", R.drawable.ic_crosshair) {
-            actions.useLocation()
-        }
-        locate.isEnabled = !isLocating
-        locate.alpha = if (isLocating) 0.7f else 1f
+        val locate = primaryButton("Konumumu kullan", R.drawable.ic_crosshair) { actions.useLocation() }
+        locateButton = locate
+        locateLabel = locate.findViewWithTag(LABEL_TAG)
         column.addView(locate.params(MATCH, dp(52), top = 28))
         column.addView(secondaryButton("Şehir veya ilçe ara", R.drawable.ic_search) { actions.openPlaces() }.params(MATCH, dp(52), top = 10))
         addView(column, LayoutParams(MATCH, WRAP))
+    }
+
+    private fun outdatedCard(): View = card().apply {
+        addView(context.icon(R.drawable.ic_alert, Palette.TEXT, 28))
+        addView(context.text("Güncel tahmin yok", 18f, Palette.TEXT, Fonts.medium).params(top = 10))
+        addView(
+            context.text(
+                "Bu yer için kayıtlı tahminin süresi doldu. İnternete bağlanıp yenileyin; eski verilerle uyarı gösterilmez.",
+                14f, Palette.TEXT_SECONDARY,
+            ).params(top = 4),
+        )
+        addView(primaryButton("Yenile", R.drawable.ic_refresh) { actions.refresh() }.params(MATCH, dp(48), top = 16))
     }
 
     private fun feature(title: String, text: String): View = context.horizontal().apply {
@@ -679,7 +726,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         val dark = Color.parseColor("#0F2C63")
         addView(context.icon(iconRes, dark, 18))
         addView(context.space(widthDp = 10))
-        addView(context.text(label, 16f, dark, Fonts.medium))
+        addView(context.text(label, 16f, dark, Fonts.medium).apply { tag = LABEL_TAG })
         setOnClickListener { onClick() }
     }
 
@@ -693,6 +740,10 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     }
 
     // endregion
+
+    private companion object {
+        const val LABEL_TAG = "label"
+    }
 }
 
 fun uvLabel(uv: Double): String = when {

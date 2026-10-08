@@ -69,19 +69,21 @@ class SettingsStore(context: Context) {
     }
 
     /**
-     * Records that [key] was notified. Returns false if it already was within the last few days,
-     * so the same storm is not announced again on every background check.
+     * Records that the event [key] was notified at [level]. Returns false when it was already
+     * notified at the same or a higher level within the last few days, so an ongoing storm is not
+     * announced again on every background check, but an upgrade (e.g. yellow → orange) is.
      */
     @Synchronized
-    fun markNotified(key: String, nowMillis: Long = System.currentTimeMillis()): Boolean {
+    fun markNotified(key: String, level: Int, nowMillis: Long = System.currentTimeMillis()): Boolean {
         val stored = prefs.getString(KEY_NOTIFIED, null)?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
         val fresh = JSONObject()
         stored.keys().forEach { k ->
-            val at = stored.optLong(k)
-            if (nowMillis - at < NOTIFIED_TTL_MILLIS) fresh.put(k, at)
+            val entry = stored.optJSONObject(k) ?: return@forEach
+            if (nowMillis - entry.optLong("at") < NOTIFIED_TTL_MILLIS) fresh.put(k, entry)
         }
-        if (fresh.has(key)) return false
-        fresh.put(key, nowMillis)
+        val previous = fresh.optJSONObject(key)
+        if (previous != null && previous.optInt("level", -1) >= level) return false
+        fresh.put(key, JSONObject().put("at", nowMillis).put("level", level))
         prefs.edit().putString(KEY_NOTIFIED, fresh.toString()).commit()
         return true
     }

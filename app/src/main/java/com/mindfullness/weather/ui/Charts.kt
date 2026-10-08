@@ -75,8 +75,11 @@ class PrecipitationChartView(context: Context, private val hours: List<HourlyPoi
         val baseline = height - dp(4).toFloat()
         hours.forEachIndexed { index, hour ->
             if (index % 4 == 0) {
-                val x = (index * slot + slot / 2).coerceIn(dp(14).toFloat(), width - dp(14).toFloat())
-                canvas.drawText(if (index == 0) "Şimdi" else hour.time.hour.toString().padStart(2, '0'), x, baseline, label)
+                // Each point holds the preceding hour, so the slot starts an hour before its timestamp.
+                val text = if (index == 0) "Şimdi" else hour.time.minusHours(1).hour.toString().padStart(2, '0')
+                val half = label.measureText(text) / 2
+                val x = (index * slot + slot / 2).coerceIn(half, width - half)
+                canvas.drawText(text, x, baseline, label)
             }
         }
     }

@@ -45,6 +45,15 @@ data class Forecast(
     }
 
     fun hourAt(now: LocalDateTime): HourlyPoint? = hoursFrom(now, 1).firstOrNull()
+
+    /**
+     * Points whose accumulated values (precipitation, rain, snowfall) fall from the current hour
+     * onwards. Open-Meteo stamps an hour's sum at its end, so the 15:00 point covers 14:00–15:00.
+     */
+    fun precipitationHours(now: LocalDateTime, count: Int): List<HourlyPoint> {
+        val start = now.withMinute(0).withSecond(0).withNano(0)
+        return hourly.asSequence().filter { it.time.isAfter(start) }.take(count).toList()
+    }
 }
 
 data class CurrentWeather(

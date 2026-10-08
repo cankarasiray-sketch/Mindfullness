@@ -15,8 +15,9 @@ import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
 import java.io.File
 import java.time.Duration
-import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.util.concurrent.TimeUnit
 
 object AppGraph {
@@ -51,7 +52,7 @@ class AlertJobService : JobService() {
             val now = forecast.localNow()
             AlertEngine.evaluate(forecast, now).asSequence()
                 .filter { !it.outlook && it.severity >= settings.minSeverity && it.start.isBefore(now.plusHours(24)) }
-                .filter { store.markNotified(it.key) }
+                .filter { store.markNotified(it.key, it.severity.ordinal) }
                 .take(3)
                 .forEach { Notifier.showAlert(context, place, it, now) }
             return true
@@ -133,9 +134,12 @@ object JobScheduling {
     }
 
     fun scheduleMorning(context: Context) {
-        val now = LocalDateTime.now()
-        var next = now.toLocalDate().atTime(MORNING_TIME)
-        if (!next.isAfter(now)) next = next.plusDays(1)
+        // Zoned times keep the summary at 07:00 local across daylight-saving changes.
+        val zone = ZoneId.systemDefault()
+        val now = ZonedDateTime.now(zone)
+        var next = now.toLocalDate().atTime(MORNING_TIME).atZone(zone)
+        // A run that fires slightly early must not schedule a second summary for the same morning.
+        if (!next.isAfter(now.plusMinutes(30))) next = next.plusDays(1)
         val delay = Duration.between(now, next).toMillis()
         val job = JobInfo.Builder(MORNING_JOB, ComponentName(context, MorningJobService::class.java))
             .setMinimumLatency(delay)

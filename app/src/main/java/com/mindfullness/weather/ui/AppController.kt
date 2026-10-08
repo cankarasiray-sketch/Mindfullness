@@ -13,8 +13,11 @@ import com.mindfullness.weather.platform.AppGraph
 import com.mindfullness.weather.platform.Async
 import com.mindfullness.weather.platform.DeviceLocationProvider
 import com.mindfullness.weather.platform.JobScheduling
+import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.platform.SettingsStore
 import java.time.LocalDateTime
+import kotlin.math.cos
+import kotlin.math.sqrt
 
 data class HomeState(
     val place: Place? = null,
@@ -82,6 +85,8 @@ data class SettingsState(
     val notificationPlace: Place? = null,
     val viewingPlace: Place? = null,
     val version: String = "",
+    /** Notifications are wanted but blocked by the system (permission revoked or switched off). */
+    val notificationsBlocked: Boolean = false,
 )
 
 /**
@@ -112,6 +117,8 @@ class AppController(context: Context) {
     private var searchError: String? = null
     private var isLocating = false
     private var started = false
+    private var fetchPending = false
+    private val summariesInFlight = HashSet<Long>()
 
     private var loadToken = 0
     private var locateToken = 0
@@ -144,6 +151,7 @@ class AppController(context: Context) {
                 notificationPlace = settings.notificationPlace,
                 viewingPlace = home.place,
                 version = versionName,
+                notificationsBlocked = (settings.alertsEnabled || settings.morningSummary) && !Notifier.canNotify(app),
             )
         }
 
@@ -154,6 +162,23 @@ class AppController(context: Context) {
     }
 
     fun hasLocationPermission() = locator.hasPermission()
+
+    /** Shows the place a tapped notification was about. */
+    fun openPlace(placeId: Long) {
+        if (home.place?.id == placeId && home.content != null) return
+        if (placeId == Place.CURRENT_LOCATION_ID) {
+            val current = currentPlace
+            when {
+                locator.hasPermission() -> useCurrentLocation()
+                current != null -> show(current)
+            }
+            return
+        }
+        val place = store.places.firstOrNull { it.id == placeId }
+            ?: store.settings.notificationPlace?.takeIf { it.id == placeId }
+            ?: return
+        select(place)
+    }
 
     // region Home ------------------------------------------------------------------------------
 
@@ -184,8 +209,9 @@ class AppController(context: Context) {
     }
 
     fun useCurrentLocation(userRefresh: Boolean = false) {
-        store.selectedId = Place.CURRENT_LOCATION_ID
         val token = ++locateToken
+        // Results of fetches started for the previously shown place must not replace this view.
+        loadToken++
         isLocating = true
         val lastKnown = currentPlace
         // Show the last known location's cached forecast while the new fix comes in.
@@ -199,30 +225,51 @@ class AppController(context: Context) {
         }
         setHome(home.copy(isLocating = true, isRefreshing = home.content != null))
 
-        locator.locate { place ->
+        locator.locate { located ->
             if (token != locateToken) return@locate
             isLocating = false
+            val place = located?.let(::keepKnownName)
             if (place != null) {
                 currentPlace = place
                 store.lastCurrentPlace = place
+                store.selectedId = Place.CURRENT_LOCATION_ID
                 // Keep background alerts following the device when they are tied to "current location".
                 if (store.settings.notificationPlace?.isCurrentLocation == true) {
                     store.update { it.copy(notificationPlace = place) }
                 }
                 setHome(home.copy(isLocating = false))
                 show(place, userRefresh)
-            } else {
-                val fallback = currentPlace
-                if (fallback != null) {
-                    message("Konum alınamadı; son bilinen konum gösteriliyor.")
-                    setHome(home.copy(isLocating = false))
-                    show(fallback, userRefresh)
-                } else {
-                    message("Konum alınamadı. Konum servislerini açın veya bir şehir arayın.")
-                    setHome(if (home.content == null) HomeState(needsOnboarding = true) else home.copy(isLocating = false, isRefreshing = false))
+                return@locate
+            }
+            val fallback = currentPlace
+            if (fallback != null) {
+                message("Konum alınamadı; son bilinen konum gösteriliyor.")
+                store.selectedId = Place.CURRENT_LOCATION_ID
+                setHome(home.copy(isLocating = false))
+                show(fallback, userRefresh)
+                return@locate
+            }
+            message("Konum alınamadı. Konum servislerini açın veya bir şehir arayın.")
+            // Stay on (or go back to) a real place; the selection only switches after a successful fix.
+            val previous = home.place?.takeIf { !it.isCurrentLocation && home.content != null }
+            val saved = store.places.firstOrNull()
+            when {
+                previous != null -> {
+                    store.selectedId = previous.id
+                    setHome(home.copy(isLocating = false, isRefreshing = false))
                 }
+                saved != null -> select(saved)
+                else -> setHome(HomeState(needsOnboarding = true))
             }
         }
+    }
+
+    /** Offline geocoding yields a generic name; keep the district name of a nearby earlier fix. */
+    private fun keepKnownName(place: Place): Place {
+        val previous = currentPlace ?: return place
+        if (place.name != DeviceLocationProvider.GENERIC_NAME || previous.name == DeviceLocationProvider.GENERIC_NAME) return place
+        if (distanceKm(place, previous) > 5) return place
+        return place.copy(name = previous.name, region = previous.region, country = previous.country, countryCode = previous.countryCode)
     }
 
     private fun cancelLocating() {
@@ -250,13 +297,18 @@ class AppController(context: Context) {
         setHome(state.copy(content = ForecastContent.from(content.forecast)))
         val age = System.currentTimeMillis() - content.forecast.fetchedAtMillis
         if (age > 30 * 60_000L && !state.isLoading && !state.isRefreshing && !state.isLocating) {
-            state.place?.let { show(it) }
+            val place = state.place ?: return
+            // The device may have moved since the last fix, so a stale current location is looked up again.
+            if (place.isCurrentLocation && locator.hasPermission()) useCurrentLocation() else show(place)
         }
     }
 
     private fun show(place: Place, userRefresh: Boolean = false) {
         val token = ++loadToken
-        val samePlace = home.place?.id == place.id && home.content != null
+        val shown = home.place
+        val samePlace = shown != null && shown.id == place.id && home.content != null &&
+            (!place.isCurrentLocation || distanceKm(shown, place) <= 5)
+        fetchPending = true
         if (samePlace) {
             setHome(home.copy(place = place, isRefreshing = userRefresh || home.isRefreshing, errorMessage = null))
         } else {
@@ -264,12 +316,14 @@ class AppController(context: Context) {
             Async.run({ repository.cached(place) }) { result ->
                 val cached = result.getOrNull()
                 if (cached != null && token == loadToken && home.content == null) {
-                    setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = true))
+                    // The fetch may already have failed; only keep spinning while it is still running.
+                    setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = fetchPending))
                 }
             }
         }
         Async.run({ repository.fetch(place) }) { result ->
             if (token != loadToken) return@run
+            fetchPending = false
             val forecast = result.getOrNull()
             if (forecast != null) {
                 setHome(home.copy(place = place, content = ForecastContent.from(forecast), isLoading = false, isRefreshing = false, errorMessage = null))
@@ -288,8 +342,9 @@ class AppController(context: Context) {
         if (text == query) return
         query = text
         Async.main.removeCallbacks(searchRunnable)
+        // Responses for an earlier text must never be shown under the new one.
+        searchToken++
         if (text.trim().length < 2) {
-            searchToken++
             isSearching = false
             searchResults = emptyList()
             searchError = null
@@ -324,10 +379,11 @@ class AppController(context: Context) {
     fun remove(place: Place) {
         store.removePlace(place.id)
         summaries.remove(place.id)
-        if (store.settings.notificationPlace?.id == place.id) {
+        val settings = store.settings
+        if (settings.notificationPlace?.id == place.id) {
             store.update { it.copy(notificationPlace = null, alertsEnabled = false) }
             JobScheduling.apply(app, store.settings)
-            message("${place.name} bildirim konumuydu; uyarı bildirimleri kapatıldı.")
+            if (settings.alertsEnabled) message("${place.name} bildirim konumuydu; uyarı bildirimleri kapatıldı.")
         }
         if (home.place?.id == place.id) {
             val next = store.places.firstOrNull()
@@ -350,13 +406,16 @@ class AppController(context: Context) {
     /** Loads cached weather for the saved places list and refreshes stale entries. */
     fun refreshSummaries() {
         val all = store.places + listOfNotNull(currentPlace)
-        all.forEach { place ->
-            Async.run({ repository.cached(place) }) { cachedResult ->
-                val cached = cachedResult.getOrNull()
-                if (cached != null) putSummary(place, cached)
-                if (cached == null || System.currentTimeMillis() - cached.fetchedAtMillis > 30 * 60_000L) {
-                    Async.run({ repository.fetch(place) }) { fetched -> fetched.getOrNull()?.let { putSummary(place, it) } }
-                }
+        all.filter { summariesInFlight.add(it.id) }.forEach { place ->
+            // Background work: never queued in front of what the user is looking at.
+            Async.runLow({
+                val cached = repository.cached(place)
+                val stale = cached == null || System.currentTimeMillis() - cached.fetchedAtMillis > 30 * 60_000L
+                cached to if (stale) runCatching { repository.fetch(place) }.getOrNull() else null
+            }) { result ->
+                summariesInFlight.remove(place.id)
+                val (cached, fetched) = result.getOrNull() ?: return@runLow
+                (fetched ?: cached)?.let { putSummary(place, it) }
             }
         }
     }
@@ -423,5 +482,13 @@ class AppController(context: Context) {
 
     fun message(text: String) {
         onMessage?.invoke(text)
+    }
+
+    /** Approximate distance, good enough to tell "same town" from "moved". */
+    private fun distanceKm(a: Place, b: Place): Double {
+        val meanLat = Math.toRadians((a.latitude + b.latitude) / 2)
+        val dx = Math.toRadians(b.longitude - a.longitude) * cos(meanLat)
+        val dy = Math.toRadians(b.latitude - a.latitude)
+        return sqrt(dx * dx + dy * dy) * 6371.0
     }
 }

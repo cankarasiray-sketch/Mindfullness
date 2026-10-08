@@ -18,6 +18,8 @@ import com.mindfullness.weather.ui.Palette
 import java.time.LocalDateTime
 
 object Notifier {
+    /** Extra carrying the id of the place a notification is about. */
+    const val EXTRA_PLACE_ID = "com.mindfullness.weather.PLACE_ID"
     private const val CHANNEL_ALERTS = "weather_alerts"
     private const val CHANNEL_DAILY = "daily_summary"
     private const val MORNING_ID = 1
@@ -64,10 +66,11 @@ object Notifier {
             .setContentText("${alert.whenText(now)} · ${alert.detail}")
             .setStyle(Notification.BigTextStyle().bigText(body))
             .setCategory(Notification.CATEGORY_RECOMMENDATION)
-            .setContentIntent(openApp(context))
+            .setContentIntent(openApp(context, place))
             .setAutoCancel(true)
             .build()
-        notify(context, alert.key.hashCode(), notification)
+        // Same event → same id, so an upgraded warning replaces the earlier notification.
+        notify(context, (place.id.toString() + alert.key).hashCode(), notification)
     }
 
     fun showMorningSummary(context: Context, place: Place, text: String, importantAlerts: Int) {
@@ -82,7 +85,7 @@ object Notifier {
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(Notification.BigTextStyle().bigText(text))
-            .setContentIntent(openApp(context))
+            .setContentIntent(openApp(context, place))
             .setAutoCancel(true)
             .build()
         notify(context, MORNING_ID, notification)
@@ -96,10 +99,12 @@ object Notifier {
         }
     }
 
-    private fun openApp(context: Context): PendingIntent = PendingIntent.getActivity(
+    private fun openApp(context: Context, place: Place): PendingIntent = PendingIntent.getActivity(
         context,
-        0,
-        Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+        place.id.hashCode(),
+        Intent(context, MainActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            .putExtra(EXTRA_PLACE_ID, place.id),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 }

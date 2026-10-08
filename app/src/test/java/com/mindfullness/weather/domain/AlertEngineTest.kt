@@ -125,6 +125,72 @@ class AlertEngineTest {
     }
 
     @Test
+    fun `black ice is still reported after the rain has stopped`() {
+        // Rain 12:00–14:00 (points 13 and 14 hold the preceding hour), frost from 17:00.
+        val hours = hours(LocalDateTime.of(2026, 1, 5, 0, 0), 48) { i ->
+            when (i) {
+                13, 14 -> copy(precipitation = 2.0, rain = 2.0, temperature = 3.0)
+                in 17..21 -> copy(temperature = -2.0)
+                else -> this
+            }
+        }
+        val later = LocalDateTime.of(2026, 1, 5, 16, 10)
+        val ice = AlertEngine.evaluate(synthetic(hours), later).single { it.type == AlertType.ICE }
+        assertEquals("Gizli buzlanma riski", ice.title)
+        assertEquals(LocalDateTime.of(2026, 1, 5, 17, 0), ice.start)
+    }
+
+    @Test
+    fun `freezing rain elsewhere does not hide tonight's black ice`() {
+        val hours = hours(LocalDateTime.of(2026, 1, 5, 0, 0), 72) { i ->
+            when (i) {
+                13, 14 -> copy(precipitation = 2.0, rain = 2.0, temperature = 3.0)
+                in 17..21 -> copy(temperature = -2.0)
+                42 -> copy(weatherCode = 66, precipitation = 1.0, rain = 1.0, temperature = -1.0)
+                else -> this
+            }
+        }
+        val alerts = AlertEngine.evaluate(synthetic(hours), LocalDateTime.of(2026, 1, 5, 15, 0))
+        assertTrue(alerts.any { it.title == "Gizli buzlanma riski" })
+        assertTrue(alerts.any { it.title.startsWith("Dondurucu yağmur") })
+    }
+
+    @Test
+    fun `an ongoing event keeps its key while time passes`() {
+        // Rain 22:00–04:00.
+        val hours = hours(LocalDateTime.of(2026, 1, 10, 0, 0), 72) { i ->
+            if (i in 23..28) copy(precipitation = 6.0, rain = 6.0, precipitationProbability = 90) else this
+        }
+        val forecast = synthetic(hours)
+        val evening = AlertEngine.evaluate(forecast, LocalDateTime.of(2026, 1, 10, 22, 10)).single { it.type == AlertType.RAIN }
+        val night = AlertEngine.evaluate(forecast, LocalDateTime.of(2026, 1, 11, 1, 10)).single { it.type == AlertType.RAIN }
+        assertEquals(evening.key, night.key)
+        assertEquals(evening.severity, night.severity)
+        assertEquals(LocalDateTime.of(2026, 1, 10, 22, 0), night.start)
+        assertEquals("Şimdi – 04:00", TimeText.range(night.start, night.end, LocalDateTime.of(2026, 1, 11, 1, 10)))
+    }
+
+    @Test
+    fun `mixed rain and snow still grades the rain`() {
+        val hours = hours(LocalDateTime.of(2026, 1, 20, 0, 0), 48) { i ->
+            if (i in 3..8) copy(precipitation = 9.0, rain = 8.8, snowfall = 0.15, temperature = 1.0, precipitationProbability = 90) else this
+        }
+        val rain = AlertEngine.evaluate(synthetic(hours), hours.first().time).single { it.type == AlertType.RAIN }
+        assertEquals(Severity.ORANGE, rain.severity)
+    }
+
+    @Test
+    fun `a weak partial-day alert does not hide a stronger outlook`() {
+        val forecast = synthetic(
+            hours(LocalDateTime.of(2026, 7, 20, 0, 0), 72) { i ->
+                if (i in 59..60) copy(apparentTemperature = 33.0, temperature = 31.0) else this
+            },
+        ).copy(daily = (0..4).map { day(LocalDate.of(2026, 7, 20).plusDays(it.toLong()), apparentMax = if (it == 2) 41.0 else 28.0) })
+        val alerts = AlertEngine.evaluate(forecast, LocalDateTime.of(2026, 7, 20, 13, 5))
+        assertTrue(alerts.any { it.outlook && it.type == AlertType.HEAT && it.severity == Severity.ORANGE })
+    }
+
+    @Test
     fun `episodes tolerate short gaps`() {
         val hours = hours(LocalDateTime.of(2026, 3, 1, 0, 0), 10) { this }
         val wet = setOf(1, 2, 4, 8)
@@ -164,6 +230,13 @@ class AlertEngineTest {
                 isDay = start.plusHours(i.toLong()).hour in 7..18,
             ).modify(i)
         }
+
+    private fun day(date: LocalDate, apparentMax: Double) = DailyPoint(
+        date = date, weatherCode = 1, temperatureMax = apparentMax - 2, temperatureMin = 18.0, apparentMax = apparentMax,
+        apparentMin = 18.0, sunrise = null, sunset = null, uvIndexMax = 5.0, precipitationSum = 0.0,
+        precipitationProbabilityMax = 0, precipitationHours = 0.0, snowfallSum = 0.0, windSpeedMax = 10.0,
+        windGustsMax = 20.0, windDirectionDominant = 180.0,
+    )
 
     private fun synthetic(hours: List<HourlyPoint>) = Forecast(
         fetchedAtMillis = 0,
