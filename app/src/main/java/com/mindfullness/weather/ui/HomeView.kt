@@ -182,7 +182,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         content.addView(alertsSection(data.alerts, now).params(bottom = gap))
         if (data.tips.isNotEmpty()) content.addView(tipsSection(data.tips).params(bottom = gap))
         content.addView(precipitationCard(data.precipitation, forecast.hoursFrom(now, 24)).params(bottom = gap))
-        content.addView(hourlyCard(forecast.hoursFrom(now, 36)).params(bottom = gap))
+        content.addView(hourlyCard(forecast.hoursFrom(now, 36), forecast.current).params(bottom = gap))
         content.addView(
             dailyCard(forecast.daily.filter { !it.date.isBefore(now.toLocalDate()) }, now.toLocalDate(), alertDays(data.alerts))
                 .params(bottom = gap),
@@ -409,12 +409,20 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         }
     }
 
-    private fun hourlyCard(hours: List<HourlyPoint>): View = context.vertical().apply {
+    private fun hourlyCard(hours: List<HourlyPoint>, current: CurrentWeather): View = context.vertical().apply {
         background = context.glassBackground()
         setPadding(0, dp(16), 0, dp(14))
         addView(context.sectionTitle(R.drawable.ic_clock, "Saatlik tahmin").params(start = 16, end = 16, bottom = 10))
         val row = context.horizontal().apply { setPadding(dp(10), 0, dp(10), 0) }
-        hours.forEachIndexed { index, hour -> row.addView(hourItem(hour, index == 0)) }
+        hours.forEachIndexed { index, hour ->
+            // "Şimdi" mirrors the current conditions shown in the header.
+            val shown = if (index == 0) {
+                hour.copy(temperature = current.temperature, weatherCode = current.weatherCode, isDay = current.isDay)
+            } else {
+                hour
+            }
+            row.addView(hourItem(shown, index == 0))
+        }
         addView(HorizontalScrollView(context).apply {
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER

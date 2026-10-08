@@ -37,22 +37,37 @@ Her push'ta GitHub Actions uygulamayı derler ve **Releases** sayfasına `HavaUy
 
 ## Geliştirme
 
-- Kotlin, Jetpack Compose (Material 3), WorkManager, kotlinx.serialization
-- `minSdk 26` (Android 8.0), `targetSdk 35`
+- Kotlin, yalnızca Android framework'ü (View sistemi) ve Kotlin standart kütüphanesi — AndroidX, Compose
+  veya başka bağımlılık yok. Arka plan kontrolleri `JobScheduler`, veri ayrıştırma `org.json` ile yapılır.
+- `minSdk 26` (Android 8.0), `targetSdk 34`
 
 ```bash
 ./gradlew testReleaseUnitTest   # uyarı motoru testleri
 ./gradlew assembleRelease       # app/build/outputs/apk/release/app-release.apk
 ```
 
+### Google depolarına erişim olmadan derleme
+
+Android SDK'nın ve Google Maven'ın indirilemediği ortamlarda APK, Ubuntu paketlerindeki araçlarla
+derlenebilir (`apt install aapt dalvik-exchange apksigner zipalign`):
+
+```bash
+gradle -p tools/offline-apk assembleApk -PversionCode=3
+# çıktı: tools/offline-apk/build/apk/app-release.apk
+```
+
+Bu yol Android 14 framework sınıflarını Maven Central'daki Robolectric `android-all` paketinden alır,
+ProGuard ile Kotlin standart kütüphanesini küçültür, `dx` ile dex üretir ve depodaki anahtarla imzalar.
+
 Kod düzeni:
 
 | Klasör | İçerik |
 | --- | --- |
 | `domain/` | Uyarı motoru (`AlertEngine`), öneriler (`Insights`), modeller, Türkçe tarih/saat metinleri |
-| `data/` | Open-Meteo istemcisi, JSON eşleme, önbellekli depo |
-| `platform/` | Konum, ayarlar, bildirimler ve WorkManager işleri |
-| `ui/` | Compose ekranları: ana ekran, yer arama, ayarlar |
+| `data/` | Open-Meteo istemcisi, JSON ayrıştırma, önbellekli depo |
+| `platform/` | Konum, ayarlar, bildirimler, `JobScheduler` görevleri |
+| `ui/` | Ekranlar (`HomeView`, `PlacesView`, `SettingsView`), durum yönetimi (`AppController`), çizimler |
+| `tools/` | İkon üretici (`generate_icons.py`) ve çevrimdışı APK derleyici |
 
 `app/signing/havauyari.jks` yalnızca sürümler arası güncellenebilirlik için depoya eklenmiş bir anahtardır.
 Play Store'a yüklenecekse `SIGNING_STORE_FILE`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`,
