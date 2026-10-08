@@ -15,6 +15,7 @@ import com.mindfullness.weather.platform.DeviceLocationProvider
 import com.mindfullness.weather.platform.JobScheduling
 import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.platform.SettingsStore
+import com.mindfullness.weather.platform.WeatherWidget
 import java.time.LocalDateTime
 import kotlin.math.cos
 import kotlin.math.sqrt
@@ -82,6 +83,7 @@ data class SettingsState(
     val alertsEnabled: Boolean = false,
     val minSeverity: Severity = Severity.YELLOW,
     val morningSummaryEnabled: Boolean = false,
+    val rainSoonEnabled: Boolean = true,
     val notificationPlace: Place? = null,
     val viewingPlace: Place? = null,
     val version: String = "",
@@ -148,6 +150,7 @@ class AppController(context: Context) {
                 alertsEnabled = settings.alertsEnabled,
                 minSeverity = settings.minSeverity,
                 morningSummaryEnabled = settings.morningSummary,
+                rainSoonEnabled = settings.rainSoon,
                 notificationPlace = settings.notificationPlace,
                 viewingPlace = home.place,
                 version = versionName,
@@ -385,6 +388,7 @@ class AppController(context: Context) {
             JobScheduling.apply(app, store.settings)
             if (settings.alertsEnabled) message("${place.name} bildirim konumuydu; uyarı bildirimleri kapatıldı.")
         }
+        WeatherWidget.requestRefresh(app)
         if (home.place?.id == place.id) {
             val next = store.places.firstOrNull()
             val current = currentPlace
@@ -421,6 +425,7 @@ class AppController(context: Context) {
     }
 
     private fun putSummary(place: Place, forecast: Forecast) {
+        WeatherWidget.onForecast(app, place, forecast)
         val now = forecast.localNow()
         val today = forecast.today(now)
         summaries[place.id] = PlaceSummary(
@@ -442,6 +447,13 @@ class AppController(context: Context) {
         store.update { it.copy(alertsEnabled = enabled, notificationPlace = it.notificationPlace ?: home.place) }
         JobScheduling.apply(app, store.settings)
         if (enabled) JobScheduling.checkNow(app)
+        WeatherWidget.requestRefresh(app)
+        notifyChanged()
+    }
+
+    fun setRainSoon(enabled: Boolean) {
+        store.update { it.copy(rainSoon = enabled) }
+        JobScheduling.apply(app, store.settings)
         notifyChanged()
     }
 
@@ -453,6 +465,7 @@ class AppController(context: Context) {
     fun setMorningSummary(enabled: Boolean) {
         store.update { it.copy(morningSummary = enabled, notificationPlace = it.notificationPlace ?: home.place) }
         JobScheduling.apply(app, store.settings)
+        WeatherWidget.requestRefresh(app)
         notifyChanged()
     }
 
@@ -461,6 +474,7 @@ class AppController(context: Context) {
         store.update { it.copy(notificationPlace = place, alertsEnabled = true) }
         JobScheduling.apply(app, store.settings)
         JobScheduling.checkNow(app)
+        WeatherWidget.requestRefresh(app)
         message("${place.name} için hava uyarısı bildirimleri açık.")
         notifyChanged()
     }

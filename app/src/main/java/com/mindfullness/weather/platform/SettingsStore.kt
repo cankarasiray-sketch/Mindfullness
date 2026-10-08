@@ -12,6 +12,8 @@ data class AppSettings(
     val minSeverity: Severity,
     val morningSummary: Boolean,
     val notificationPlace: Place?,
+    /** Announce rain an hour or two before it starts (needs [alertsEnabled]). */
+    val rainSoon: Boolean = true,
 )
 
 /** Small SharedPreferences-backed store for places and notification preferences. */
@@ -33,6 +35,7 @@ class SettingsStore(context: Context) {
                 ?.let { name -> Severity.values().firstOrNull { it.name == name } } ?: Severity.YELLOW,
             morningSummary = prefs.getBoolean(KEY_MORNING, false),
             notificationPlace = readPlace(KEY_NOTIFY_PLACE),
+            rainSoon = prefs.getBoolean(KEY_RAIN_SOON, true),
         )
 
     /** [Place.CURRENT_LOCATION_ID], a saved place id, or null before the first choice. */
@@ -49,6 +52,10 @@ class SettingsStore(context: Context) {
         get() = readPlace(KEY_CURRENT_PLACE)
         set(value) = writePlace(KEY_CURRENT_PLACE, value)
 
+    /** Place shown by the home-screen widget: the notification place, else the device or first saved place. */
+    val widgetPlace: Place?
+        get() = settings.notificationPlace ?: lastCurrentPlace ?: places.firstOrNull()
+
     fun addPlace(place: Place) {
         writePlaces((listOf(place) + places.filter { it.id != place.id }).take(MAX_PLACES))
     }
@@ -64,6 +71,7 @@ class SettingsStore(context: Context) {
             .putBoolean(KEY_ALERTS, next.alertsEnabled)
             .putString(KEY_MIN_SEVERITY, next.minSeverity.name)
             .putBoolean(KEY_MORNING, next.morningSummary)
+            .putBoolean(KEY_RAIN_SOON, next.rainSoon)
             .apply()
         writePlace(KEY_NOTIFY_PLACE, next.notificationPlace)
     }
@@ -111,6 +119,7 @@ class SettingsStore(context: Context) {
         const val KEY_MIN_SEVERITY = "min_severity"
         const val KEY_MORNING = "morning_summary"
         const val KEY_NOTIFY_PLACE = "notification_place"
+        const val KEY_RAIN_SOON = "rain_soon"
         const val KEY_NOTIFIED = "notified_keys"
         const val MAX_PLACES = 15
         const val NOTIFIED_TTL_MILLIS = 3 * 24 * 60 * 60 * 1000L

@@ -52,6 +52,8 @@ object WeatherArt {
     }
     private val rect = RectF()
 
+    /** Shared paints: synchronized because widgets are drawn from background threads. */
+    @Synchronized
     fun draw(canvas: Canvas, code: Int, isDay: Boolean, s: Float) {
         when (WeatherCodes.condition(code)) {
             Condition.CLEAR -> if (isDay) {

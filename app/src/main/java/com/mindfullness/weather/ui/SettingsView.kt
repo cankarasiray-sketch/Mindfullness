@@ -21,6 +21,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         fun setAlertsEnabled(enabled: Boolean)
         fun setMinSeverity(severity: Severity)
         fun setMorningSummary(enabled: Boolean)
+        fun setRainSoon(enabled: Boolean)
         fun useViewingPlaceForNotifications()
         fun openNotificationSettings()
         fun back()
@@ -76,7 +77,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         notifications.addView(
             switchRow(
                 "Hava uyarıları",
-                "Önümüzdeki 24 saatte önemli bir hava olayı beklendiğinde bildirim alın. Tahmin yaklaşık 3 saatte bir kontrol edilir.",
+                "Önümüzdeki 24 saatte önemli bir hava olayı beklendiğinde bildirim alın. Tahmin düzenli olarak arka planda kontrol edilir.",
                 state.alertsEnabled,
             ) { actions.setAlertsEnabled(it) },
         )
@@ -87,6 +88,14 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
             )
             notifications.addView(severityOption("Sarı ve üzeri (önerilen)", Severity.YELLOW, state.minSeverity))
             notifications.addView(severityOption("Yalnızca turuncu ve kırmızı", Severity.ORANGE, state.minSeverity))
+            notifications.addView(divider())
+            notifications.addView(
+                switchRow(
+                    "Yağmur başlamadan haber ver",
+                    "Yağmur veya kar 1–2 saat içinde başlayacaksa kısa bir bildirim alın. Bunun için tahmin saatte bir kontrol edilir.",
+                    state.rainSoonEnabled,
+                ) { actions.setRainSoon(it) },
+            )
             notifications.addView(divider())
             notifications.addView(notificationPlaceRow(state))
         }
@@ -112,7 +121,8 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         val about = section().apply { setPadding(dp(16), dp(16), dp(16), dp(16)) }
         about.addView(
             context.text(
-                "Hava verileri Open-Meteo.com tarafından sağlanır (CC BY 4.0). Uyarılar tahmin modellerine dayalı " +
+                "Hava verileri Open-Meteo.com tarafından sağlanır (CC BY 4.0); uyarıların güven derecesi ECMWF, DWD ICON " +
+                    "ve NOAA GFS modelleri karşılaştırılarak, hava kalitesi Copernicus CAMS verisiyle hesaplanır. Uyarılar " +
                     "otomatik değerlendirmelerdir; resmî uyarılar için MGM ve AFAD duyurularını takip edin.",
                 14f, Palette.ON_SURFACE_MUTED,
             ),
@@ -205,6 +215,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
                 14f, Palette.ON_SURFACE_MUTED,
             ).params(top = 2),
         )
+        texts.addView(context.text("Ana ekran widget'ı da bu konumu gösterir.", 12f, Palette.ON_SURFACE_MUTED).params(top = 4))
         row.addView(texts, LayoutParams(0, WRAP, 1f).apply { marginStart = dp(14) })
         addView(row)
         val viewing = state.viewingPlace

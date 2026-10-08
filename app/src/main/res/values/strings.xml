@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Hava Uyarı</string>
+    <string name="widget_name">Hava Uyarı</string>
+    <string name="widget_description">Anlık hava durumu ve en önemli uyarı</string>
 </resources>

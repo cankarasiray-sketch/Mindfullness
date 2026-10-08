@@ -2,8 +2,11 @@ package com.mindfullness.weather.data
 
 import com.mindfullness.weather.domain.CurrentWeather
 import com.mindfullness.weather.domain.DailyPoint
+import com.mindfullness.weather.domain.AirPoint
 import com.mindfullness.weather.domain.Forecast
 import com.mindfullness.weather.domain.HourlyPoint
+import com.mindfullness.weather.domain.ModelHour
+import com.mindfullness.weather.domain.ModelRun
 import com.mindfullness.weather.domain.Place
 import org.json.JSONArray
 import org.json.JSONObject
@@ -26,10 +29,26 @@ class OpenMeteoApi {
             append("&current=").append(CURRENT.joinToString(","))
             append("&hourly=").append(HOURLY.joinToString(","))
             append("&daily=").append(DAILY.joinToString(","))
-            append("&timezone=auto&forecast_days=10&wind_speed_unit=kmh")
+            // The previous day lets night-time checks see the evening before (e.g. rain before frost).
+            append("&timezone=auto&past_days=1&forecast_days=10&wind_speed_unit=kmh")
         }
         return get(url)
     }
+
+    /** Precipitation, gusts and temperature from independent models, to rate how certain a warning is. */
+    fun modelsJson(latitude: Double, longitude: Double): String = get(
+        "https://api.open-meteo.com/v1/forecast?latitude=${coordinate(latitude)}&longitude=${coordinate(longitude)}" +
+            "&hourly=precipitation,wind_gusts_10m,temperature_2m&models=${MODELS.joinToString(",")}" +
+            "&timezone=auto&past_days=1&forecast_days=3&wind_speed_unit=kmh",
+        optional = true,
+    )
+
+    /** CAMS air quality and desert dust. */
+    fun airQualityJson(latitude: Double, longitude: Double): String = get(
+        "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${coordinate(latitude)}&longitude=${coordinate(longitude)}" +
+            "&hourly=european_aqi,pm2_5,pm10,dust&timezone=auto&forecast_days=4",
+        optional = true,
+    )
 
     fun search(query: String): List<Place> {
         val name = URLEncoder.encode(query.trim(), "UTF-8")
@@ -37,11 +56,12 @@ class OpenMeteoApi {
         return GeocodingParser.parse(body)
     }
 
-    private fun get(url: String): String {
+    private fun get(url: String, optional: Boolean = false): String {
         val connection = URI(url).toURL().openConnection() as HttpURLConnection
         try {
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 20_000
+            // Optional extras must not hold up the main forecast for long.
+            connection.connectTimeout = if (optional) 8_000 else 15_000
+            connection.readTimeout = if (optional) 10_000 else 20_000
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("User-Agent", "HavaUyari/1.0 (Android)")
             val code = connection.responseCode
@@ -58,6 +78,9 @@ class OpenMeteoApi {
     private fun coordinate(value: Double) = String.format(Locale.ROOT, "%.4f", value)
 
     companion object {
+        /** Global models compared for confidence: ECMWF IFS 0.25°, DWD ICON and NOAA GFS. */
+        val MODELS = listOf("ecmwf_ifs025", "icon_seamless", "gfs_seamless")
+
         private val CURRENT = listOf(
             "temperature_2m", "relative_humidity_2m", "apparent_temperature", "is_day", "precipitation",
             "weather_code", "cloud_cover", "pressure_msl", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
@@ -65,7 +88,7 @@ class OpenMeteoApi {
         private val HOURLY = listOf(
             "temperature_2m", "apparent_temperature", "relative_humidity_2m", "precipitation_probability",
             "precipitation", "rain", "showers", "snowfall", "weather_code", "wind_speed_10m", "wind_gusts_10m",
-            "wind_direction_10m", "visibility", "uv_index", "is_day",
+            "wind_direction_10m", "visibility", "uv_index", "is_day", "cape",
         )
         private val DAILY = listOf(
             "weather_code", "temperature_2m_max", "temperature_2m_min", "apparent_temperature_max",
@@ -120,6 +143,7 @@ object ForecastParser {
         val visibility = hourly.doubles("visibility")
         val uv = hourly.doubles("uv_index")
         val isDay = hourly.doubles("is_day")
+        val cape = hourly.doubles("cape")
 
         val hourlyPoints = hourTimes.indices.mapNotNull { i ->
             val time = hourTimes[i] ?: return@mapNotNull null
@@ -141,6 +165,7 @@ object ForecastParser {
                 visibility = visibility.at(i),
                 uvIndex = uv.at(i),
                 isDay = (isDay.at(i) ?: 1.0) >= 0.5,
+                cape = cape.at(i),
             )
         }
 
@@ -206,6 +231,46 @@ object ForecastParser {
             hourly = hourlyPoints,
             daily = dailyPoints,
         )
+    }
+}
+
+/**
+ * Splits a multi-model response. With several models, Open-Meteo suffixes every hourly variable
+ * with the model name (precipitation_icon_seamless); time stays shared. Without suffixes there is
+ * no telling which model the data is from, so nothing is returned.
+ */
+object ModelsParser {
+    fun parse(json: String): List<ModelRun> {
+        val hourly = JSONObject(json).optJSONObject("hourly") ?: return emptyList()
+        val times = hourly.strings("time").map { it?.let(LocalDateTime::parse) }
+        return OpenMeteoApi.MODELS.mapNotNull { model ->
+            val precipitation = hourly.doubles("precipitation_$model")
+            val gusts = hourly.doubles("wind_gusts_10m_$model")
+            val temperature = hourly.doubles("temperature_2m_$model")
+            if (precipitation.all { it == null } && gusts.all { it == null } && temperature.all { it == null }) {
+                return@mapNotNull null
+            }
+            val hours = times.indices.mapNotNull { i ->
+                val time = times[i] ?: return@mapNotNull null
+                ModelHour(time, precipitation.at(i), gusts.at(i), temperature.at(i))
+            }
+            ModelRun(model, hours)
+        }
+    }
+}
+
+object AirQualityParser {
+    fun parse(json: String): List<AirPoint> {
+        val hourly = JSONObject(json).optJSONObject("hourly") ?: return emptyList()
+        val times = hourly.strings("time")
+        val aqi = hourly.doubles("european_aqi")
+        val pm25 = hourly.doubles("pm2_5")
+        val pm10 = hourly.doubles("pm10")
+        val dust = hourly.doubles("dust")
+        return times.indices.mapNotNull { i ->
+            val time = times[i]?.let(LocalDateTime::parse) ?: return@mapNotNull null
+            AirPoint(time, aqi.at(i), pm25.at(i), pm10.at(i), dust.at(i))
+        }
     }
 }
 

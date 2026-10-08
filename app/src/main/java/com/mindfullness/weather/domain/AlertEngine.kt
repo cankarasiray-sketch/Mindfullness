@@ -14,7 +14,21 @@ enum class Severity(val label: String, val shortLabel: String) {
 }
 
 enum class AlertType {
-    RAIN, SNOW, THUNDERSTORM, WIND, HEAT, COLD, ICE, FOG, UV, TEMPERATURE_DROP,
+    RAIN, SNOW, THUNDERSTORM, WIND, HEAT, COLD, ICE, FOG, UV, TEMPERATURE_DROP, FLOOD, AIR_QUALITY, DUST,
+}
+
+/** How many independent weather models also predict an alert's event. */
+data class Confidence(val agreeing: Int, val total: Int) {
+    val level: Level
+        get() = when {
+            agreeing == total -> Level.HIGH
+            agreeing * 2 >= total -> Level.MEDIUM
+            else -> Level.LOW
+        }
+
+    val text: String get() = "Güven: ${level.label} · $agreeing/$total model"
+
+    enum class Level(val label: String) { HIGH("Yüksek"), MEDIUM("Orta"), LOW("Düşük") }
 }
 
 data class WeatherAlert(
@@ -30,6 +44,8 @@ data class WeatherAlert(
     val outlook: Boolean = false,
     /** Day-level alert without meaningful start/end hours. */
     val allDay: Boolean = outlook,
+    /** Agreement of independent models; null when not applicable or no model data. */
+    val confidence: Confidence? = null,
 ) {
     /**
      * Identifies the event across forecast refreshes: episodes are built from the whole day's data,
@@ -37,10 +53,43 @@ data class WeatherAlert(
      */
     val key: String get() = "${type}_$start"
 
-    /** "Bugün 15:00–21:00", "Şimdi – 18:00" or "Cumartesi, 10 Ekim" for day-level alerts. */
-    fun whenText(now: LocalDateTime): String =
-        if (allDay) "${TimeText.relativeDay(start.toLocalDate(), now.toLocalDate())}, ${TimeText.dayMonth(start.toLocalDate())}"
-        else TimeText.range(start, end, now)
+    /** "Bugün 15:00–21:00", "Şimdi – 18:00", "Cumartesi, 10 Ekim" or "Bugün – Cum" for day-level alerts. */
+    fun whenText(now: LocalDateTime): String {
+        if (!allDay) return TimeText.range(start, end, now)
+        val today = now.toLocalDate()
+        val first = start.toLocalDate()
+        val last = end.minusMinutes(1).toLocalDate()
+        return if (last.isAfter(first)) "${TimeText.relativeShortDay(first, today)} – ${TimeText.relativeShortDay(last, today)}"
+        else "${TimeText.relativeDay(first, today)}, ${TimeText.dayMonth(first)}"
+    }
+
+    /** Plain-text version for sharing. */
+    fun shareText(placeName: String, now: LocalDateTime): String = buildString {
+        append(if (severity == Severity.INFO) "Bilgi" else "${severity.shortLabel} uyarı").append(" · $title\n")
+        append("$placeName · ${whenText(now)}\n")
+        append(detail)
+        confidence?.let { append("\n${it.text}") }
+        if (advice.isNotEmpty()) {
+            append("\n\nÖneriler:\n")
+            append(advice.joinToString("\n") { "• $it" })
+        }
+        append("\n\nHava Uyarı")
+    }
+}
+
+/** Rain about to start at a place that is dry now, for the "rain soon" notification. */
+data class RainSoon(
+    /** Expected start, never before the time of the check. */
+    val start: LocalDateTime,
+    /** Start of the forecast hour the precipitation falls in; stable across checks. */
+    val hour: LocalDateTime,
+    val probability: Int?,
+    /** Expected amount of the whole shower, mm. */
+    val amount: Double,
+    val snow: Boolean,
+) {
+    /** Identifies the event so it is announced once. */
+    val key: String get() = "RAIN_SOON_$hour"
 }
 
 /**
@@ -60,18 +109,25 @@ object AlertEngine {
         val hours = forecast.hourly.filter { !it.time.isAfter(windowEnd) }
 
         val freezing = freezingRain(hours)
+        val storms = thunderstorm(hours)
         val hourlyAlerts = buildList {
             addAll(precipitation(hours))
-            addAll(thunderstorm(hours))
+            addAll(storms)
+            addAll(convectiveRisk(hours).filter { risk -> storms.none { it.overlaps(risk) } })
             addAll(wind(hours))
             addAll(heat(hours))
             addAll(freezing)
             addAll(cold(hours))
-            addAll(blackIce(hours).filter { ice -> freezing.none { it.start < ice.end && ice.start < it.end } })
+            addAll(blackIce(hours).filter { ice -> freezing.none { it.overlaps(ice) } })
             addAll(fog(hours))
             addAll(uv(hours))
+            addAll(airQuality(forecast.air.filter { !it.time.isAfter(windowEnd) }))
         }.filter { it.end.isAfter(now) && it.start.isBefore(windowEnd) }
-        val alerts = hourlyAlerts + temperatureDrop(forecast.daily, now.toLocalDate())
+            .map { alert -> ModelAgreement.rate(alert, hours, forecast.models)?.let { alert.copy(confidence = it) } ?: alert }
+        val dayAlerts = temperatureDrop(forecast.daily, now.toLocalDate()) +
+            flood(forecast.daily, now.toLocalDate(), windowEnd.toLocalDate())
+                .filter { flood -> hourlyAlerts.none { it.type == AlertType.RAIN && it.severity >= flood.severity && it.overlaps(flood) } }
+        val alerts = hourlyAlerts + dayAlerts
 
         // Day-level heads-ups are dropped for days the hourly alerts already cover at the same or a
         // higher level; a partial-day hourly alert must not hide a stronger outlook for that day.
@@ -92,6 +148,30 @@ object AlertEngine {
             compareBy<WeatherAlert> { it.outlook }
                 .thenByDescending { it.severity }
                 .thenBy { it.start },
+        )
+    }
+
+    /**
+     * Precipitation about to start within [withinHours] at a place where it is dry now. Only
+     * fairly certain, measurable precipitation counts, so the notification is worth the attention.
+     */
+    fun upcomingRain(forecast: Forecast, now: LocalDateTime, withinHours: Int = 2): RainSoon? {
+        val current = forecast.current
+        if (current.precipitation >= 0.1 || current.weatherCode >= 51) return null
+        // The first point holds the current hour, so withinHours + 1 points reach that far ahead.
+        val hit = forecast.precipitationHours(now, withinHours + 1).firstOrNull { hour ->
+            val probability = hour.precipitationProbability
+            hour.precipitation >= 0.3 && (probability == null || probability >= 50)
+        } ?: return null
+        val hour = hit.time.minusHours(1)
+        val following = forecast.precipitationHours(now, 12).filter { !it.time.isBefore(hit.time) }
+        val shower = episodes(following) { it.precipitation >= 0.1 }.firstOrNull() ?: listOf(hit)
+        return RainSoon(
+            start = if (hour.isBefore(now)) now.truncatedTo(ChronoUnit.MINUTES) else hour,
+            hour = hour,
+            probability = hit.precipitationProbability,
+            amount = shower.sumOf { it.precipitation },
+            snow = isSnowy(hit) && hit.liquid < hit.precipitation / 2,
         )
     }
 
@@ -241,6 +321,33 @@ object AlertEngine {
                 end = endOf(hours),
                 detail = "Yıldırım ve ani kuvvetli yağış riski · hamleler ${gusts.roundToInt()} km/sa",
                 advice = advice,
+            )
+        }
+
+    /**
+     * Thunderstorm potential the weather code does not show: a very unstable atmosphere (high CAPE)
+     * with a fair chance of showers often ends in sudden downpours, lightning and hail. Episodes
+     * that touch a forecast thunderstorm are dropped by the caller, as that warning already covers them.
+     */
+    private fun convectiveRisk(window: List<HourlyPoint>): List<WeatherAlert> =
+        episodes(window) { hour ->
+            (hour.cape ?: 0.0) >= 1000 && (hour.precipitationProbability ?: 0) >= 40 && hour.temperature >= 8
+        }.map { hours ->
+            val cape = hours.maxOf { it.cape ?: 0.0 }
+            val probability = hours.maxOf { it.precipitationProbability ?: 0 }
+            val severity = if (cape >= 2500 && probability >= 60) Severity.ORANGE else Severity.YELLOW
+            WeatherAlert(
+                type = AlertType.THUNDERSTORM,
+                severity = severity,
+                title = "Gök gürültülü sağanak riski",
+                start = hours.first().time,
+                end = endOf(hours),
+                detail = "Atmosfer kararsız (CAPE ${(cape / 100).roundToInt() * 100} J/kg) · ani sağanak, yıldırım ve dolu görülebilir",
+                advice = listOf(
+                    "Gökyüzü kararırsa ya da gök gürlerse kapalı bir alana geçin.",
+                    "Açık alanlarda, ağaç ve direk altında beklemeyin.",
+                    "Ani sel riskine karşı dere yataklarından uzak durun.",
+                ),
             )
         }
 
@@ -465,6 +572,65 @@ object AlertEngine {
         }
 
     // endregion
+    // region Air quality ------------------------------------------------------------------
+
+    /**
+     * Poor air from the CAMS forecast. Saharan dust is called out separately because it calls for
+     * different precautions and often arrives with "mud rain".
+     */
+    private fun airQuality(air: List<AirPoint>): List<WeatherAlert> =
+        episodes(air, maxGap = 2) { (it.europeanAqi ?: 0.0) >= 60 }.map { hours ->
+            val aqi = hours.maxOf { it.europeanAqi ?: 0.0 }
+            val peak = hours.maxBy { it.europeanAqi ?: 0.0 }
+            val dust = hours.mapNotNull { it.dust }.maxOrNull() ?: 0.0
+            val pm10 = hours.mapNotNull { it.pm10 }.maxOrNull()
+            val pm25 = hours.mapNotNull { it.pm25 }.maxOrNull()
+            val dusty = dust >= 50 && (peak.dust ?: 0.0) >= 0.5 * (peak.pm10 ?: Double.MAX_VALUE)
+            val severity = when {
+                aqi >= 100 -> Severity.ORANGE
+                aqi >= 80 -> Severity.YELLOW
+                else -> Severity.INFO
+            }
+            val quality = when (severity) {
+                Severity.ORANGE -> "son derece kötü"
+                Severity.YELLOW -> "çok kötü"
+                else -> "kötü"
+            }
+            val advice = buildList {
+                if (dusty) {
+                    add("Pencereleri kapalı tutun, çamaşırları dışarıda kurutmayın.")
+                    add("Yağış olursa çamur yağmuru görülebilir; aracınızı ve güneş panellerini örtün.")
+                } else {
+                    add("Pencereleri kirliliğin yüksek olduğu saatlerde kapalı tutun.")
+                }
+                add("Açık havada yoğun egzersiz ve spordan kaçının.")
+                add("Astım, KOAH ve kalp hastaları ilaçlarını yanlarında bulundursun.")
+                if (severity >= Severity.YELLOW) {
+                    add("Dışarı çıkmanız gerekiyorsa FFP2 maske takın.")
+                    add("Çocuklar, yaşlılar ve hamileler dışarıda uzun süre kalmasın.")
+                }
+            }
+            WeatherAlert(
+                type = if (dusty) AlertType.DUST else AlertType.AIR_QUALITY,
+                severity = severity,
+                title = when {
+                    dusty && severity >= Severity.YELLOW -> "Yoğun çöl tozu"
+                    dusty -> "Çöl tozu taşınımı"
+                    else -> "Hava kalitesi $quality"
+                },
+                start = hours.first().time,
+                end = hours.last().time.plusHours(1),
+                detail = buildList {
+                    add("Hava kalitesi indeksi ${aqi.roundToInt()} ($quality)")
+                    if (dusty) add("toz ${dust.roundToInt()} µg/m³")
+                    if (pm10 != null) add("PM10 ${pm10.roundToInt()} µg/m³")
+                    if (pm25 != null && !dusty) add("PM2,5 ${pm25.roundToInt()} µg/m³")
+                }.joinToString(" · "),
+                advice = advice,
+            )
+        }
+
+    // endregion
     // region Daily ----------------------------------------------------------------------
 
     private fun temperatureDrop(daily: List<DailyPoint>, today: LocalDate): List<WeatherAlert> {
@@ -487,6 +653,44 @@ object AlertEngine {
                 allDay = true,
             )
         }?.let(::listOf).orEmpty()
+    }
+
+    /**
+     * Rain adding up over several days saturates the ground, so rivers and streams can flood even
+     * when no single day is extreme. Uses the previous day as well, which the forecast includes.
+     */
+    private fun flood(daily: List<DailyPoint>, today: LocalDate, detailEnd: LocalDate): List<WeatherAlert> {
+        val byDate = daily.associateBy { it.date }
+        val windows = (0 until OUTLOOK_DAYS).mapNotNull { offset ->
+            val last = today.plusDays(offset)
+            val days = (2L downTo 0L).mapNotNull { byDate[last.minusDays(it)] }
+            if (byDate[last] == null) null else last to days.sumOf { it.precipitationSum }
+        }
+        val (last, total) = windows.maxByOrNull { it.second } ?: return emptyList()
+        val severity = when {
+            total >= 100 -> Severity.ORANGE
+            total >= 60 -> Severity.YELLOW
+            else -> return emptyList()
+        }
+        val first = last.minusDays(2).let { if (it.isBefore(today)) today else it }
+        return listOf(
+            WeatherAlert(
+                type = AlertType.FLOOD,
+                severity = severity,
+                title = "Birikimli yağış · Sel ve taşkın riski",
+                start = first.atStartOfDay(),
+                end = last.plusDays(1).atStartOfDay(),
+                detail = "3 günde toplam ~${formatAmount(total)} mm yağış · toprak suya doyabilir",
+                advice = listOf(
+                    "Dere yataklarına, alt geçitlere ve su birikintilerine girmeyin.",
+                    "Bodrum ve zemin kattaki eşyaları yükseğe kaldırın.",
+                    "Yağmur oluklarını ve giderleri temizleyin.",
+                    "Heyelan riski olan yamaç ve şevlerden uzak durun.",
+                ),
+                outlook = first.isAfter(detailEnd),
+                allDay = true,
+            ),
+        )
     }
 
     /** Day-level heads-ups beyond the detailed hourly window, only for notable events. */
@@ -552,13 +756,13 @@ object AlertEngine {
      * Groups consecutive hours matching [predicate]. Up to [maxGap] non-matching hours inside a
      * run are tolerated so a short break does not produce two separate warnings.
      */
-    internal fun episodes(
-        hours: List<HourlyPoint>,
+    internal fun <T> episodes(
+        hours: List<T>,
         maxGap: Int = 1,
-        predicate: (HourlyPoint) -> Boolean,
-    ): List<List<HourlyPoint>> {
-        val result = mutableListOf<List<HourlyPoint>>()
-        var current = mutableListOf<HourlyPoint>()
+        predicate: (T) -> Boolean,
+    ): List<List<T>> {
+        val result = mutableListOf<List<T>>()
+        var current = mutableListOf<T>()
         var gap = 0
         for (hour in hours) {
             if (predicate(hour)) {
@@ -576,6 +780,8 @@ object AlertEngine {
         if (current.isNotEmpty()) result.add(current)
         return result
     }
+
+    private fun WeatherAlert.overlaps(other: WeatherAlert): Boolean = start < other.end && other.start < end
 
     /** Instant values (temperature, wind, visibility, UV) describe the hour that starts at their timestamp. */
     private fun endOf(hours: List<HourlyPoint>): LocalDateTime = hours.last().time.plusHours(1)

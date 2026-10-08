@@ -20,7 +20,9 @@ import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import com.mindfullness.weather.R
+import com.mindfullness.weather.domain.AirPoint
 import com.mindfullness.weather.domain.AlertEngine
+import com.mindfullness.weather.domain.Confidence
 import com.mindfullness.weather.domain.CurrentWeather
 import com.mindfullness.weather.domain.DailyPoint
 import com.mindfullness.weather.domain.HourlyPoint
@@ -41,10 +43,12 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         fun openPlaces()
         fun openSettings()
         fun useLocation()
+        fun share(alert: WeatherAlert)
     }
 
     private val sky = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, Palette.sky(null, true))
     private val scroll = ScrollView(context)
+    private val pullToRefresh = PullToRefreshLayout(context, scroll) { actions.refresh() }
     private val content = context.vertical()
     private val banner = context.horizontal()
     private val bannerText = context.text("", 14f)
@@ -75,7 +79,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         scroll.isFillViewport = true
         scroll.overScrollMode = View.OVER_SCROLL_NEVER
         scroll.addView(content, LayoutParams(MATCH, WRAP))
-        addView(scroll, LayoutParams(MATCH, MATCH))
+        addView(pullToRefresh, LayoutParams(MATCH, MATCH))
         addView(overlay, LayoutParams(MATCH, MATCH))
         buildBanner()
         buildTopBar()
@@ -167,6 +171,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private fun applyInsets() {
         topBar.setPadding(insetLeft + dp(8), insetTop + dp(6), insetRight + dp(4), dp(10))
         content.setPadding(insetLeft + dp(16), insetTop + dp(76), insetRight + dp(16), insetBottom + dp(28))
+        pullToRefresh.restingTop = insetTop + dp(76)
         for (i in 0 until overlay.childCount) {
             overlay.getChildAt(i).setPadding(insetLeft + dp(24), insetTop + dp(24), insetRight + dp(24), insetBottom + dp(24))
         }
@@ -187,6 +192,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         }
         refreshButton.isEnabled = !spinning
         refreshButton.alpha = if (spinning) 0.8f else 1f
+        pullToRefresh.isEnabled = !spinning
     }
 
     private fun rebuild(data: ForecastContent) {
@@ -210,10 +216,15 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             dailyCard(forecast.daily.filter { !it.date.isBefore(now.toLocalDate()) }, now.toLocalDate(), alertDays(data.alerts))
                 .params(bottom = gap),
         )
-        content.addView(detailsSection(forecast.current, forecast.hourAt(now), today).params(bottom = gap))
+        content.addView(detailsSection(forecast.current, forecast.hourAt(now), today, forecast.airAt(now)).params(bottom = gap))
+        val sources = buildList {
+            add("Veri: Open-Meteo.com (CC BY 4.0)")
+            if (forecast.models.isNotEmpty()) add("model karşılaştırması: ECMWF, ICON, GFS")
+            if (forecast.air.isNotEmpty()) add("hava kalitesi: CAMS")
+        }.joinToString(" · ")
         content.addView(
             context.text(
-                "Veri: Open-Meteo.com (CC BY 4.0) · Son güncelleme ${TimeText.ago(forecast.fetchedAtMillis)}\n" +
+                "$sources\nSon güncelleme ${TimeText.ago(forecast.fetchedAtMillis)} · yenilemek için aşağı çekin\n" +
                     "Uyarılar tahmin modellerine dayanır; resmî uyarılar için MGM ve AFAD'ı takip edin.",
                 12f, Palette.TEXT_TERTIARY,
             ).apply { gravity = Gravity.CENTER }.params(top = 4),
@@ -364,6 +375,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         header.addView(context.pill(alert.severity.shortLabel, accent, Palette.ON_SEVERITY))
         body.addView(header)
         body.addView(context.text(alert.detail, 14f, Palette.TEXT_SECONDARY).params(top = 10))
+        alert.confidence?.let { body.addView(confidenceRow(it).params(top = 8)) }
 
         val advice = context.vertical().apply { setPadding(0, dp(12), 0, 0) }
         val adviceHeader = context.horizontal()
@@ -385,8 +397,19 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
         val toggleText = context.text("", 12f, Palette.TEXT_TERTIARY, Fonts.medium)
         val toggleIcon = context.icon(R.drawable.ic_chevron_down, Palette.TEXT_TERTIARY, 18)
+        val share = context.horizontal().apply {
+            background = ripple(null, radius = dp(16).toFloat())
+            setPadding(dp(8), dp(6), dp(10), dp(6))
+            minimumHeight = dp(36)
+            contentDescription = "Uyarıyı paylaş"
+            addView(context.icon(R.drawable.ic_share, Palette.TEXT_TERTIARY, 16))
+            addView(context.text("Paylaş", 12f, Palette.TEXT_TERTIARY, Fonts.medium).params(WRAP, WRAP, start = 6))
+            setOnClickListener { actions.share(alert) }
+        }
         val footer = context.horizontal().apply {
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(share)
+            addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
             addView(toggleText)
             addView(toggleIcon)
         }
@@ -404,6 +427,18 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             apply(open)
         }
         return card
+    }
+
+    /** How many independent models agree with the alert. */
+    private fun confidenceRow(confidence: Confidence): View = context.horizontal().apply {
+        val color = when (confidence.level) {
+            Confidence.Level.HIGH -> Palette.GOOD
+            Confidence.Level.MEDIUM -> Palette.SUN
+            Confidence.Level.LOW -> Palette.TEXT_SECONDARY
+        }
+        addView(context.icon(R.drawable.ic_layers, color, 14))
+        val note = if (confidence.level == Confidence.Level.LOW) " · tahmin değişebilir" else ""
+        addView(context.text(confidence.text + note, 12f, Palette.TEXT_SECONDARY, Fonts.medium).params(WRAP, WRAP, start = 6))
     }
 
     private fun tipsSection(tips: List<Tip>): View = context.vertical().apply {
@@ -566,7 +601,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
     private class Tile(val icon: Int, val label: String, val value: String, val note: String, val rotation: Float = 0f)
 
-    private fun detailsSection(current: CurrentWeather, hour: HourlyPoint?, today: DailyPoint?): View {
+    private fun detailsSection(current: CurrentWeather, hour: HourlyPoint?, today: DailyPoint?, air: AirPoint?): View {
         val tiles = mutableListOf<Tile>()
         val feelsDiff = current.apparentTemperature - current.temperature
         tiles += Tile(
@@ -614,6 +649,13 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 else -> "Normal"
             },
         )
+        air?.europeanAqi?.let { aqi ->
+            val dust = air.dust?.takeIf { it >= 50 }
+            tiles += Tile(
+                R.drawable.ic_mask, "Hava kalitesi", aqi.roundToInt().toString(),
+                aqiLabel(aqi) + (dust?.let { " · çöl tozu ${it.roundToInt()} µg/m³" } ?: ""),
+            )
+        }
         if (today?.sunrise != null && today.sunset != null) {
             tiles += Tile(R.drawable.ic_sunrise, "Gün doğumu", TimeText.hour(today.sunrise), "Gün batımı ${TimeText.hour(today.sunset)}")
         }
@@ -631,7 +673,8 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 pair.forEachIndexed { index, tile ->
                     row.addView(detailTile(tile), LinearLayout.LayoutParams(0, MATCH, 1f).apply { if (index == 0) marginEnd = dp(10) })
                 }
-                if (pair.size == 1) row.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+                // MATCH height keeps every child "fill parent", so the row still takes the tile's height.
+                if (pair.size == 1) row.addView(View(context), LinearLayout.LayoutParams(0, MATCH, 1f))
                 addView(row.params(bottom = 10))
             }
         }
@@ -752,6 +795,16 @@ fun uvLabel(uv: Double): String = when {
     uv < 8 -> "Yüksek"
     uv < 11 -> "Çok yüksek"
     else -> "Aşırı"
+}
+
+/** European Air Quality Index bands. */
+fun aqiLabel(aqi: Double): String = when {
+    aqi < 20 -> "İyi"
+    aqi < 40 -> "Makul"
+    aqi < 60 -> "Orta"
+    aqi < 80 -> "Kötü"
+    aqi < 100 -> "Çok kötü"
+    else -> "Son derece kötü"
 }
 
 private val COMPASS = listOf("K", "KD", "D", "GD", "G", "GB", "B", "KB")

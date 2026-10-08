@@ -2,6 +2,7 @@ package com.mindfullness.weather
 
 import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -13,6 +14,7 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
+import com.mindfullness.weather.domain.WeatherAlert
 import com.mindfullness.weather.platform.Async
 import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.ui.AppController
@@ -233,6 +235,20 @@ class MainActivity : Activity() {
         override fun openPlaces() = show(Screen.PLACES)
         override fun openSettings() = show(Screen.SETTINGS)
         override fun useLocation() = requestLocation()
+
+        override fun share(alert: WeatherAlert) {
+            val now = controller.home.content?.now ?: return
+            val text = alert.shareText(controller.home.place?.name.orEmpty(), now)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, alert.title)
+                .putExtra(Intent.EXTRA_TEXT, text)
+            try {
+                startActivity(Intent.createChooser(send, "Uyarıyı paylaş"))
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(this@MainActivity, "Paylaşılacak bir uygulama bulunamadı.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private val placesActions = object : PlacesView.Actions {
@@ -267,6 +283,8 @@ class MainActivity : Activity() {
             if (enabled) withNotificationPermission { controller.setMorningSummary(true) } else controller.setMorningSummary(false)
             render()
         }
+
+        override fun setRainSoon(enabled: Boolean) = controller.setRainSoon(enabled)
 
         override fun useViewingPlaceForNotifications() = withNotificationPermission { controller.useViewingPlaceForNotifications() }
 

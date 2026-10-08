@@ -9,6 +9,7 @@ import android.content.Context
 import com.mindfullness.weather.data.OpenMeteoApi
 import com.mindfullness.weather.data.WeatherRepository
 import com.mindfullness.weather.domain.AlertEngine
+import com.mindfullness.weather.domain.AlertType
 import com.mindfullness.weather.domain.Forecast
 import com.mindfullness.weather.domain.Insights
 import com.mindfullness.weather.domain.Place
@@ -29,7 +30,10 @@ object AppGraph {
     }
 }
 
-/** Checks the forecast for the notification place and posts warnings not announced yet. */
+/**
+ * Checks the forecast for the notification place, posts warnings not announced yet and the
+ * "rain soon" heads-up, and refreshes the home-screen widgets.
+ */
 class AlertJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         Async.background {
@@ -46,17 +50,35 @@ class AlertJobService : JobService() {
         fun runCheck(context: Context): Boolean {
             val store = SettingsStore(context)
             val settings = store.settings
-            val place = settings.notificationPlace
-            if (!settings.alertsEnabled || place == null || !Notifier.canNotify(context)) return true
-            val forecast = fetchOrNull(context, place) ?: return false
+            val alertPlace = settings.notificationPlace?.takeIf { settings.alertsEnabled && Notifier.canNotify(context) }
+            val widgets = WeatherWidget.isInUse(context)
+            // The widget shows the notification place whenever there is one, so one fetch serves both.
+            val place = alertPlace ?: store.widgetPlace?.takeIf { widgets } ?: return true
+            val forecast = fetchOrNull(context, place)
+            if (widgets) WeatherWidget.updateAll(context, place, forecast)
+            if (forecast == null) return false
+            if (alertPlace == null) return true
+
             val now = forecast.localNow()
-            AlertEngine.evaluate(forecast, now).asSequence()
+            // Lazy, so only the alerts actually posted are recorded as notified.
+            val posted = AlertEngine.evaluate(forecast, now).asSequence()
                 .filter { !it.outlook && it.severity >= settings.minSeverity && it.start.isBefore(now.plusHours(24)) }
                 .filter { store.markNotified(it.key, it.severity.ordinal) }
                 .take(3)
-                .forEach { Notifier.showAlert(context, place, it, now) }
+                .toList()
+            posted.forEach { Notifier.showAlert(context, place, it, now) }
+            if (settings.rainSoon) {
+                val rain = AlertEngine.upcomingRain(forecast, now)
+                // A precipitation warning posted just now already tells about the same shower.
+                val covered = rain != null && posted.any {
+                    it.type in PRECIPITATION && it.start.isBefore(rain.hour.plusHours(2)) && it.end.isAfter(rain.hour)
+                }
+                if (rain != null && store.markNotified(rain.key, 0) && !covered) Notifier.showRainSoon(context, place, rain, now)
+            }
             return true
         }
+
+        private val PRECIPITATION = setOf(AlertType.RAIN, AlertType.SNOW, AlertType.THUNDERSTORM, AlertType.ICE)
     }
 }
 
@@ -104,10 +126,14 @@ object JobScheduling {
 
     fun apply(context: Context, settings: AppSettings) {
         val scheduler = scheduler(context) ?: return
-        if (settings.alertsEnabled) {
-            if (scheduler.getPendingJob(ALERT_JOB) == null) {
+        val widgets = WeatherWidget.isInUse(context)
+        if (settings.alertsEnabled || widgets) {
+            // "Rain soon" needs hourly checks to give an hour's notice; widgets should not lag either.
+            val hourly = (settings.alertsEnabled && settings.rainSoon) || widgets
+            val period = TimeUnit.HOURS.toMillis(if (hourly) 1 else 3)
+            if (scheduler.getPendingJob(ALERT_JOB)?.intervalMillis != period) {
                 val job = JobInfo.Builder(ALERT_JOB, ComponentName(context, AlertJobService::class.java))
-                    .setPeriodic(TimeUnit.HOURS.toMillis(3), TimeUnit.HOURS.toMillis(1))
+                    .setPeriodic(period, if (hourly) TimeUnit.MINUTES.toMillis(20) else TimeUnit.HOURS.toMillis(1))
                     .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
                     .setPersisted(true)
                     .build()
@@ -124,7 +150,7 @@ object JobScheduling {
         }
     }
 
-    /** Runs an alert check soon, e.g. right after notifications were switched on. */
+    /** Runs an alert check soon, e.g. right after notifications were switched on or a widget was added. */
     fun checkNow(context: Context) {
         val job = JobInfo.Builder(ALERT_NOW_JOB, ComponentName(context, AlertJobService::class.java))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)

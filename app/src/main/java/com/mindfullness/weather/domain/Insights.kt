@@ -3,7 +3,7 @@ package com.mindfullness.weather.domain
 import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
-enum class TipKind { UMBRELLA, WARM_COAT, JACKET, SUNSCREEN, SUNGLASSES, WATER, BOOTS, WINDBREAKER }
+enum class TipKind { UMBRELLA, WARM_COAT, JACKET, SUNSCREEN, SUNGLASSES, WATER, BOOTS, WINDBREAKER, MASK }
 
 data class Tip(val kind: TipKind, val text: String)
 
@@ -31,6 +31,8 @@ object Insights {
         val rainy = wet.filter { !AlertEngine.isSnowy(it) || it.liquid >= 0.2 }
         val snowy = precipitationHours.any { AlertEngine.isSnowy(it) }
         val sunnyDaytime = hours.count { it.isDay && it.weatherCode <= 1 } >= 3
+        val air = forecast.air.filter { point -> hours.any { it.time == point.time } }
+        val worstAir = air.maxByOrNull { it.europeanAqi ?: 0.0 }?.takeIf { (it.europeanAqi ?: 0.0) >= 80 }
 
         return buildList {
             if (rainy.isNotEmpty()) {
@@ -49,6 +51,10 @@ object Insights {
             if (maxUv >= 6) add(Tip(TipKind.SUNSCREEN, "Güneş kremi (UV ${maxUv.roundToInt()})"))
             if (sunnyDaytime && maxUv >= 3) add(Tip(TipKind.SUNGLASSES, "Güneş gözlüğü"))
             if (maxFeels >= 30) add(Tip(TipKind.WATER, "Su şişesi"))
+            if (worstAir != null) {
+                val dust = (worstAir.dust ?: 0.0) >= 0.5 * (worstAir.pm10 ?: Double.MAX_VALUE)
+                add(Tip(TipKind.MASK, if (dust) "Maske (çöl tozu)" else "Maske (hava kirliliği)"))
+            }
         }
     }
 
