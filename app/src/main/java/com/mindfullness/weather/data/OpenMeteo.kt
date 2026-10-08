@@ -12,7 +12,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.URL
+import java.net.URI
 import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -47,7 +47,7 @@ class OpenMeteoApi {
     }
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = URI(url).toURL().openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 15_000
             connection.readTimeout = 20_000

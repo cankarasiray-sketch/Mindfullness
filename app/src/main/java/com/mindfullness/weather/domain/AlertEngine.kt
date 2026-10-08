@@ -28,9 +28,16 @@ data class WeatherAlert(
     val advice: List<String>,
     /** True for day-level heads-ups further than 48 hours ahead. */
     val outlook: Boolean = false,
+    /** Day-level alert without meaningful start/end hours. */
+    val allDay: Boolean = outlook,
 ) {
     /** Stable across forecast refreshes, used to avoid notifying twice for the same event. */
     val key: String get() = "${type}_${start.toLocalDate()}_$severity"
+
+    /** "Bugün 15:00–21:00", "Şimdi – 18:00" or "Cumartesi, 10 Ekim" for day-level alerts. */
+    fun whenText(now: LocalDateTime): String =
+        if (allDay) "${TimeText.relativeDay(start.toLocalDate(), now.toLocalDate())}, ${TimeText.dayMonth(start.toLocalDate())}"
+        else TimeText.range(start, end, now)
 }
 
 /**
@@ -451,12 +458,13 @@ object AlertEngine {
                 title = "Sıcaklık belirgin şekilde düşüyor",
                 start = after.date.atStartOfDay(),
                 end = after.date.plusDays(1).atStartOfDay(),
-                detail = "${TimeText.relativeDay(after.date, today)} en yüksek ${after.temperatureMax.roundToInt()}° " +
+                detail = "En yüksek sıcaklık ${before.temperatureMax.roundToInt()}° → ${after.temperatureMax.roundToInt()}° " +
                     "(${drop.roundToInt()}° daha soğuk)",
                 advice = listOf(
                     "Yanınıza kalın bir kat alın.",
                     "Ani sıcaklık değişimlerinde soğuk algınlığına karşı dikkatli olun.",
                 ),
+                allDay = true,
             )
         }?.let(::listOf).orEmpty()
     }
@@ -467,7 +475,6 @@ object AlertEngine {
             .flatMap { day ->
                 val start = day.date.atStartOfDay()
                 val end = day.date.plusDays(1).atStartOfDay()
-                val label = "${TimeText.dayName(day.date)}, ${TimeText.dayMonth(day.date)}"
                 buildList {
                     when {
                         day.snowfallSum >= 15 -> Severity.ORANGE
@@ -475,7 +482,7 @@ object AlertEngine {
                         else -> null
                     }?.let {
                         add(WeatherAlert(AlertType.SNOW, it, "Kar yağışı bekleniyor", start, end,
-                            "$label · ~${formatAmount(day.snowfallSum)} cm", listOf("Yolculuk planlarınızı kar durumuna göre gözden geçirin."), outlook = true))
+                            "~${formatAmount(day.snowfallSum)} cm kar birikimi", listOf("Yolculuk planlarınızı kar durumuna göre gözden geçirin."), outlook = true))
                     }
                     when {
                         day.snowfallSum >= 5 -> null
@@ -484,11 +491,11 @@ object AlertEngine {
                         else -> null
                     }?.let {
                         add(WeatherAlert(AlertType.RAIN, it, "Kuvvetli yağış bekleniyor", start, end,
-                            "$label · ~${formatAmount(day.precipitationSum)} mm", listOf("Açık hava planlarınızı yağışa göre esnetin."), outlook = true))
+                            "Günlük toplam ~${formatAmount(day.precipitationSum)} mm", listOf("Açık hava planlarınızı yağışa göre esnetin."), outlook = true))
                     }
                     if (day.weatherCode in WeatherCodes.THUNDER) {
                         add(WeatherAlert(AlertType.THUNDERSTORM, Severity.YELLOW, "Gök gürültülü sağanak olası", start, end,
-                            label, listOf("O gün için açık alan etkinliklerini dikkatle planlayın."), outlook = true))
+                            "Yıldırım ve ani kuvvetli yağış riski", listOf("O gün için açık alan etkinliklerini dikkatle planlayın."), outlook = true))
                     }
                     when {
                         day.windGustsMax >= 90 -> Severity.RED
@@ -497,7 +504,7 @@ object AlertEngine {
                         else -> null
                     }?.let {
                         add(WeatherAlert(AlertType.WIND, it, "Kuvvetli rüzgar / fırtına", start, end,
-                            "$label · hamleler ${day.windGustsMax.roundToInt()} km/sa", listOf("Balkon ve bahçedeki eşyaları önceden sabitleyin."), outlook = true))
+                            "Hamleler ${day.windGustsMax.roundToInt()} km/sa", listOf("Balkon ve bahçedeki eşyaları önceden sabitleyin."), outlook = true))
                     }
                     when {
                         day.apparentMax >= 39 -> Severity.ORANGE
@@ -505,7 +512,7 @@ object AlertEngine {
                         else -> null
                     }?.let {
                         add(WeatherAlert(AlertType.HEAT, it, "Sıcak hava", start, end,
-                            "$label · hissedilen ${day.apparentMax.roundToInt()}°C", listOf("Su tüketimini artırın, öğle saatlerinde güneşten kaçının."), outlook = true))
+                            "Hissedilen ${day.apparentMax.roundToInt()}°C", listOf("Su tüketimini artırın, öğle saatlerinde güneşten kaçının."), outlook = true))
                     }
                     when {
                         day.temperatureMin <= -8 -> Severity.ORANGE
@@ -513,7 +520,7 @@ object AlertEngine {
                         else -> null
                     }?.let {
                         add(WeatherAlert(AlertType.COLD, it, "Don ve ayaz", start, end,
-                            "$label · en düşük ${day.temperatureMin.roundToInt()}°C", listOf("Su tesisatını ve bitkileri dona karşı koruyun."), outlook = true))
+                            "En düşük ${day.temperatureMin.roundToInt()}°C", listOf("Su tesisatını ve bitkileri dona karşı koruyun."), outlook = true))
                     }
                 }
             }

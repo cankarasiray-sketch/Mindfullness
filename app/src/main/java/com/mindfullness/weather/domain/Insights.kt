@@ -43,7 +43,7 @@ object Insights {
                 minFeels < 12 -> add(Tip(TipKind.WARM_COAT, "Mont"))
                 minFeels < 18 -> add(Tip(TipKind.JACKET, "Hırka veya ceket"))
             }
-            if (maxGust >= 45 && minFeels >= 5) add(Tip(TipKind.WINDBREAKER, "Rüzgarlık"))
+            if (maxGust >= 45 && minFeels >= 12) add(Tip(TipKind.WINDBREAKER, "Rüzgarlık"))
             if (maxUv >= 6) add(Tip(TipKind.SUNSCREEN, "Güneş kremi (UV ${maxUv.roundToInt()})"))
             if (sunnyDaytime && maxUv >= 3) add(Tip(TipKind.SUNGLASSES, "Güneş gözlüğü"))
             if (maxFeels >= 30) add(Tip(TipKind.WATER, "Su şişesi"))
