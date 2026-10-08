@@ -58,9 +58,10 @@ public final class Bridge {
         extra.put("radar", repo.radarView()); // adil oran tablosu dahil: Fırsatlar açılınca hazır
         extra.put("zirve", repo.zirveView());
         extra.put("virtual", repo.virtualView());
-        extra.put("pick", repo.pick());
-        extra.put("singles", repo.singles());
-        extra.put("bands", repo.bands());
+        Object[] picks = repo.picks(); // 2.16: üçü tek hesapla (önce her biri ayrı ayrı baştan)
+        extra.put("pick", picks[0]);
+        extra.put("singles", picks[1]);
+        extra.put("bands", picks[2]);
         long switched = repo.profileSwitchedAt();
         extra.put("profileSwitchedAt", switched > 0 ? Instant.ofEpochMilli(switched).toString() : null);
         extra.put("credits", repo.credits());

@@ -63,9 +63,14 @@ public final class Pick {
      * Tek maç fırsatları, günün seçimi, Değerli oranlar ve Zirve Oran listesi bu sırayla dizilir.
      */
     public static int rank(double evA, double pA, double oddsA, double evB, double pB, double oddsB, double f) {
+        return rankScored(evA, score(pA, oddsA, f), pA, evB, score(pB, oddsB, f), pB);
+    }
+
+    /** {@link #rank} denge puanı önceden hesaplanmışken (2.16: uzun listede her karşılaştırmada logaritma yok). */
+    static int rankScored(double evA, double scoreA, double pA, double evB, double scoreB, double pB) {
         boolean ga = evA >= 0, gb = evB >= 0;
         if (ga != gb) return ga ? -1 : 1;
-        int c = Double.compare(score(pB, oddsB, f), score(pA, oddsA, f));
+        int c = Double.compare(scoreB, scoreA);
         return c != 0 ? c : Double.compare(pB, pA);
     }
 
@@ -132,8 +137,8 @@ public final class Pick {
 
     /**
      * Tek oynanabilen (MBS 1), en az minProb tutan, başlamasına 30 dk–karar penceresi kalan tüm seçimler
-     * (her pazar ve her oran; aynı seçimde normal oran ile Zirve Oran'dan iyi olanı), adil orana yakınlığa
-     * (beklenen değer) göre azalan; eşitlikte sık tutan önce. Model pazarlarında olasılık güvenlik payı
+     * (her pazar ve her oran; aynı seçimde normal oran ile Zirve Oran'dan iyi olanı), {@link #rank} sırasıyla:
+     * önce kârlı, sonra denge puanı, eşitlikte sık tutan. Model pazarlarında olasılık güvenlik payı
      * düşülmüş gelir (Models.fair) ve "model" işaretlidir.
      */
     public static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, Instant now) {
@@ -148,7 +153,6 @@ public final class Pick {
     /** hours: başlangıca en fazla bu kadar saat kalan maçlar (günün seçimi: windowHours; Fırsatlar: scanHours, 2.15.7). */
     static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f,
                                              double hours, Instant now) {
-        final double fs = f;
         Map<String, Map<String, Object>> best = new LinkedHashMap<>(); // ref|m|o -> en iyi oran
         for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
             Map<String, Object> r = Json.obj(o);
@@ -186,8 +190,8 @@ public final class Pick {
         Collections.sort(all, new Comparator<Map<String, Object>>() {
             @Override
             public int compare(Map<String, Object> a, Map<String, Object> b) {
-                return rank(Json.dbl(a, "ev", 0), Json.dbl(a, "p", 0), Json.dbl(a, "odds", 1),
-                        Json.dbl(b, "ev", 0), Json.dbl(b, "p", 0), Json.dbl(b, "odds", 1), fs);
+                return rankScored(Json.dbl(a, "ev", 0), Json.dbl(a, "score", 0), Json.dbl(a, "p", 0),
+                        Json.dbl(b, "ev", 0), Json.dbl(b, "score", 0), Json.dbl(b, "p", 0)); // puan scored() ile bir kez
             }
         });
         return all;
@@ -198,9 +202,22 @@ public final class Pick {
      * PER_GROUP seçimi (sıra {@link #rank}), günün seçimi tutarıyla.
      */
     public static List<Object> list(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
+        return listOf(singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now), cfg, balance);
+    }
+
+    /**
+     * Günün seçimi, tek maç listesi ve denge tablosu tek seferde: {seçim, liste, bantlar} (2.16: ekran her
+     * yenilendiğinde Fırsatlar penceresinin seçimleri bir kez kurulur; sonuç list/bands/choose ile aynı).
+     */
+    public static Object[] all(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
+        List<Map<String, Object>> wide = singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now);
+        return new Object[] {choose(fairs, zirve, cfg, balance, now), listOf(wide, cfg, balance), bandsOf(wide)};
+    }
+
+    private static List<Object> listOf(List<Map<String, Object>> sorted, Settings cfg, long balance) {
         List<Object> out = new ArrayList<>();
         Map<String, Integer> per = new java.util.HashMap<>();
-        for (Map<String, Object> e : singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now)) {
+        for (Map<String, Object> e : sorted) {
             String g = group(Json.str(e, "m"));
             int n = per.containsKey(g) ? per.get(g) : 0;
             if (out.size() >= LIST_SIZE && n >= PER_GROUP) continue;
@@ -228,7 +245,7 @@ public final class Pick {
      * zirve: Zirve görünümü (null olabilir; satırlar {ref, m, o, label, p, tval, val, mbs, kickoff, status}).
      * Seçim yoksa null. Dönen: kaynak, maç, seçim, oran, adil oran, tutma olasılığı, beklenen değer, tutar,
      * tutarsa ödeme, beklenen sonuç, her gün oynanırsa aylık beklenen, en fazla 3 alternatif ve (2.10)
-     * yüksek olasılık katmanı: en az cfg.pickHighProb tutanların adil orana en yakını ("high"; ana seçim
+     * yüksek olasılık katmanı: en az cfg.pickHighProb tutanların en iyisi ({@link #rank}; "high"; ana seçim
      * zaten o katmandaysa "isHigh").
      */
     public static Map<String, Object> choose(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
@@ -262,7 +279,11 @@ public final class Pick {
      * Hangi tutma aralığında kâra (en az kayba) en yakın seçim olduğunu gösterir.
      */
     public static List<Object> bands(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
-        List<Map<String, Object>> all = singles(fairs, zirve, cfg, BANDS[0], fraction(cfg, balance), cfg.scanHours(), now);
+        return bandsOf(singles(fairs, zirve, cfg, BANDS[0], fraction(cfg, balance), cfg.scanHours(), now));
+    }
+
+    /** all: en az BANDS[0] (= LIST_MIN_PROB) tutan, sıralı seçimler. */
+    private static List<Object> bandsOf(List<Map<String, Object>> all) {
         List<Object> out = new ArrayList<>();
         for (int b = 0; b + 1 < BANDS.length; b++) {
             long n = 0;

@@ -5,6 +5,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import app.bilincli.core.Models.SharpEvent;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -175,5 +176,99 @@ public class KeysTest {
         s.creditExpand = false;
         assertTrue(CreditPlan.plan(s, 2455L, 45L, LocalDate.of(2026, 10, 1), yield, active, 1.0).expanded.isEmpty());
         assertTrue(!Settings.fromMap(s.toMap()).creditExpand);
+    }
+
+    /** 2.16: paralel tarama için iş parçacığı güvenli sahte kaynak (anahtar A'nın kredisi bitmiş). */
+    static Http parallelFake(final List<String> calls) {
+        return new Http() {
+            public Response get(String url, Map<String, String> headers) throws ProviderException {
+                synchronized (calls) {
+                    calls.add(url);
+                }
+                try {
+                    Thread.sleep(3); // istekler gerçekten üst üste binsin
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                String key = url.replaceAll(".*apiKey=([^&]*).*", "$1");
+                if (A.equals(key)) throw new ProviderException(Http.safe(url) + " -> HTTP 401: {\"message\":\"Usage quota has been reached\"}");
+                String league = url.replaceAll(".*/sports/([^/]*)/.*", "$1");
+                Map<String, String> h = new LinkedHashMap<>();
+                h.put("x-requests-remaining", "400");
+                h.put("x-requests-used", "100");
+                if (url.contains("/events?")) return new Response(200, league.contains("bundesliga") ? "[]" : "[{\"id\":\"e\"}]", h);
+                if (league.contains("serie_a")) throw new ProviderException(Http.safe(url) + " -> HTTP 500: sunucu hatası");
+                h.put("x-requests-last", "1");
+                return new Response(200, "[{\"id\":\"" + league + "-e\",\"commence_time\":\"2026-10-01T18:00:00Z\",\"home_team\":\"Ev " + league
+                        + "\",\"away_team\":\"Dep\",\"bookmakers\":[{\"key\":\"pinnacle\",\"markets\":[{\"key\":\"h2h\",\"outcomes\":["
+                        + "{\"name\":\"Ev " + league + "\",\"price\":2.0},{\"name\":\"Dep\",\"price\":3.8},{\"name\":\"Draw\",\"price\":3.4}]}]}]}]", h);
+            }
+        };
+    }
+
+    @Test
+    public void parallelScanMatchesSequentialScan() throws Exception {
+        // 2.16: ligler aynı anda çekilir; sonuç (maçlar, rapor, boş ligler, uyarılar, kredi) sırayla taramayla aynı
+        List<String> leagues = Arrays.asList("soccer_epl", "soccer_spain_la_liga", "soccer_italy_serie_a", "soccer_germany_bundesliga",
+                "soccer_france_ligue_one", "soccer_netherlands_eredivisie", "soccer_portugal_primeira_liga");
+        List<List<Object>> results = new ArrayList<>();
+        for (int threads : new int[] {1, 4}) {
+            List<String> calls = new ArrayList<>();
+            OddsApi api = new OddsApi(parallelFake(calls), cfg(A + " " + B));
+            api.threads = threads;
+            final List<String> steps = Collections.synchronizedList(new ArrayList<String>());
+            final Thread caller = Thread.currentThread();
+            api.progress = new Daily.Progress() {
+                public void step(String text) {
+                    assertTrue(text, Thread.currentThread() == caller); // ilerleme yalnızca çağıran iş parçacığından
+                    steps.add(text);
+                }
+            };
+            List<SharpEvent> ev = api.fetchEvents(leagues, CoreTest.NOW);
+            List<String> refs = new ArrayList<>();
+            for (SharpEvent e : ev) refs.add(e.ref);
+            List<Object> r = new ArrayList<>();
+            r.add(refs);
+            r.add(new ArrayList<>(api.report));
+            r.add(new ArrayList<>(api.idle));
+            r.add(new ArrayList<>(api.warnings));
+            r.add(api.spent);
+            r.add(api.remaining);
+            r.add(new ArrayList<>(api.keyProblems.keySet()));
+            results.add(r);
+            assertEquals(threads == 1 ? 7 : 8, steps.size());
+        }
+        assertEquals(results.get(0), results.get(1));
+        List<Object> r = results.get(0);
+        assertEquals(Arrays.asList("soccer_epl-e", "soccer_spain_la_liga-e", "soccer_france_ligue_one-e",
+                "soccer_netherlands_eredivisie-e", "soccer_portugal_primeira_liga-e"), r.get(0));
+        assertEquals(Collections.singletonList("soccer_germany_bundesliga"), r.get(2));
+        assertEquals(1, ((List<?>) r.get(3)).size());
+        assertTrue(String.valueOf(r.get(3)), String.valueOf(r.get(3)).contains("soccer_italy_serie_a atlandı"));
+        assertEquals(5, r.get(4)); // 5 oran isteği x 1 kredi
+        assertEquals(Collections.singletonList("…1111"), r.get(6)); // kredisi biten anahtar atlandı
+    }
+
+    @Test
+    public void rateLimitedLeagueIsRetriedOnce() throws Exception {
+        // 2.16: paralel taramada tek anahtar istek sınırına (429) takılırsa lig atlanmaz, bir kez yeniden çekilir
+        OddsApi.RETRY_429_MS = 5;
+        final List<String> calls = new ArrayList<>();
+        final java.util.concurrent.atomic.AtomicBoolean limited = new java.util.concurrent.atomic.AtomicBoolean();
+        final Http inner = parallelFake(calls);
+        Http http = new Http() {
+            public Response get(String url, Map<String, String> headers) throws ProviderException {
+                if (url.contains("soccer_epl/odds") && limited.compareAndSet(false, true)) {
+                    throw new ProviderException(Http.safe(url) + " -> HTTP 429: too many requests");
+                }
+                return inner.get(url, headers);
+            }
+        };
+        OddsApi api = new OddsApi(http, cfg(B));
+        api.threads = 4;
+        List<SharpEvent> ev = api.fetchEvents(Arrays.asList("soccer_epl", "soccer_spain_la_liga"), CoreTest.NOW);
+        assertEquals(2, ev.size());
+        assertTrue(api.warnings.toString(), api.warnings.isEmpty());
+        OddsApi.RETRY_429_MS = 1500;
     }
 }

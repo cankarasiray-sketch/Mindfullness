@@ -62,6 +62,20 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Her anlamda iyileştirme (2.16)
+
+Davranış değişmedi (sıralama, tutar, pencereler aynı); hız, dayanıklılık ve tutarlılık:
+
+- **Tarama ~4 kat hızlı:** Pinnacle oranları ligler sırayla değil, aynı anda 4 lig olarak çekilir. Kredi
+  aynı (lig başına yine bir istek). Anahtar kredisi ve harcama kayıtları paralel isteklere dayanıklı; maçlar,
+  "Kaynakları test et" raporu ve uyarılar sırayla taramadaki gibi lig sırasıyla birleşir (testle doğrulandı).
+  Aynı anda gelen isteklerde istek sınırına (429) takılan lig atlanmaz: kısa beklemeyle bir kez yeniden çekilir.
+- **Ekran yenilemesi hafif:** günün seçimi, tek maç listesi ve denge tablosu her yenilemede 3 kez ayrı ayrı
+  baştan hesaplanıyordu; artık tek geçişte (sonuç aynı). Sıralamada denge puanı bir kez hesaplanır.
+- **48 saatlik Fırsatlar için tablo 300 maç** (önce 250): yoğun hafta sonunda ikinci günün maçları kesilmez.
+- 2.15.4 öncesinden kalan "adil orana en yakın" açıklamaları yeni sıralamaya (önce kâr, sonra denge puanı)
+  göre düzeltildi; günün seçimi tutarı açıklaması kasanın %3'ü.
+
 ## Fırsatlar 2 günlük (2.15.7)
 
 - Fırsatlar sekmesi (Tek maç fırsatları, denge tablosu, Değerli oranlar) ve kârlı seçim bildirimi artık

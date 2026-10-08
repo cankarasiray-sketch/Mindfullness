@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.Test;
 
-/** 2.9: günün seçimi — tek maç, sık tutan, adil orana en yakın (normal oran ve Zirve Oran). */
+/** 2.9: günün seçimi — tek maç, sık tutan; 2.15.4'ten beri önce kârlı, sonra denge puanı (normal oran ve Zirve Oran). */
 public class PickTest {
     static final Instant NOW = CoreTest.NOW; // 01.10 06:00 Türkiye
 
@@ -435,5 +435,19 @@ public class PickTest {
         Map<String, Object> old = new Settings().toMap();
         old.remove("opportunityHours");
         assertEquals(48, Settings.fromMap(old).opportunityHours, 0); // eski kayıt: 2 gün
+    }
+
+    @Test
+    public void allInOnePassEqualsSeparateCalls() {
+        // 2.16: ekran için tek geçiş; sonuç ayrı ayrı hesapla aynı
+        assertEquals(Pick.LIST_MIN_PROB, Pick.BANDS[0], 0);
+        List<Object> fx = fairs();
+        fx.add(row("7", "City", 30, sel("MS", "1", 0.78, 1.22, 1), sel("AU25", "UST", 0.66, 1.50, 1)));
+        Settings cfg = new Settings();
+        cfg.pickMinOdds = 1.05;
+        Object[] all = Pick.all(fx, null, cfg, 500000, NOW);
+        assertEquals(Pick.choose(fx, null, cfg, 500000, NOW), all[0]);
+        assertEquals(Pick.list(fx, null, cfg, 500000, NOW), all[1]);
+        assertEquals(Pick.bands(fx, null, cfg, 500000, NOW), all[2]);
     }
 }

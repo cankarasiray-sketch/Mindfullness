@@ -126,7 +126,7 @@ public final class Texts {
                 String head = Json.str(pick, "home") + " – " + Json.str(pick, "away") + " · " + Json.str(pick, "label") + " @ "
                         + Fmt.odds(Json.dbl(pick, "odds", 0));
                 String why = Json.bool(pick, "value", false) ? "Bu seçim adil oranı geçiyor (değerli). "
-                        : "Değerli seçim yok (iddaa oranları adilin altında); bu, adil orana en yakın ve sık tutan seçim. ";
+                        : "Değerli seçim yok (iddaa oranları adilin altında); bu, kâr ve tutma olasılığı birlikte en iyi seçim. ";
                 return new String[] {"Günün seçimi · " + head, Pick.line(pick) + "\n" + why
                         + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + ".\n\n" + r.decision.reason};
             }

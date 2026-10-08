@@ -224,7 +224,7 @@ public class SinglesTest {
         assertEquals("7", q.get("ref"));
         assertTrue(Json.bool(q, "isHigh", false));
         assertNull(q.get("high"));
-        // liste: en az %50, adil orana yakınlığa göre; model pazarları işaretli
+        // liste: en az %50, önce kârlı sonra denge puanı; model pazarları işaretli
         Map<String, Object> modelSel = PickTest.sel("AU@1.5", "UST", 0.74, 1.30, 1);
         modelSel.put("model", true);
         fairs.add(PickTest.row("8", "Brighton", 6, modelSel));

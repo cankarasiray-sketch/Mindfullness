@@ -596,7 +596,7 @@ function pickCard() {
     + (p.high ? pickBlock(p.high, "%" + num(high * 100, 0) + "+ SEÇİMİ · daha sık tutar, ödemesi küçük") : "")
     + '<p class="small muted">' + (p.value ? "Bu seçim adil oranı geçiyor: değerli. "
       : "Değerli seçim yok (iddaa oranları adil oranın altında). Bu, tek maç oynanabilen ve en az %" + num(S.settings.pickMinProb * 100, 0)
-        + " tutan " + p.candidates + " seçim (her pazar, her oran) arasında adil orana en yakın olanı"
+        + " tutan " + p.candidates + " seçim (her pazar, her oran) arasında kâr ve tutma olasılığı birlikte en iyisi"
         + (p.highCount ? "; %" + num(high * 100, 0) + "+ tutan " + p.highCount + " seçim var" : "") + ". Her gün oynanırsa ayda beklenen ≈ " + tl(p.monthly) + ". ")
     + "Seçimde önce kâr (adil oranı geçen seçim varsa o), sonra denge puanıyla (tutma olasılığı ve ödeme birlikte: kasayı uzun vadede en az küçülten). Tutar: beklenen kayıp "
     + pct(-lim, true) + " sınırına kadar (adil oranın %" + num(lim * 100, 0) + " altına kadar) tam, daha kötüsünde oynanmaz (Ayarlar → Tek maç); kaybı telafi için artırma.</p>"
@@ -615,7 +615,7 @@ function pickPlay(i) {
   act("pickPlay", {ref: p.ref, m: p.m, o: p.o, odds: val("pkOdds"), amount: val("pkAmt")}).then(function (res) { if (res && res.ok) closeSheet(); });
 }
 // ---- Tek maç fırsatları (2.10) --------------------------------------------------------------
-// Son taramanın tüm tek oynanabilen seçimleri (her pazar, her oran; Zirve dahil), adil orana yakınlığa göre.
+// Son taramanın tüm tek oynanabilen seçimleri (her pazar, her oran; Zirve dahil): önce kârlı, sonra denge puanı (2.15.4).
 /** Denge tablosu (2.13): tutma olasılığı bandına göre bugünün en iyi tek maç seçimi ve iddaa kesintisi. */
 function bandsHtml() {
   var B = (S.bands || []).filter(function (b) { return b.n > 0; });
@@ -625,7 +625,7 @@ function bandsHtml() {
     var on = b === best;
     return '<div class="item band-row' + (on ? " on" : "") + '"><span class="muted">Tutma %' + num(b.from * 100, 0) + "–" + num(b.to * 100, 0) + " · " + b.n + " seçim</span><span>"
       + (on ? '<span class="st ok">en iyi denge</span> ' : "") + '<b class="' + cls(b.bestEv) + '">' + pct(b.bestEv, true) + "</b></span></div>";
-  }).join("") + '<p class="small muted">Her bantta adil orana en yakın seçimin beklenen değeri; "en iyi denge" tutma ve ödemeyi birlikte tartan puanda öndeki bant.</p></div>';
+  }).join("") + '<p class="small muted">Her bantta en iyi seçimin (önce kâr, sonra denge puanı) beklenen değeri; "en iyi denge" tutma ve ödemeyi birlikte tartan puanda öndeki bant.</p></div>';
 }
 var singlesMin = null, singlesGroup = null, singlesShow = 25;
 /** Tek maç fırsatlarında varsayılan süzgeç: tutma olasılığı %65 ve üstü (kullanıcı isteği). */
@@ -1375,8 +1375,8 @@ function viewSettings() {
   html += '<div class="card" id="pickSettings"><h2>Tek maç</h2><label class="check"><input type="checkbox" id="sSingles"' + (st.singlesOnly ? " checked" : "") + ">Yalnızca tek maç kupon (kombine yok)</label>"
     + '<p class="small muted">Değerli seçimler de yalnızca tek oynanabilen (MBS 1) maçlardan, tekli kupon olarak önerilir. Tutma oranı artar; demo simülasyonunda aylık büyüme +%6,7\'den +%5,4\'e indi (değerli bacakların birleşimi ve MBS 2–3 maçlar dışarıda kalır).</p>'
     + '<label class="check"><input type="checkbox" id="sPick"' + (st.dailyPick ? " checked" : "") + ">Her gün bir seçim öner (günün seçimi)</label>"
-    + '<p class="small muted">Değerli seçim olmayan günlerde: tek oynanabilen, aşağıdaki olasılıkla tutan seçimler (her pazar, her oran; normal oran ve Zirve Oran) arasında adil orana en yakın olan. '
-    + "Beklenen sonuç çoğu gün eksidir ve kartta yazar; tutar Kelly değil, sabittir.</p>"
+    + '<p class="small muted">Değerli seçim olmayan günlerde: tek oynanabilen, aşağıdaki olasılıkla tutan seçimler (her pazar, her oran; normal oran ve Zirve Oran) arasında önce kârlı olan, yoksa kâr ve tutma olasılığı birlikte en iyisi (denge puanı). '
+    + "Beklenen sonuç çoğu gün eksidir ve kartta yazar; tutar Kelly değil, kasanın %3'ü (ya da aşağıdaki sabit tutar).</p>"
     + '<label>En az tutma olasılığı (%)</label><input id="sPickProb" inputmode="decimal" value="' + esc(num(st.pickMinProb * 100, 0)) + '">'
     + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.15) * 100, 1)) + '">'
     + '<p class="small muted">Tek maç seçimlerinde beklenen kayıp bu sınıra kadarsa (oran adil oranın bu kadar altına kadar) tam tutar; daha kötüyse oynanmaz.</p>'

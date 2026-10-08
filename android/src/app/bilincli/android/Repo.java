@@ -240,6 +240,8 @@ final class Repo {
     static final long PROBE_FRESH_S = 45 * 60;
     /** Maç listesi sorgusunda aynı anda en fazla bu kadar istek (ücretsiz uç). */
     static final int PROBE_THREADS = 4;
+    /** Pinnacle oranlarında aynı anda en fazla bu kadar lig (2.16). */
+    static final int ODDS_THREADS = 4;
 
     /** Taranacak liglerde karar penceresinde kaç maç var (kota harcamaz); planı doğru kurmak için. */
     void probeActive() {
@@ -919,6 +921,7 @@ final class Repo {
     Daily.LiveSources live(Settings scope) {
         Daily.LiveSources src = new Daily.LiveSources(new AndroidHttp(app), scope);
         src.progress = stepper; // arayüz bekliyorsa ilerleme gösterilir
+        src.threads = ODDS_THREADS; // 2.16: ligler aynı anda çekilir (tarama süresi ~4'te 1)
         src.memory = memory;
         src.knownActive = active(); // pencere maç sayıları zaten biliniyorsa tekrar sorulmaz
         src.knownKeyCredits = keyCredits(); // birden fazla anahtar: kredisi en çok kalan seçilir
@@ -1110,9 +1113,14 @@ final class Repo {
         synchronized (pickLock) {
             List<Object> fairs = Json.arr(radar.view().get("fairs"));
             Map<String, Object> z = zirveView();
-            pickValue = Pick.choose(fairs, z, cfg, balance, now);
-            singlesValue = Pick.list(fairs, z, cfg, balance, now);
-            bandsValue = Pick.bands(fairs, z, cfg, balance, now);
+            Object[] all = Pick.all(fairs, z, cfg, balance, now); // 2.16: liste ve bantlar tek geçişte
+            @SuppressWarnings("unchecked")
+            Map<String, Object> pv = (Map<String, Object>) all[0];
+            @SuppressWarnings("unchecked")
+            List<Object> sv = (List<Object>) all[1], bv = (List<Object>) all[2];
+            pickValue = pv;
+            singlesValue = sv;
+            bandsValue = bv;
             // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
             // "oynama" günü (beklenen kayıp sınırı aşıyor) sanal bahis de yok: strateji o gün oynamıyor
             if (pickValue != null && !Json.bool(pickValue, "skip", false)) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(pickValue), now);
@@ -1155,6 +1163,19 @@ final class Repo {
         }
     }
 
+    /** Ekran için günün seçimi, tek maç listesi ve denge tablosu tek hesapla: {seçim, liste, bantlar} (2.16). */
+    Object[] picks() {
+        if (isDemo()) return new Object[3];
+        try {
+            refreshPicks();
+            synchronized (pickLock) {
+                return new Object[] {pickValue, singlesValue, bandsValue};
+            }
+        } catch (RuntimeException e) {
+            return new Object[3]; // tablo yazılırken okunduysa bir sonraki çizimde gelir
+        }
+    }
+
     /** Tutma olasılığı bantlarına göre bugünün en iyi tek maç seçimi (2.13 denge tablosu). */
     List<Object> bands() {
         if (isDemo()) return null;
@@ -1168,7 +1189,7 @@ final class Repo {
         }
     }
 
-    /** Tek maç fırsatları listesi (2.10): en az %50 tutan tek oynanabilen seçimler, adil orana yakınlığa göre. */
+    /** Tek maç fırsatları listesi (2.10): en az %50 tutan tek oynanabilen seçimler; önce kârlı, sonra denge puanı (2.15.4). */
     List<Object> singles() {
         if (isDemo()) return null;
         try {

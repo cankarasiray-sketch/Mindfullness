@@ -22,8 +22,11 @@ import java.util.Map;
 public final class Promo {
     private Promo() {}
 
-    /** Tabloda en fazla bu kadar maç (en yakın başlayanlar). */
-    static final int MAX_ROWS = 250;
+    /**
+     * Tabloda en fazla bu kadar maç (en yakın başlayanlar). 2.16: 250 -> 300, Fırsatlar 48 saate çıkınca
+     * yoğun hafta sonlarında ikinci günün maçları kesilmesin.
+     */
+    static final int MAX_ROWS = 300;
     /** Bu kadar gün ilerisindeki maçlar alınmaz. */
     static final long HORIZON_S = 4 * 86400L;
 

@@ -83,9 +83,13 @@ public final class Daily {
         /** Önceki çalışmalardan anahtar başına {kalan, kullanılan, zaman}; anahtar seçimi için. */
         public Map<String, long[]> knownKeyCredits;
 
+        /** Pinnacle oranlarında aynı anda çekilen lig sayısı (2.16; telefonda 4, testlerde 1). */
+        public int threads = 1;
+
         private OddsApi api() throws Http.ProviderException {
             if (api == null) {
                 api = new OddsApi(http, cfg);
+                api.threads = threads;
                 api.progress = progress;
                 api.knownInWindow = knownActive;
                 if (knownKeyCredits != null) api.keyCredits.putAll(knownKeyCredits);
