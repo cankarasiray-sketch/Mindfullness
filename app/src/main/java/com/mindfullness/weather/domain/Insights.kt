@@ -52,8 +52,7 @@ object Insights {
             if (sunnyDaytime && maxUv >= 3) add(Tip(TipKind.SUNGLASSES, "Güneş gözlüğü"))
             if (maxFeels >= 30) add(Tip(TipKind.WATER, "Su şişesi"))
             if (worstAir != null) {
-                val dust = (worstAir.dust ?: 0.0) >= 0.5 * (worstAir.pm10 ?: Double.MAX_VALUE)
-                add(Tip(TipKind.MASK, if (dust) "Maske (çöl tozu)" else "Maske (hava kirliliği)"))
+                add(Tip(TipKind.MASK, if (worstAir.isDusty) "Maske (çöl tozu)" else "Maske (hava kirliliği)"))
             }
         }
     }

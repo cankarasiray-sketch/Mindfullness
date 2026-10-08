@@ -51,8 +51,14 @@ class ForecastQualityTest {
 
     @Test
     fun `unstable air warns about thunderstorms the weather code does not show`() {
+        // Unstable 13:00–17:00; the shower chance of those hours sits on the points that close them (14–17).
         val unstable = hours(base, 48) { i ->
-            if (i in 13..16) copy(cape = 1800.0, precipitationProbability = 45, weatherCode = 3, temperature = 24.0) else this
+            copy(
+                cape = if (i in 13..16) 1800.0 else cape,
+                precipitationProbability = if (i in 14..17) 45 else precipitationProbability,
+                weatherCode = if (i in 13..17) 3 else weatherCode,
+                temperature = if (i in 13..17) 24.0 else temperature,
+            )
         }
         val risk = AlertEngine.evaluate(synthetic(unstable), now).single { it.type == AlertType.THUNDERSTORM }
         assertEquals("Gök gürültülü sağanak riski", risk.title)
@@ -69,6 +75,30 @@ class ForecastQualityTest {
         // Cold-season instability or a low chance of showers is not worth a warning.
         val cold = unstable.map { it.copy(temperature = 4.0) }
         assertTrue(AlertEngine.evaluate(synthetic(cold), now).none { it.type == AlertType.THUNDERSTORM })
+    }
+
+    @Test
+    fun `a storm that is over or weaker does not hide the instability warning`() {
+        // Very unstable 10:00–21:00 with a high shower chance; it is 14:00.
+        val unstable = hours(base, 48) { i ->
+            copy(
+                cape = if (i in 10..20) 3000.0 else cape,
+                precipitationProbability = if (i in 11..21) 70 else precipitationProbability,
+                temperature = 25.0,
+            )
+        }
+        val afternoon = base.plusHours(14)
+        // The thunderstorm the forecast showed at 11:00 has passed: the risk for the rest of the day stays.
+        val past = unstable.map { if (it.time == base.plusHours(11)) it.copy(weatherCode = 95) else it }
+        val risk = AlertEngine.evaluate(synthetic(past), afternoon).single { it.type == AlertType.THUNDERSTORM }
+        assertEquals("Gök gürültülü sağanak riski", risk.title)
+        assertEquals(Severity.ORANGE, risk.severity)
+        assertEquals(base.plusHours(21), risk.end)
+
+        // A single yellow storm hour in the evening does not replace the orange risk.
+        val evening = unstable.map { if (it.time == base.plusHours(19)) it.copy(weatherCode = 95) else it }
+        val alerts = AlertEngine.evaluate(synthetic(evening), afternoon).filter { it.type == AlertType.THUNDERSTORM }
+        assertTrue(alerts.any { it.title == "Gök gürültülü sağanak riski" && it.severity == Severity.ORANGE })
     }
 
     @Test
@@ -90,6 +120,13 @@ class ForecastQualityTest {
         assertEquals("Hava kalitesi kötü", smog.title)
         assertEquals(Severity.INFO, smog.severity)
 
+        // The mask tip names the same cause as the warning.
+        val smogDay = synthetic(hours(base, 48) { this }).copy(air = air(85.0, 60.0, 30.0))
+        assertEquals("Hava kalitesi çok kötü", AlertEngine.evaluate(smogDay, now).single { it.type == AlertType.AIR_QUALITY }.title)
+        assertEquals("Maske (hava kirliliği)", Insights.tips(smogDay, now).single { it.kind == TipKind.MASK }.text)
+        val dustDay = synthetic(hours(base, 48) { this }).copy(air = air(85.0, 160.0, 120.0))
+        assertEquals("Maske (çöl tozu)", Insights.tips(dustDay, now).single { it.kind == TipKind.MASK }.text)
+
         val clean = AlertEngine.evaluate(synthetic(hours(base, 48) { this }).copy(air = air(35.0, 30.0, 10.0)), now)
         assertTrue(clean.none { it.type == AlertType.AIR_QUALITY || it.type == AlertType.DUST })
     }
@@ -101,11 +138,15 @@ class ForecastQualityTest {
         val forecast = synthetic(hours(base, 48) { this }).copy(daily = daily)
         val flood = AlertEngine.evaluate(forecast, now).single { it.type == AlertType.FLOOD }
         assertEquals(Severity.YELLOW, flood.severity)
-        assertEquals(today.atStartOfDay(), flood.start)
+        // The 3-day window began yesterday; the start (and key) stays put as the days pass.
+        assertEquals(today.minusDays(1).atStartOfDay(), flood.start)
         assertEquals(today.plusDays(2).atStartOfDay(), flood.end)
         assertFalse(flood.outlook)
         assertEquals("Bugün – Yarın", flood.whenText(now))
         assertTrue(flood.detail, flood.detail.contains("75 mm"))
+        val tomorrow = AlertEngine.evaluate(forecast, now.plusDays(1)).single { it.type == AlertType.FLOOD }
+        assertEquals(flood.key, tomorrow.key)
+        assertEquals("Bugün, 9 Ekim", tomorrow.whenText(now.plusDays(1)))
 
         // A heavy-rain warning for the same period already says it.
         val downpour = hours(base, 48) { i ->

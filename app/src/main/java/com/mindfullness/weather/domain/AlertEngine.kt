@@ -57,7 +57,8 @@ data class WeatherAlert(
     fun whenText(now: LocalDateTime): String {
         if (!allDay) return TimeText.range(start, end, now)
         val today = now.toLocalDate()
-        val first = start.toLocalDate()
+        // A multi-day alert may have started before today; it reads from today on.
+        val first = start.toLocalDate().let { if (it.isBefore(today)) today else it }
         val last = end.minusMinutes(1).toLocalDate()
         return if (last.isAfter(first)) "${TimeText.relativeShortDay(first, today)} – ${TimeText.relativeShortDay(last, today)}"
         else "${TimeText.relativeDay(first, today)}, ${TimeText.dayMonth(first)}"
@@ -113,7 +114,10 @@ object AlertEngine {
         val hourlyAlerts = buildList {
             addAll(precipitation(hours))
             addAll(storms)
-            addAll(convectiveRisk(hours).filter { risk -> storms.none { it.overlaps(risk) } })
+            // A forecast storm replaces the risk only while it is still ahead and at least as serious.
+            addAll(convectiveRisk(hours).filter { risk ->
+                storms.none { it.end.isAfter(now) && it.severity >= risk.severity && it.overlaps(risk) }
+            })
             addAll(wind(hours))
             addAll(heat(hours))
             addAll(freezing)
@@ -329,12 +333,15 @@ object AlertEngine {
      * with a fair chance of showers often ends in sudden downpours, lightning and hail. Episodes
      * that touch a forecast thunderstorm are dropped by the caller, as that warning already covers them.
      */
-    private fun convectiveRisk(window: List<HourlyPoint>): List<WeatherAlert> =
-        episodes(window) { hour ->
-            (hour.cape ?: 0.0) >= 1000 && (hour.precipitationProbability ?: 0) >= 40 && hour.temperature >= 8
+    private fun convectiveRisk(window: List<HourlyPoint>): List<WeatherAlert> {
+        // CAPE describes the hour from its timestamp; that hour's shower chance is stamped on the next point.
+        val showerChance = HashMap<LocalDateTime, Int>()
+        for (i in 0 until window.size - 1) window[i + 1].precipitationProbability?.let { showerChance[window[i].time] = it }
+        return episodes(window) { hour ->
+            (hour.cape ?: 0.0) >= 1000 && (showerChance[hour.time] ?: 0) >= 40 && hour.temperature >= 8
         }.map { hours ->
             val cape = hours.maxOf { it.cape ?: 0.0 }
-            val probability = hours.maxOf { it.precipitationProbability ?: 0 }
+            val probability = hours.maxOf { showerChance[it.time] ?: 0 }
             val severity = if (cape >= 2500 && probability >= 60) Severity.ORANGE else Severity.YELLOW
             WeatherAlert(
                 type = AlertType.THUNDERSTORM,
@@ -350,6 +357,7 @@ object AlertEngine {
                 ),
             )
         }
+    }
 
     private fun wind(window: List<HourlyPoint>): List<WeatherAlert> =
         episodes(window) { it.windGusts >= 50 || it.windSpeed >= 39 }.map { hours ->
@@ -585,7 +593,7 @@ object AlertEngine {
             val dust = hours.mapNotNull { it.dust }.maxOrNull() ?: 0.0
             val pm10 = hours.mapNotNull { it.pm10 }.maxOrNull()
             val pm25 = hours.mapNotNull { it.pm25 }.maxOrNull()
-            val dusty = dust >= 50 && (peak.dust ?: 0.0) >= 0.5 * (peak.pm10 ?: Double.MAX_VALUE)
+            val dusty = peak.isDusty
             val severity = when {
                 aqi >= 100 -> Severity.ORANGE
                 aqi >= 80 -> Severity.YELLOW
@@ -672,7 +680,8 @@ object AlertEngine {
             total >= 60 -> Severity.YELLOW
             else -> return emptyList()
         }
-        val first = last.minusDays(2).let { if (it.isBefore(today)) today else it }
+        // Not clamped to today: the start (and so the key) must stay the same while the event lasts.
+        val first = last.minusDays(2)
         return listOf(
             WeatherAlert(
                 type = AlertType.FLOOD,

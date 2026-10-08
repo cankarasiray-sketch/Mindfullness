@@ -46,7 +46,8 @@ class OpenMeteoApi {
     /** CAMS air quality and desert dust. */
     fun airQualityJson(latitude: Double, longitude: Double): String = get(
         "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${coordinate(latitude)}&longitude=${coordinate(longitude)}" +
-            "&hourly=european_aqi,pm2_5,pm10,dust&timezone=auto&forecast_days=4",
+            // The previous day keeps an episode running across midnight on one start (and key).
+            "&hourly=european_aqi,pm2_5,pm10,dust&timezone=auto&past_days=1&forecast_days=4",
         optional = true,
     )
 

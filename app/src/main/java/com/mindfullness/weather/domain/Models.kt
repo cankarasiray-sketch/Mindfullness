@@ -122,7 +122,11 @@ data class AirPoint(
     val pm10: Double?,
     /** Desert dust near the surface, µg/m³. */
     val dust: Double?,
-)
+) {
+    /** Saharan dust, rather than local pollution, is the main cause of the particles. */
+    val isDusty: Boolean
+        get() = (dust ?: 0.0) >= 50 && (dust ?: 0.0) >= 0.5 * (pm10 ?: Double.MAX_VALUE)
+}
 
 data class DailyPoint(
     val date: LocalDate,
