@@ -18,7 +18,8 @@ class WeatherRepository(
     private val api: OpenMeteoApi,
     private val cacheDir: File,
 ) {
-    private val extras = Executors.newFixedThreadPool(2) { runnable -> Thread(runnable).apply { isDaemon = true } }
+    // Unbounded: with a fixed pool, extras of several places fetched at once would queue past their timeout.
+    private val extras = Executors.newCachedThreadPool { runnable -> Thread(runnable).apply { isDaemon = true } }
 
     fun fetch(place: Place): Forecast {
         // Model comparison and air quality are extras: they load alongside and may fail on their own.
