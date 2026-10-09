@@ -22,13 +22,17 @@ android {
     }
 
     signingConfigs {
-        // A fixed key keeps the signature stable between builds, so updates install without
-        // uninstalling first. Override it with SIGNING_* environment variables for a private key.
-        create("app") {
-            storeFile = System.getenv("SIGNING_STORE_FILE")?.let { file(it) } ?: file("signing/havauyari.jks")
-            storePassword = System.getenv("SIGNING_STORE_PASSWORD") ?: "havauyari"
-            keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "havauyari"
-            keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: "havauyari"
+        // Releases are signed with the private key from the SIGNING_* environment variables, which CI
+        // fills from GitHub Secrets. The key never lives in the repository. Without it, release
+        // builds fall back to the debug key and cannot update an installed release.
+        val keystore = System.getenv("SIGNING_STORE_FILE")?.takeIf { it.isNotBlank() }
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "havauyari"
+                keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD")
+            }
         }
     }
 
@@ -37,11 +41,10 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            signingConfig = signingConfigs.getByName("app")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
         debug {
             applicationIdSuffix = ".debug"
-            signingConfig = signingConfigs.getByName("app")
         }
     }
 

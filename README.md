@@ -72,8 +72,9 @@ sudo apt install aapt dalvik-exchange apksigner zipalign
 ```
 
 Bu yol Android 14 framework sınıflarını Maven Central'daki Robolectric `android-all` paketinden alır,
-ProGuard ile Kotlin standart kütüphanesini küçültür, `dx` ile dex üretir ve depodaki anahtarla imzalar.
-Sürüm numarası CI ile aynı şekilde commit sayısından hesaplanır.
+ProGuard ile Kotlin standart kütüphanesini küçültür, `dx` ile dex üretir ve imzalar. Sürüm anahtarıyla
+imzalamak için `-Pkeystore=… -PkeystorePassword=…` verin; verilmezse geçici bir test anahtarı kullanılır
+(bu APK yüklü sürümün üzerine kurulamaz). Sürüm numarası CI ile aynı şekilde commit sayısından hesaplanır.
 
 Kod düzeni:
 
@@ -85,6 +86,19 @@ Kod düzeni:
 | `ui/` | Ekranlar (`HomeView`, `PlacesView`, `SettingsView`), durum yönetimi (`AppController`), çizimler |
 | `tools/` | İkon üretici (`generate_icons.py`) ve çevrimdışı APK derleyici |
 
-`app/signing/havauyari.jks` yalnızca sürümler arası güncellenebilirlik için depoya eklenmiş bir anahtardır.
-Play Store'a yüklenecekse `SIGNING_STORE_FILE`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_ALIAS`,
-`SIGNING_KEY_PASSWORD` ortam değişkenleriyle gizli bir anahtar kullanın.
+### İmza anahtarı
+
+Sürüm APK'ları gizli bir anahtarla imzalanır; anahtar depoda **bulunmaz**, yalnızca GitHub Secrets'ta durur.
+Deponun **Settings → Secrets and variables → Actions → New repository secret** bölümüne iki secret eklenir:
+
+| Secret | Değer |
+| --- | --- |
+| `SIGNING_KEYSTORE_BASE64` | Anahtar dosyasının (`.jks`) base64 hâli, tek satır |
+| `SIGNING_STORE_PASSWORD` | Anahtar dosyasının şifresi (anahtar takma adı: `havauyari`) |
+
+Secret'lar yoksa CI testleri çalıştırır ama APK yayımlamaz (uyarı verir); farklı anahtarla imzalanmış bir
+APK yüklü uygulamanın üzerine kurulamayacağı için bu bilinçli bir tercihtir. Anahtar dosyasını ve şifresini
+güvenli bir yerde yedekleyin: kaybolursa yeni sürümler ancak uygulama kaldırılıp yeniden kurularak yüklenebilir.
+
+Yerelde: `SIGNING_STORE_FILE=/yol/anahtar.jks SIGNING_STORE_PASSWORD=… ./gradlew assembleRelease`.
+Önceki sürümlerde depoda duran eski anahtar artık kullanılmıyor.

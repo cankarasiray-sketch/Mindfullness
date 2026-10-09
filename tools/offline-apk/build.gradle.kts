@@ -161,18 +161,38 @@ val alignApk by tasks.registering(Exec::class) {
     commandLine("$buildTools/zipalign", "-p", "-f", "4", unalignedApk.get().asFile.path, alignedApk.get().asFile.path)
 }
 
+// The release key is private (GitHub Secrets in CI); pass it with -Pkeystore=… -PkeystorePassword=…
+// or the SIGNING_STORE_FILE / SIGNING_STORE_PASSWORD environment variables. Without it the APK is
+// signed with a throwaway local key, fine for testing but unable to update an installed release.
+val releaseKeystore: String? = providers.gradleProperty("keystore").orNull ?: System.getenv("SIGNING_STORE_FILE")
+val testKeystore = layout.buildDirectory.file("test-signing.jks")
+
+val createTestKey by tasks.registering(Exec::class) {
+    onlyIf { releaseKeystore == null && !testKeystore.get().asFile.exists() }
+    executable("${System.getProperty("java.home")}/bin/keytool")
+    args(
+        "-genkeypair", "-storetype", "PKCS12", "-keystore", testKeystore.get().asFile.path,
+        "-storepass", "android", "-keypass", "android", "-alias", "havauyari",
+        "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000", "-dname", "CN=Hava Uyari Test",
+    )
+}
+
 val assembleApk by tasks.registering(Exec::class) {
-    val keystore = providers.gradleProperty("keystore").getOrElse(appDir.resolve("signing/havauyari.jks").path)
-    val password = providers.gradleProperty("keystorePassword").getOrElse("havauyari")
-    val alias = providers.gradleProperty("keyAlias").getOrElse("havauyari")
+    val keystore = releaseKeystore ?: testKeystore.get().asFile.path
+    val password = providers.gradleProperty("keystorePassword").orNull ?: System.getenv("SIGNING_STORE_PASSWORD")
+        ?: if (releaseKeystore == null) "android" else error("keystorePassword (or SIGNING_STORE_PASSWORD) is required with a keystore")
+    val alias = providers.gradleProperty("keyAlias").orNull ?: System.getenv("SIGNING_KEY_ALIAS") ?: "havauyari"
     inputs.file(alignedApk)
     inputs.file(keystore)
     outputs.file(signedApk)
-    dependsOn(alignApk)
+    dependsOn(alignApk, createTestKey)
     commandLine(
         "$buildTools/apksigner", "sign",
         "--ks", keystore, "--ks-pass", "pass:$password", "--ks-key-alias", alias, "--key-pass", "pass:$password",
         "--out", signedApk.get().asFile.path, alignedApk.get().asFile.path,
     )
-    doLast { println("APK: ${signedApk.get().asFile} ($versionName, versionCode $versionCode)") }
+    doLast {
+        println("APK: ${signedApk.get().asFile} ($versionName, versionCode $versionCode)")
+        if (releaseKeystore == null) println("Uyarı: test anahtarıyla imzalandı; yüklü sürümün üzerine kurulamaz.")
+    }
 }

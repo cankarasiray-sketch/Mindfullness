@@ -34,10 +34,33 @@ jobs:
       - name: Unit tests
         run: ./gradlew --no-daemon testReleaseUnitTest
 
+      # The release key lives only in GitHub Secrets (see README, "İmza anahtarı"). Without it no APK
+      # is published, as one signed with another key could not update the installed app.
+      - name: Restore signing key
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$STORE_PASSWORD" ]; then
+            echo "::warning title=İmza anahtarı yok::SIGNING_KEYSTORE_BASE64 ve SIGNING_STORE_PASSWORD secret'ları tanımlı değil; APK derlenmedi ve yayımlanmadı."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/release.jks" -storepass "$STORE_PASSWORD" -alias havauyari > /dev/null
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
       - name: Build release APK
+        if: steps.signing.outputs.available == 'true'
+        env:
+          SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: havauyari
         run: ./gradlew --no-daemon assembleRelease
 
       - name: Rename APK
+        if: steps.signing.outputs.available == 'true'
         id: apk
         run: |
           version="1.0.$(git rev-list --count HEAD)"
@@ -45,13 +68,14 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "HavaUyari-$version.apk"
 
       - uses: actions/upload-artifact@v4
+        if: steps.signing.outputs.available == 'true'
         with:
           name: HavaUyari-apk
           path: HavaUyari-*.apk
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.signing.outputs.available == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.apk.outputs.version }}
