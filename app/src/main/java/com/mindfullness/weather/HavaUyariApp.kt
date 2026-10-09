@@ -1,6 +1,7 @@
 package com.mindfullness.weather
 
 import android.app.Application
+import com.mindfullness.weather.platform.CrashReport
 import com.mindfullness.weather.platform.JobScheduling
 import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.platform.SettingsStore
@@ -12,6 +13,7 @@ class HavaUyariApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReport.install(this)
         Notifier.createChannels(this)
         JobScheduling.apply(this, SettingsStore(this).settings)
     }

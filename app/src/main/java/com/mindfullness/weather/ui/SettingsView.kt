@@ -22,6 +22,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         fun setMinSeverity(severity: Severity)
         fun setMorningSummary(enabled: Boolean)
         fun setRainSoon(enabled: Boolean)
+        fun shareApp()
         fun useViewingPlaceForNotifications()
         fun openNotificationSettings()
         fun back()
@@ -116,6 +117,27 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         levels.addView(levelRow(Severity.ORANGE, "Turuncu · Hazırlıklı olun", "Tehlikeli olabilir; planlarınızı gözden geçirin."))
         levels.addView(levelRow(Severity.RED, "Kırmızı · Önlem alın", "Çok tehlikeli; önlem alın ve resmî uyarıları izleyin."))
         body.addView(levels)
+
+        body.addView(sectionLabel("Paylaş").params(top = 24))
+        val share = section()
+        share.addView(
+            context.horizontal().apply {
+                background = ripple(null)
+                setPadding(dp(16), dp(16), dp(16), dp(16))
+                setOnClickListener { actions.shareApp() }
+                addView(context.icon(R.drawable.ic_share, Palette.ACCENT, 22))
+                val texts = context.vertical()
+                texts.addView(context.text("Uygulamayı paylaş", 16f, Palette.ON_SURFACE, Fonts.medium))
+                texts.addView(
+                    context.text(
+                        "İndirme bağlantısını ve kurulum adımlarını gönderin. APK dosyası yerine bağlantı göndermek kurulum sorunlarını önler.",
+                        14f, Palette.ON_SURFACE_MUTED,
+                    ).params(top = 3),
+                )
+                addView(texts, LayoutParams(0, WRAP, 1f).apply { marginStart = dp(14) })
+            },
+        )
+        body.addView(share)
 
         body.addView(sectionLabel("Hakkında").params(top = 24))
         val about = section().apply { setPadding(dp(16), dp(16), dp(16), dp(16)) }

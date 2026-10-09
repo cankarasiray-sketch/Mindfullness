@@ -15,7 +15,9 @@ import android.widget.Toast
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
 import com.mindfullness.weather.domain.WeatherAlert
+import com.mindfullness.weather.platform.AppShare
 import com.mindfullness.weather.platform.Async
+import com.mindfullness.weather.platform.CrashReport
 import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.ui.AppController
 import com.mindfullness.weather.ui.HomeView
@@ -42,6 +44,12 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // After a crash, offer the report before building anything that might crash again.
+        if (CrashReport.pending(this) != null) {
+            startActivity(Intent(this, CrashReportActivity::class.java))
+            finish()
+            return
+        }
         controller = (application as HavaUyariApp).controller
         drawEdgeToEdge()
 
@@ -59,8 +67,12 @@ class MainActivity : Activity() {
         if (savedInstanceState == null) openNotificationTarget(intent)
     }
 
+    /** False when onCreate handed over to the crash report and finished without setting up. */
+    private val isSetUp: Boolean get() = ::controller.isInitialized
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (!isSetUp) return
         setIntent(intent)
         openNotificationTarget(intent)
     }
@@ -75,12 +87,17 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (!isSetUp) return
         controller.onResume()
         // Notification permission may have changed in system settings while we were away.
         render()
     }
 
     override fun onDestroy() {
+        if (!isSetUp) {
+            super.onDestroy()
+            return
+        }
         if (controller.onChange === renderCallback) controller.onChange = null
         if (controller.onMessage === messageCallback) controller.onMessage = null
         Async.main.removeCallbacks(renderRunnable)
@@ -94,7 +111,7 @@ class MainActivity : Activity() {
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        if (screen != Screen.HOME) {
+        if (isSetUp && screen != Screen.HOME) {
             goHome()
         } else {
             @Suppress("DEPRECATION")
@@ -285,6 +302,18 @@ class MainActivity : Activity() {
         }
 
         override fun setRainSoon(enabled: Boolean) = controller.setRainSoon(enabled)
+
+        override fun shareApp() {
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("text/plain")
+                .putExtra(Intent.EXTRA_SUBJECT, "Hava Uyarı")
+                .putExtra(Intent.EXTRA_TEXT, AppShare.invitation())
+            try {
+                startActivity(Intent.createChooser(send, "Uygulamayı paylaş"))
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(this@MainActivity, "Paylaşılacak bir uygulama bulunamadı.", Toast.LENGTH_SHORT).show()
+            }
+        }
 
         override fun useViewingPlaceForNotifications() = withNotificationPermission { controller.useViewingPlaceForNotifications() }
 

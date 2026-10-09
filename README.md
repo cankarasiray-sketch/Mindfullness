@@ -49,6 +49,25 @@ Her push'ta GitHub Actions uygulamayı derler ve **Releases** sayfasına `HavaUy
 2. Dosyayı açın; istenirse "Bilinmeyen kaynaklardan yükleme" iznini verin.
 3. Sürüm numarası (`N`) commit sayısıdır; aynı anahtarla imzalanan her yeni sürüm eskisinin üzerine kurulur.
 
+### Başkasıyla paylaşma
+
+APK dosyasını WhatsApp vb. ile göndermek yerine şu bağlantıyı paylaşın (uygulamada **Ayarlar → Uygulamayı
+paylaş** bunu kurulum adımlarıyla birlikte gönderir):
+
+https://github.com/cankarasiray-sketch/Mindfullness/releases/latest/download/HavaUyari.apk
+
+Kurulmuyorsa en sık nedenler:
+
+| Belirti | Neden ve çözüm |
+| --- | --- |
+| "Uygulama yüklenmedi" / "paket mevcut bir paketle çakışıyor" | Telefonda farklı anahtarla imzalanmış eski bir sürüm (1.0.10 ve öncesi) var. Önce onu kaldırın. |
+| "Güvenliğiniz için bu kaynaktan yüklemeye izin verilmiyor" | Dosyayı açan uygulamaya (WhatsApp, Dosyalar, Chrome) **Ayarlar → Bilinmeyen uygulamaları yükle** izni verin. |
+| Play Protect "Uygulama engellendi / tanınmıyor" | **Daha fazla ayrıntı → Yine de yükle**. |
+| "Paket ayrıştırılırken sorun oluştu" | Android 8.0'dan eski telefon ya da dosya eksik indi; bağlantıdan yeniden indirin. |
+
+Uygulama açılıp kapanıyorsa bir sonraki açılışta hata raporu ekranı çıkar; **Raporu paylaş** ile gönderilen
+rapor sorunun yerini gösterir.
+
 ## Geliştirme
 
 - Kotlin, yalnızca Android framework'ü (View sistemi) ve Kotlin standart kütüphanesi — AndroidX, Compose

@@ -66,12 +66,14 @@ jobs:
           version="1.0.$(git rev-list --count HEAD)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           cp app/build/outputs/apk/release/app-release.apk "HavaUyari-$version.apk"
+          # A fixed name gives a link that always serves the newest APK: releases/latest/download/HavaUyari.apk
+          cp app/build/outputs/apk/release/app-release.apk HavaUyari.apk
 
       - uses: actions/upload-artifact@v4
         if: steps.signing.outputs.available == 'true'
         with:
           name: HavaUyari-apk
-          path: HavaUyari-*.apk
+          path: HavaUyari-1.*.apk
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -84,9 +86,16 @@ jobs:
           # Only the default branch produces the "Latest" release; other branches publish pre-releases.
           prerelease: ${{ github.ref_name != github.event.repository.default_branch }}
           make_latest: ${{ github.ref_name == github.event.repository.default_branch }}
-          files: HavaUyari-*.apk
+          files: |
+            HavaUyari-${{ steps.apk.outputs.version }}.apk
+            HavaUyari.apk
           body: |
-            Telefona kurmak için aşağıdaki **HavaUyari-${{ steps.apk.outputs.version }}.apk** dosyasını indirip açın.
-            İlk kurulumda "Bilinmeyen kaynaklardan uygulama yükleme" izni istenebilir.
+            Telefona kurmak için aşağıdaki **HavaUyari.apk** dosyasını telefonun tarayıcısında indirip açın (Android 8 ve üzeri).
+            Başkasıyla paylaşırken dosya yerine şu bağlantıyı gönderin; her zaman en yeni sürümü indirir:
+            https://github.com/${{ github.repository }}/releases/latest/download/HavaUyari.apk
+
+            - "Bu kaynaktan yüklemeye izin ver" istenirse açın.
+            - Play Protect uyarı verirse "Daha fazla ayrıntı → Yine de yükle"yi seçin.
+            - Eski anahtarla imzalanmış bir sürüm (1.0.10 ve öncesi) kuruluysa önce onu kaldırın.
 
             Dal: `${{ github.ref_name }}` · Commit: ${{ github.sha }}

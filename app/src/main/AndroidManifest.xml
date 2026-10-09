@@ -30,6 +30,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".CrashReportActivity"
+            android:exported="false"
+            android:launchMode="singleTask" />
+
         <service
             android:name=".platform.AlertJobService"
             android:exported="false"
