@@ -24,7 +24,7 @@ veya ilçenin hava durumuna da bakabilirsiniz.
 - **Arama ve kayıtlı yerler** – Türkçe yer adı araması (il, ilçe, dünya genelinde şehirler); baktığınız
   yerler listede kalır, anlık sıcaklık ve varsa uyarı rozetiyle görünür.
 - **Bildirimler** – seçtiğiniz konum için arka planda düzenli kontrol; sarı ve üzeri (veya yalnızca
-  turuncu/kırmızı) uyarılarda bildirim. İsteğe bağlı 07:00 **sabah özeti**.
+  turuncu/kırmızı) uyarılarda bildirim. İsteğe bağlı 06:00 **sabah özeti**.
 - **Yağmur başlamadan haber ver** – yağmur veya kar 1–2 saat içinde başlayacaksa kısa bir bildirim
   (saatlik kontrol, her yağış için bir kez).
 - **Ana ekran widget'ı** – anlık sıcaklık, hava durumu, en yüksek/en düşük ve en önemli uyarı; bildirim

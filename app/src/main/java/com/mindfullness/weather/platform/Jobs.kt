@@ -6,6 +6,7 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
+import android.os.PersistableBundle
 import com.mindfullness.weather.data.OpenMeteoApi
 import com.mindfullness.weather.data.WeatherRepository
 import com.mindfullness.weather.domain.AlertEngine
@@ -82,7 +83,7 @@ class AlertJobService : JobService() {
     }
 }
 
-/** Posts the 07:00 summary and schedules the next one. */
+/** Posts the 06:00 summary and schedules the next one. */
 class MorningJobService : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         Async.background {
@@ -120,7 +121,9 @@ object JobScheduling {
     private const val ALERT_JOB = 1001
     private const val ALERT_NOW_JOB = 1002
     private const val MORNING_JOB = 1003
-    private val MORNING_TIME: LocalTime = LocalTime.of(7, 0)
+    private val MORNING_TIME: LocalTime = LocalTime.of(6, 0)
+    /** Extra recording the time a morning job was scheduled for, so a changed time replaces it. */
+    private const val EXTRA_MORNING_MINUTE = "morning_minute"
 
     private fun scheduler(context: Context) = context.getSystemService(JobScheduler::class.java)
 
@@ -144,7 +147,9 @@ object JobScheduling {
             scheduler.cancel(ALERT_NOW_JOB)
         }
         if (settings.morningSummary) {
-            if (scheduler.getPendingJob(MORNING_JOB) == null) scheduleMorning(context)
+            val pending = scheduler.getPendingJob(MORNING_JOB)
+            // Jobs from older versions (07:00, without the extra) are moved to the current time.
+            if (pending == null || pending.extras.getInt(EXTRA_MORNING_MINUTE, -1) != morningMinute) scheduleMorning(context)
         } else {
             scheduler.cancel(MORNING_JOB)
         }
@@ -160,7 +165,7 @@ object JobScheduling {
     }
 
     fun scheduleMorning(context: Context) {
-        // Zoned times keep the summary at 07:00 local across daylight-saving changes.
+        // Zoned times keep the summary at 06:00 local across daylight-saving changes.
         val zone = ZoneId.systemDefault()
         val now = ZonedDateTime.now(zone)
         var next = now.toLocalDate().atTime(MORNING_TIME).atZone(zone)
@@ -172,7 +177,10 @@ object JobScheduling {
             .setOverrideDeadline(delay + TimeUnit.MINUTES.toMillis(45))
             .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
             .setPersisted(true)
+            .setExtras(PersistableBundle().apply { putInt(EXTRA_MORNING_MINUTE, morningMinute) })
             .build()
         scheduler(context)?.schedule(job)
     }
+
+    private val morningMinute: Int get() = MORNING_TIME.hour * 60 + MORNING_TIME.minute
 }

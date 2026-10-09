@@ -103,7 +103,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         notifications.addView(
             switchRow(
                 "Sabah özeti",
-                "Her sabah 07:00 civarında günün hava durumu ve yanınıza almanız gerekenler.",
+                "Her sabah 06:00 civarında günün hava durumu ve yanınıza almanız gerekenler.",
                 state.morningSummaryEnabled,
             ) { actions.setMorningSummary(it) },
         )
