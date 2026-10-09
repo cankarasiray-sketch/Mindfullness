@@ -190,6 +190,8 @@ val assembleApk by tasks.registering(Exec::class) {
     commandLine(
         "$buildTools/apksigner", "sign",
         "--ks", keystore, "--ks-pass", "pass:$password", "--ks-key-alias", alias, "--key-pass", "pass:$password",
+        // JAR (v1) signing too, although Android 7 needs only v2: some vendor installers still check it.
+        "--v1-signing-enabled", "true", "--v2-signing-enabled", "true", "--v3-signing-enabled", "true",
         "--out", signedApk.get().asFile.path, alignedApk.get().asFile.path,
     )
     doLast {
