@@ -18,8 +18,8 @@ import com.mindfullness.weather.domain.Severity
 import com.mindfullness.weather.domain.TimeText
 import com.mindfullness.weather.domain.WeatherAlert
 import com.mindfullness.weather.ui.Palette
-import java.time.Duration
-import java.time.LocalDateTime
+import org.threeten.bp.Duration
+import org.threeten.bp.LocalDateTime
 
 object Notifier {
     /** Extra carrying the id of the place a notification is about. */
@@ -30,6 +30,8 @@ object Notifier {
     private const val MORNING_ID = 1
 
     fun createChannels(context: Context) {
+        // Channels exist from Android 8; before that each notification carries its own priority.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_ALERTS, "Hava uyarıları", NotificationManager.IMPORTANCE_HIGH).apply {
@@ -69,7 +71,7 @@ object Notifier {
             append(alert.whenText(now)).append(" · ").append(alert.detail)
             alert.advice.take(2).forEach { append("\n• ").append(it) }
         }
-        val notification = Notification.Builder(context, CHANNEL_ALERTS)
+        val notification = builder(context, CHANNEL_ALERTS, important = true)
             .setSmallIcon(R.drawable.ic_stat_weather)
             .setColor(Palette.severity(alert.severity))
             .setContentTitle("$marker ${alert.title} · ${place.name}")
@@ -92,16 +94,20 @@ object Notifier {
             if (!rain.snow && rain.amount >= 0.1) append(" · ~${AlertEngine.formatAmount(rain.amount)} mm")
             rain.probability?.let { append(" · olasılık %$it") }
         }
-        val notification = Notification.Builder(context, CHANNEL_RAIN)
+        val notification = builder(context, CHANNEL_RAIN, important = true)
             .setSmallIcon(R.drawable.ic_stat_weather)
             .setColor(Palette.RAIN)
             .setContentTitle(if (rain.snow) "❄️ Kar yaklaşıyor · ${place.name}" else "☔ Yağmur yaklaşıyor · ${place.name}")
             .setContentText(text)
             .setCategory(Notification.CATEGORY_RECOMMENDATION)
             .setContentIntent(openApp(context, place))
-            // Pointless once the shower is over.
-            .setTimeoutAfter(Duration.between(now, rain.start.plusHours(2)).toMillis().coerceAtLeast(60_000L))
             .setAutoCancel(true)
+            .apply {
+                // Pointless once the shower is over.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    setTimeoutAfter(Duration.between(now, rain.start.plusHours(2)).toMillis().coerceAtLeast(60_000L))
+                }
+            }
             .build()
         notify(context, ("rain_soon" + place.id).hashCode(), notification)
     }
@@ -112,7 +118,7 @@ object Notifier {
             append("Günaydın · ").append(place.name)
             if (importantAlerts > 0) append(" · $importantAlerts uyarı")
         }
-        val notification = Notification.Builder(context, CHANNEL_DAILY)
+        val notification = builder(context, CHANNEL_DAILY, important = false)
             .setSmallIcon(R.drawable.ic_stat_weather)
             .setColor(Palette.ACCENT)
             .setContentTitle(title)
@@ -123,6 +129,16 @@ object Notifier {
             .build()
         notify(context, MORNING_ID, notification)
     }
+
+    private fun builder(context: Context, channel: String, important: Boolean): Notification.Builder =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(context, channel)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(context)
+                .setPriority(if (important) Notification.PRIORITY_HIGH else Notification.PRIORITY_DEFAULT)
+                .setDefaults(if (important) Notification.DEFAULT_SOUND else 0)
+        }
 
     private fun notify(context: Context, id: Int, notification: Notification) {
         try {

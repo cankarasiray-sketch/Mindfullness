@@ -6,8 +6,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDate
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDate
+import org.threeten.bp.LocalDateTime
 
 class AlertEngineTest {
 

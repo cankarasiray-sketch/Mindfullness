@@ -63,7 +63,10 @@ Kurulmuyorsa en sık nedenler:
 | "Uygulama yüklenmedi" / "paket mevcut bir paketle çakışıyor" | Telefonda farklı anahtarla imzalanmış eski bir sürüm (1.0.10 ve öncesi) var. Önce onu kaldırın. |
 | "Güvenliğiniz için bu kaynaktan yüklemeye izin verilmiyor" | Dosyayı açan uygulamaya (WhatsApp, Dosyalar, Chrome) **Ayarlar → Bilinmeyen uygulamaları yükle** izni verin. |
 | Play Protect "Uygulama engellendi / tanınmıyor" | **Daha fazla ayrıntı → Yine de yükle**. |
-| "Paket ayrıştırılırken sorun oluştu" | Android 8.0'dan eski telefon ya da dosya eksik indi; bağlantıdan yeniden indirin. |
+| Samsung: "Otomatik Engelleyici yetkisiz kaynaklardan yüklemeyi engelledi" | **Ayarlar → Güvenlik ve gizlilik → Otomatik Engelleyici**'yi kapatın (yeni Samsung'larda varsayılan olarak açık). |
+| Xiaomi: "Paket ayrıştırılırken sorun oluştu" / "Uygulama yüklenmedi" | APK'yı WhatsApp/Telegram içinden açmayın; bağlantıdan indirip **Dosya Yöneticisi → İndirilenler**'den açın. Güvenlik taramasında geri sayım bitince **Yine de yükle**. |
+| Huawei / Honor: "Saf mod" uyarısı | **Ayarlar → Sistem ve güncellemeler → Saf mod**'u kapatın. |
+| "Paket ayrıştırılırken sorun oluştu" | Android 7.0'dan eski telefon ya da dosya eksik indi; bağlantıdan yeniden indirin. |
 
 Uygulama açılıp kapanıyorsa bir sonraki açılışta hata raporu ekranı çıkar; **Raporu paylaş** ile gönderilen
 rapor sorunun yerini gösterir.
@@ -72,7 +75,8 @@ rapor sorunun yerini gösterir.
 
 - Kotlin, yalnızca Android framework'ü (View sistemi) ve Kotlin standart kütüphanesi — AndroidX, Compose
   veya başka bağımlılık yok. Arka plan kontrolleri `JobScheduler`, veri ayrıştırma `org.json` ile yapılır.
-- `minSdk 26` (Android 8.0), `targetSdk 34`
+- `minSdk 24` (Android 7.0), `targetSdk 34`; `java.time` yerine aynı API'li ThreeTen backport
+  (`org.threeten.bp`, saat dilimi veritabanı olmadan) kullanılır.
 
 ```bash
 ./gradlew testReleaseUnitTest   # uyarı motoru testleri
@@ -106,6 +110,10 @@ Kod düzeni:
 | `tools/` | İkon üretici (`generate_icons.py`) ve çevrimdışı APK derleyici |
 
 ### İmza anahtarı
+
+Secret'lar eklenene kadar sürümler `release/` klasörü üzerinden yayımlanır: anahtarla imzalanmış APK
+`release/HavaUyari.apk` olarak (sürümü `release/version.txt`'de) depoya konur, `publish-apk.yml` imzanın
+sürüm anahtarına ait olduğunu doğrulayıp onu "Latest" sürüm olarak yayımlar.
 
 Sürüm APK'ları gizli bir anahtarla imzalanır; anahtar depoda **bulunmaz**, yalnızca GitHub Secrets'ta durur.
 Deponun **Settings → Secrets and variables → Actions → New repository secret** bölümüne iki secret eklenir:

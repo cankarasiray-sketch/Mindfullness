@@ -1,8 +1,8 @@
 package com.mindfullness.weather.domain
 
-import java.time.DayOfWeek
-import java.time.LocalDate
-import java.time.LocalDateTime
+import org.threeten.bp.DayOfWeek
+import org.threeten.bp.LocalDate
+import org.threeten.bp.LocalDateTime
 import java.util.Locale
 import kotlin.math.roundToInt
 

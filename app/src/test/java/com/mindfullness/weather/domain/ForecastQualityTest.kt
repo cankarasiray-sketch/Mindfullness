@@ -6,7 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDateTime
 
 /** Model agreement, convective risk, air quality, flood risk and the rain-soon check. */
 class ForecastQualityTest {

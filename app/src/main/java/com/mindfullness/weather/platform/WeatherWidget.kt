@@ -16,14 +16,13 @@ import com.mindfullness.weather.domain.Forecast
 import com.mindfullness.weather.domain.Insights
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
-import com.mindfullness.weather.domain.TimeText
 import com.mindfullness.weather.domain.WeatherCodes
 import com.mindfullness.weather.ui.Palette
 import com.mindfullness.weather.ui.WeatherArt
 import com.mindfullness.weather.ui.deg
-import java.time.Instant
-import java.time.LocalDateTime
-import java.time.ZoneId
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Home-screen widget: current conditions and the most important alert for the widget place
@@ -160,8 +159,9 @@ class WeatherWidget : AppWidgetProvider() {
                 rain.expectsPrecipitation -> dot(views, Palette.RAIN, rain.headline)
                 else -> dot(views, Palette.GOOD, "Önemli bir hava olayı beklenmiyor")
             }
-            val fetched = LocalDateTime.ofInstant(Instant.ofEpochMilli(forecast.fetchedAtMillis), ZoneId.systemDefault())
-            views.setTextViewText(R.id.widget_updated, "${TimeText.hour(fetched)} itibarıyla")
+            // Device time zone; the app avoids region zones (no time-zone database is bundled).
+            val fetched = SimpleDateFormat("HH:mm", Locale.ROOT).format(Date(forecast.fetchedAtMillis))
+            views.setTextViewText(R.id.widget_updated, "$fetched itibarıyla")
             return views
         }
 

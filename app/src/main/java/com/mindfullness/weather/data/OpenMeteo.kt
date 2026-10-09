@@ -14,8 +14,8 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URLEncoder
-import java.time.LocalDate
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDate
+import org.threeten.bp.LocalDateTime
 import java.util.Locale
 
 /** Thin blocking client for the free, key-less Open-Meteo forecast and geocoding APIs. */

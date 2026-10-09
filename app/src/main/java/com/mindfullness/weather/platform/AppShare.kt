@@ -10,10 +10,13 @@ object AppShare {
 
         İndirmek için: $DOWNLOAD_URL
 
-        Kurulum (Android 8 ve üzeri):
+        Kurulum (Android 7.0 ve üzeri):
         1. Bağlantıyı tarayıcıda açın; HavaUyari.apk iner.
         2. İnen dosyaya dokunun. "Bu kaynaktan yüklemeye izin ver" istenirse açın.
         3. Play Protect uyarı verirse "Daha fazla ayrıntı → Yine de yükle"yi seçin.
+        Xiaomi'de: dosyayı WhatsApp içinden değil, Dosya Yöneticisi → İndirilenler'den açın; güvenlik uyarısında geri sayım bitince "Yine de yükle"yi seçin.
+        Samsung'da yükleme engellenirse: Ayarlar → Güvenlik ve gizlilik → Otomatik Engelleyici'yi kapatın.
+        Huawei'de: Ayarlar → Sistem ve güncellemeler → Saf mod'u kapatın.
         Daha önce Hava Uyarı'nın eski bir sürümünü kurduysanız önce onu kaldırın.
     """.trimIndent()
 }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Round launcher icon for Android 7.1; Android 8+ uses the adaptive icon in mipmap-anydpi-v26. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:angle="270"
+                android:endColor="#FF102F6B"
+                android:startColor="#FF2F74DB" />
+        </shape>
+    </item>
+    <item
+        android:bottom="-6dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:left="-6dp"
+        android:right="-6dp"
+        android:top="-6dp" />
+</layer-list>

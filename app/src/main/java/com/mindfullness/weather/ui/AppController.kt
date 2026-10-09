@@ -16,7 +16,7 @@ import com.mindfullness.weather.platform.JobScheduling
 import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.platform.SettingsStore
 import com.mindfullness.weather.platform.WeatherWidget
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDateTime
 import kotlin.math.cos
 import kotlin.math.sqrt
 

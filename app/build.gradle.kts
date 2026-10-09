@@ -15,7 +15,8 @@ android {
 
     defaultConfig {
         applicationId = "com.mindfullness.weather"
-        minSdk = 26
+        // Android 7.0: java.time comes from the ThreeTen backport, as it only exists from Android 8.
+        minSdk = 24
         targetSdk = 34
         versionCode = buildNumber
         versionName = "1.0.$buildNumber"
@@ -59,8 +60,10 @@ android {
 }
 
 dependencies {
-    // The app uses only the Android framework and the Kotlin standard library, so it can also be
-    // built without Google's Maven repository (see tools/offline-apk).
+    // The app uses only the Android framework, the Kotlin standard library and the java.time
+    // backport, so it can also be built without Google's Maven repository (see tools/offline-apk).
+    // Without the time-zone database: the app only works with fixed UTC offsets.
+    implementation(variantOf(libs.threetenbp) { classifier("no-tzdb") })
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
 }

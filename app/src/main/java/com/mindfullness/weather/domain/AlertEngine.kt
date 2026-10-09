@@ -1,8 +1,8 @@
 package com.mindfullness.weather.domain
 
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.temporal.ChronoUnit
+import org.threeten.bp.LocalDate
+import org.threeten.bp.LocalDateTime
+import org.threeten.bp.temporal.ChronoUnit
 import kotlin.math.roundToInt
 
 /** Warning levels follow the colour scheme used by MGM / Meteoalarm. */

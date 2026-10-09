@@ -1,0 +1,55 @@
+name: Publish signed APK
+
+# Publishes an APK that was signed with the release key outside CI and committed to release/.
+# Used while the SIGNING_* secrets are not set up; with them, android.yml builds and publishes itself.
+on:
+  push:
+    paths: ["release/HavaUyari.apk"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-apk
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: apk
+        run: echo "version=$(tr -d '[:space:]' < release/version.txt)" >> "$GITHUB_OUTPUT"
+
+      # Only an APK signed with the release key may become the "Latest" download.
+      - name: Verify release signature
+        run: |
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$apksigner" verify --print-certs release/HavaUyari.apk | tee certs.txt
+          grep -q "SHA-256 digest: d77b2469e50daeaff0620d4c7f71a8b28b8370c095f588279b740245860a7626" certs.txt
+          cp release/HavaUyari.apk "HavaUyari-${{ steps.apk.outputs.version }}.apk"
+          cp release/HavaUyari.apk HavaUyari.apk
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.apk.outputs.version }}
+          name: Hava Uyarı ${{ steps.apk.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          files: |
+            HavaUyari-${{ steps.apk.outputs.version }}.apk
+            HavaUyari.apk
+          body: |
+            Telefona kurmak için **HavaUyari.apk** dosyasını telefonun tarayıcısında indirip açın (Android 7.0 ve üzeri).
+            Başkasıyla paylaşırken dosya yerine şu bağlantıyı gönderin; her zaman en yeni sürümü indirir:
+            https://github.com/${{ github.repository }}/releases/latest/download/HavaUyari.apk
+
+            - İnen dosyayı WhatsApp/Telegram içinden değil, **Dosya Yöneticisi → İndirilenler**'den açın (özellikle Xiaomi).
+            - "Bu kaynaktan yüklemeye izin ver" istenirse açın.
+            - Güvenlik / Play Protect uyarısında "Yine de yükle"yi seçin (Xiaomi'de geri sayım bitince).
+            - Samsung'da: Ayarlar → Güvenlik ve gizlilik → Otomatik Engelleyici'yi kapatın.
+            - Eski anahtarla imzalanmış bir sürüm (1.0.10 ve öncesi) kuruluysa önce onu kaldırın.

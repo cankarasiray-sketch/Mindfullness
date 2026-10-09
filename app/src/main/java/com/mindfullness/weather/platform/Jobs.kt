@@ -16,10 +16,7 @@ import com.mindfullness.weather.domain.Insights
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
 import java.io.File
-import java.time.Duration
-import java.time.LocalTime
-import java.time.ZoneId
-import java.time.ZonedDateTime
+import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
 object AppGraph {
@@ -121,7 +118,8 @@ object JobScheduling {
     private const val ALERT_JOB = 1001
     private const val ALERT_NOW_JOB = 1002
     private const val MORNING_JOB = 1003
-    private val MORNING_TIME: LocalTime = LocalTime.of(6, 0)
+    private const val MORNING_HOUR = 6
+    private const val MORNING_MINUTE = 0
     /** Extra recording the time a morning job was scheduled for, so a changed time replaces it. */
     private const val EXTRA_MORNING_MINUTE = "morning_minute"
 
@@ -165,13 +163,18 @@ object JobScheduling {
     }
 
     fun scheduleMorning(context: Context) {
-        // Zoned times keep the summary at 06:00 local across daylight-saving changes.
-        val zone = ZoneId.systemDefault()
-        val now = ZonedDateTime.now(zone)
-        var next = now.toLocalDate().atTime(MORNING_TIME).atZone(zone)
+        // Calendar works in the device's time zone, so the summary stays at 06:00 local across
+        // daylight-saving changes (adding a day keeps the wall-clock time).
+        val now = Calendar.getInstance()
+        val next = (now.clone() as Calendar).apply {
+            set(Calendar.HOUR_OF_DAY, MORNING_HOUR)
+            set(Calendar.MINUTE, MORNING_MINUTE)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
         // A run that fires slightly early must not schedule a second summary for the same morning.
-        if (!next.isAfter(now.plusMinutes(30))) next = next.plusDays(1)
-        val delay = Duration.between(now, next).toMillis()
+        if (next.timeInMillis <= now.timeInMillis + TimeUnit.MINUTES.toMillis(30)) next.add(Calendar.DAY_OF_YEAR, 1)
+        val delay = next.timeInMillis - now.timeInMillis
         val job = JobInfo.Builder(MORNING_JOB, ComponentName(context, MorningJobService::class.java))
             .setMinimumLatency(delay)
             .setOverrideDeadline(delay + TimeUnit.MINUTES.toMillis(45))
@@ -182,5 +185,5 @@ object JobScheduling {
         scheduler(context)?.schedule(job)
     }
 
-    private val morningMinute: Int get() = MORNING_TIME.hour * 60 + MORNING_TIME.minute
+    private val morningMinute: Int get() = MORNING_HOUR * 60 + MORNING_MINUTE
 }

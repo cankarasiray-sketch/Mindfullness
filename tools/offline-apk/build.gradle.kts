@@ -39,6 +39,7 @@ dependencies {
     androidAll("org.robolectric:android-all:14-robolectric-10818077")
     compileOnly("org.robolectric:android-all:14-robolectric-10818077")
     proguard("com.guardsquare:proguard-base:7.6.1")
+    implementation("org.threeten:threetenbp:1.7.0:no-tzdb")
 }
 
 java {
@@ -92,7 +93,7 @@ val linkResources by tasks.registering(Exec::class) {
             "link",
             "-I", androidAll.singleFile.path,
             "--manifest", manifest.get().asFile.path,
-            "--min-sdk-version", "26", "--target-sdk-version", "34",
+            "--min-sdk-version", "24", "--target-sdk-version", "34",
             "--version-code", versionCode.toString(), "--version-name", versionName,
             "--java", genDir.get().asFile.path,
             "--proguard", aaptRules.get().asFile.path,
@@ -138,7 +139,7 @@ val dex by tasks.registering(Exec::class) {
     outputs.file(classesDex)
     dependsOn(shrink)
     commandLine(
-        "java", "-jar", "$buildTools/lib/dx.jar", "--dex", "--min-sdk-version=26",
+        "java", "-jar", "$buildTools/lib/dx.jar", "--dex", "--min-sdk-version=24",
         "--output=${classesDex.get().asFile.path}", shrunkJar.get().asFile.path,
     )
 }

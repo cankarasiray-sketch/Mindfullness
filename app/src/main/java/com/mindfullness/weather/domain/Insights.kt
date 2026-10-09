@@ -1,6 +1,6 @@
 package com.mindfullness.weather.domain
 
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDateTime
 import kotlin.math.roundToInt
 
 enum class TipKind { UMBRELLA, WARM_COAT, JACKET, SUNSCREEN, SUNGLASSES, WATER, BOOTS, WINDBREAKER, MASK }

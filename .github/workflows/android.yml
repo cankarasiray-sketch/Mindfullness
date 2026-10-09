@@ -90,12 +90,13 @@ jobs:
             HavaUyari-${{ steps.apk.outputs.version }}.apk
             HavaUyari.apk
           body: |
-            Telefona kurmak için aşağıdaki **HavaUyari.apk** dosyasını telefonun tarayıcısında indirip açın (Android 8 ve üzeri).
+            Telefona kurmak için aşağıdaki **HavaUyari.apk** dosyasını telefonun tarayıcısında indirip açın (Android 7.0 ve üzeri).
             Başkasıyla paylaşırken dosya yerine şu bağlantıyı gönderin; her zaman en yeni sürümü indirir:
             https://github.com/${{ github.repository }}/releases/latest/download/HavaUyari.apk
 
             - "Bu kaynaktan yüklemeye izin ver" istenirse açın.
             - Play Protect uyarı verirse "Daha fazla ayrıntı → Yine de yükle"yi seçin.
+            - Samsung'da: Ayarlar → Güvenlik ve gizlilik → Otomatik Engelleyici'yi kapatın.
             - Eski anahtarla imzalanmış bir sürüm (1.0.10 ve öncesi) kuruluysa önce onu kaldırın.
 
             Dal: `${{ github.ref_name }}` · Commit: ${{ github.sha }}

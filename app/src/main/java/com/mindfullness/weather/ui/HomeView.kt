@@ -32,8 +32,8 @@ import com.mindfullness.weather.domain.TimeText
 import com.mindfullness.weather.domain.Tip
 import com.mindfullness.weather.domain.WeatherAlert
 import com.mindfullness.weather.domain.WeatherCodes
-import java.time.LocalDate
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDate
+import org.threeten.bp.LocalDateTime
 import kotlin.math.roundToInt
 
 class HomeView(context: Context, private val actions: Actions) : FrameLayout(context) {
@@ -299,7 +299,11 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             // Shrinks "-12°" on narrow screens or large font scales instead of wrapping the "°".
             ellipsize = null
             gravity = Gravity.CENTER_VERTICAL
-            setAutoSizeTextTypeUniformWithConfiguration(40, 96, 2, TypedValue.COMPLEX_UNIT_SP)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                setAutoSizeTextTypeUniformWithConfiguration(40, 96, 2, TypedValue.COMPLEX_UNIT_SP)
+            } else {
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 80f)
+            }
         }
         row.addView(temperature, LinearLayout.LayoutParams(0, dp(120), 1f))
         row.addView(WeatherIconView(context, current.weatherCode, current.isDay), LinearLayout.LayoutParams(dp(120), dp(120)))

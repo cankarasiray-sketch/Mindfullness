@@ -8,6 +8,8 @@ build/
 .externalNativeBuild
 .cxx
 *.apk
+# Signed release published by .github/workflows/publish-apk.yml
+!release/HavaUyari.apk
 *.aab
 /dist
 # Signing keys are private and live in GitHub Secrets.

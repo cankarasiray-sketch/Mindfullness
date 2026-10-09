@@ -1,7 +1,7 @@
 package com.mindfullness.weather.domain
 
-import java.time.LocalDate
-import java.time.LocalDateTime
+import org.threeten.bp.LocalDate
+import org.threeten.bp.LocalDateTime
 
 /** Builders for synthetic forecasts: mild, dry weather unless a test changes it. */
 internal fun hours(start: LocalDateTime, count: Int, modify: HourlyPoint.(Int) -> HourlyPoint): List<HourlyPoint> =
