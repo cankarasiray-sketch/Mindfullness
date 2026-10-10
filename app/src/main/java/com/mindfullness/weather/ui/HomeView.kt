@@ -86,6 +86,9 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     /** Direction of the place sliding in after a swipe, until it is rendered. */
     private var entering = 0
     private var placeBeforeSwipe: Long? = null
+    /** The new place is sliding in; a touch may interrupt it. */
+    private var slidingIn = false
+    private var slideGeneration = 0
     private var shownPlaceId: Long? = null
     private var refreshAnimator: ObjectAnimator? = null
 
@@ -291,7 +294,10 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         !onboarding && !swipeAnimating && (pager.count >= 2 || (pager.count == 1 && pager.index < 0))
 
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && slidingIn) finishSlideIn()
         track(event)
+        // While the old place slides out or the new one is awaited, a touch must not click through.
+        if (event.actionMasked == MotionEvent.ACTION_DOWN && swipeAnimating) return true
         return swiping
     }
 
@@ -310,6 +316,12 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 if (swiping) settle()
                 endGesture()
             }
+            // A second finger ends the swipe rather than letting the offset jump between fingers.
+            MotionEvent.ACTION_POINTER_DOWN -> if (swiping) {
+                settle()
+                swiping = false
+                swipeBlocked = true
+            }
         }
         return true
     }
@@ -324,12 +336,17 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 velocity?.recycle()
                 velocity = VelocityTracker.obtain()
             }
+            MotionEvent.ACTION_POINTER_DOWN -> if (!swiping) swipeBlocked = true
             MotionEvent.ACTION_MOVE -> if (!swiping && !swipeBlocked) {
                 val dx = event.x - downX
                 val dy = event.y - downY
                 if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.5f) {
                     swiping = true
-                    downX = event.x
+                    // Continue from where a settling animation left the page.
+                    pages.forEach { it.animate().cancel() }
+                    val offset = pullToRefresh.translationX
+                    val towards = if (offset < 0) 1 else -1
+                    downX = event.x - (if (offset == 0f || pager.canMove(towards)) offset else offset / 0.25f)
                     parent?.requestDisallowInterceptTouchEvent(true)
                 } else if (abs(dy) > touchSlop) {
                     // A vertical scroll; leave it to the list.
@@ -343,7 +360,8 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private fun insideHorizontalScroller(rawX: Float, rawY: Float): Boolean {
         val location = IntArray(2)
         return horizontalScrollers.any { view ->
-            if (!view.isShown) return@any false
+            // A row whose content fits cannot scroll, so swipes there switch places.
+            if (!view.isShown || (!view.canScrollHorizontally(1) && !view.canScrollHorizontally(-1))) return@any false
             view.getLocationOnScreen(location)
             rawX >= location[0] && rawX < location[0] + view.width && rawY >= location[1] && rawY < location[1] + view.height
         }
@@ -391,13 +409,27 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private fun slideIn() {
         val from = entering * width * 0.35f
         entering = 0
+        slidingIn = true
+        val generation = ++slideGeneration
         pages.forEach { page ->
             page.animate().cancel()
             page.translationX = from
             page.alpha = 0f
             page.animate().translationX(0f).alpha(1f).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
         }
-        postDelayed({ swipeAnimating = false }, 220)
+        postDelayed({ if (generation == slideGeneration) finishSlideIn() }, 220)
+    }
+
+    /** Ends the slide-in at once, e.g. when the next swipe starts during it. */
+    private fun finishSlideIn() {
+        slideGeneration++
+        slidingIn = false
+        swipeAnimating = false
+        pages.forEach {
+            it.animate().cancel()
+            it.translationX = 0f
+            it.alpha = 1f
+        }
     }
 
     private fun settle() {

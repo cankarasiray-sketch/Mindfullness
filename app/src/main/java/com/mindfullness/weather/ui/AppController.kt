@@ -141,6 +141,9 @@ class AppController(context: Context) {
     private val remembered = HashMap<Long, Pair<Place, Forecast>>()
     private val prefetching = HashSet<Long>()
 
+    /** When the device location was last fixed in this process (0: not yet). */
+    private var fixedAtMillis = 0L
+
     private var loadToken = 0
     private var locateToken = 0
     private var searchToken = 0
@@ -248,8 +251,9 @@ class AppController(context: Context) {
         val index = list.indexOfFirst { it.id == home.place?.id }
         val target = if (index < 0) (if (step > 0) list.first() else list.last()) else list[index + step]
         when {
-            // A fresh forecast of the last fix is enough; otherwise the device may have moved.
-            target.isCurrentLocation && locator.hasPermission() && !isFresh(target) -> useCurrentLocation()
+            // A recent fix with a fresh forecast is enough; otherwise the device may have moved.
+            target.isCurrentLocation && locator.hasPermission() &&
+                !(isFresh(target) && System.currentTimeMillis() - fixedAtMillis < FRESH_MILLIS) -> useCurrentLocation()
             else -> {
                 cancelLocating()
                 store.selectedId = target.id
@@ -282,8 +286,9 @@ class AppController(context: Context) {
     private fun prefetchNeighbours() {
         val list = pages
         val index = list.indexOfFirst { it.id == home.place?.id }
+        // The device location's cache file may still hold an earlier fix's forecast, so it is not prefetched.
         listOfNotNull(list.getOrNull(index - 1), list.getOrNull(index + 1))
-            .filter { recall(it) == null && prefetching.add(it.id) }
+            .filter { !it.isCurrentLocation && recall(it) == null && prefetching.add(it.id) }
             .forEach { place ->
                 Async.runLow({ repository.cached(place) }) { result ->
                     prefetching.remove(place.id)
@@ -306,7 +311,6 @@ class AppController(context: Context) {
             if (known == null) {
                 Async.run({ repository.cached(lastKnown) }) { result ->
                     val cached = result.getOrNull() ?: return@run
-                    remember(lastKnown, cached)
                     if (token == locateToken && isLocating && home.place?.isCurrentLocation == true && home.content == null) {
                         setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = true))
                     }
@@ -320,6 +324,7 @@ class AppController(context: Context) {
             isLocating = false
             val place = located?.let(::keepKnownName)
             if (place != null) {
+                fixedAtMillis = System.currentTimeMillis()
                 currentPlace = place
                 store.lastCurrentPlace = place
                 store.selectedId = Place.CURRENT_LOCATION_ID
@@ -413,7 +418,8 @@ class AppController(context: Context) {
             setHome(HomeState(place = place, isLoading = true, isRefreshing = userRefresh, isLocating = isLocating))
             Async.run({ repository.cached(place) }) { result ->
                 val cached = result.getOrNull()
-                if (cached != null) remember(place, cached)
+                // One cache file serves every fix of the device location, so only real places are remembered.
+                if (cached != null && !place.isCurrentLocation) remember(place, cached)
                 if (cached != null && token == loadToken && home.content == null) {
                     // The fetch may already have failed; only keep spinning while it is still running.
                     setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = fetchPending))
@@ -422,6 +428,8 @@ class AppController(context: Context) {
             prefetchNeighbours()
         }
         Async.run({ repository.fetch(place) }) { result ->
+            // Kept even when the user has moved on, so coming back shows it without another fetch.
+            result.getOrNull()?.let { remember(place, it) }
             if (token != loadToken) return@run
             fetchPending = false
             val forecast = result.getOrNull()
@@ -517,13 +525,14 @@ class AppController(context: Context) {
             }) { result ->
                 summariesInFlight.remove(place.id)
                 val (cached, fetched) = result.getOrNull() ?: return@runLow
-                (fetched ?: cached)?.let { putSummary(place, it) }
+                (fetched ?: cached)?.let { putSummary(place, it, fetched = fetched != null) }
             }
         }
     }
 
-    private fun putSummary(place: Place, forecast: Forecast) {
-        remember(place, forecast)
+    private fun putSummary(place: Place, forecast: Forecast, fetched: Boolean = true) {
+        // A cached device-location forecast may belong to an earlier fix.
+        if (fetched || !place.isCurrentLocation) remember(place, forecast)
         WeatherWidget.onForecast(app, place, forecast)
         val now = forecast.localNow()
         val today = forecast.today(now)

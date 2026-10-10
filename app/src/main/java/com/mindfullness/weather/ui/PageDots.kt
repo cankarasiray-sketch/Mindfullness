@@ -17,6 +17,12 @@ class PageDots(context: Context) : View(context) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val arrow = Path()
 
+    init {
+        // The location arrow is a little wider than a dot.
+        val overhang = kotlin.math.ceil(size * 0.15f).toInt()
+        setPadding(overhang, overhang, overhang, overhang)
+    }
+
     fun set(pager: PagerInfo) {
         if (pager.count == count && pager.index == index && pager.firstIsLocation == firstIsLocation) return
         count = pager.count

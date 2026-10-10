@@ -23,6 +23,12 @@ const val MAX_FAVORITES = 10
 class SettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("hava_uyari", Context.MODE_PRIVATE)
 
+    init {
+        // Up to version 1.0.15, 15 places were kept, most recently used first: keep the 10 newest.
+        val saved = places
+        if (saved.size > MAX_FAVORITES) writePlaces(saved.take(MAX_FAVORITES))
+    }
+
     val places: List<Place>
         get() = prefs.getString(KEY_PLACES, null)?.let { json ->
             runCatching {
