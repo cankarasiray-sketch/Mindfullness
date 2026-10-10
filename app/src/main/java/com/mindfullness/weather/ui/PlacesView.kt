@@ -24,6 +24,7 @@ import android.widget.ScrollView
 import com.mindfullness.weather.R
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
+import com.mindfullness.weather.platform.MAX_FAVORITES
 import java.util.Locale
 
 class PlacesView(context: Context, private val actions: Actions) : LinearLayout(context) {
@@ -33,6 +34,7 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
         fun select(place: Place)
         fun selectCurrentLocation()
         fun remove(place: Place)
+        fun move(place: Place, offset: Int)
         fun setNotificationPlace(place: Place)
         fun back()
     }
@@ -167,20 +169,30 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
         list.removeAllViews()
         if (state.query.isBlank()) {
             list.addView(currentLocationRow(state).params(top = 4, bottom = 8))
-            list.addView(header("Kayıtlı yerler"))
+            list.addView(header("Favori yerler · ${state.saved.size}/$MAX_FAVORITES"))
             if (state.saved.isEmpty()) {
                 list.addView(
                     hint(
                         R.drawable.ic_pin,
-                        "Henüz kayıtlı yer yok",
-                        "Yukarıdan bir şehir veya ilçe arayın. Baktığınız yerler burada listelenir; tek dokunuşla geçiş yapabilirsiniz.",
+                        "Henüz favori yer yok",
+                        "Yukarıdan bir şehir veya ilçe arayın; baktığınız yerler buraya eklenir (en fazla $MAX_FAVORITES). " +
+                            "Ana ekranda sağa-sola kaydırarak aralarında geçiş yapabilirsiniz.",
                     ),
                 )
-            }
-            state.saved.forEach { summary ->
+            } else {
                 list.addView(
-                    savedRow(summary, summary.place.id == state.selectedId, summary.place.id == state.notificationPlaceId)
-                        .params(bottom = 8),
+                    context.text(
+                        "Ana ekranda sağa-sola kaydırarak bu sırayla geçiş yapabilirsiniz.",
+                        13f, Palette.ON_SURFACE_MUTED,
+                    ).params(start = 4, top = -4, bottom = 10),
+                )
+            }
+            state.saved.forEachIndexed { position, summary ->
+                list.addView(
+                    savedRow(
+                        summary, summary.place.id == state.selectedId, summary.place.id == state.notificationPlaceId,
+                        canMoveUp = position > 0, canMoveDown = position < state.saved.lastIndex,
+                    ).params(bottom = 8),
                 )
             }
         } else {
@@ -250,7 +262,7 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
             }
         }
 
-    private fun savedRow(summary: PlaceSummary, selected: Boolean, notifies: Boolean): View =
+    private fun savedRow(summary: PlaceSummary, selected: Boolean, notifies: Boolean, canMoveUp: Boolean, canMoveDown: Boolean): View =
         rowContainer(selected) { actions.select(summary.place) }.apply {
             val texts = context.vertical()
             val name = context.text(summary.place.name, 16f, Palette.ON_SURFACE, Fonts.medium, maxLines = 1)
@@ -276,18 +288,22 @@ class PlacesView(context: Context, private val actions: Actions) : LinearLayout(
             addView(texts, LayoutParams(0, WRAP, 1f))
             weatherBadge(summary)?.let { addView(it.params(WRAP, WRAP, start = 8)) }
             val more = context.iconButton(R.drawable.ic_more, "Seçenekler", Palette.ON_SURFACE_MUTED) {}
-            more.setOnClickListener { showMenu(more, summary.place, notifies) }
+            more.setOnClickListener { showMenu(more, summary.place, notifies, canMoveUp, canMoveDown) }
             addView(more)
         }
 
-    private fun showMenu(anchor: View, place: Place, notifies: Boolean) {
+    private fun showMenu(anchor: View, place: Place, notifies: Boolean, canMoveUp: Boolean, canMoveDown: Boolean) {
         val menu = PopupMenu(context, anchor)
         if (!notifies) menu.menu.add(0, 1, 0, "Bildirimleri bu yer için al")
-        menu.menu.add(0, 2, 1, "Listeden kaldır")
+        if (canMoveUp) menu.menu.add(0, 3, 1, "Yukarı taşı")
+        if (canMoveDown) menu.menu.add(0, 4, 2, "Aşağı taşı")
+        menu.menu.add(0, 2, 3, "Listeden kaldır")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> actions.setNotificationPlace(place)
                 2 -> actions.remove(place)
+                3 -> actions.move(place, -1)
+                4 -> actions.move(place, 1)
             }
             true
         }

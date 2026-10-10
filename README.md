@@ -21,8 +21,10 @@ veya ilçenin hava durumuna da bakabilirsiniz.
   - 3–7 gün sonrası için "İleriki günler" ön uyarıları.
 - **Yağış grafiği** – 24 saatlik yağış miktarı ve olasılığı; "Yağış bekleniyor · 15:00 – 21:00" gibi özet.
 - **Yanınıza alın** – şemsiye, mont, güneş kremi, su şişesi gibi kısa öneriler.
-- **Arama ve kayıtlı yerler** – Türkçe yer adı araması (il, ilçe, dünya genelinde şehirler); baktığınız
-  yerler listede kalır, anlık sıcaklık ve varsa uyarı rozetiyle görünür.
+- **Arama ve favori yerler** – Türkçe yer adı araması (il, ilçe, dünya genelinde şehirler); baktığınız
+  yerler en fazla 10 favori olarak listede kalır, anlık sıcaklık ve varsa uyarı rozetiyle görünür.
+  **Ana ekranda sağa-sola kaydırarak** mevcut konum ve favoriler arasında geçilir (alttaki noktalar
+  sırayı gösterir); sıra listedeki "Yukarı/Aşağı taşı" ile değiştirilebilir.
 - **Bildirimler** – seçtiğiniz konum için arka planda düzenli kontrol; sarı ve üzeri (veya yalnızca
   turuncu/kırmızı) uyarılarda bildirim. İsteğe bağlı 06:00 **sabah özeti**.
 - **Yağmur başlamadan haber ver** – yağmur veya kar 1–2 saat içinde başlayacaksa kısa bir bildirim

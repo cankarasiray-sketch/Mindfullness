@@ -10,8 +10,13 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.VelocityTracker
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowInsets
+import android.view.animation.AccelerateInterpolator
+import android.view.animation.DecelerateInterpolator
 import android.view.animation.LinearInterpolator
 import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
@@ -34,6 +39,8 @@ import com.mindfullness.weather.domain.WeatherAlert
 import com.mindfullness.weather.domain.WeatherCodes
 import org.threeten.bp.LocalDate
 import org.threeten.bp.LocalDateTime
+import kotlin.math.abs
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 class HomeView(context: Context, private val actions: Actions) : FrameLayout(context) {
@@ -44,6 +51,9 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         fun openSettings()
         fun useLocation()
         fun share(alert: WeatherAlert)
+
+        /** Shows the next (+1) or previous (-1) place; false when there is none. */
+        fun swipe(step: Int): Boolean
     }
 
     private val sky = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, Palette.sky(null, true))
@@ -58,6 +68,25 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private val subtitle = context.text("", 12f, Palette.TEXT_SECONDARY, maxLines = 1)
     private val placeIcon = context.icon(R.drawable.ic_navigation, Palette.TEXT, 16)
     private val refreshButton = context.iconButton(R.drawable.ic_refresh, "Yenile") { actions.refresh() }
+    private val dots = PageDots(context)
+    private val dotsPill = FrameLayout(context)
+
+    // Horizontal swipe between places.
+    private var pager = PagerInfo.NONE
+    private var onboarding = false
+    private val horizontalScrollers = ArrayList<View>()
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val minFling = ViewConfiguration.get(context).scaledMinimumFlingVelocity
+    private var downX = 0f
+    private var downY = 0f
+    private var swiping = false
+    private var swipeBlocked = false
+    private var swipeAnimating = false
+    private var velocity: VelocityTracker? = null
+    /** Direction of the place sliding in after a swipe, until it is rendered. */
+    private var entering = 0
+    private var placeBeforeSwipe: Long? = null
+    private var shownPlaceId: Long? = null
     private var refreshAnimator: ObjectAnimator? = null
 
     private var insetTop = 0
@@ -84,6 +113,11 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         buildBanner()
         buildTopBar()
         addView(topBar, LayoutParams(MATCH, WRAP, Gravity.TOP))
+        dotsPill.background = rounded(Color.argb(70, 0, 0, 0), dp(12).toFloat())
+        dotsPill.setPadding(dp(10), dp(7), dp(10), dp(7))
+        dotsPill.addView(dots, LayoutParams(WRAP, WRAP))
+        dotsPill.visibility = View.GONE
+        addView(dotsPill, LayoutParams(WRAP, WRAP, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
         setOnApplyWindowInsetsListener { _, insets ->
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val bars = insets.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
@@ -108,7 +142,16 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
     // region Rendering ---------------------------------------------------------------------------
 
-    fun render(state: HomeState) {
+    fun render(state: HomeState, pager: PagerInfo = PagerInfo.NONE) {
+        this.pager = pager
+        onboarding = state.needsOnboarding
+        shownPlaceId = state.place?.id
+        val dotsVisible = !state.needsOnboarding && (pager.count >= 2 || (pager.count == 1 && pager.index < 0))
+        if (dotsVisible != (dotsPill.visibility == View.VISIBLE)) {
+            dotsPill.visibility = if (dotsVisible) View.VISIBLE else View.GONE
+            applyInsets()
+        }
+        dots.set(pager)
         val current = state.content?.forecast?.current
         sky.colors = Palette.sky(current?.weatherCode, current?.isDay ?: true)
 
@@ -150,6 +193,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             renderedPlaceId = null
             content.removeAllViews()
         }
+        if (entering != 0 && state.place?.id != placeBeforeSwipe) slideIn()
     }
 
     private fun showOverlay(key: String?, build: () -> View?) {
@@ -170,7 +214,13 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
     private fun applyInsets() {
         topBar.setPadding(insetLeft + dp(8), insetTop + dp(6), insetRight + dp(4), dp(10))
-        content.setPadding(insetLeft + dp(16), insetTop + dp(76), insetRight + dp(16), insetBottom + dp(28))
+        // Room for the page dots, so the last card is not hidden under them.
+        val dotsRoom = if (dotsPill.visibility == View.VISIBLE) dp(36) else 0
+        content.setPadding(insetLeft + dp(16), insetTop + dp(76), insetRight + dp(16), insetBottom + dp(28) + dotsRoom)
+        (dotsPill.layoutParams as? LayoutParams)?.let {
+            it.bottomMargin = insetBottom + dp(12)
+            dotsPill.layoutParams = it
+        }
         pullToRefresh.restingTop = insetTop + dp(76)
         for (i in 0 until overlay.childCount) {
             overlay.getChildAt(i).setPadding(insetLeft + dp(24), insetTop + dp(24), insetRight + dp(24), insetBottom + dp(24))
@@ -198,6 +248,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private fun rebuild(data: ForecastContent) {
         val forecast = data.forecast
         val now = data.now
+        horizontalScrollers.clear()
         val today = forecast.today(now)
         content.removeAllViews()
         content.addView(banner)
@@ -229,6 +280,135 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 12f, Palette.TEXT_TERTIARY,
             ).apply { gravity = Gravity.CENTER }.params(top = 4),
         )
+    }
+
+    // endregion
+    // region Swiping between places --------------------------------------------------------------
+
+    private val pages: List<View> get() = listOf(pullToRefresh, overlay)
+
+    private fun canSwipe(): Boolean =
+        !onboarding && !swipeAnimating && (pager.count >= 2 || (pager.count == 1 && pager.index < 0))
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        track(event)
+        return swiping
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        // DOWN was already seen by onInterceptTouchEvent; later events come here directly when no
+        // child took the gesture, or once it was intercepted.
+        if (event.actionMasked != MotionEvent.ACTION_DOWN) track(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> return canSwipe()
+            MotionEvent.ACTION_MOVE -> if (swiping) drag(event.x - downX)
+            MotionEvent.ACTION_UP -> {
+                if (swiping) release(event.x - downX)
+                endGesture()
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                if (swiping) settle()
+                endGesture()
+            }
+        }
+        return true
+    }
+
+    private fun track(event: MotionEvent) {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x
+                downY = event.y
+                swiping = false
+                swipeBlocked = !canSwipe() || insideHorizontalScroller(event.rawX, event.rawY)
+                velocity?.recycle()
+                velocity = VelocityTracker.obtain()
+            }
+            MotionEvent.ACTION_MOVE -> if (!swiping && !swipeBlocked) {
+                val dx = event.x - downX
+                val dy = event.y - downY
+                if (abs(dx) > touchSlop && abs(dx) > abs(dy) * 1.5f) {
+                    swiping = true
+                    downX = event.x
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                } else if (abs(dy) > touchSlop) {
+                    // A vertical scroll; leave it to the list.
+                    swipeBlocked = true
+                }
+            }
+        }
+        velocity?.addMovement(event)
+    }
+
+    private fun insideHorizontalScroller(rawX: Float, rawY: Float): Boolean {
+        val location = IntArray(2)
+        return horizontalScrollers.any { view ->
+            if (!view.isShown) return@any false
+            view.getLocationOnScreen(location)
+            rawX >= location[0] && rawX < location[0] + view.width && rawY >= location[1] && rawY < location[1] + view.height
+        }
+    }
+
+    /** Follows the finger; past the first or last place it only gives a little (rubber band). */
+    private fun drag(dx: Float) {
+        val step = if (dx < 0) 1 else -1
+        val offset = if (pager.canMove(step)) dx else dx * 0.25f
+        pages.forEach {
+            it.translationX = offset
+            it.alpha = 1f - min(0.4f, abs(offset) / width.coerceAtLeast(1))
+        }
+    }
+
+    private fun release(dx: Float) {
+        val tracker = velocity
+        tracker?.computeCurrentVelocity(1000)
+        val vx = tracker?.xVelocity ?: 0f
+        val step = if (dx < 0) 1 else -1
+        val flung = abs(vx) > minFling * 6 && (vx < 0) == (dx < 0) && abs(dx) > touchSlop
+        if (pager.canMove(step) && (abs(dx) > width * 0.25f || flung)) commit(step) else settle()
+    }
+
+    private fun commit(step: Int) {
+        swipeAnimating = true
+        placeBeforeSwipe = shownPlaceId
+        pages.forEach { page ->
+            page.animate().translationX(-step * width.toFloat()).alpha(0f).setDuration(150)
+                .setInterpolator(AccelerateInterpolator()).start()
+        }
+        // One end action for the whole move: switch places, then the new one slides in on render.
+        postDelayed({
+            entering = step
+            if (!actions.swipe(step)) {
+                entering = 0
+                settle()
+            } else {
+                // Safety net in case the new place never renders (it always should).
+                postDelayed({ if (entering != 0) slideIn() }, 700)
+            }
+        }, 150)
+    }
+
+    private fun slideIn() {
+        val from = entering * width * 0.35f
+        entering = 0
+        pages.forEach { page ->
+            page.animate().cancel()
+            page.translationX = from
+            page.alpha = 0f
+            page.animate().translationX(0f).alpha(1f).setDuration(220).setInterpolator(DecelerateInterpolator()).start()
+        }
+        postDelayed({ swipeAnimating = false }, 220)
+    }
+
+    private fun settle() {
+        swipeAnimating = false
+        pages.forEach { it.animate().translationX(0f).alpha(1f).setDuration(180).setInterpolator(DecelerateInterpolator()).start() }
+    }
+
+    private fun endGesture() {
+        swiping = false
+        velocity?.recycle()
+        velocity = null
     }
 
     // endregion
@@ -462,6 +642,8 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(row)
+            // Drags that start on this list scroll it instead of switching places.
+            horizontalScrollers += this
         })
     }
 
@@ -503,6 +685,8 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             isHorizontalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(row)
+            // Drags that start on this list scroll it instead of switching places.
+            horizontalScrollers += this
         })
     }
 

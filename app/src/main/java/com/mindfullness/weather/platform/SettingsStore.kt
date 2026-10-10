@@ -16,6 +16,9 @@ data class AppSettings(
     val rainSoon: Boolean = true,
 )
 
+/** How many favourite places can be saved; the home screen pages through them with a swipe. */
+const val MAX_FAVORITES = 10
+
 /** Small SharedPreferences-backed store for places and notification preferences. */
 class SettingsStore(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences("hava_uyari", Context.MODE_PRIVATE)
@@ -56,8 +59,31 @@ class SettingsStore(context: Context) {
     val widgetPlace: Place?
         get() = settings.notificationPlace ?: lastCurrentPlace ?: places.firstOrNull()
 
-    fun addPlace(place: Place) {
-        writePlaces((listOf(place) + places.filter { it.id != place.id }).take(MAX_PLACES))
+    /**
+     * Adds [place] to the end of the favourites, so the swipe order stays stable. A place already in
+     * the list keeps its position. Returns false when the list is full.
+     */
+    fun addPlace(place: Place): Boolean {
+        val saved = places
+        val index = saved.indexOfFirst { it.id == place.id }
+        if (index >= 0) {
+            writePlaces(saved.toMutableList().also { it[index] = place })
+            return true
+        }
+        if (saved.size >= MAX_FAVORITES) return false
+        writePlaces(saved + place)
+        return true
+    }
+
+    /** Moves a favourite [offset] positions (negative: towards the start). */
+    fun movePlace(id: Long, offset: Int) {
+        val saved = places.toMutableList()
+        val from = saved.indexOfFirst { it.id == id }
+        if (from < 0) return
+        val to = (from + offset).coerceIn(0, saved.lastIndex)
+        if (to == from) return
+        saved.add(to, saved.removeAt(from))
+        writePlaces(saved)
     }
 
     fun removePlace(id: Long) {
@@ -121,7 +147,6 @@ class SettingsStore(context: Context) {
         const val KEY_NOTIFY_PLACE = "notification_place"
         const val KEY_RAIN_SOON = "rain_soon"
         const val KEY_NOTIFIED = "notified_keys"
-        const val MAX_PLACES = 15
         const val NOTIFIED_TTL_MILLIS = 3 * 24 * 60 * 60 * 1000L
     }
 }

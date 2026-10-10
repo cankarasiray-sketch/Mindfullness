@@ -13,6 +13,7 @@ import com.mindfullness.weather.platform.AppGraph
 import com.mindfullness.weather.platform.Async
 import com.mindfullness.weather.platform.DeviceLocationProvider
 import com.mindfullness.weather.platform.JobScheduling
+import com.mindfullness.weather.platform.MAX_FAVORITES
 import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.platform.SettingsStore
 import com.mindfullness.weather.platform.WeatherWidget
@@ -54,6 +55,20 @@ class ForecastContent(
                 precipitation = Insights.precipitation(forecast, now),
             )
         }
+    }
+}
+
+/** Where the shown place sits among the pages the home screen swipes through. */
+data class PagerInfo(val count: Int, val index: Int, val firstIsLocation: Boolean) {
+    /** Whether a swipe by [step] (+1 next, -1 previous) leads to another place. */
+    fun canMove(step: Int): Boolean = when {
+        count == 0 -> false
+        index < 0 -> true
+        else -> index + step in 0 until count
+    }
+
+    companion object {
+        val NONE = PagerInfo(0, -1, false)
     }
 }
 
@@ -122,6 +137,10 @@ class AppController(context: Context) {
     private var fetchPending = false
     private val summariesInFlight = HashSet<Long>()
 
+    /** Last forecast per place, so swiping between places shows them at once. */
+    private val remembered = HashMap<Long, Pair<Place, Forecast>>()
+    private val prefetching = HashSet<Long>()
+
     private var loadToken = 0
     private var locateToken = 0
     private var searchToken = 0
@@ -141,6 +160,15 @@ class AppController(context: Context) {
                 selectedId = home.place?.id,
                 notificationPlaceId = settings.notificationPlace?.id.takeIf { settings.alertsEnabled },
             )
+        }
+
+    /** The device location first (when known), then the favourites: what a swipe on home moves through. */
+    private val pages: List<Place> get() = listOfNotNull(currentPlace) + store.places
+
+    val pager: PagerInfo
+        get() {
+            val list = pages
+            return PagerInfo(list.size, list.indexOfFirst { it.id == home.place?.id }, currentPlace != null)
         }
 
     val settings: SettingsState
@@ -205,10 +233,63 @@ class AppController(context: Context) {
             return
         }
         cancelLocating()
-        store.addPlace(place)
+        if (!store.addPlace(place)) {
+            message("Favori listesi dolu (en fazla $MAX_FAVORITES yer). ${place.name} kaydedilmedi; eklemek için listeden bir yer kaldırın.")
+        }
         store.selectedId = place.id
         clearQuery()
         show(place)
+    }
+
+    /** Shows the next (+1) or previous (-1) page; false when there is none. */
+    fun swipe(step: Int): Boolean {
+        val list = pages
+        if (!pager.canMove(step)) return false
+        val index = list.indexOfFirst { it.id == home.place?.id }
+        val target = if (index < 0) (if (step > 0) list.first() else list.last()) else list[index + step]
+        when {
+            // A fresh forecast of the last fix is enough; otherwise the device may have moved.
+            target.isCurrentLocation && locator.hasPermission() && !isFresh(target) -> useCurrentLocation()
+            else -> {
+                cancelLocating()
+                store.selectedId = target.id
+                show(target)
+            }
+        }
+        return true
+    }
+
+    fun movePlace(place: Place, offset: Int) {
+        store.movePlace(place.id, offset)
+        notifyChanged()
+    }
+
+    private fun isFresh(place: Place): Boolean =
+        recall(place)?.let { System.currentTimeMillis() - it.fetchedAtMillis < FRESH_MILLIS } ?: false
+
+    private fun remember(place: Place, forecast: Forecast) {
+        val known = remembered[place.id]
+        if (known == null || known.second.fetchedAtMillis <= forecast.fetchedAtMillis) remembered[place.id] = place to forecast
+    }
+
+    /** The remembered forecast for [place]; for the device location only while it has not moved far. */
+    private fun recall(place: Place): Forecast? {
+        val (known, forecast) = remembered[place.id] ?: return null
+        return if (!place.isCurrentLocation || distanceKm(known, place) <= 5) forecast else null
+    }
+
+    /** Loads the cached forecasts of the neighbouring pages, so the next swipe needs no wait. */
+    private fun prefetchNeighbours() {
+        val list = pages
+        val index = list.indexOfFirst { it.id == home.place?.id }
+        listOfNotNull(list.getOrNull(index - 1), list.getOrNull(index + 1))
+            .filter { recall(it) == null && prefetching.add(it.id) }
+            .forEach { place ->
+                Async.runLow({ repository.cached(place) }) { result ->
+                    prefetching.remove(place.id)
+                    result.getOrNull()?.let { remember(place, it) }
+                }
+            }
     }
 
     fun useCurrentLocation(userRefresh: Boolean = false) {
@@ -217,12 +298,18 @@ class AppController(context: Context) {
         loadToken++
         isLocating = true
         val lastKnown = currentPlace
-        // Show the last known location's cached forecast while the new fix comes in.
+        // Switch to the last known location right away, with its forecast if remembered or cached,
+        // while the new fix comes in.
         if (lastKnown != null && home.place?.isCurrentLocation != true) {
-            Async.run({ repository.cached(lastKnown) }) { result ->
-                val cached = result.getOrNull()
-                if (cached != null && token == locateToken && isLocating && home.place?.isCurrentLocation != true) {
-                    setHome(HomeState(place = lastKnown, content = ForecastContent.from(cached), isLocating = true, isRefreshing = true))
+            val known = recall(lastKnown)
+            setHome(HomeState(place = lastKnown, content = known?.let { ForecastContent.from(it) }, isLoading = known == null, isLocating = true))
+            if (known == null) {
+                Async.run({ repository.cached(lastKnown) }) { result ->
+                    val cached = result.getOrNull() ?: return@run
+                    remember(lastKnown, cached)
+                    if (token == locateToken && isLocating && home.place?.isCurrentLocation == true && home.content == null) {
+                        setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = true))
+                    }
                 }
             }
         }
@@ -299,7 +386,7 @@ class AppController(context: Context) {
         val content = state.content ?: return
         setHome(state.copy(content = ForecastContent.from(content.forecast)))
         val age = System.currentTimeMillis() - content.forecast.fetchedAtMillis
-        if (age > 30 * 60_000L && !state.isLoading && !state.isRefreshing && !state.isLocating) {
+        if (age > FRESH_MILLIS && !state.isLoading && !state.isRefreshing && !state.isLocating) {
             val place = state.place ?: return
             // The device may have moved since the last fix, so a stale current location is looked up again.
             if (place.isCurrentLocation && locator.hasPermission()) useCurrentLocation() else show(place)
@@ -312,17 +399,27 @@ class AppController(context: Context) {
         val samePlace = shown != null && shown.id == place.id && home.content != null &&
             (!place.isCurrentLocation || distanceKm(shown, place) <= 5)
         fetchPending = true
+        val known = if (samePlace) null else recall(place)
         if (samePlace) {
             setHome(home.copy(place = place, isRefreshing = userRefresh || home.isRefreshing, errorMessage = null))
+        } else if (known != null) {
+            // Remembered from an earlier visit or a prefetch: show it at once and refresh only if old.
+            val fresh = System.currentTimeMillis() - known.fetchedAtMillis < FRESH_MILLIS
+            fetchPending = userRefresh || !fresh
+            setHome(HomeState(place = place, content = ForecastContent.from(known), isRefreshing = fetchPending, isLocating = isLocating))
+            prefetchNeighbours()
+            if (!fetchPending) return
         } else {
             setHome(HomeState(place = place, isLoading = true, isRefreshing = userRefresh, isLocating = isLocating))
             Async.run({ repository.cached(place) }) { result ->
                 val cached = result.getOrNull()
+                if (cached != null) remember(place, cached)
                 if (cached != null && token == loadToken && home.content == null) {
                     // The fetch may already have failed; only keep spinning while it is still running.
                     setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = fetchPending))
                 }
             }
+            prefetchNeighbours()
         }
         Async.run({ repository.fetch(place) }) { result ->
             if (token != loadToken) return@run
@@ -382,6 +479,7 @@ class AppController(context: Context) {
     fun remove(place: Place) {
         store.removePlace(place.id)
         summaries.remove(place.id)
+        remembered.remove(place.id)
         val settings = store.settings
         if (settings.notificationPlace?.id == place.id) {
             store.update { it.copy(notificationPlace = null, alertsEnabled = false) }
@@ -425,6 +523,7 @@ class AppController(context: Context) {
     }
 
     private fun putSummary(place: Place, forecast: Forecast) {
+        remember(place, forecast)
         WeatherWidget.onForecast(app, place, forecast)
         val now = forecast.localNow()
         val today = forecast.today(now)
@@ -496,6 +595,11 @@ class AppController(context: Context) {
 
     fun message(text: String) {
         onMessage?.invoke(text)
+    }
+
+    private companion object {
+        /** A forecast this recent is shown without fetching again (also the resume threshold). */
+        const val FRESH_MILLIS = 30 * 60_000L
     }
 
     /** Approximate distance, good enough to tell "same town" from "moved". */

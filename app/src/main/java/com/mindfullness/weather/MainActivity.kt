@@ -183,7 +183,7 @@ class MainActivity : Activity() {
 
     private fun render() {
         when (screen) {
-            Screen.HOME -> homeView.render(controller.home)
+            Screen.HOME -> homeView.render(controller.home, controller.pager)
             Screen.PLACES -> placesView.render(controller.places)
             Screen.SETTINGS -> settingsView.render(controller.settings)
         }
@@ -253,6 +253,8 @@ class MainActivity : Activity() {
         override fun openSettings() = show(Screen.SETTINGS)
         override fun useLocation() = requestLocation()
 
+        override fun swipe(step: Int): Boolean = controller.swipe(step)
+
         override fun share(alert: WeatherAlert) {
             val now = controller.home.content?.now ?: return
             val text = alert.shareText(controller.home.place?.name.orEmpty(), now)
@@ -282,6 +284,8 @@ class MainActivity : Activity() {
         }
 
         override fun remove(place: Place) = controller.remove(place)
+
+        override fun move(place: Place, offset: Int) = controller.movePlace(place, offset)
 
         override fun setNotificationPlace(place: Place) = withNotificationPermission { controller.setNotificationPlace(place) }
 
