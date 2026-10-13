@@ -841,8 +841,9 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   const card = t.$("#zirveCard").textContent;
   assert.match(card, /3 maçta 5 artırılmış oran · adil oranı geçen 1/);
   assert.match(card, /Belçika – Türkiye/);
-  assert.match(card, /MS 1 1,40 1,37 · adil 1,33 · tutma %75\+%5,0 Oyna/);
-  assert.match(card, /KG Var 1,90 1,80 · adil 2,00 · tutma %50−%5,0 değer yok/);
+  assert.match(card, /MS 1 1,40 1,37 · adil 1,33 · tutma %75\+%5,0 OYNA Oynadım/);
+  assert.match(card, /KG Var 1,90 1,80 · adil 2,00 · tutma %50−%5,0 değer yok Oynadım/);
+  assert.equal(t.$$("#zirveCard .zirve-play").length, 2); // 2.16.1: adil oranı olan her seçimde; "mac" satırlarında yok
   assert.match(card, /Hırvatistan – İngiltere/);
   // son taramada olmayan maç: tek açıklama, seçimlerde tekrar yok
   assert.equal(t.$$(".zirve-why").length, 1);
@@ -859,6 +860,22 @@ test("Zirve Oran: kendiliğinden listelenir, adil oranı geçen oynanır, ana sa
   t.button("Bu tutarla oynadım").click();
   await t.tick();
   assert.deepEqual(t.calls.at(-1), { action: "promoPlay", payload: { ref: "b1", m: "MS", o: "1", odds: "1,4", amount: "150" } });
+  // 2.16.1: adil oranı geçmeyen Zirve seçimi de kaydedilir (tek maç listesindeki tutarla)
+  s.singles = [{ source: "zirve", ref: "b1", m: "KG", o: "VAR", label: "KG Var", home: "Belçika", away: "Türkiye", kickoff: soon, odds: 1.9, p: 0.5,
+    fair: 2, ev: -0.05, mbs: 1, stake: 15000, win: 28500, expected: -750 }];
+  const t2 = boot(s, "#firsat");
+  t2.$$("#zirveCard .zirve-play")[1].click();
+  assert.match(t2.$("#sheet").textContent, /Adil oranı geçmiyor \(değer yok\)\. Tek maç tutarı 150,00 TL\./);
+  assert.equal(t2.$("#zirveAmt").value, "150");
+  t2.button("Bu tutarla oynadım").click();
+  await t2.tick();
+  assert.deepEqual(t2.calls.at(-1), { action: "promoPlay", payload: { ref: "b1", m: "KG", o: "VAR", odds: "1,9", amount: "150" } });
+  s.singles = [];
+  const t3 = boot(s, "#firsat");
+  t3.$$("#zirveCard .zirve-play")[1].click();
+  assert.match(t3.$("#sheet").textContent, /Tek maç listesinde yok .*tutarı kendin yaz/);
+  assert.equal(t3.$("#zirveAmt").value, "");
+  assert.deepEqual(t2.errors, []);
   t.button("Yeniden oku").click();
   await t.tick();
   assert.equal(t.calls.at(-1).action, "zirveRefresh");

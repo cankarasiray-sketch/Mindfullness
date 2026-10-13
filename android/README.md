@@ -62,6 +62,15 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Zirve Oran'da "Oynadım" (2.16.1)
+
+- Fırsatlar → Zirve Oran'da adil oranı olan her seçimin yanında **Oynadım** düğmesi var (önce yalnızca adil
+  oranı geçen "OYNA" satırlarında "Oyna" vardı). Adil oranı geçmeyen seçimde tutar, tek maç listesindeki
+  tutardır (kasanın %3'ü; beklenen kayıp sınırı aşıyorsa boş, oynadıysan yazılır). Kayıt Zirve/kampanya
+  bahsi olarak kasaya düşer, sonuç maçtan sonra otomatik işlenir.
+- Son taramada adil oranı olmayan Zirve seçimleri (maç ya da pazar eşleşmedi) kaydedilemez: sonucu
+  işlenemez; önce "Şimdi tara".
+
 ## Her anlamda iyileştirme (2.16)
 
 Davranış değişmedi (sıralama, tutar, pencereler aynı); hız, dayanıklılık ve tutarlılık:

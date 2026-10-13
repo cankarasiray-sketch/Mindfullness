@@ -1004,8 +1004,17 @@ function zirveRow(i, plain) {
   return '<div class="l2"><span><span class="chip' + (st === "oyna" ? " main" : "") + '">' + esc(r.label || r.name) + "</span>" + mbsChip(r.mbs) + ' <span class="odds">' + odds(r.tval)
     + '</span> <span class="small muted"><s>' + odds(r.val) + "</s>" + (r.p ? " · adil " + odds(1 / r.p) + " · tutma %" + num(r.p * 100, 0) : "") + "</span></span><span>"
     + (r.ev != null ? '<b class="' + cls(r.ev) + '">' + pct(r.ev, true) + "</b> " : "")
-    + (st === "oyna" ? '<button class="b sm zirve-play" onclick="zirveSheet(' + i + ')">Oyna</button>' : '<span class="st">' + esc(ZIRVE_STATUS[st] || st) + "</span>")
+    + '<span class="st' + (st === "oyna" ? " ok" : "") + '">' + esc(ZIRVE_STATUS[st] || st) + "</span>"
+    // 2.16.1: adil oranı olan her Zirve seçimi "Oynadım" ile kaydedilir (yalnızca "oyna" değil)
+    + (zirvePlayable(r) ? ' <button class="b sm zirve-play' + (st === "oyna" ? "" : " ghost") + '" onclick="zirveSheet(' + i + ')">Oynadım</button>' : "")
     + "</span></div>";
+}
+/** Kaydedilebilir Zirve seçimi: son taramada adil oranı olan (sonuç maçtan sonra otomatik işlenir). */
+function zirvePlayable(r) { return !!(r.ref && r.m && r.o && r.p) && r.status !== "mac" && r.status !== "secim" && r.status !== "pazar"; }
+/** Aynı seçimin tek maç listesindeki tutarı (tek maç kuralı: adil oranın %15 altına kadar tam tutar). */
+function zirveSingleStake(r) {
+  var x = (S.singles || []).filter(function (s) { return s.ref === r.ref && s.m === r.m && s.o === r.o; })[0];
+  return x ? (x.skip ? 0 : x.stake || 0) : null;
 }
 function zirveCard() {
   if (S.demo) return "";
@@ -1049,13 +1058,15 @@ function zirveCard() {
   return html;
 }
 function zirveSheet(i) {
-  var r = zirveRows[i];
+  var r = zirveRows[i], amount = r.status === "oyna" ? (r.stake || 0) : zirveSingleStake(r);
   openSheet("<h3>" + esc(r.home) + " – " + esc(r.away) + "</h3><p class=\"muted small\">" + esc(dm(r.kickoff)) + " " + esc(hm(r.kickoff))
     + " · <b>" + esc(r.label || r.name) + "</b> · Zirve " + odds(r.tval) + " (normal " + odds(r.val) + ") · adil " + odds(1 / r.p) + " · avantaj " + pct(r.ev, true) + "</p>"
-    + "<p><b>Oyna:</b> önerilen tutar " + (r.stake ? tl(r.stake) : "kasa boş") + (r.fraction ? " (kasanın " + pct(r.fraction) + "'ü)" : "") + ". Bilyoner'de oranın hâlâ "
-    + odds(r.tval) + " Zirve Oran olarak göründüğünü ve kampanya şartlarını (tekli/kombine, en yüksek tutar) kontrol et.</p>"
+    + (r.status === "oyna" ? "<p><b>Oyna:</b> önerilen tutar " + (r.stake ? tl(r.stake) : "kasa boş") + (r.fraction ? " (kasanın " + pct(r.fraction) + "'ü)" : "") + ". "
+      : "<p>Adil oranı geçmiyor (" + esc(ZIRVE_STATUS[r.status] || r.status) + "). " + (amount == null ? "Tek maç listesinde yok (oran, tutma ya da saat sınırı); tutarı kendin yaz. "
+        : amount > 0 ? "Tek maç tutarı " + tl(amount) + ". " : "Tek maç kuralına göre oynanmaz (beklenen kayıp sınırı aşıyor); oynadıysan tutarı yaz. "))
+    + "Bilyoner'de oranın hâlâ " + odds(r.tval) + " Zirve Oran olarak göründüğünü ve kampanya şartlarını (tekli/kombine, en yüksek tutar) kontrol et. Sonuç maçtan sonra otomatik işlenir.</p>"
     + '<label>Oynadığın oran</label><input id="zirveOdds" inputmode="decimal" value="' + esc(String(r.tval).replace(".", ",")) + '">'
-    + '<label>Oynadığın tutar (TL)</label><input id="zirveAmt" inputmode="decimal" value="' + esc(r.stake ? String(r.stake / 100) : "") + '">'
+    + '<label>Oynadığın tutar (TL)</label><input id="zirveAmt" inputmode="decimal" value="' + esc(amount ? String(amount / 100) : "") + '">'
     + '<div class="btns"><button class="b" onclick="zirvePlay(' + i + ')">Bu tutarla oynadım</button><button class="b ghost" onclick="closeSheet()">Kapat</button></div>');
 }
 function zirvePlay(i) {
