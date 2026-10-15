@@ -450,4 +450,45 @@ public class PickTest {
         assertEquals(Pick.list(fx, null, cfg, 500000, NOW), all[1]);
         assertEquals(Pick.bands(fx, null, cfg, 500000, NOW), all[2]);
     }
+
+    @Test
+    public void clvCountsSinglesAndZirve() {
+        // 2.16.2: tek maç (günün seçimi / tek maç fırsatları) ve Zirve kuponları da kapanış oranı özetine girer
+        CoreTest.TestClock clock = new CoreTest.TestClock();
+        Ledger l = new Ledger(new Ledger.MemoryStorage(null), clock);
+        l.deposit(100000, "t");
+        List<Object> fx = fairs();
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] liv = Promo.find(fx, "3", "AU25", "UST");
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] ars = Promo.find(fx, "1", "MS", "1");
+        long pick = Promo.recordPick(l, liv[0], liv[1], 1.58, 5000, "2026-10-01");
+        long zirve = Promo.record(l, ars[0], ars[1], 1.52, 5000, "2026-10-01");
+        l.setClosing(pick, l.coupon(pick).legs.get(0).position, 0.66);
+        l.setClosing(zirve, l.coupon(zirve).legs.get(0).position, 0.64);
+        double[] clv = l.clvSummary();
+        assertEquals(2, (int) clv[1]); // oynanan
+        assertEquals(((1.58 * 0.66 - 1) + (1.52 * 0.64 - 1)) / 2, clv[0], 1e-12);
+        assertEquals(1, (int) clv[5]); // tek maç
+        assertEquals(1.58 * 0.66 - 1, clv[4], 1e-12);
+        assertEquals(1, (int) clv[7]); // Zirve / kampanya
+        assertEquals(1.52 * 0.64 - 1, clv[6], 1e-12);
+        // KG bacağının kapanışı maç bazında çekilir: kapanış penceresinde maç kimliği istenir
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] kg = Promo.find(fx, "3", "KG", "VAR");
+        Promo.recordPick(l, kg[0], kg[1], 1.75, 5000, "2026-10-01");
+        Instant ko = Instant.parse(Json.str(kg[0], "kickoff"));
+        assertTrue(Closing.dueKgRefs(l, NOW).isEmpty());
+        assertEquals(java.util.Collections.singleton("s3"), Closing.dueKgRefs(l, ko.minusSeconds(15 * 60)));
+    }
+
+    @Test
+    public void modelMarketClosingHasNoSafetyMargin() {
+        // 2.16.2: gol modeli pazarında kapanış adil olasılığı payı düşülmeden (pay yalnızca seçimde temkin)
+        Models.SharpEvent s = SinglesTest.sharp(0);
+        Map<String, Double> raw = GoalModel.market(Models.goalMatrix(s), "AU@1.5");
+        assertEquals(raw.get("UST"), Models.closingFair(s, "AU@1.5").get("UST"), 1e-12);
+        assertEquals(raw.get("UST") - GoalModel.MARGIN, Models.fair(s, "AU@1.5").get("UST"), 1e-12);
+        assertEquals(s.fair.get("MS"), Models.closingFair(s, "MS"));
+    }
 }

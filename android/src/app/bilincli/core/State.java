@@ -75,6 +75,10 @@ public final class State {
         clvMap.put("playedN", (long) clv[1]);
         clvMap.put("all", clv[2]);
         clvMap.put("allN", (long) clv[3]);
+        clvMap.put("pick", clv[4]);
+        clvMap.put("pickN", (long) clv[5]);
+        clvMap.put("promo", clv[6]);
+        clvMap.put("promoN", (long) clv[7]);
         m.put("clv", clvMap);
         m.put("edge", EdgeCalibration.fromLedger(ledger).toMap());
         m.put("outlook", Outlook.month(ledger, ledger.now()));

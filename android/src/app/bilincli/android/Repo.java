@@ -1030,6 +1030,15 @@ final class Repo {
                 try {
                     Daily.LiveSources cs = live();
                     List<Models.SharpEvent> closing = cs.sharp(due);
+                    Set<String> kgRefs = Closing.dueKgRefs(ledger, now); // 2.16.2: KG bacaklarının kapanışı
+                    for (Models.SharpEvent ev : closing) {
+                        if (!kgRefs.contains(ev.ref)) continue;
+                        try {
+                            cs.enrich(ev, "btts");
+                        } catch (Http.ProviderException ignored) {
+                            // bu maçın KG kapanışı alınamadı; diğerleri yine yazılır
+                        }
+                    }
                     Closing.capture(ledger, closing, now);
                     forecasts.recordSharp(closing, now);
                     after(cs);

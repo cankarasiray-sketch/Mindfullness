@@ -612,11 +612,16 @@ public final class Ledger {
     }
 
     /** CLV özeti: [oynanan bacak ortalaması, sayısı, tüm önerilen bacak ortalaması, sayısı]. */
+    /**
+     * Kapanış oranı özeti: {oynanan ort., oynanan sayı, tüm öneriler ort., sayı, tek maç (günün seçimi / tek maç
+     * fırsatları) ort., sayı, Zirve/kampanya ort., sayı}. 2.16.2: tek maç ve Zirve kuponları da sayılır (önce
+     * dışarıdaydı; yalnızca bu yollarla oynayan kullanıcıda kart hep boş kalıyordu). Kanıt koruması
+     * (EdgeCalibration) yine yalnızca kupon motorunun seçimleriyle ölçer.
+     */
     public synchronized double[] clvSummary() {
-        double playedSum = 0, allSum = 0;
-        int playedN = 0, allN = 0;
+        double playedSum = 0, allSum = 0, pickSum = 0, promoSum = 0;
+        int playedN = 0, allN = 0, pickN = 0, promoN = 0;
         for (Coupon c : coupons) {
-            if (c.promo || c.pick) continue; // kampanya / günün seçimi: avantaj kanıtı ölçümüne girmez
             for (Leg l : c.legs) {
                 Double v = l.clv();
                 if (v == null) continue;
@@ -625,10 +630,18 @@ public final class Ledger {
                 if (c.played) {
                     playedSum += v;
                     playedN++;
+                    if (c.pick) {
+                        pickSum += v;
+                        pickN++;
+                    } else if (c.promo) {
+                        promoSum += v;
+                        promoN++;
+                    }
                 }
             }
         }
-        return new double[] {playedN == 0 ? 0 : playedSum / playedN, playedN, allN == 0 ? 0 : allSum / allN, allN};
+        return new double[] {playedN == 0 ? 0 : playedSum / playedN, playedN, allN == 0 ? 0 : allSum / allN, allN,
+            pickN == 0 ? 0 : pickSum / pickN, pickN, promoN == 0 ? 0 : promoSum / promoN, promoN};
     }
 
     // ---- günlük çalıştırma kayıtları -----------------------------------------

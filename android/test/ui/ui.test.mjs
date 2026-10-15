@@ -231,6 +231,14 @@ test("aylık beklenti ve CLV uyarısı", async () => {
   t.w.show("gecmis");
   assert.match(t.text(), /Kapanış oranı testi/);
   assert.match(t.text(), /−%3,1 \(42 maç\)/);
+  assert.doesNotMatch(t.$("#view").textContent, /Bunlardan tek maç/); // kırılım yalnızca tek maç/Zirve verisi varsa
+  // 2.16.2: tek maç ve Zirve kırılımı
+  const k = clone(s);
+  k.clv = { played: -0.02, playedN: 50, all: -0.02, allN: 50, pick: -0.025, pickN: 40, promo: 0.01, promoN: 10 };
+  const g = boot(k, "#gecmis");
+  assert.match(g.$("#view").textContent, /Bunlardan tek maç seçimleri−%2,5 \(40 maç\)/);
+  assert.match(g.$("#view").textContent, /Bunlardan Zirve \/ kampanya\+%1,0 \(10 maç\)/);
+  assert.match(g.$("#view").textContent, /Tek maç ve Zirve seçimleri dahil/);
 });
 
 test("risk profili seçimi", async () => {

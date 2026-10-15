@@ -78,6 +78,15 @@ public final class Models {
     }
 
     /** Kararda kullanılan adil olasılıklar; basketbol Alt/Üst'te iddaa çizgisine dönüştürülür. */
+    /**
+     * Kapanış oranı için adil olasılık: gol modeli pazarlarında güvenlik payı düşülmeden (2.16.2; pay
+     * seçimde temkin içindir, kapanışta düşülürse CLV her zaman eksi görünür). Diğer pazarlar fair ile aynı.
+     */
+    public static Map<String, Double> closingFair(SharpEvent s, String market) {
+        if (GoalModel.isModelMarket(market)) return market.startsWith("IYAU@") ? null : GoalModel.market(goalMatrix(s), market);
+        return fair(s, market);
+    }
+
     public static Map<String, Double> fair(SharpEvent s, String market) {
         if (GoalModel.isModelMarket(market)) {
             // 2.10: Pinnacle'ın fiyat vermediği tek maç pazarı: gol modeli, güvenlik payı düşülerek

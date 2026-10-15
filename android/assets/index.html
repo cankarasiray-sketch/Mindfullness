@@ -1154,9 +1154,11 @@ function viewHistory() {
     + '</div><p class="small muted">100–200 kupondan önce sonuç çıkarma; varyans çok yüksek. Beklenen ile gerçekleşen uzun vadede yakınsamıyorsa piyasada avantaj yok demektir.</p></div>';
   var v = S.clv;
   html += '<div class="card"><h2>Kapanış oranı testi (CLV)</h2><p class="small muted">Her maçtan 10 dk önce Pinnacle\'ın son oranı kaydedilir. '
-    + "Seçimlerin kapanış oranını düzenli olarak yeniyorsa avantaj gerçektir; yenemiyorsa değildir. Kâr/zarardan çok daha hızlı ve güvenilir sinyal verir.</p><div class=\"list\">"
+    + "Seçimlerin kapanış oranını düzenli olarak yeniyorsa avantaj gerçektir; yenemiyorsa değildir. Kâr/zarardan çok daha hızlı ve güvenilir sinyal verir. Tek maç ve Zirve seçimleri dahil; kapanış ancak maçtan önce uygulama arka planda çalışabildiyse alınır.</p><div class=\"list\">"
     + item("Oynanan seçimler", v.playedN ? '<span class="' + cls(v.played) + '">' + pct(v.played, true) + "</span> (" + v.playedN + " maç)" : "henüz yok")
     + item("Tüm öneriler", v.allN ? '<span class="' + cls(v.all) + '">' + pct(v.all, true) + "</span> (" + v.allN + " maç)" : "henüz yok")
+    + (v.pickN ? item("Bunlardan tek maç seçimleri", '<span class="' + cls(v.pick) + '">' + pct(v.pick, true) + "</span> (" + v.pickN + " maç)") : "")
+    + (v.promoN ? item("Bunlardan Zirve / kampanya", '<span class="' + cls(v.promo) + '">' + pct(v.promo, true) + "</span> (" + v.promoN + " maç)") : "")
     + "</div>" + (v.playedN < 30 ? '<p class="small muted">Güvenilir yorum için en az 30 maç gerekir.</p>' : "") + "</div>";
   html += edgeCard();
   html += accuracyCard();

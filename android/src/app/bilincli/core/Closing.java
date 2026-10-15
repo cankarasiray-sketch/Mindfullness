@@ -48,7 +48,7 @@ public final class Closing {
             for (Leg l : c.legs) {
                 if (!needs(l, now)) continue;
                 SharpEvent s = byRef.get(l.sharpRef);
-                Map<String, Double> fair = s == null ? null : Models.fair(s, l.market);
+                Map<String, Double> fair = s == null ? null : Models.closingFair(s, l.market);
                 if (fair == null) continue;
                 Double f = fair.get(l.outcome);
                 if (f == null) continue;
@@ -57,6 +57,20 @@ public final class Closing {
             }
         }
         return n;
+    }
+
+    /**
+     * Şu an kapanışı alınacak Karşılıklı Gol bacaklarının maçları (keskin maç kimliği): KG oranı lig taramasında
+     * gelmez, maç bazında çekilir (maç başına 1 kredi; 2.16.2).
+     */
+    public static Set<String> dueKgRefs(Ledger ledger, Instant now) {
+        Set<String> out = new LinkedHashSet<>();
+        for (Coupon c : ledger.openCoupons()) {
+            for (Leg l : c.legs) {
+                if ("KG".equals(l.market) && needs(l, now) && l.sharpRef != null) out.add(l.sharpRef);
+            }
+        }
+        return out;
     }
 
     /** Bir sonraki kapanış alarmı zamanı (yoksa null). */

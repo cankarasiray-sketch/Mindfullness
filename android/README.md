@@ -62,6 +62,18 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Kapanış oranı testi (CLV) tek maç ve Zirve'yi de sayar (2.16.2)
+
+- Kapanış oranı tek maç (günün seçimi, tek maç fırsatları) ve Zirve kuponları için de kaydediliyordu ama
+  CLV kartı bunları saymıyordu; yalnızca bu yollarla oynayan kullanıcıda kart hep "henüz yok"tu. Artık sayılır
+  ve kartta "Bunlardan tek maç seçimleri" ile "Bunlardan Zirve / kampanya" kırılımı görünür. Önceki kuponların
+  kaydedilmiş kapanışları da hemen sayılır.
+- Kanıt koruması (avantaj küçültme) yine yalnızca kupon motorunun seçimleriyle ölçer.
+- Gol modeli pazarlarında (1,5 Üst, takım golü, handikap) kapanış adil olasılığı güvenlik payı düşülmeden
+  alınır (pay yalnızca seçimde temkin; kapanışta düşülse CLV hep eksi görünürdü).
+- Karşılıklı Gol bacaklarının kapanışı maç bazında çekilir (maç başına 1 kredi); önce lig taramasında KG
+  gelmediği için alınamıyordu.
+
 ## Zirve Oran'da "Oynadım" (2.16.1)
 
 - Fırsatlar → Zirve Oran'da adil oranı olan her seçimin yanında **Oynadım** düğmesi var (önce yalnızca adil
