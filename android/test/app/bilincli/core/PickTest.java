@@ -512,7 +512,7 @@ public class PickTest {
         // 2.16.4: 2,5 Üst üçüncü golde tutar; maç bitmeden kupon tuttu sayılır ve ödenir, maç bitince doğrulanır
         assertTrue(Settlement.liveWon("AU25", "UST", 2, 1));
         assertFalse(Settlement.liveWon("AU25", "UST", 1, 1));
-        assertFalse(Settlement.liveWon("AU25", "ALT", 0, 0)); // Alt maç bitmeden kesinleşmez
+        assertFalse(Settlement.liveWon("AU25", "ALT", 0, 0)); // Alt maç bitmeden tutmaz (2.16.5: ama yatabilir)
         assertTrue(Settlement.liveWon("AU@1.5", "UST", 2, 0));
         assertTrue(Settlement.liveWon("EVG@0.5", "UST", 1, 0));
         assertFalse(Settlement.liveWon("DEPG@0.5", "UST", 1, 0));
@@ -581,7 +581,7 @@ public class PickTest {
         assertEquals(Models.LOST, l.coupon(id).result);
         assertEquals(100000 - 5000, l.balance());
         assertEquals(-5000, l.stats().bettingPl());
-        // Alt bahsi maç sürerken sonuçlanmaz, canlı kontrol de kurulmaz
+        // maç sonucu bahsi maç sürerken sonuçlanmaz, canlı kontrol de kurulmaz
         @SuppressWarnings("unchecked")
         Map<String, Object>[] ars = Promo.find(fx, "1", "MS", "1");
         Promo.recordPick(l, ars[0], ars[1], 1.45, 5000, "2026-10-01");
@@ -615,6 +615,52 @@ public class PickTest {
         List<String> msgs = Daily.settle(l, src);
         assertTrue(msgs.toString(), msgs.toString().contains("düzeltildi"));
         assertEquals(Models.LOST, l.coupon(id).result);
+        assertFalse(Settlement.hasEarly(l));
+    }
+
+    @Test
+    public void underLosesAsSoonAsLineIsPassed() throws Exception {
+        // 2.16.5: 2,5 Alt üçüncü golde yatar; maç bitmeden kupon yattı sayılır, maç bitince doğrulanır
+        assertEquals(Models.LOST, Settlement.liveResult("AU25", "ALT", 2, 1));
+        assertNull(Settlement.liveResult("AU25", "ALT", 1, 1));
+        assertEquals(Models.WON, Settlement.liveResult("AU25", "UST", 2, 1));
+        assertEquals(Models.LOST, Settlement.liveResult("AU@1.5", "ALT", 1, 1));
+        assertEquals(Models.LOST, Settlement.liveResult("DEPG@0.5", "ALT", 0, 1));
+        assertNull(Settlement.liveResult("EVG@0.5", "ALT", 0, 1)); // ev sahibi gol atmadı: henüz belli değil
+        assertEquals(Models.LOST, Settlement.liveResult("KG", "YOK", 1, 1));
+        assertNull(Settlement.liveResult("KG", "YOK", 2, 0));
+        assertEquals(Models.LOST, Settlement.liveResult("BT@160.5", "ALT", 85, 80));
+        assertNull(Settlement.liveResult("MS", "1", 0, 3));
+        CoreTest.TestClock clock = new CoreTest.TestClock();
+        Ledger l = new Ledger(new Ledger.MemoryStorage(null), clock);
+        l.deposit(100000, "t");
+        List<Object> fx = fairs();
+        Json.obj(fx.get(2)).put("sel", new ArrayList<Object>(java.util.Arrays.asList(sel("AU25", "ALT", 0.39, 2.30, 1))));
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] liv = Promo.find(fx, "3", "AU25", "ALT");
+        long id = Promo.recordPick(l, liv[0], liv[1], 2.30, 5000, "2026-10-01");
+        Instant ko = Instant.parse(Json.str(liv[0], "kickoff"));
+        Instant t = ko.plusSeconds(40 * 60);
+        assertEquals(t, Settlement.nextLiveCheck(l, t, null)); // Alt da canlı izlenir
+        Map<String, Models.ScoreResult> scores = new LinkedHashMap<>();
+        List<String> calls = new ArrayList<>();
+        scores.put("s3", new Models.ScoreResult(false, 1, 1));
+        assertTrue(Settlement.settleOpen(l, scoreFeed(scores, calls), t).isEmpty());
+        assertTrue(Settlement.report(new ArrayList<String>(), new ArrayList<String>(), l, t).contains("maç sürüyor; 2,5 Alt kaybederse hemen işlenir, tutarsa sonuç"));
+        scores.put("s3", new Models.ScoreResult(false, 2, 1)); // üçüncü gol
+        List<String> msgs = Settlement.settleOpen(l, scoreFeed(scores, calls), t.plusSeconds(900));
+        assertEquals(1, msgs.size());
+        assertTrue(msgs.get(0), msgs.get(0).contains("kupon #" + id + " yattı. Maç sürerken kesinleşti (Liverpool – Dep 3, 2-1 (canlı))"));
+        assertEquals(Models.LOST, l.coupon(id).result);
+        assertEquals(100000 - 5000, l.balance());
+        assertNull(Settlement.nextLiveCheck(l, t.plusSeconds(1800), t));
+        // gol iptal: son skor 1-1, Alt tuttu -> kupon düzeltilir ve ödenir
+        scores.put("s3", new Models.ScoreResult(true, 1, 1));
+        msgs = Settlement.settleOpen(l, scoreFeed(scores, calls), Settlement.resultDue(ko.toString(), "soccer_epl"));
+        assertEquals(1, msgs.size());
+        assertTrue(msgs.get(0), msgs.get(0).contains("maç sürerken yattı sayılmıştı, son skor 1-1") && msgs.get(0).contains("kupon tuttu, ödeme 115,00 TL"));
+        assertEquals(Models.WON, l.coupon(id).result);
+        assertEquals(100000 - 5000 + 11500, l.balance());
         assertFalse(Settlement.hasEarly(l));
     }
 }

@@ -53,8 +53,8 @@ public final class Ledger {
         public Double closingFair;
         public String closingAt;
         /**
-         * 2.16.4: maç sürerken canlı skorla kazanıldı sayıldı (ör. 3. gol: 2,5 Üst); maç bitince son skorla
-         * doğrulanır, tutmadıysa (gol iptali) kupon düzeltilir.
+         * 2.16.4: maç sürerken canlı skorla kesinleşti (ör. 3. gol: 2,5 Üst tuttu, 2,5 Alt yattı); maç bitince
+         * son skorla doğrulanır, farklıysa (gol iptali) kupon düzeltilir.
          */
         public boolean early;
 
@@ -583,8 +583,9 @@ public final class Ledger {
     }
 
     /**
-     * 2.16.4: maç sürerken kazanıldı sayılan bacak son skorla tutmadıysa (ör. gol VAR'la iptal) düzeltilir:
-     * ödeme varsa geri alınır, bacak son sonuçla yazılır, kupon yeniden sonuçlanır. Yeni kupon sonucunu döndürür.
+     * 2.16.4: maç sürerken kesinleşen bacak son skorla farklı çıktıysa (ör. gol VAR'la iptal) düzeltilir:
+     * ödeme varsa geri alınır, bacak son sonuçla yazılır, kupon yeniden sonuçlanır (tutarsa ödenir). Yeni kupon
+     * sonucunu döndürür.
      */
     public synchronized String correctLeg(long couponId, int position, String result, String score) {
         Coupon c = coupon(couponId);

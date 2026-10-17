@@ -62,6 +62,14 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Maç sürerken yatan Alt bahsi de hemen işlenir (2.16.5)
+
+- Oynanan **Alt** bahisleri (2,5 Alt, 0,5–4,5 Alt, ev/deplasman gol Alt, basketbol toplam Alt) çizgi aşıldığı
+  anda (ör. 2,5 Alt'ta üçüncü gol), **KG Yok** iki takım da gol attığı anda yattı sayılır; kupon hemen
+  kapanır ve "Maç sürerken kesinleşti" bildirimi gelir. Çizgi aşılmazsa Alt'ın tuttuğu maç sonunda işlenir.
+- Bu bahisler de maç sürerken 15 dakikada bir canlı skorla izlenir; maç bitince son skorla doğrulanır. Gol
+  iptal edildiyse (son skorda Alt tuttuysa) kupon düzeltilir ve ödenir.
+
 ## Maç sürerken tutan bahis hemen işlenir (2.16.4)
 
 - Oynanan **Üst** bahisleri (2,5 Üst, 0,5–4,5 Üst, ev/deplasman gol Üst, basketbol toplam Üst) ve **KG Var**,

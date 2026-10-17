@@ -27,33 +27,48 @@ public final class Settlement {
     public static final long LIVE_CHECK_S = 15 * 60;
 
     /**
-     * 2.16.4: maç sürerken kesinleşen kazanç. Gol (basketbolda sayı) yalnızca artar: çizgi aşılınca Üst,
-     * iki takım da gol atınca KG Var tutmuştur; maçın kalanı sonucu değiştiremez.
+     * Maç sürerken kesinleşen sonuç (WON / LOST; kesinleşmediyse null). Gol (basketbolda sayı) yalnızca artar:
+     * çizgi aşılınca Üst tutmuş (2.16.4), Alt kaybetmiştir (2.16.5); iki takım da gol atınca KG Var tutmuş,
+     * KG Yok kaybetmiştir. Maçın kalanı bu sonucu değiştiremez.
      */
-    public static boolean liveWon(String market, String outcome, int home, int away) {
-        if ("UST".equals(outcome)) {
-            if ("AU25".equals(market)) return home + away >= 3;
-            if (market.startsWith("AU@") || market.startsWith("BT@")) return home + away > Models.line(market);
-            if (market.startsWith("EVG@")) return home > Models.line(market);
-            if (market.startsWith("DEPG@")) return away > Models.line(market);
-            return false;
+    public static String liveResult(String market, String outcome, int home, int away) {
+        if ("KG".equals(market)) {
+            if (home == 0 || away == 0) return null;
+            return "VAR".equals(outcome) ? Models.WON : "YOK".equals(outcome) ? Models.LOST : null;
         }
-        return "KG".equals(market) && "VAR".equals(outcome) && home > 0 && away > 0;
+        boolean passed;
+        if ("AU25".equals(market)) passed = home + away >= 3;
+        else if (market.startsWith("AU@") || market.startsWith("BT@")) passed = home + away > Models.line(market);
+        else if (market.startsWith("EVG@")) passed = home > Models.line(market);
+        else if (market.startsWith("DEPG@")) passed = away > Models.line(market);
+        else return null;
+        if (!passed) return null;
+        return "UST".equals(outcome) ? Models.WON : "ALT".equals(outcome) ? Models.LOST : null;
     }
 
-    /** Maç sürerken kazanıldı sayılıp son skorla henüz doğrulanmamış bacak var mı. */
+    /** Maç sürerken kesinleşen kazanç (2.16.4). */
+    public static boolean liveWon(String market, String outcome, int home, int away) {
+        return Models.WON.equals(liveResult(market, outcome, home, away));
+    }
+
+    /** Maç sürerken kesinleşip son skorla henüz doğrulanmamış bacak var mı. */
     public static boolean hasEarly(Ledger ledger) {
         for (Coupon c : ledger.coupons()) for (Leg l : c.legs) if (l.early) return true;
         return false;
     }
 
-    /** Maç sürerken kazanılabilir pazar mı (Üst türleri, KG Var). */
+    /** Maç sürerken kesinleşebilen pazar mı: Üst ve Alt türleri (2.16.5: Alt da), KG Var / Yok. */
     static boolean liveCapable(Leg l) {
         String m = l.market;
-        if ("UST".equals(l.outcome)) {
+        if ("UST".equals(l.outcome) || "ALT".equals(l.outcome)) {
             return "AU25".equals(m) || m.startsWith("AU@") || m.startsWith("BT@") || m.startsWith("EVG@") || m.startsWith("DEPG@");
         }
-        return "KG".equals(m) && "VAR".equals(l.outcome);
+        return "KG".equals(m) && ("VAR".equals(l.outcome) || "YOK".equals(l.outcome));
+    }
+
+    /** Bacak canlıda kazanarak mı (Üst, KG Var) yoksa kaybederek mi (Alt, KG Yok) kesinleşir. */
+    static boolean winsLive(Leg l) {
+        return "UST".equals(l.outcome) || "VAR".equals(l.outcome);
     }
 
     /** Oynanan kuponda maçı başlamış, sonucu henüz alınamayan ve canlı kesinleşebilen bacak. */
@@ -176,8 +191,9 @@ public final class Settlement {
             if (s != null && s.completed && s.home != null && s.away != null) {
                 ledger.setLegResult(c.id, l.position, legResult(l.market, l.outcome, s.home, s.away),
                         s.home + "-" + s.away);
-            } else if (s != null && s.home != null && s.away != null && c.played && liveCapable(l) && liveWon(l.market, l.outcome, s.home, s.away)) {
-                markLiveWin(ledger, c, l, s); // uzatmalar / gecikme: maç bitmeden kesinleşti
+            } else if (s != null && s.home != null && s.away != null && c.played && liveCapable(l)
+                    && liveResult(l.market, l.outcome, s.home, s.away) != null) {
+                markLive(ledger, c, l, s, liveResult(l.market, l.outcome, s.home, s.away)); // uzatmalar / gecikme: maç bitmeden kesinleşti
             } else if (!Instant.parse(l.kickoff).plusSeconds(MANUAL_AFTER_S).isAfter(now)) {
                 messages.add("#" + c.id + " " + l.home + " - " + l.away
                         + ": sonuç bulunamadı (ertelenmiş olabilir). Kuponda maçın sonucunu elle gir.");
@@ -187,22 +203,26 @@ public final class Settlement {
             Coupon c = (Coupon) d[0];
             Leg l = (Leg) d[1];
             ScoreResult s = scores.get(l.sharpRef);
-            if (s != null && s.home != null && s.away != null && liveWon(l.market, l.outcome, s.home, s.away)) markLiveWin(ledger, c, l, s);
+            String res = s == null || s.home == null || s.away == null ? null : liveResult(l.market, l.outcome, s.home, s.away);
+            if (res != null) markLive(ledger, c, l, s, res);
         }
         for (Object[] d : verify) {
             Coupon c = (Coupon) d[0];
             Leg l = (Leg) d[1];
             ScoreResult s = scores.get(l.sharpRef);
             if (s != null && s.completed && s.home != null && s.away != null) {
-                String fin = legResult(l.market, l.outcome, s.home, s.away);
-                if (Models.WON.equals(fin)) {
-                    ledger.setLegResult(c.id, l.position, Models.WON, s.home + "-" + s.away);
+                String fin = legResult(l.market, l.outcome, s.home, s.away), was = l.result;
+                if (fin.equals(was)) {
+                    ledger.setLegResult(c.id, l.position, fin, s.home + "-" + s.away);
                     ledger.markEarly(c.id, l.position, false); // doğrulandı
                 } else {
+                    boolean paid = c.payout != null && c.payout > 0;
                     String outcome = ledger.correctLeg(c.id, l.position, fin, s.home + "-" + s.away);
-                    messages.add("Kupon #" + c.id + " düzeltildi: " + l.home + " – " + l.away + " maç sürerken tuttu sayılmıştı, son skor "
-                            + s.home + "-" + s.away + " (gol iptal edilmiş olabilir)"
-                            + (outcome == null ? "; diğer maçlar bekleniyor." : Models.LOST.equals(outcome) ? "; kupon yattı, ödeme geri alındı." : "."));
+                    messages.add("Kupon #" + c.id + " düzeltildi: " + l.home + " – " + l.away + " maç sürerken "
+                            + (Models.WON.equals(was) ? "tuttu" : "yattı") + " sayılmıştı, son skor " + s.home + "-" + s.away + " (gol iptal edilmiş olabilir)"
+                            + (outcome == null ? "; diğer maçlar bekleniyor."
+                            : Models.LOST.equals(outcome) ? (paid ? "; kupon yattı, ödeme geri alındı." : "; kupon yattı.")
+                            : Models.WON.equals(outcome) ? "; kupon tuttu, ödeme " + Fmt.tl(ledger.coupon(c.id).payout) + "." : "; kupon iade oldu."));
                 }
             } else if (!Instant.parse(l.kickoff).plusSeconds(MANUAL_AFTER_S).isAfter(now)) {
                 ledger.markEarly(c.id, l.position, false); // son skor yok: canlı sonuç kalır
@@ -218,7 +238,11 @@ public final class Settlement {
                 for (Leg l : ledger.coupon(c.id).legs) if (l.early) livePart = " Maç sürerken kesinleşti (" + l.home + " – " + l.away + ", " + l.score + ").";
                 messages.add(kind + " kupon #" + c.id + " TUTTU (oran " + Fmt.odds(c.totalOdds) + extra + ")." + livePart);
             } else if (Models.LOST.equals(outcome)) {
-                messages.add(kind + " kupon #" + c.id + " yattı.");
+                String livePart = "";
+                for (Leg l : ledger.coupon(c.id).legs) {
+                    if (l.early && Models.LOST.equals(l.result)) livePart = " Maç sürerken kesinleşti (" + l.home + " – " + l.away + ", " + l.score + ").";
+                }
+                messages.add(kind + " kupon #" + c.id + " yattı." + livePart);
             } else {
                 messages.add(kind + " kupon #" + c.id + " iade oldu.");
             }
@@ -226,8 +250,8 @@ public final class Settlement {
         return messages;
     }
 
-    private static void markLiveWin(Ledger ledger, Coupon c, Leg l, ScoreResult s) {
-        ledger.setLegResult(c.id, l.position, Models.WON, s.home + "-" + s.away + " (canlı)");
+    private static void markLive(Ledger ledger, Coupon c, Leg l, ScoreResult s, String result) {
+        ledger.setLegResult(c.id, l.position, result, s.home + "-" + s.away + " (canlı)");
         ledger.markEarly(c.id, l.position, true);
     }
 
@@ -244,7 +268,8 @@ public final class Settlement {
                 Instant due = resultDue(l.kickoff, l.sportKey);
                 String head = "#" + c.id + " " + l.home + " – " + l.away + ": ";
                 if (due.isAfter(now) && inPlay(c, l, now)) out.add(head + "maç sürüyor; " + Models.outcomeLabel(l.market, l.outcome)
-                        + " tutunca hemen işlenir, değilse sonuç " + Fmt.localTime(due.toString()) + " sonrası alınır.");
+                        + (winsLive(l) ? " tutunca hemen işlenir, değilse sonuç " : " kaybederse hemen işlenir, tutarsa sonuç ")
+                        + Fmt.localTime(due.toString()) + " sonrası alınır.");
                 else if (due.isAfter(now)) out.add(head + "maç bitmedi, sonuç " + Fmt.localTime(due.toString()) + " sonrası alınır.");
                 else if (l.sportKey == null) out.add(head + "maçın ligi bilinmiyor; sonucu kuponda elle gir.");
                 else out.add(head + "skor henüz yayımlanmadı, birkaç dakika sonra yeniden dene.");
