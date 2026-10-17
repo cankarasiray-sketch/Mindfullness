@@ -62,6 +62,17 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Maç sürerken tutan bahis hemen işlenir (2.16.4)
+
+- Oynanan **Üst** bahisleri (2,5 Üst, 0,5–4,5 Üst, ev/deplasman gol Üst, basketbol toplam Üst) ve **KG Var**,
+  canlı skorla kesinleştiği anda (ör. 2,5 Üst'te üçüncü gol) tuttu sayılır; tekli kupon hemen ödenir ve
+  "Maç sürerken kesinleşti" bildirimi gelir. Alt, maç sonucu, çifte şans gibi maç bitmeden kesinleşmeyen
+  bahisler eskisi gibi maç sonunda.
+- Maç sürerken oynanan böyle bir bacak varken canlı skor arka planda 15 dakikada bir sorulur (lig başına
+  1 kredi; ilki başlamadan 15 dk sonra); "Sonuç kontrolü" düğmesi de canlı skora bakar.
+- Maç bitince son skorla doğrulanır. Canlıda sayılan gol iptal edildiyse (VAR) kupon düzeltilir: ödeme geri
+  alınır, sonuç son skora göre yazılır ve bildirilir.
+
 ## 20 API anahtarı (2.16.3)
 
 - Ayarlar → Veri kaynağı'na en fazla **20** The Odds API anahtarı girilebilir (önce 15). Her istek kredisi en

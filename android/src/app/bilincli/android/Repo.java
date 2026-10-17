@@ -21,6 +21,7 @@ import app.bilincli.core.Radar;
 import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
+import app.bilincli.core.Settlement;
 import app.bilincli.core.Virtual;
 import app.bilincli.core.Zirve;
 import java.io.File;
@@ -1025,6 +1026,15 @@ final class Repo {
             if (ledger.settings().oddsApiKey.isEmpty()) return out;
             Instant now = Instant.now();
             lastEventRun = now;
+            // 2.16.4: maç sürerken oynanan Üst / KG Var bacakları canlı skorla kontrol edilir (15 dk'da bir)
+            Instant liveAt = Settlement.nextLiveCheck(ledger, now, lastLiveCheck);
+            if (liveAt != null && !liveAt.isAfter(now)) {
+                lastLiveCheck = now;
+                List<String> msgs = Daily.settle(ledger, live(), forecasts, virtual);
+                synchronized (liveMessages) {
+                    liveMessages.addAll(msgs);
+                }
+            }
             Set<String> due = Closing.dueLeagues(ledger, now);
             if (!due.isEmpty()) {
                 try {
@@ -1085,6 +1095,8 @@ final class Repo {
         Instant now = Instant.now();
         Instant a = Closing.nextCaptureTime(ledger, now), b = Recheck.nextPrecheckTime(ledger, now);
         Instant next = a == null ? b : b == null ? a : a.isBefore(b) ? a : b;
+        Instant c = Settlement.nextLiveCheck(ledger, now, lastLiveCheck); // 2.16.4: canlı skor
+        if (c != null && (next == null || c.isBefore(next))) next = c;
         if (next != null && !next.isAfter(now)) {
             // vadesi gelmiş iş: hemen. Son 10 dk içinde zaten denendiyse (ağ hatası, kapanış oranı
             // yayında yok) 10 dk sonra; böylece döngüye girip kredi harcamaz.
@@ -1275,6 +1287,18 @@ final class Repo {
 
     /** Son events() çalışması (yeniden deneme aralığı için). */
     private volatile Instant lastEventRun;
+    /** Son canlı skor kontrolü (2.16.4) ve onun bildirilecek sonuç mesajları. */
+    private volatile Instant lastLiveCheck;
+    private final List<String> liveMessages = new ArrayList<>();
+
+    /** Canlı kontrolde sonuçlanan kuponların mesajları (bildirim için; alınınca boşalır). */
+    List<String> takeLiveMessages() {
+        synchronized (liveMessages) {
+            List<String> out = new ArrayList<>(liveMessages);
+            liveMessages.clear();
+            return out;
+        }
+    }
 
     static final class BackgroundResult {
         List<String> settleMessages = new ArrayList<>();

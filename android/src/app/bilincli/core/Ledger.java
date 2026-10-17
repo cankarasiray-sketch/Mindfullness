@@ -52,6 +52,11 @@ public final class Ledger {
         /** Maç başlamadan hemen önce Pinnacle'ın adil olasılığı (kapanış). CLV ölçümü için. */
         public Double closingFair;
         public String closingAt;
+        /**
+         * 2.16.4: maç sürerken canlı skorla kazanıldı sayıldı (ör. 3. gol: 2,5 Üst); maç bitince son skorla
+         * doğrulanır, tutmadıysa (gol iptali) kupon düzeltilir.
+         */
+        public boolean early;
 
         /** Kapanış avantajı: alınan oranın kapanıştaki adil orana göre değeri. null = kapanış yok. */
         public Double clv() {
@@ -211,6 +216,7 @@ public final class Ledger {
             g.put("score", l.score);
             g.put("closingFair", l.closingFair);
             g.put("closingAt", l.closingAt);
+            if (l.early) g.put("early", true);
             legs.add(g);
         }
         o.put("legs", legs);
@@ -282,6 +288,7 @@ public final class Ledger {
                 l.score = Json.str(g, "score");
                 l.closingFair = Json.num(g, "closingFair");
                 l.closingAt = Json.str(g, "closingAt");
+                l.early = Json.bool(g, "early", false);
                 c.legs.add(l);
             }
             coupons.add(c);
@@ -562,6 +569,40 @@ public final class Ledger {
             }
         }
         throw new LedgerException("Kupon #" + couponId + " içinde " + position + ". maç yok");
+    }
+
+    /** 2.16.4: bacak maç sürerken kazanıldı sayıldı (true) ya da son skorla doğrulandı (false). */
+    public synchronized void markEarly(long couponId, int position, boolean early) {
+        for (Leg l : coupon(couponId).legs) {
+            if (l.position == position) {
+                l.early = early;
+                save();
+                return;
+            }
+        }
+    }
+
+    /**
+     * 2.16.4: maç sürerken kazanıldı sayılan bacak son skorla tutmadıysa (ör. gol VAR'la iptal) düzeltilir:
+     * ödeme varsa geri alınır, bacak son sonuçla yazılır, kupon yeniden sonuçlanır. Yeni kupon sonucunu döndürür.
+     */
+    public synchronized String correctLeg(long couponId, int position, String result, String score) {
+        Coupon c = coupon(couponId);
+        if (c.result != null) {
+            if (c.payout != null && c.payout > 0) addTx("payout", -c.payout, c.id, "Kupon #" + c.id + " düzeltme: maç sürerken ödenen geri alındı");
+            c.result = null;
+            c.payout = null;
+            c.settledAt = null;
+        }
+        for (Leg l : c.legs) {
+            if (l.position == position) {
+                l.result = result;
+                l.score = score;
+                l.early = false;
+            }
+        }
+        save();
+        return settleCoupon(couponId);
     }
 
     /** Bacaklar yeterince sonuçlandıysa kuponu kapatır; sonucu döndürür. */

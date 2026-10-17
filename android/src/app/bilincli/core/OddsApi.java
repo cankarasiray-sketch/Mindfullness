@@ -787,10 +787,18 @@ public final class OddsApi {
     }
 
     public Map<String, ScoreResult> fetchScores(Set<String> sportKeys) throws Http.ProviderException {
+        return fetchScores(sportKeys, true);
+    }
+
+    /**
+     * history: son 3 günün biten maçları da (lig başına 2 kredi); false: yalnızca süren ve yaklaşan maçlar
+     * (canlı kontrol, 2.16.4; lig başına 1 kredi). Süren maçta skor var, completed false.
+     */
+    public Map<String, ScoreResult> fetchScores(Set<String> sportKeys, boolean history) throws Http.ProviderException {
         Map<String, ScoreResult> out = new LinkedHashMap<>();
         for (String league : sportKeys) {
             Map<String, String> params = new LinkedHashMap<>();
-            params.put("daysFrom", "3");
+            if (history) params.put("daysFrom", "3");
             params.put("dateFormat", "iso");
             try {
                 out.putAll(parseScores(get("/sports/" + league + "/scores", params)));

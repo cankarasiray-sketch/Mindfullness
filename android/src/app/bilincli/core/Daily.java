@@ -20,6 +20,11 @@ public final class Daily {
         List<SharpEvent> sharp() throws Http.ProviderException;
 
         Map<String, ScoreResult> scores(Set<String> sportKeys) throws Http.ProviderException;
+
+        /** Yalnızca süren ve yaklaşan maçların skoru (2.16.4: canlı kontrol; geçmiş günler gerekmez). */
+        default Map<String, ScoreResult> liveScores(Set<String> sportKeys) throws Http.ProviderException {
+            return scores(sportKeys);
+        }
     }
 
     public static final class Result {
@@ -248,6 +253,12 @@ public final class Daily {
             step("Maç sonuçları alınıyor (" + sportKeys.size() + " lig)…");
             return api().fetchScores(sportKeys);
         }
+
+        @Override
+        public Map<String, ScoreResult> liveScores(Set<String> sportKeys) throws Http.ProviderException {
+            step("Canlı skorlar alınıyor (" + sportKeys.size() + " lig)…");
+            return api().fetchScores(sportKeys, false);
+        }
     }
 
     public static final class DemoSources implements Sources {
@@ -423,7 +434,7 @@ public final class Daily {
         final Set<String> fetched = new java.util.HashSet<>();
         final Instant now = ledger.now();
         List<String> out = new ArrayList<>();
-        if (!ledger.openCoupons().isEmpty()) {
+        if (!ledger.openCoupons().isEmpty() || Settlement.hasEarly(ledger)) { // 2.16.4: canlıda ödenenin maç sonu doğrulaması
             try {
                 out = Settlement.settleOpen(ledger, new Settlement.ScoreFetcher() {
                     @Override
@@ -433,6 +444,11 @@ public final class Daily {
                         if (forecasts != null) forecasts.resolve(scores);
                         if (virtual != null) virtual.resolve(scores, now);
                         return scores;
+                    }
+
+                    @Override
+                    public Map<String, ScoreResult> fetchLive(Set<String> sportKeys) throws Exception {
+                        return src.liveScores(sportKeys); // yalnızca süren maçlar: biten yok, tahmin/sanal takip etkilenmez
                     }
                 }, now);
             } catch (Exception e) {
