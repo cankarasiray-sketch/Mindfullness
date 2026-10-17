@@ -50,11 +50,11 @@ public class KeysTest {
         assertEquals(A + "\n" + B + "\n" + C, s.oddsApiKey);
         assertEquals("…1111", Settings.keyLabel(A));
         assertNull(s.validate());
-        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15";
-        assertNull(s.validate()); // 15 anahtar kabul (2.14)
-        assertEquals(15, s.apiKeys().size());
-        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16";
-        assertTrue(s.validate().contains("En fazla 15"));
+        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16 k17 k18 k19 k20";
+        assertNull(s.validate()); // 20 anahtar kabul (2.16.3; önce 15)
+        assertEquals(20, s.apiKeys().size());
+        s.oddsApiKey = "k1 k2 k3 k4 k5 k6 k7 k8 k9 k10 k11 k12 k13 k14 k15 k16 k17 k18 k19 k20 k21";
+        assertTrue(s.validate().contains("En fazla 20"));
         assertEquals(Collections.singletonList("abc123"), cfg(" abc123 ").apiKeys()); // tek anahtar eskisi gibi
     }
 

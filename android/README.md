@@ -62,6 +62,11 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## 20 API anahtarı (2.16.3)
+
+- Ayarlar → Veri kaynağı'na en fazla **20** The Odds API anahtarı girilebilir (önce 15). Her istek kredisi en
+  çok kalan anahtardan gider; biten ya da geçersiz anahtar atlanır. 20 ücretsiz anahtar ≈ ayda 10.000 kredi.
+
 ## Kapanış oranı testi (CLV) tek maç ve Zirve'yi de sayar (2.16.2)
 
 - Kapanış oranı tek maç (günün seçimi, tek maç fırsatları) ve Zirve kuponları için de kaydediliyordu ama

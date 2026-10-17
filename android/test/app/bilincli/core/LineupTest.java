@@ -104,11 +104,11 @@ public class LineupTest {
         Settings back = Settings.fromMap(m);
         assertFalse(back.lineupScans);
         assertFalse(back.quietNights);
-        // 15 anahtar (2.14'ten beri; önce 10)
+        // 20 anahtar (2.16.3'ten beri; önce 15, ondan önce 10)
         List<String> keys = new ArrayList<>();
-        for (int i = 1; i <= 15; i++) keys.add("anahtar" + i);
+        for (int i = 1; i <= 20; i++) keys.add("anahtar" + i);
         d.oddsApiKey = String.join("\n", keys);
         assertNull(d.validate());
-        assertEquals(15, Settings.fromMap(d.toMap()).apiKeys().size());
+        assertEquals(20, Settings.fromMap(d.toMap()).apiKeys().size());
     }
 }
