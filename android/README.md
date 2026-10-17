@@ -62,6 +62,14 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Maç sonucu ve çifte şans maç biter bitmez işlenir (2.16.6)
+
+- Maç sonucu ve çifte şans maç bitmeden kesinleşmez (son dakika golü sonucu değiştirebilir), bu yüzden canlıda
+  sonuçlanmaz. Ama artık maç bitiminden hemen sonra kendiliğinden sorulur: futbolda başlangıçtan 1 sa 55 dk,
+  basketbolda 2 sa 15 dk sonra, skor "bitti" olana kadar 15 dakikada bir (en fazla 3 saat). Önce sonuç ancak
+  elle "Sonuç kontrolü"nde ya da 3 saatlik arka plan işinde geliyordu.
+- Aynı maç sonu kontrolü bütün oynanan bahislere uygulanır (Alt'ın tuttuğu, handikap vb.).
+
 ## Maç sürerken yatan Alt bahsi de hemen işlenir (2.16.5)
 
 - Oynanan **Alt** bahisleri (2,5 Alt, 0,5–4,5 Alt, ev/deplasman gol Alt, basketbol toplam Alt) çizgi aşıldığı

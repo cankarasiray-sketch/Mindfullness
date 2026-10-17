@@ -77,18 +77,25 @@ public final class Settlement {
                 && !Instant.parse(l.kickoff).isAfter(now) && resultDue(l.kickoff, l.sportKey).isAfter(now);
     }
 
+    /** Maç bitince sonuç bu süre boyunca 15 dakikada bir sorulur (2.16.6); sonra olağan kontroller. */
+    static final long FINAL_WINDOW_S = 3 * 3600;
+
     /**
-     * Sıradaki canlı skor kontrolü (2.16.4): oynanan, canlı kesinleşebilir bacağın maçı sürerken 15 dakikada bir
-     * (ilki başlamadan 15 dk sonra). Yoksa null. last: son canlı kontrol (yoksa null).
+     * Sıradaki skor kontrolü, oynanan kuponların sonuçlanmamış bacakları için 15 dakikada bir:
+     * canlı kesinleşebilen bacakta (Üst/Alt, KG) maç başlamadan 15 dk sonra başlar (2.16.4); maç sonucu, çifte şans
+     * gibi maç bitmeden kesinleşmeyen bacakta maç bitiminde (resultDue) başlar (2.16.6). Her bacak için maç
+     * bitiminden FINAL_WINDOW_S sonrasına kadar sürer (erteleme vb.; sonra olağan kontroller). Yoksa null.
+     * last: son kontrol (yoksa null).
      */
     public static Instant nextLiveCheck(Ledger ledger, Instant now, Instant last) {
         Instant best = null;
         for (Coupon c : ledger.openCoupons()) {
             if (!c.played) continue;
             for (Leg l : c.legs) {
-                if (l.result != null || l.sportKey == null || !liveCapable(l)) continue;
-                Instant start = Instant.parse(l.kickoff).plusSeconds(LIVE_CHECK_S), end = resultDue(l.kickoff, l.sportKey);
-                if (!end.isAfter(now)) continue; // maç bitti: olağan sonuç kontrolü
+                if (l.result != null || l.sportKey == null) continue;
+                Instant end = resultDue(l.kickoff, l.sportKey);
+                Instant start = liveCapable(l) ? Instant.parse(l.kickoff).plusSeconds(LIVE_CHECK_S) : end;
+                if (!end.plusSeconds(FINAL_WINDOW_S).isAfter(now)) continue; // çok eski: olağan sonuç kontrolü
                 Instant t = start.isAfter(now) ? start
                         : last == null || !last.plusSeconds(LIVE_CHECK_S).isAfter(now) ? now : last.plusSeconds(LIVE_CHECK_S);
                 if (best == null || t.isBefore(best)) best = t;

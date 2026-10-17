@@ -581,12 +581,28 @@ public class PickTest {
         assertEquals(Models.LOST, l.coupon(id).result);
         assertEquals(100000 - 5000, l.balance());
         assertEquals(-5000, l.stats().bettingPl());
-        // maç sonucu bahsi maç sürerken sonuçlanmaz, canlı kontrol de kurulmaz
+        // maç sonucu bahsi maç sürerken sonuçlanmaz: canlı kontrol yok, ilk kontrol maç bitiminde (2.16.6)
         @SuppressWarnings("unchecked")
         Map<String, Object>[] ars = Promo.find(fx, "1", "MS", "1");
-        Promo.recordPick(l, ars[0], ars[1], 1.45, 5000, "2026-10-01");
+        long ms = Promo.recordPick(l, ars[0], ars[1], 1.45, 5000, "2026-10-01");
         Instant ako = Instant.parse(Json.str(ars[0], "kickoff"));
-        assertNull(Settlement.nextLiveCheck(l, ako.plusSeconds(1800), null));
+        Instant aend = Settlement.resultDue(ako.toString(), "soccer_epl");
+        assertEquals(aend, Settlement.nextLiveCheck(l, ako.plusSeconds(1800), null));
+        scores.put("s1", new Models.ScoreResult(false, 3, 0));
+        assertTrue(Settlement.settleOpen(l, scoreFeed(scores, calls), ako.plusSeconds(4000)).isEmpty()); // 3-0 olsa da beklenir
+        assertNull(l.coupon(ms).result);
+        // maç bitti ama skor henüz "bitti" değil: 15 dk sonra yeniden sorulur
+        scores.put("s1", new Models.ScoreResult(false, 3, 0));
+        assertTrue(Settlement.settleOpen(l, scoreFeed(scores, calls), aend).isEmpty());
+        assertEquals(aend.plusSeconds(Settlement.LIVE_CHECK_S), Settlement.nextLiveCheck(l, aend.plusSeconds(60), aend));
+        scores.put("s1", new Models.ScoreResult(true, 3, 1));
+        List<String> m2 = Settlement.settleOpen(l, scoreFeed(scores, calls), aend.plusSeconds(900));
+        assertTrue(m2.toString(), m2.toString().contains("kupon #" + ms + " TUTTU"));
+        assertNull(Settlement.nextLiveCheck(l, aend.plusSeconds(1000), aend.plusSeconds(900)));
+        // en fazla maç bitiminden 3 saat sonrasına kadar sık kontrol (erteleme vb.)
+        long cs = Promo.recordPick(l, ars[0], ars[1], 1.45, 5000, "2026-10-01");
+        assertNull(Settlement.nextLiveCheck(l, aend.plusSeconds(3 * 3600 + 60), null));
+        assertNull(l.coupon(cs).result);
     }
 
     @Test
