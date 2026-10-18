@@ -62,6 +62,7 @@ public final class Bridge {
         extra.put("pick", picks[0]);
         extra.put("singles", picks[1]);
         extra.put("bands", picks[2]);
+        extra.put("draws", picks[3]);
         long switched = repo.profileSwitchedAt();
         extra.put("profileSwitchedAt", switched > 0 ? Instant.ofEpochMilli(switched).toString() : null);
         extra.put("credits", repo.credits());

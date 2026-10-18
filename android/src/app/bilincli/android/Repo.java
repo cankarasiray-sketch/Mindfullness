@@ -1126,6 +1126,7 @@ final class Repo {
     private Map<String, Object> pickValue;
     private List<Object> singlesValue;
     private List<Object> bandsValue;
+    private List<Object> drawsValue;
 
     private void refreshPicks() {
         Instant now = Instant.now();
@@ -1142,6 +1143,7 @@ final class Repo {
             pickValue = pv;
             singlesValue = sv;
             bandsValue = bv;
+            drawsValue = Pick.draws(fairs, z, cfg, balance, now, Json.arr(radar.view().get("moves"))); // 2.17
             // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
             // "oynama" günü (beklenen kayıp sınırı aşıyor) sanal bahis de yok: strateji o gün oynamıyor
             if (pickValue != null && !Json.bool(pickValue, "skip", false)) virtual.record(Fmt.dayKey(now), Virtual.PICK, Pick.selection(pickValue), now);
@@ -1156,7 +1158,11 @@ final class Repo {
         if (isDemo()) return null;
         try {
             Settings cfg = Daily.decisionSettings(ledger);
-            List<Object> list = Pick.list(Json.arr(radar.view().get("fairs")), zirveView(), cfg, ledger.balance(), Instant.now());
+            List<Object> fairs = Json.arr(radar.view().get("fairs"));
+            Map<String, Object> z = zirveView();
+            List<Object> list = new ArrayList<>(Pick.list(fairs, z, cfg, ledger.balance(), Instant.now()));
+            // 2.17: kârlı beraberlikler de bildirilir (tek maç listesinde yok: tutma %50'nin altında)
+            list.addAll(Pick.draws(fairs, z, cfg, ledger.balance(), Instant.now(), Json.arr(radar.view().get("moves"))));
             synchronized (LOCK) {
                 List<Object> notified = new ArrayList<>(Json.arr(memory.get("profitNotified")));
                 String[] n = Pick.profitNotice(list, notified);
@@ -1186,14 +1192,14 @@ final class Repo {
 
     /** Ekran için günün seçimi, tek maç listesi ve denge tablosu tek hesapla: {seçim, liste, bantlar} (2.16). */
     Object[] picks() {
-        if (isDemo()) return new Object[3];
+        if (isDemo()) return new Object[4];
         try {
             refreshPicks();
             synchronized (pickLock) {
-                return new Object[] {pickValue, singlesValue, bandsValue};
+                return new Object[] {pickValue, singlesValue, bandsValue, drawsValue};
             }
         } catch (RuntimeException e) {
-            return new Object[3]; // tablo yazılırken okunduysa bir sonraki çizimde gelir
+            return new Object[4]; // tablo yazılırken okunduysa bir sonraki çizimde gelir
         }
     }
 

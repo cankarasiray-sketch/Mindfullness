@@ -679,4 +679,53 @@ public class PickTest {
         assertEquals(100000 - 5000 + 11500, l.balance());
         assertFalse(Settlement.hasEarly(l));
     }
+
+    @Test
+    public void drawOpportunities() {
+        // 2.17: tek oynanabilen beraberlikler; önce kârlı, sonra denge puanı; piyasa beraberlik bekliyor / yükseldi işaretleri
+        List<Object> fx = new ArrayList<>();
+        fx.add(row("d1", "Roma", 8, sel("MS", "X", 0.33, 3.20, 1), sel("AU25", "ALT", 0.60, 1.55, 1))); // +%5,6, piyasa beraberlik bekliyor
+        fx.add(row("d2", "Lazio", 9, sel("MS", "X", 0.28, 3.30, 1), sel("AU25", "ALT", 0.50, 1.80, 1))); // −%7,6
+        fx.add(row("d3", "Milan", 10, sel("MS", "X", 0.18, 5.20, 1))); // −%6,4, en yüksek oran
+        fx.add(row("d4", "Inter", 11, sel("MS", "X", 0.30, 3.10, 2))); // MBS 2: tek oynanamaz
+        fx.add(row("d5", "Napoli", 12, sel("MS", "X", 0.12, 7.00, 1))); // %12: listede değil
+        fx.add(row("d6", "Genoa", 13, sel("MS", "1", 0.60, 1.60, 1))); // beraberlik değil
+        List<Object> moves = new ArrayList<>();
+        Map<String, Object> mv = new LinkedHashMap<>();
+        mv.put("bookRef", "d2");
+        mv.put("market", "MS");
+        mv.put("outcome", "X");
+        mv.put("from", 0.25);
+        mv.put("to", 0.28);
+        moves.add(mv);
+        Settings cfg = new Settings();
+        List<Object> d = Pick.draws(fx, null, cfg, 500000, NOW, moves);
+        assertEquals(3, d.size());
+        Map<String, Object> a = Json.obj(d.get(0)), b = Json.obj(d.get(1)), c = Json.obj(d.get(2));
+        assertEquals("d1", a.get("ref")); // kârlı önce
+        assertEquals("d2", b.get("ref"));
+        assertEquals("d3", c.get("ref"));
+        assertTrue(Json.bool(a, "drawish", false));
+        assertEquals(0.60, Json.dbl(a, "under", 0), 1e-9);
+        assertFalse(Json.bool(b, "drawish", true));
+        assertEquals(0.03, Json.dbl(b, "rise", 0), 1e-9);
+        assertNull(a.get("rise"));
+        assertNull(c.get("under"));
+        assertEquals(15000L, a.get("stake")); // tek maç tutarı (kasanın %3'ü; Kelly daha küçük)
+        assertEquals(15000L, c.get("stake")); // −%6,4: sınır −%15'in içinde
+        // kârlı beraberlik bildirilir
+        String[] n = Pick.profitNotice(d, new ArrayList<Object>());
+        assertEquals("Kârlı seçim · Roma – Dep d1", n[0]);
+        assertTrue(n[1], n[1].contains("MS X @ 3,20"));
+        // Zirve Oran'daki beraberlik de (daha iyi oranla)
+        Map<String, Object> zirve = new LinkedHashMap<>();
+        List<Object> zr = new ArrayList<>();
+        zr.add(zirveRow("d3", "Milan", 10, "MS", "X", 0.18, 5.80, "oyna"));
+        zirve.put("rows", zr);
+        List<Object> dz = Pick.draws(fx, zirve, cfg, 500000, NOW, null);
+        Map<String, Object> z = null;
+        for (Object o : dz) if ("d3".equals(Json.obj(o).get("ref"))) z = Json.obj(o);
+        assertEquals("zirve", z.get("source"));
+        assertEquals(5.80, Json.dbl(z, "odds", 0), 0);
+    }
 }

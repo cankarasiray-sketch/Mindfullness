@@ -328,6 +328,53 @@ public final class Pick {
                 + (Json.lng(p, "stake", 0) > 0 ? " · " + Fmt.tl(Json.lng(p, "stake", 0)) + " (tutarsa " + Fmt.tl(Json.lng(p, "win", 0)) + ")" : "");
     }
 
+    /** Beraberlik fırsatlarında en az bu tutma olasılığı ve en fazla bu kadar satır (2.17). */
+    public static final double DRAW_MIN_PROB = 0.15;
+    static final int DRAW_LIST = 40;
+    /**
+     * "Piyasa beraberlik bekliyor": Pinnacle beraberliğe en az DRAW_HIGH ve 2,5 Alt'a en az DRAW_UNDER veriyor.
+     * İki takımın da beraberliğe razı olduğu (ör. ikisine de yeten puan) maçlar keskin piyasada böyle görünür.
+     */
+    static final double DRAW_HIGH = 0.30, DRAW_UNDER = 0.55;
+
+    /**
+     * Beraberlik fırsatları (2.17): Fırsatlar penceresinde tek oynanabilen (MBS 1) maç sonucu X seçimleri (normal oran
+     * ve Zirve Oran), en az DRAW_MIN_PROB olası, {@link #rank} sırasıyla (önce kârlı), tek maç tutarıyla. Ek alanlar:
+     * under (Pinnacle 2,5 Alt olasılığı), drawish (piyasa beraberlik bekliyor), rise (Pinnacle'da beraberlik
+     * olasılığının gün içi artışı; radar hareketlerinden, en az 3 puan). moves: radar "moves" (null olabilir).
+     */
+    public static List<Object> draws(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now, List<Object> moves) {
+        Map<String, Double> under = new LinkedHashMap<>();
+        for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
+            Map<String, Object> r = Json.obj(o);
+            if (r == null) continue;
+            for (Object so : Json.arr(r.get("sel"))) {
+                Map<String, Object> x = Json.obj(so);
+                if (x != null && "AU25".equals(Json.str(x, "m")) && "ALT".equals(Json.str(x, "o"))) under.put(Json.str(r, "ref"), Json.dbl(x, "p", 0));
+            }
+        }
+        Map<String, Double> rise = new LinkedHashMap<>();
+        for (Object o : moves == null ? new ArrayList<Object>() : moves) {
+            Map<String, Object> m = Json.obj(o);
+            if (m == null || !"X".equals(Json.str(m, "outcome")) || Json.str(m, "bookRef") == null) continue;
+            if (m.get("market") != null && !"MS".equals(Json.str(m, "market"))) continue;
+            rise.put(Json.str(m, "bookRef"), Json.dbl(m, "to", 0) - Json.dbl(m, "from", 0));
+        }
+        List<Object> out = new ArrayList<>();
+        for (Map<String, Object> e : singles(fairs, zirve, cfg, DRAW_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now)) {
+            if (!"MS".equals(Json.str(e, "m")) || !"X".equals(Json.str(e, "o"))) continue;
+            Map<String, Object> d = withStake(e, cfg, balance);
+            String ref = Json.str(d, "ref");
+            Double u = under.get(ref);
+            if (u != null) d.put("under", u);
+            if (rise.containsKey(ref)) d.put("rise", rise.get(ref));
+            d.put("drawish", Json.dbl(d, "p", 0) >= DRAW_HIGH && u != null && u >= DRAW_UNDER);
+            out.add(d);
+            if (out.size() >= DRAW_LIST) break;
+        }
+        return out;
+    }
+
     /** Kârlı seçim bildiriminde hatırlanan en fazla anahtar. */
     static final int MAX_NOTIFIED = 300;
 

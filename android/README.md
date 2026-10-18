@@ -62,6 +62,18 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Beraberlik fırsatları (2.17)
+
+- Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %15 olası; tek maç
+  listesinde yoklardı, çünkü orası en az %50 tutanları gösterir). Normal oran ve Zirve Oran birlikte.
+- Sıra: önce **kârlı** (iddaa'nın beraberlik oranı adil oranı geçen), sonra kâr ve tutma dengesi; istersen
+  "En yüksek oran" sırası. Tutar tek maç kuralıyla (kasanın %3'ü; beklenen kayıp −%15'i aşarsa oynama).
+- **Piyasa beraberlik bekliyor:** Pinnacle beraberliğe en az %30, 2,5 Alt'a en az %55 veriyor. İki takımın da
+  beraberliğe razı olduğu maçlar (ör. ikisine de yeten puan) keskin piyasada böyle görünür; bu maçlarda
+  beraberlik oranı düşer. **Beraberlik yükseldi:** Pinnacle'da beraberlik olasılığı gün içinde en az 3 puan arttı.
+- Kârlı beraberlik çıkınca kârlı seçim bildirimi gelir. Uygulama puan durumunu bilmez; takımların niyeti
+  yalnızca piyasa fiyatından okunur.
+
 ## Maç sonucu ve çifte şans maç biter bitmez işlenir (2.16.6)
 
 - Maç sonucu ve çifte şans maç bitmeden kesinleşmez (son dakika golü sonucu değiştirebilir), bu yüzden canlıda

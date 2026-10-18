@@ -674,6 +674,35 @@ function singlesCard() {
     + (match.length > rows.length ? '<div class="btns"><button class="b ghost" onclick="singlesShow+=25;render()">Daha fazla göster (' + (match.length - rows.length) + " seçim daha)</button></div>" : "")
     + "</div>";
 }
+// ---- Beraberlik fırsatları (2.17) -------------------------------------------------------------------
+var drawSort = "kar", drawOnly = false, drawShow = 15;
+function drawsCard() {
+  if (S.demo || !S.draws) return "";
+  var all = S.draws.filter(function (x) { return !drawOnly || x.drawish; });
+  if (drawSort === "oran") all = all.slice().sort(function (a, b) { return b.odds - a.odds; });
+  var rows = all.slice(0, drawShow);
+  var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
+  var chip = function (on, js, text) { return '<button class="chip' + (on ? " main" : "") + '" onclick="' + js + ';drawShow=15;render()">' + text + "</button>"; };
+  return '<div class="card" id="drawsCard"><h2>Beraberlik fırsatları</h2><p class="small muted">Önümüzdeki ' + oppText() + " içinde tek oynanabilen beraberlikler (en az %"
+    + Math.round(0.15 * 100) + " olası). Kâr, iddaa'nın beraberlik oranı adil oranı geçtiğinde gelir (yeşil); yüksek oran tek başına kâr değildir. "
+    + "İki takımın da beraberliğe razı olduğu maçlar (ör. ikisine de yeten puan) Pinnacle'ın fiyatına yansır: <b>piyasa beraberlik bekliyor</b> = beraberliğe en az %30, "
+    + "2,5 Alt'a en az %55; <b>beraberlik yükseldi</b> = Pinnacle'da beraberlik olasılığı gün içinde en az 3 puan arttı. Bu maçlarda beraberlik oranı düşer, yükselmez.</p>"
+    + '<div class="btns" style="flex-wrap:wrap">' + chip(drawSort === "kar", "drawSort=\'kar\'", "Kâr sırası") + " " + chip(drawSort === "oran", "drawSort=\'oran\'", "En yüksek oran")
+    + " " + chip(drawOnly, "drawOnly=!drawOnly", "Piyasa beraberlik bekliyor") + "</div>"
+    + (rows.length ? rows.map(function (x) {
+      var i = regPick(x.stake != null ? x : Object.assign({}, x, {stake: stake, win: Math.round(stake * x.odds), expected: Math.round(stake * x.ev)}));
+      return '<div class="vrow draw-row"><div class="l1"><span>' + esc(dm(x.kickoff)) + " " + esc(hm(x.kickoff)) + (x.league ? " · " + esc(x.league) : "") + "</span><span>"
+        + (x.code ? "kod " + esc(x.code) : "") + '</span></div><div class="teams" style="font-weight:600">' + esc(x.home) + " – " + esc(x.away) + "</div>"
+        + '<div class="l2"><span>' + pickOdds(x) + ' <span class="small muted">adil ' + odds(x.fair) + " · beraberlik %" + num(x.p * 100, 0)
+        + (x.under != null ? " · 2,5 Alt %" + num(x.under * 100, 0) : "") + "</span>"
+        + (x.drawish ? ' <span class="st ok">piyasa beraberlik bekliyor</span>' : "")
+        + (x.rise ? ' <span class="st">beraberlik yükseldi +' + num(x.rise * 100, 0) + " puan</span>" : "") + "</span>"
+        + '<span><b class="' + cls(x.ev) + '">' + pct(x.ev, true) + "</b>" + (x.skip ? ' <span class="small muted">oynama</span>' : x.stake ? " <b>" + tl(x.stake) + "</b>" : "")
+        + ' <button class="b ghost" style="padding:4px 10px" onclick="pickSheet(' + i + ')">Oynadım</button></span></div></div>';
+    }).join("") : '<p class="small muted">' + (S.draws.length ? "Bu süzgeçte beraberlik yok." : "Tek oynanabilen beraberlik yok (önce \"Şimdi tara\").") + "</p>")
+    + (all.length > rows.length ? '<div class="btns"><button class="b ghost" onclick="drawShow+=15;render()">Daha fazla göster (' + (all.length - rows.length) + " daha)</button></div>" : "")
+    + "</div>";
+}
 /** Geçmiş: oynanan günün seçimlerinin gerçek sonucu ve beklenenle karşılaştırma. */
 function pickStatsCard() {
   if (S.demo) return "";
@@ -1084,6 +1113,7 @@ function viewOpportunities() {
     + (S.demo ? "" : '<div class="btns"><button class="b" onclick="act(\'radarScan\')">Şimdi tara</button><button class="b ghost" onclick="show(\'ayarlar\')">Radar ayarı</button></div>')
     + "</div>";
   html += singlesCard();
+  html += drawsCard();
   html += zirveCard();
   html += campaignCard();
   html += '<div class="card"><h2>Değerli oranlar</h2><p class="small muted">iddaa oranının, Pinnacle\'ın marjı arındırılmış adil oranından yüksek olduğu seçimler. '
