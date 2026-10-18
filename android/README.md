@@ -64,8 +64,9 @@ bildirim olarak gelir.
 
 ## Beraberlik fırsatları (2.17)
 
-- Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %15 olası; tek maç
-  listesinde yoklardı, çünkü orası en az %50 tutanları gösterir). Normal oran ve Zirve Oran birlikte.
+- Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den
+  beri, önce %15; tek maç listesinde yoklardı, çünkü orası en az %50 tutanları gösterir). Normal oran ve Zirve
+  Oran birlikte.
 - Sıra: önce **kârlı** (iddaa'nın beraberlik oranı adil oranı geçen), sonra kâr ve tutma dengesi; istersen
   "En yüksek oran" sırası. Tutar tek maç kuralıyla (kasanın %3'ü; beklenen kayıp −%15'i aşarsa oynama).
 - **Piyasa beraberlik bekliyor:** Pinnacle beraberliğe en az %30, 2,5 Alt'a en az %55 veriyor. İki takımın da

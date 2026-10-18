@@ -328,8 +328,8 @@ public final class Pick {
                 + (Json.lng(p, "stake", 0) > 0 ? " · " + Fmt.tl(Json.lng(p, "stake", 0)) + " (tutarsa " + Fmt.tl(Json.lng(p, "win", 0)) + ")" : "");
     }
 
-    /** Beraberlik fırsatlarında en az bu tutma olasılığı ve en fazla bu kadar satır (2.17). */
-    public static final double DRAW_MIN_PROB = 0.15;
+    /** Beraberlik fırsatlarında en az bu tutma olasılığı (2.17.1, kullanıcı isteği: %15 -> %30) ve en fazla bu kadar satır. */
+    public static final double DRAW_MIN_PROB = 0.30;
     static final int DRAW_LIST = 40;
     /**
      * "Piyasa beraberlik bekliyor": Pinnacle beraberliğe en az DRAW_HIGH ve 2,5 Alt'a en az DRAW_UNDER veriyor.

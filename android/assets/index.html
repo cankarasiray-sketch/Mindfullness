@@ -683,8 +683,7 @@ function drawsCard() {
   var rows = all.slice(0, drawShow);
   var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
   var chip = function (on, js, text) { return '<button class="chip' + (on ? " main" : "") + '" onclick="' + js + ';drawShow=15;render()">' + text + "</button>"; };
-  return '<div class="card" id="drawsCard"><h2>Beraberlik fırsatları</h2><p class="small muted">Önümüzdeki ' + oppText() + " içinde tek oynanabilen beraberlikler (en az %"
-    + Math.round(0.15 * 100) + " olası). Kâr, iddaa'nın beraberlik oranı adil oranı geçtiğinde gelir (yeşil); yüksek oran tek başına kâr değildir. "
+  return '<div class="card" id="drawsCard"><h2>Beraberlik fırsatları</h2><p class="small muted">Önümüzdeki ' + oppText() + " içinde tek oynanabilen, en az %30 olası beraberlikler. Kâr, iddaa'nın beraberlik oranı adil oranı geçtiğinde gelir (yeşil); yüksek oran tek başına kâr değildir. "
     + "İki takımın da beraberliğe razı olduğu maçlar (ör. ikisine de yeten puan) Pinnacle'ın fiyatına yansır: <b>piyasa beraberlik bekliyor</b> = beraberliğe en az %30, "
     + "2,5 Alt'a en az %55; <b>beraberlik yükseldi</b> = Pinnacle'da beraberlik olasılığı gün içinde en az 3 puan arttı. Bu maçlarda beraberlik oranı düşer, yükselmez.</p>"
     + '<div class="btns" style="flex-wrap:wrap">' + chip(drawSort === "kar", "drawSort=\'kar\'", "Kâr sırası") + " " + chip(drawSort === "oran", "drawSort=\'oran\'", "En yüksek oran")

@@ -788,10 +788,11 @@ test("beraberlik fırsatları: kâr sırası, en yüksek oran, piyasa beraberlik
   const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
   const mk = (ref, home, p, odds, extra) => Object.assign({ source: "iddaa", ref, m: "MS", o: "X", label: "MS X", home, away: "Dep", kickoff: ko, odds, p, fair: 1 / p,
     ev: p * odds - 1, mbs: 1, stake: 17000, win: Math.round(17000 * odds), expected: Math.round(17000 * (p * odds - 1)) }, extra || {});
-  s.draws = [mk("d1", "Roma", 0.33, 3.2, { under: 0.6, drawish: true }), mk("d2", "Lazio", 0.28, 3.3, { under: 0.5, rise: 0.03 }), mk("d3", "Milan", 0.18, 5.2)];
+  s.draws = [mk("d1", "Roma", 0.33, 3.2, { under: 0.6, drawish: true }), mk("d2", "Lazio", 0.31, 3.0, { under: 0.5, rise: 0.03 }), mk("d3", "Milan", 0.30, 3.25)];
   const f = boot(s, "#firsat");
   let rows = f.$$("#drawsCard .draw-row");
   assert.equal(rows.length, 3);
+  assert.match(f.$("#drawsCard").textContent, /en az %30 olası beraberlikler/);
   assert.match(rows[0].textContent, /Roma – Dep/);
   assert.match(rows[0].textContent, /beraberlik %33 · 2,5 Alt %60/);
   assert.match(rows[0].textContent, /piyasa beraberlik bekliyor/);
