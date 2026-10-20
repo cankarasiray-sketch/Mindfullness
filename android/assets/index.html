@@ -720,11 +720,10 @@ function altiliPlanHtml(a) {
   if (r.error) return '<p class="small muted">' + esc(r.error) + "</p>";
   var tl0 = function (x) { return tl(Math.round(x * 100)); }, kat = r.kat || 0;
   return '<div class="list">'
-    + item("Kupon" + (r.mode === "tutma" ? " (tutma odaklı, " + tl0(r.budget) + " bütçe" + (r.legMin ? ", her ayak en az %" + num(r.legMin * 100, 0) : "") + ")"
-      : r.legMin ? " (her ayak en az %" + num(r.legMin * 100, 0) + ")" : ""),
+    + item("Kupon" + (r.mode === "tutma" ? " (tutma odaklı, " + tl0(r.budget) + " bütçe)" : ""),
       r.legs.map(function (l, k) { return (k + 1) + ". ayak: <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")"; }).join("<br>"))
     + item("Kombinasyon · misli · tutar", r.units + " · " + Math.max(1, kat) + " · " + tl0(Math.max(1, kat) * r.cost))
-    + item("Tutma olasılığı", "%" + num(r.hit * 100, 2) + (r.legMin ? ' <span class="small muted">(6 ayağın birlikte tutması)</span>' : ""))
+    + item("Tutma olasılığı", "%" + num(r.hit * 100, 2))
     + item("Beklenen getiri", '<span class="' + cls(r.roi - 1) + '">%' + num(r.roi * 100, 0) + "</span>")
     + (r.play ? item("Tutarsa ortalama ikramiye", tl0(r.ifHit)) + item("Beklenen kazanç", '<span class="pos">' + tl0(r.ev) + "</span>") : "")
     + item("Kazanma olasılığı", r.oddsLegs ? "ganyan oranlarından (" + r.oddsLegs + "/6 ayak)" : "AGF'den (ganyan okunamadı)")
@@ -734,8 +733,6 @@ function altiliPlanHtml(a) {
         + '<p class="small">Bilyoner\'de: At Yarışı → ' + esc(a.city || a.label) + " → Altılı Ganyan; her ayakta yukarıdaki atları seç, misli " + Math.max(1, kat)
         + ", tutarın " + tl0(Math.max(1, kat) * r.cost) + " olduğunu kontrol et" + (a.start ? ", 1. ayak " + esc(a.start) + " öncesi" : "") + ".</p>"
       : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>"
-        + (r.overBudget ? '<p class="small"><b>Dikkat:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost) + "; bütçe (" + tl0(r.budget)
-          + ") aşılıyor. Ayak sınırını düşürmek için: Birim fiyat, kesinti, bütçe → Ayak başına en az tutma.</p>" : "")
         + (r.mode === "tutma" ? '<p class="small">Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı (her ayakta alternatifli; bütçe kupon sınırı ya da tek maçtaki gibi kasanın %3\'ü). '
           + "Tutarsa ortalama " + tl0(r.ifHit) + "; uzun vadede her 100 TL'de ortalama " + num(Math.max(0, 1 - r.roi) * 100, 0) + " TL kayıp.</p>" : ""));
 }
@@ -775,7 +772,6 @@ function altiliCard() {
     + f("kesinti", "Kesinti (%)", numText(Math.round((st.altiliTakeout || 0.27) * 1000) / 10), "altiliSave({takeout: numTr(this.value) / 100})", "kaynaklar %25–30")
     + f("vergi", "İkramiyeden vergi (%)", numText(Math.round((st.altiliTax || 0) * 1000) / 10), "altiliSave({tax: numTr(this.value) / 100})", "kesiliyorsa")
     + f("butce", "Kupon başına en fazla (TL)", numText(inp.maxCost), "altiliSave({maxCost: numTr(this.value)})", "boş: kasanın Kelly payı")
-    + f("ayak", "Ayak başına en az tutma (%)", numText(Math.round((st.altiliLegProb == null ? 0.8 : st.altiliLegProb) * 100)), "altiliSave({legProb: numTr(this.value) / 100})", "0: sınır yok")
     + "</details>";
   var manual = inp.manual && inp.manual.length === 6 ? inp.manual : ["", "", "", "", "", ""];
   html += '<details class="info"><summary class="small">Elle AGF gir (okuma olmazsa)</summary>'

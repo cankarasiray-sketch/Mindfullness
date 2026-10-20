@@ -494,7 +494,6 @@ final class Repo {
         if (p.get("unit") instanceof Number) s.altiliUnit = Json.dbl(p, "unit", s.altiliUnit);
         if (p.get("takeout") instanceof Number) s.altiliTakeout = Json.dbl(p, "takeout", s.altiliTakeout);
         if (p.get("tax") instanceof Number) s.altiliTax = Json.dbl(p, "tax", s.altiliTax);
-        if (p.get("legProb") instanceof Number) s.altiliLegProb = Json.dbl(p, "legProb", s.altiliLegProb);
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -531,7 +530,6 @@ final class Repo {
         in.maxFraction = s.maxStakeFraction;
         in.maxCost = Json.dbl(inp, "maxCost", 0);
         in.budget = Pick.stake(s, ledger.balance()) / 100.0; // 2.23: oynanmayacak günde tutma odaklı kupon, tek maçtaki tutarla
-        in.legMin = s.altiliLegProb; // 2.25: her ayakta en az %80 tutma
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
             in.devir = Json.dbl(by, "devir", 0);
@@ -554,7 +552,7 @@ final class Repo {
         if (isDemo()) return null;
         Settings st = ledger.settings();
         String cacheKey = agfRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliLegProb + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();
@@ -746,10 +744,6 @@ final class Repo {
                 body.append(a.get("label")).append(" · ").append(a.get("source")).append(start == null ? "" : " · 1. ayak " + start).append('\n')
                         .append(Texts.altiliCoupon(plan)).append('\n').append(Texts.altiliSummary(plan))
                         .append("\nOrtalamada kâr beklenmiyor; oynayacaksan günün en mantıklı kuponu bu.");
-                if (Json.bool(plan, "overBudget", false)) {
-                    body.append("\nDikkat: her ayakta en az %").append(Math.round(Json.dbl(plan, "legMin", 0) * 100)).append(" tutma için kupon bütçeyi (")
-                            .append(Fmt.tl(Math.round(Json.dbl(plan, "budget", 0) * 100))).append(") aşıyor.");
-                }
             }
             if (title == null) return null;
             sent.put("day", day);
