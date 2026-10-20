@@ -62,6 +62,19 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Altılı devir hesaplayıcı (2.18, at yarışı)
+
+- Fırsatlar'ın altında. At yarışı havuz usulüdür: ikramiye, havuzdan kesinti düşüldükten sonra kazananlara
+  bölünür; kalabalığın tahmini (AGF) doğruysa ortalama oyuncu kesinti kadar kaybeder. Kâr yalnızca önceki
+  günden devreden para kesintiyi aşınca mümkün: ortalama getiri = (havuz × (1 − kesinti) + devir) / havuz.
+- Girdiler: devir, tahmini bugünkü altılı havuzu, kesinti (resmi oran bulunamadı; kaynaklar %25–30, varsayılan
+  %27), ikramiyeden vergi (kesiliyorsa), birim fiyat, bütçe ve 6 ayağın AGF'leri ("1:32 4:20 7:15").
+- Uygulama at seçmez: kazanma şansını AGF'den alır, bütçeye göre tutma olasılığı en yüksek kuponu kurar
+  (her ayakta AGF'si yüksek atlardan, kupon bedeline göre tutmayı en çok artıranı ekleyerek), beklenen
+  ikramiyeyi kazananlar arasında bölüşmeyi de hesaba katarak bulur ve **OYNA / OYNAMA** der; oynamada kâr için
+  gereken en az devri yazar. Kasaya göre üst sınır çeyrek Kelly'dir (tutma olasılığı düşük olduğu için küçük).
+- Girdiler telefonda saklanır. AGF'ler elle girilir (TJK/Bilyoner'den otomatik okuma yok).
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

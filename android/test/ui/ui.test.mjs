@@ -809,6 +809,36 @@ test("beraberlik fırsatları: kâr sırası, en yüksek oran, piyasa beraberlik
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı devir hesaplayıcı: devir kesintiyi aşmazsa oynama, aşarsa oyna ve kupon", async () => {
+  const s = clone(baseState);
+  s.stats.balance = 500000;
+  const f = boot(s, "#firsat");
+  assert.ok(f.$("#altiliCard"));
+  assert.match(f.$("#altiliOut").textContent, /Tahmini havuz, birim fiyat ve bütçeyi gir/);
+  const set = (id, v) => { f.$("#alt_" + id).value = v; };
+  set("havuz", "1000000"); set("devir", "200000"); set("birim", "1"); set("butce", "200");
+  for (let k = 0; k < 5; k++) set("leg" + k, "1:40 2:25 3:15 4:10 5:10");
+  f.w.altiliInput();
+  assert.match(f.$("#altiliOut").textContent, /6\. ayağın AGF'lerini gir/);
+  set("leg5", "1:40 2:25 3:15 4:10 5:10");
+  f.w.altiliInput();
+  let out = f.$("#altiliOut").textContent;
+  assert.match(out, /Ortalama getiri \(devir dahil\)%93,0 kesintinin altında/);
+  assert.match(out, /1\. ayak: 1, 2, 3, 4 \(%90\)/);
+  assert.match(out, /Kombinasyon · bedel192 · 192,00 TL/);
+  assert.match(out, /Tutma olasılığı%12,85/);
+  assert.match(out, /OYNAMA: ortalamada zarar\. Bu havuzla kâr için devir en az 270\.000,00 TL olmalı/);
+  set("devir", "500000");
+  f.w.altiliInput();
+  out = f.$("#altiliOut").textContent;
+  assert.match(out, /%123,0 kesintiyi aşıyor/);
+  assert.match(out, /OYNA: devir havuzu kesintiyi aşıyor/);
+  assert.match(out, /Beklenen sonuç43,49 TL/);
+  assert.match(out, /Kasana göre en fazla 33,14 TL/);
+  assert.match(out, /bu kupon kasana göre büyük/); // çeyrek Kelly: 5.000 TL kasada ~33 TL
+  assert.deepEqual(f.errors, []);
+});
+
 test("sonuç kontrolü: kısa yanıt balonda, uzun yanıt (bekleyen maçlar) sayfada", async () => {
   const s = clone(baseState);
   const t = boot(s);
