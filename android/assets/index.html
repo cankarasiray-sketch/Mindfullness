@@ -714,7 +714,8 @@ function altiliPlanHtml(a) {
   if (r.error) return '<p class="small muted">' + esc(r.error) + "</p>";
   var tl0 = function (x) { return tl(Math.round(x * 100)); }, kat = r.kat || 0;
   return '<div class="list">'
-    + item("Kupon", r.legs.map(function (l, k) { return (k + 1) + ". ayak: <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")"; }).join("<br>"))
+    + item("Kupon" + (r.mode === "tutma" ? " (tutma odaklı, " + tl0(r.budget) + " bütçe)" : ""),
+      r.legs.map(function (l, k) { return (k + 1) + ". ayak: <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")"; }).join("<br>"))
     + item("Kombinasyon · misli · tutar", r.units + " · " + Math.max(1, kat) + " · " + tl0(Math.max(1, kat) * r.cost))
     + item("Tutma olasılığı", "%" + num(r.hit * 100, 2))
     + item("Beklenen getiri", '<span class="' + cls(r.roi - 1) + '">%' + num(r.roi * 100, 0) + "</span>")
@@ -725,7 +726,9 @@ function altiliPlanHtml(a) {
     + (r.play ? '<p><b class="pos">OYNA:</b> ' + esc(r.reason) + " Tutar kasanın Kelly payından: " + tl0(r.stake) + ". Çoğu gün kaybedilir; kâr uzun vadede gelir.</p>"
         + '<p class="small">Bilyoner\'de: At Yarışı → ' + esc(a.city || a.label) + " → Altılı Ganyan; her ayakta yukarıdaki atları seç, misli " + Math.max(1, kat)
         + ", tutarın " + tl0(Math.max(1, kat) * r.cost) + " olduğunu kontrol et" + (a.start ? ", 1. ayak " + esc(a.start) + " öncesi" : "") + ".</p>"
-      : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>");
+      : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>"
+        + (r.mode === "tutma" ? '<p class="small">Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı (her ayakta alternatifli; bütçe kupon sınırı ya da tek maçtaki gibi kasanın %3\'ü). '
+          + "Tutarsa ortalama " + tl0(r.ifHit) + "; uzun vadede her 100 TL'de ortalama " + num(Math.max(0, 1 - r.roi) * 100, 0) + " TL kayıp.</p>" : ""));
 }
 function altiliCard() {
   if (S.demo) return "";

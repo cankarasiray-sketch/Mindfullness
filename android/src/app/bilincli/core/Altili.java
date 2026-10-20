@@ -62,6 +62,8 @@ public final class Altili {
         public double takeout = 0.27, tax = 0, unit = 1, devir = 0, pool = 0, maxCost = 0;
         /** Kasa (TL), Kelly çarpanı ve kupon başına kasanın en fazla payı (futboldaki sınırla aynı). */
         public double kasa = 0, km = 0.25, maxFraction = 0.05;
+        /** Oynanmayacak günde tutma odaklı kuponun bütçesi (TL; tek maçtaki tutar: kasanın %3'ü). */
+        public double budget = 0;
     }
 
     private static double num(String s) {
@@ -320,6 +322,37 @@ public final class Altili {
     }
 
     /**
+     * 2.23: bütçeyle tutma olasılığı en yüksek kupon (her ayakta en olası atlardan, bedele göre tutmayı en çok artıran
+     * at eklenir; ayak başına en çok MAX_PER_LEG at). Ayak başına seçilen at sayısı.
+     */
+    static int[] mostLikely(List<Leg> legs, long maxUnits) {
+        int[] n = new int[6];
+        double[] s = new double[6];
+        long units = 1;
+        for (int k = 0; k < 6; k++) {
+            n[k] = 1;
+            s[k] = legs.get(k).horses.get(0).q;
+        }
+        for (;;) {
+            int best = -1;
+            double gain = 0;
+            for (int k = 0; k < 6; k++) {
+                List<Horse> hs = legs.get(k).horses;
+                if (n[k] >= Math.min(hs.size(), MAX_PER_LEG) || units / n[k] * (n[k] + 1) > maxUnits) continue;
+                double g = Math.log((s[k] + hs.get(n[k]).q) / s[k]) / Math.log((n[k] + 1.0) / n[k]);
+                if (g > gain) {
+                    gain = g;
+                    best = k;
+                }
+            }
+            if (best < 0) return n;
+            s[best] += legs.get(best).horses.get(n[best]).q;
+            units = units / n[best] * (n[best] + 1);
+            n[best]++;
+        }
+    }
+
+    /**
      * Altılı planı: {play, legs: [{horses: [no], share, odds}], units, kat, unit, cost, stake, hit, roi, ev, ifHit,
      * oddsLegs, avg?, needDevir?, reason} ya da {error}. Tutarlar TL.
      */
@@ -369,6 +402,30 @@ public final class Altili {
             e = exactEval(cands, legs, best, in);
         }
         boolean play = e.kat >= 1 && e.roi > 1;
+        double kellyRoi = e.roi, kellyStake = e.stake, budget = in.maxCost > 0 ? in.maxCost : in.budget;
+        boolean tutma = !play && budget >= in.unit;
+        if (tutma) { // oynanmayacak günde tek atlı kupon yerine bütçeyle tutma olasılığı en yüksek, alternatifli kupon
+            int[] n = mostLikely(legs, (long) Math.floor(budget / in.unit + 1e-9));
+            pick.clear();
+            r = 1;
+            double hit = 1;
+            long units = 1;
+            for (int k = 0; k < 6; k++) {
+                List<Horse> hs = new ArrayList<>(legs.get(k).horses.subList(0, n[k]));
+                double sq = 0, sr = 0;
+                for (Horse h : hs) {
+                    sq += h.q;
+                    sr += h.q / h.p;
+                }
+                pick.add(hs);
+                hit *= sq;
+                r *= sr;
+                units *= n[k];
+            }
+            double roi = in.pool > 0 && units <= MAX_EXACT ? exactRoi(pick, units, 1, in) : factor(in) * r / units;
+            e = eval(hit, roi, units, in);
+            e.kat = 1;
+        }
         List<Object> legsOut = new ArrayList<>();
         for (int k = 0; k < 6; k++) {
             Map<String, Object> l = new LinkedHashMap<>();
@@ -386,6 +443,10 @@ public final class Altili {
             legsOut.add(l);
         }
         out.put("play", play);
+        if (tutma) {
+            out.put("mode", "tutma");
+            out.put("budget", budget);
+        }
         out.put("legs", legsOut);
         out.put("units", e.units);
         out.put("kat", e.kat);
@@ -410,11 +471,11 @@ public final class Altili {
             why = oddsLegs > 0 && (in.pool <= 0 || factor(in) <= 1)
                     ? "Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr."
                     : "Devir havuzu kesintiyi aşıyor; ortalamada kâr.";
-        } else if (e.roi > 1) {
-            why = "Ortalamada kârlı ama kupon kasana göre büyük (Kelly payı " + Fmt.tl(Math.round(e.stake * 100)) + ").";
+        } else if (kellyRoi > 1) {
+            why = "Ortalamada kârlı ama kupon kasana göre büyük (Kelly payı " + Fmt.tl(Math.round(kellyStake * 100)) + ").";
         } else {
-            why = String.format(Locale.ROOT, "Ortalamada zarar: en iyi kupon bile her 100 TL'nin ortalama %.0f TL'sini geri getirir.", e.roi * 100)
-                    .replace('.', ',');
+            why = "Ortalamada zarar: " + (tutma ? "bu kupon" : "en iyi kupon bile") + " her 100 TL'nin ortalama " + Fmt.num(e.roi * 100, 0)
+                    + " TL'sini geri getirir.";
             if (oddsLegs == 0) why += " Ganyan oranı okunamadı: AGF tek başına kalabalığın tahmini, kâr yalnızca devirle mümkün"
                     + (in.pool > 0 ? "." : " (devir ve havuzu gir).");
         }

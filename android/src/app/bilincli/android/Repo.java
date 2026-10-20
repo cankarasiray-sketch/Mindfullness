@@ -529,6 +529,7 @@ final class Repo {
         in.km = s.kellyMultiplier;
         in.maxFraction = s.maxStakeFraction;
         in.maxCost = Json.dbl(inp, "maxCost", 0);
+        in.budget = Pick.stake(s, ledger.balance()) / 100.0; // 2.23: oynanmayacak günde tutma odaklı kupon, tek maçtaki tutarla
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
             in.devir = Json.dbl(by, "devir", 0);

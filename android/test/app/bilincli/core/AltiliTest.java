@@ -45,7 +45,29 @@ public class AltiliTest {
         assertEquals(Boolean.FALSE, p.get("play"));
         assertEquals(0.73, (Double) p.get("roi"), 1e-9);
         assertTrue((String) p.get("reason"), ((String) p.get("reason")).contains("Ganyan oranı okunamadı"));
-        assertTrue((String) p.get("reason"), ((String) p.get("reason")).contains("73 TL"));
+        assertTrue((String) p.get("reason"), ((String) p.get("reason")).contains("73 TL'sini geri getirir. Ganyan"));
+        assertEquals(null, p.get("mode")); // bütçe yok: tutma odaklı kupon kurulmaz
+    }
+
+    @Test
+    public void noPlayDayStillGivesAlternativesWithinBudget() {
+        Altili.Inputs in = inputs(2324.20);
+        in.budget = 60; // tek maçtaki gibi kasanın %3'ü (10 TL'ye yuvarlı)
+        Map<String, Object> p = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), in);
+        assertEquals(Boolean.FALSE, p.get("play"));
+        assertEquals("tutma", p.get("mode"));
+        long units = (Long) p.get("units");
+        assertTrue("bütçe: " + units, units <= 60 && units >= 32);
+        int multi = 0;
+        for (int k = 0; k < 6; k++) if (horses(p, k).size() > 1) multi++;
+        assertTrue(multi >= 5); // ayakların çoğu alternatifli
+        assertTrue((Double) p.get("hit") > Math.pow(0.4, 6) * 10); // tek favorili kupondan çok daha sık tutar
+        assertEquals(0.73, (Double) p.get("roi"), 1e-9);
+        assertEquals(1L, p.get("kat"));
+        assertEquals(0.0, (Double) p.get("stake"), 0);
+        assertTrue((String) p.get("reason"), ((String) p.get("reason")).startsWith("Ortalamada zarar: bu kupon"));
+        in.maxCost = 8; // kupon sınırı bütçenin yerine geçer
+        assertTrue((Long) Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), in).get("units") <= 8);
     }
 
     @Test

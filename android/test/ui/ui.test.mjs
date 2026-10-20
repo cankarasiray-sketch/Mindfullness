@@ -821,9 +821,9 @@ function altiliState() {
           units: 8, kat: 3, unit: 1.25, cost: 10, stake: 30, hit: 0.105, roi: 1.38, ev: 11.4, ifHit: 394.3, oddsLegs: 6,
           reason: "Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr."}},
       {key: "tjk/2/1", source: "TJK", label: "İzmir 1. altılı", devir: 0, pool: 0,
-        plan: {play: false, legs: [leg(["1"], 0.4, false), leg(["3"], 0.5, false), leg(["4"], 0.6, false), leg(["1"], 0.45, false), leg(["6"], 0.55, false), leg(["2"], 0.7, false)],
-          units: 1, kat: 0, unit: 1.25, cost: 1.25, stake: 0, hit: 0.0021, roi: 0.73, ev: -0.34, ifHit: 435, oddsLegs: 0,
-          reason: "Ortalamada zarar: en iyi kupon bile her 100 TL'nin ortalama 73 TL'sini geri getirir. Ganyan oranı okunamadı: AGF tek başına kalabalığın tahmini, kâr yalnızca devirle mümkün (devir ve havuzu gir)."}}]};
+        plan: {play: false, mode: "tutma", budget: 60, legs: [leg(["1", "2"], 0.65, false), leg(["3", "1"], 0.8, false), leg(["4", "2"], 1, false), leg(["1", "2"], 0.8, false), leg(["6", "1"], 1, false), leg(["2"], 0.7, false)],
+          units: 32, kat: 1, unit: 1.25, cost: 40, stake: 0, hit: 0.233, roi: 0.73, ev: -10.8, ifHit: 125.3, oddsLegs: 0,
+          reason: "Ortalamada zarar: bu kupon her 100 TL'nin ortalama 73 TL'sini geri getirir. Ganyan oranı okunamadı: AGF tek başına kalabalığın tahmini, kâr yalnızca devirle mümkün (devir ve havuzu gir)."}}]};
   return s;
 }
 
@@ -844,7 +844,10 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.ok(f.$("#altAuto").checked);
   f.button("İzmir 1. altılı · TJK").click();
   card = f.$("#altiliCard").textContent;
-  assert.match(card, /OYNAMA: Ortalamada zarar/);
+  assert.match(card, /OYNAMA: Ortalamada zarar: bu kupon/);
+  assert.match(card, /Kupon \(tutma odaklı, 60,00 TL bütçe\)1\. ayak: 1, 2 \(%65\)/);
+  assert.match(card, /Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı/);
+  assert.match(card, /Tutarsa ortalama 125,30 TL; uzun vadede her 100 TL'de ortalama 27 TL kayıp\./);
   assert.match(card, /Kazanma olasılığıAGF'den \(ganyan okunamadı\)/);
   assert.match(f.button("İzmir 1. altılı · TJK").className, /main/);
   f.$("#alt_devir").value = "1.500.000"; f.$("#alt_havuz").value = "4.000.000";

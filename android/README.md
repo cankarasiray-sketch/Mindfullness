@@ -117,6 +117,11 @@ bildirim olarak gelir.
   Ekrana bakılmadığı için bozulan okuma sessiz kalmaz: 3 gün üst üste hiç altılı ya da hiç ganyan okunamazsa bir kez
   (en fazla haftada bir) uyarı bildirimi gelir.
 
+- **2.23: alternatifli kupon.** Oynanmayacak (ortalamada zararlı) günde de tek atlı kupon yerine, bütçeyle tutma
+  olasılığı en yüksek kupon gösterilir: her ayakta en olası atlardan başlayıp bedele göre tutmayı en çok artıran at
+  eklenir (ayak başına en çok 10 at). Bütçe: kupon sınırı girildiyse o, yoksa tek maçtaki gibi kasanın %3'ü. Karar
+  yine OYNAMA'dır; kart, tutarsa ortalama ikramiyeyi ve uzun vadeli kaybı yazar. Bildirim yalnızca kârlı kuponda.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den
