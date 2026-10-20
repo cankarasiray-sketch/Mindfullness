@@ -82,6 +82,17 @@ bildirim olarak gelir.
 - TJK resmi bir API sunmaz; okuma sayfa yapısına dayanır ve esnektir (ayaklar ayrı tablolar, sütunlar ya da
   satırlar olabilir; her ayağın payları toplamı ~%100 olmalı). Okunamazsa kartta **Okuma ayrıntısı** neyin
   bulunamadığını gösterir; paylaşılabilir.
+- **2.20: Bilyoner ve Nesine.** Düğme artık "AGF ve oranları oku": önce Bilyoner ve Nesine'nin at yarışı
+  sayfaları, sonra TJK okunur; altılılar kaynağıyla listelenir ("İstanbul 3–8. koşu · Bilyoner (ganyanlı)").
+  İki site de bu veriyi belgelenmiş bir adresten vermiyor: okuyucu, Zirve Oran keşfi gibi, sayfaya gömülü veriyi
+  ve sitenin betiklerinde geçen veri adreslerini inceler; bulduğu JSON'larda koşucu listelerini alan adlarından
+  tanır (at no + AGF ve/veya ganyan). Okuma ayrıntısındaki Bilyoner/Nesine bölümü paylaşılırsa okuma kesinleşir.
+- **Ganyan oranı (futboldaki adil oran gibi).** Bir ayaktaki her atın ganyanı varsa ve oranlar akla yatkınsa
+  (1/oran toplamı 0,95–2), kazanma olasılığı ganyandan (kesinti payı arındırılarak), kalabalığın altılı payı
+  AGF'den alınır: beklenen ikramiye q·N/(U·p + 1), q kazanma olasılığı, p AGF payı. Kazanma olasılığı
+  AGF'sinden yüksek (altılıda az oynanmış) atlar devirsiz de kâr getirebilir; ganyan yoksa eskisi gibi q = p.
+  Ayak biçimi "no:AGF:ganyan" (ör. "1:32:2.5"). Ganyan oranları yarışa kadar değişir; sonraki ayakların erken
+  oranları zayıftır.
 
 ## Beraberlik fırsatları (2.17)
 

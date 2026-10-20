@@ -839,33 +839,58 @@ test("altılı devir hesaplayıcı: devir kesintiyi aşmazsa oynama, aşarsa oyn
   assert.deepEqual(f.errors, []);
 });
 
-test("altılı: TJK AGF okuması ayakları doldurur, altılı seçilir, yeni okumada seçili altılı güncellenir", async () => {
+test("altılı: AGF okuması ayakları doldurur, altılı seçilir, yeni okumada seçili altılı güncellenir", async () => {
   const s = clone(baseState);
   const ist = ["1:40 2:25 3:15 4:10 5:10", "3:50 1:30 2:20", "4:60 2:40", "1:45 2:35 3:20", "6:55 1:45", "2:70 1:30"];
   const izm = ["7:50 1:30 2:20", "1:40 2:30 3:30", "5:80 1:20", "2:50 1:50", "3:60 4:40", "1:90 2:10"];
-  s.tjk = {at: "2026-10-20T09:00:00Z", day: "2026-10-20", log: ["Program: İstanbul, İzmir", "İstanbul 1. altılı: 6 ayak okundu (at sayıları 5-3-2-3-2-2)"],
-    altilis: [{city: "İstanbul", cityId: 3, no: 1, label: "İstanbul 1. altılı", legs: ist}, {city: "İzmir", cityId: 2, no: 1, label: "İzmir 1. altılı", legs: izm}]};
+  s.agf = {at: "2026-10-20T09:00:00Z", day: "2026-10-20", log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "TJK", "  Program: İstanbul, İzmir"],
+    altilis: [{key: "bilyoner/İstanbul 3–8. koşu", source: "Bilyoner", label: "İstanbul 3–8. koşu", legs: ist, odds: true},
+      {key: "tjk/2/1", source: "TJK", city: "İzmir", cityId: 2, no: 1, label: "İzmir 1. altılı", legs: izm}]};
   const f = boot(s, "#firsat");
   assert.equal(f.$("#alt_leg0").value, ist[0]); // ilk altılı kendiliğinden
-  assert.match(f.$("#altiliCard").textContent, /Okuma ayrıntısı/);
   assert.match(f.$("#altiliCard details").textContent, /Program: İstanbul, İzmir/);
   f.$("#alt_birim").value = "1"; f.$("#alt_butce").value = "50";
   f.w.altiliInput();
   let out = f.$("#altiliOut").textContent;
   assert.match(out, /1\. ayak: 1/);
-  assert.match(out, /Tutma olasılığı%/);
   assert.match(out, /OYNA \/ OYNAMA kararı için devri ve tahmini havuzu gir/);
-  f.button("İzmir 1. altılı").click();
+  f.button("İzmir 1. altılı · TJK").click();
   assert.equal(f.$("#alt_leg0").value, izm[0]);
   assert.equal(f.$("#alt_birim").value, "1"); // elle girilenler kalır
-  assert.match(f.button("İzmir 1. altılı").className, /main/);
-  f.button("TJK'dan AGF oku").click();
-  assert.equal(f.calls.at(-1).action, "tjkAgf");
-  s.tjk = clone(s.tjk);
-  s.tjk.at = "2026-10-20T10:30:00Z";
-  s.tjk.altilis[1].legs = ["7:60 1:40", ...izm.slice(1)];
+  assert.match(f.button("İzmir 1. altılı · TJK").className, /main/);
+  assert.ok(f.button("İstanbul 3–8. koşu · Bilyoner (ganyanlı)"));
+  f.button("AGF ve oranları oku").click();
+  assert.equal(f.calls.at(-1).action, "agfRead");
+  s.agf = clone(s.agf);
+  s.agf.at = "2026-10-20T10:30:00Z";
+  s.agf.altilis[1].legs = ["7:60 1:40", ...izm.slice(1)];
   await f.tick();
   assert.equal(f.$("#alt_leg0").value, "7:60 1:40"); // seçili İzmir güncel AGF ile
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: ganyan oranı varsa kazanma olasılığı ondan, az oynanmış atlarla devirsiz de kâr", async () => {
+  const s = clone(baseState);
+  s.stats.balance = 500000;
+  const f = boot(s, "#firsat");
+  const set = (id, v) => { f.$("#alt_" + id).value = v; };
+  set("havuz", "1000000"); set("devir", "0"); set("birim", "1"); set("butce", "100");
+  for (let k = 0; k < 6; k++) set("leg" + k, "1:60:3 2:40:1.5"); // 2 numara: ganyana göre %67, AGF %40
+  f.w.altiliInput();
+  let out = f.$("#altiliOut").textContent;
+  assert.match(out, /Kazanma olasılığıganyan oranlarından \(6\/6 ayak\)/);
+  assert.match(out, /1\. ayak: 2, 1 \(%100\)/);
+  assert.match(out, /Kombinasyon · bedel64 · 64,00 TL/);
+  assert.match(out, /kesintinin altında/);
+  assert.match(out, /Bu kuponun beklenen getirisi%13\d,\d/);
+  assert.match(out, /OYNA: ganyan oranlarına göre seçtiğin atlar altılıda az oynanmış/);
+  for (let k = 0; k < 6; k++) set("leg" + k, "1:60:1.5 2:40:3"); // ganyan ve AGF aynı yönde: değer yok
+  f.w.altiliInput();
+  out = f.$("#altiliOut").textContent;
+  assert.match(out, /OYNAMA: ortalamada zarar\. Bu havuzla kâr için devir en az/);
+  for (let k = 0; k < 6; k++) set("leg" + k, "1:60:9 2:40:9"); // oranlar akla yatkın değil (toplam %22): AGF kullanılır
+  f.w.altiliInput();
+  assert.doesNotMatch(f.$("#altiliOut").textContent, /ganyan oranlarından/);
   assert.deepEqual(f.errors, []);
 });
 

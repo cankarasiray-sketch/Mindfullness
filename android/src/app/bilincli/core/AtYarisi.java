@@ -1,0 +1,445 @@
+package app.bilincli.core;
+
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 2.20: Bilyoner ve Nesine at yarışı verisi (AGF ve ganyan oranı). İki site de bu veriyi belgelenmiş bir adresten
+ * vermiyor; okuyucu, Zirve Oran keşfi gibi, telefonda herkese açık at yarışı sayfasını, sayfaya gömülü veriyi ve
+ * sitenin betiklerinde geçen veri adreslerini inceler. Bulduğu her JSON'da koşucu listelerini alan adlarından tanır
+ * (at no + AGF ve/veya ganyan). Okunan her şey ve bulunamayanlar okuma ayrıntısına yazılır; kesin okuyucu bu
+ * çıktıya göre yazılır. Hesap ya da oturum kullanılmaz, kredi harcanmaz.
+ */
+public final class AtYarisi {
+    private AtYarisi() {}
+
+    /** {ad, sayfa, alan adı}. */
+    static final String[][] SITES = {
+        {"Bilyoner", "https://www.bilyoner.com/at-yarisi", "bilyoner"},
+        {"Nesine", "https://www.nesine.com/at-yarisi", "nesine"},
+    };
+    static final int MAX_SCRIPTS = 4, MAX_PATHS = 6, MAX_RACES_LOGGED = 12;
+    /** Ganyan oranlarının ima ettiği olasılıklar toplamı (kesinti payı dahil) bu aralıkta değilse oranlar kullanılmaz. */
+    static final double MIN_BOOK = 0.95, MAX_BOOK = 2.0;
+
+    public static final class Runner {
+        public final String no;
+        /** AGF payı (yüzde) ya da yoksa null. */
+        public final Double agf;
+        /** Ganyan oranı ya da yoksa null. */
+        public final Double odds;
+
+        Runner(String no, Double agf, Double odds) {
+            this.no = no;
+            this.agf = agf;
+            this.odds = odds;
+        }
+    }
+
+    public static final class Race {
+        final String path, place;
+        final Long number;
+        final List<Runner> runners;
+
+        Race(String path, String place, Long number, List<Runner> runners) {
+            this.path = path;
+            this.place = place;
+            this.number = number;
+            this.runners = runners;
+        }
+
+        boolean hasAgf() {
+            int n = 0;
+            double s = 0;
+            for (Runner r : runners) {
+                if (r.agf != null) {
+                    n++;
+                    s += r.agf;
+                }
+            }
+            return n >= 2 && s >= Tjk.MIN_SUM && s <= Tjk.MAX_SUM;
+        }
+
+        /** Tüm koşucularda oran var ve oranların ima ettiği toplam akla yatkın. */
+        boolean hasOdds() {
+            double book = 0;
+            for (Runner r : runners) {
+                if (r.odds == null) return false;
+                book += 1 / r.odds;
+            }
+            return runners.size() >= 2 && book >= MIN_BOOK && book <= MAX_BOOK;
+        }
+
+        /** Ayak metni "no:agf[:ganyan]" (AGF'ye göre azalan; AGF'siz atlar dışarıda). */
+        String legText() {
+            boolean odds = hasOdds();
+            List<Runner> rs = new ArrayList<>();
+            for (Runner r : runners) if (r.agf != null && r.agf > 0) rs.add(r);
+            rs.sort(new java.util.Comparator<Runner>() {
+                @Override
+                public int compare(Runner x, Runner y) {
+                    return x.agf.doubleValue() != y.agf.doubleValue() ? Double.compare(y.agf, x.agf)
+                            : Integer.compare(Integer.parseInt(x.no), Integer.parseInt(y.no));
+                }
+            });
+            StringBuilder b = new StringBuilder();
+            for (Runner r : rs) {
+                b.append(b.length() == 0 ? "" : " ").append(r.no).append(':').append(Tjk.pct(r.agf));
+                if (odds) b.append(':').append(Tjk.pct(r.odds));
+            }
+            return b.toString();
+        }
+    }
+
+    // ---- JSON'da koşucu listeleri ---------------------------------------------------------------------------
+
+    private static final Pattern HORSE_KEY = Pattern.compile(
+            "(?i)^(no|num|number|horse_?no|horse_?number|start_?no|start_?number|program_?no|program_?number|at_?no|atnumarasi|saddle_?(no|number|cloth)|runner_?no|runner_?number)$");
+    private static final Pattern AGF_KEY = Pattern.compile("(?i)agf");
+    private static final Pattern RANK_KEY = Pattern.compile("(?i)(rank|order|sira|sort|index|position)");
+    private static final Pattern ODDS_KEY = Pattern.compile("(?i)(ganyan|win_?odds?|^odds?$|^odd_?value$|^price$|^oran$|^winprice$)");
+    private static final Pattern PLACE_KEY = Pattern.compile("(?i)^(hippodrome\\w*|hipodrom\\w*|city\\w*|sehir\\w*|track\\w*|location\\w*|venue\\w*)$");
+    private static final Pattern RACE_NO_KEY = Pattern.compile("(?i)^(race_?(no|number|order)|kosu_?(no|sira|sirasi)?|run_?no)$");
+    private static final Pattern NUMBER = Pattern.compile("(\\d{1,4}(?:[.,]\\d{1,4})?)");
+
+    static Double number(Object v) {
+        if (v instanceof Number) return ((Number) v).doubleValue();
+        if (!(v instanceof String)) return null;
+        Matcher m = NUMBER.matcher((String) v);
+        return m.find() ? Double.valueOf(m.group(1).replace(',', '.')) : null;
+    }
+
+    private static Integer horseNo(Object v) {
+        Double d = v instanceof String && !((String) v).trim().matches("\\d{1,2}") ? null : number(v);
+        if (d == null || d != Math.rint(d) || d < 1 || d > 30) return null;
+        return d.intValue();
+    }
+
+    /** Liste koşucu listesiyse koşu (aksi halde null). */
+    @SuppressWarnings("unchecked")
+    static Race race(List<Object> list, String path, String place, Long number) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Object o : list) if (o instanceof Map) rows.add((Map<String, Object>) o);
+        if (rows.size() < 2 || rows.size() < list.size() * 0.8) return null;
+        Set<String> keys = new LinkedHashSet<>();
+        for (Map<String, Object> r : rows) keys.addAll(r.keySet());
+        String horse = null, agf = null, odds = null;
+        for (String k : keys) {
+            if (horse == null && HORSE_KEY.matcher(k).matches() && uniqueHorses(rows, k)) horse = k;
+            else if (AGF_KEY.matcher(k).find() && !RANK_KEY.matcher(k).find() && numeric(rows, k, 0, 100)) {
+                if (agf == null || k.toLowerCase(Locale.ROOT).matches(".*(rate|percent|ratio|value|oran|yuzde).*")) agf = k;
+            } else if (odds == null && ODDS_KEY.matcher(k).find() && !AGF_KEY.matcher(k).find() && numeric(rows, k, 1, 1000)) odds = k;
+        }
+        if (horse == null || (agf == null && odds == null)) return null;
+        List<Runner> runners = new ArrayList<>();
+        double agfSum = 0;
+        for (Map<String, Object> r : rows) {
+            Integer no = horseNo(r.get(horse));
+            if (no == null) continue;
+            Double a = agf == null ? null : number(r.get(agf)), o = odds == null ? null : number(r.get(odds));
+            if (o != null && !(o > 1)) o = null;
+            if (a != null) agfSum += a;
+            runners.add(new Runner(String.valueOf(no), a, o));
+        }
+        if (agf != null && agfSum > 0 && agfSum <= 1.5) { // AGF 0–1 kesir olarak gelmiş: yüzdeye çevir
+            List<Runner> scaled = new ArrayList<>();
+            for (Runner r : runners) scaled.add(new Runner(r.no, r.agf == null ? null : r.agf * 100, r.odds));
+            runners = scaled;
+        }
+        return runners.size() >= 2 ? new Race(path, place, number, runners) : null;
+    }
+
+    private static boolean uniqueHorses(List<Map<String, Object>> rows, String k) {
+        Set<Integer> seen = new HashSet<>();
+        int n = 0;
+        for (Map<String, Object> r : rows) {
+            Integer no = horseNo(r.get(k));
+            if (no != null) {
+                n++;
+                seen.add(no);
+            }
+        }
+        return n >= rows.size() * 0.8 && seen.size() >= n * 0.9;
+    }
+
+    private static boolean numeric(List<Map<String, Object>> rows, String k, double min, double max) {
+        int n = 0;
+        for (Map<String, Object> r : rows) {
+            Double d = number(r.get(k));
+            if (d != null && d >= min && d <= max) n++;
+        }
+        return n >= 2 && n >= rows.size() * 0.5;
+    }
+
+    /** JSON ağacındaki tüm koşucu listeleri (sırayla); hipodrom ve koşu numarası üst nesnelerden alınır. */
+    @SuppressWarnings("unchecked")
+    static void harvest(Object node, String path, String place, Long number, List<Race> out, int depth) {
+        if (depth > 40) return;
+        if (node instanceof List) {
+            List<Object> l = (List<Object>) node;
+            Race r = race(l, path, place, number);
+            if (r != null) out.add(r);
+            for (int i = 0; i < l.size() && i < 2000; i++) harvest(l.get(i), path + "[" + i + "]", place, number, out, depth + 1);
+        } else if (node instanceof Map) {
+            Map<String, Object> m = (Map<String, Object>) node;
+            for (Map.Entry<String, Object> e : m.entrySet()) {
+                if (e.getValue() instanceof String && PLACE_KEY.matcher(e.getKey()).matches() && ((String) e.getValue()).length() <= 40) {
+                    place = (String) e.getValue();
+                } else if (RACE_NO_KEY.matcher(e.getKey()).matches()) {
+                    Double d = number(e.getValue());
+                    if (d != null && d == Math.rint(d) && d >= 1 && d <= 20) number = d.longValue();
+                }
+            }
+            for (Map.Entry<String, Object> e : m.entrySet()) harvest(e.getValue(), path + "." + e.getKey(), place, number, out, depth + 1);
+        }
+    }
+
+    /** Koşu listesinin üst yolu ("...races[3].horses" -> "...races"): aynı programın koşuları. */
+    static String parent(String path) {
+        int at = path.lastIndexOf('[');
+        return at < 0 ? path : path.substring(0, at);
+    }
+
+    /**
+     * Altılılar: aynı programdaki (aynı üst yol ve hipodrom) AGF'li koşular. Tam 6 ise bir altılı; daha çoksa ilk 6
+     * ve son 6 ayrı ayrı sunulur (hangisinin 1. altılı olduğu sitede yazmıyorsa kullanıcı seçer).
+     */
+    static List<Map<String, Object>> altilis(String site, List<Race> races) {
+        Map<String, List<Race>> groups = new LinkedHashMap<>();
+        for (Race r : races) {
+            if (!r.hasAgf()) continue;
+            String g = parent(r.path) + "|" + r.place;
+            List<Race> l = groups.get(g);
+            if (l == null) groups.put(g, l = new ArrayList<>());
+            l.add(r);
+        }
+        List<Map<String, Object>> out = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        for (List<Race> g : groups.values()) {
+            if (g.size() < 6) continue;
+            int[] starts = g.size() == 6 ? new int[] {0} : new int[] {0, g.size() - 6};
+            for (int from : starts) {
+                List<Race> six = g.subList(from, from + 6);
+                List<Object> legs = new ArrayList<>();
+                boolean odds = true;
+                for (Race r : six) {
+                    legs.add(r.legText());
+                    odds &= r.hasOdds();
+                }
+                if (!seen.add(legs.toString())) continue;
+                Race first = six.get(0), last = six.get(5);
+                String place = first.place == null ? "" : first.place + " ";
+                String range = first.number != null && last.number != null ? first.number + "–" + last.number + ". koşu" : (from + 1) + "–" + (from + 6) + ". AGF'li koşu";
+                Map<String, Object> a = new LinkedHashMap<>();
+                a.put("key", site.toLowerCase(Locale.ROOT) + "/" + place + range);
+                a.put("source", site);
+                a.put("label", place + range);
+                a.put("legs", legs);
+                a.put("odds", odds);
+                out.add(a);
+            }
+        }
+        return out;
+    }
+
+    // ---- sayfa, gömülü veri, betikler -----------------------------------------------------------------------
+
+    private static final Pattern JSON_SCRIPT = Pattern.compile("(?is)<script[^>]*type\\s*=\\s*[\"']application/(?:ld\\+)?json[\"'][^>]*>(.*?)</script>");
+    private static final Pattern STATE_SCRIPT = Pattern.compile("(?is)window\\.(__[A-Z_]{3,40}__)\\s*=\\s*(\\{.*?\\})\\s*;?\\s*</script>");
+    private static final Pattern SCRIPT_SRC = Pattern.compile("(?i)<script[^>]+src\\s*=\\s*[\"']([^\"']+)[\"']");
+    /** Betikte at yarışı veri yolu adayları. */
+    private static final Pattern DATA_PATH = Pattern.compile(
+            "(?i)[\"'`]((?:https?:)?(?://[a-z0-9.-]+)?/[a-z0-9_/.?=&-]*(?:at-?yaris|horse|race|yaris|kosu|agf|ganyan|altili|hipodrom|hippodrome)[a-z0-9_/.?=&-]*)[\"'`]");
+    private static final Pattern API_LIKE = Pattern.compile("(?i)(/api/|/service|/v\\d+/|//api\\.|\\.json)");
+
+    static Map<String, String> headers(String accept, String referer) {
+        Map<String, String> h = new LinkedHashMap<>();
+        h.put("Accept", accept);
+        h.put("Accept-Language", "tr-TR,tr;q=0.9");
+        h.put("Referer", referer);
+        h.put("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36");
+        return h;
+    }
+
+    static String absolute(String page, String src) {
+        if (src.startsWith("http://") || src.startsWith("https://")) return src;
+        if (src.startsWith("//")) return "https:" + src;
+        int host = page.indexOf('/', page.indexOf("//") + 2);
+        String origin = host < 0 ? page : page.substring(0, host);
+        return src.startsWith("/") ? origin + src : origin + "/" + src;
+    }
+
+    private static String host(String url) {
+        int s = url.indexOf("//");
+        if (s < 0) return "";
+        int e = url.indexOf('/', s + 2);
+        return (e < 0 ? url.substring(s + 2) : url.substring(s + 2, e)).toLowerCase(Locale.ROOT);
+    }
+
+    static String shorten(String s, int n) {
+        String t = String.valueOf(s).replaceAll("\\s+", " ").trim();
+        return t.length() > n ? t.substring(0, n) + "…" : t;
+    }
+
+    /** JSON'un kısa yapı özeti (üst alanlar ve ilk dizinin örnek elemanı): kesin okuyucuyu yazmak için. */
+    @SuppressWarnings("unchecked")
+    static String shape(Object v, int depth) {
+        if (v instanceof Map) {
+            Map<String, Object> m = (Map<String, Object>) v;
+            StringBuilder b = new StringBuilder("{");
+            int i = 0;
+            for (Map.Entry<String, Object> e : m.entrySet()) {
+                if (i++ >= 12) {
+                    b.append("…");
+                    break;
+                }
+                b.append(i > 1 ? ", " : "").append(e.getKey());
+                if (depth < 3 && (e.getValue() instanceof Map || e.getValue() instanceof List)) b.append(": ").append(shape(e.getValue(), depth + 1));
+            }
+            return b.append('}').toString();
+        }
+        if (v instanceof List) {
+            List<Object> l = (List<Object>) v;
+            return "[" + l.size() + (l.isEmpty() || depth >= 3 ? "" : " × " + shape(l.get(0), depth + 1)) + "]";
+        }
+        return String.valueOf(v);
+    }
+
+    private static String fetch(Http http, String url, String accept, String referer, List<Object> log) {
+        try {
+            Http.Response r = http.get(url, headers(accept, referer));
+            String body = r.body == null ? "" : r.body;
+            log.add("  " + url + " -> HTTP " + r.status + ", " + body.length() / 1024 + " KB");
+            return body;
+        } catch (Http.ProviderException | RuntimeException e) {
+            log.add("  " + url + " -> alınamadı: " + shorten(e.getMessage(), 160));
+            return null;
+        }
+    }
+
+    /** JSON metnindeki koşular; JSON değilse null. */
+    private static List<Race> races(String json, String where, List<Object> log) {
+        Object root;
+        try {
+            root = Json.parse(json.trim());
+        } catch (RuntimeException e) {
+            return null;
+        }
+        List<Race> out = new ArrayList<>();
+        harvest(root, "$", null, null, out, 0);
+        int agf = 0, odds = 0;
+        for (Race r : out) {
+            if (r.hasAgf()) agf++;
+            if (r.hasOdds()) odds++;
+        }
+        log.add("    " + where + ": " + out.size() + " koşucu listesi (AGF'li " + agf + ", ganyanlı " + odds + ")"
+                + (out.isEmpty() ? "; yapı: " + shorten(shape(root, 0), 400) : ""));
+        for (int i = 0; i < out.size() && i < MAX_RACES_LOGGED; i++) {
+            Race r = out.get(i);
+            log.add("      " + r.path + (r.place == null ? "" : " · " + r.place) + (r.number == null ? "" : " · koşu " + r.number)
+                    + ": " + r.runners.size() + " at, " + shorten(r.legText().isEmpty() ? first(r) : r.legText(), 80));
+        }
+        return out;
+    }
+
+    private static String first(Race r) {
+        Runner x = r.runners.get(0);
+        return x.no + " ganyan " + x.odds;
+    }
+
+    /** Bir sitenin sayfası, gömülü verisi, betiklerdeki veri adresleri; bulunan koşular. */
+    static List<Race> site(Http http, String name, String page, String domain, List<Object> log, Daily.Progress progress) {
+        List<Race> all = new ArrayList<>();
+        if (progress != null) progress.step(name + " at yarışı sayfası inceleniyor…");
+        String html = fetch(http, page, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8", page, log);
+        if (html == null) return all;
+        int blocks = 0;
+        Matcher j = JSON_SCRIPT.matcher(html);
+        while (j.find()) {
+            List<Race> r = races(j.group(1), "gömülü veri " + (++blocks) + " (" + j.group(1).length() / 1024 + " KB)", log);
+            if (r != null) all.addAll(r);
+        }
+        Matcher st = STATE_SCRIPT.matcher(html);
+        while (st.find()) {
+            List<Race> r = races(st.group(2), "window." + st.group(1), log);
+            if (r != null) all.addAll(r);
+            blocks++;
+        }
+        if (blocks == 0) log.add("    gömülü veri yok (" + shorten(Tjk.text(html), 160) + ")");
+        Set<String> paths = new LinkedHashSet<>();
+        collectPaths(html, paths);
+        List<String> scripts = new ArrayList<>();
+        Matcher s = SCRIPT_SRC.matcher(html);
+        while (s.find()) {
+            String js = absolute(page, Tjk.decode(s.group(1)));
+            if (host(js).contains(domain) && !scripts.contains(js)) scripts.add(js);
+        }
+        // at yarışına özgü görünen betikler önce
+        List<String> ordered = new ArrayList<>();
+        for (String js : scripts) if (DATA_PATH.matcher("\"" + js.replaceFirst("^https?://[^/]+", "") + "\"").find()) ordered.add(js);
+        for (String js : scripts) if (!ordered.contains(js)) ordered.add(js);
+        log.add("    betik: " + scripts.size() + " (en fazla " + MAX_SCRIPTS + " incelenir)");
+        for (int i = 0; i < ordered.size() && i < MAX_SCRIPTS; i++) {
+            if (progress != null) progress.step(name + " betikleri inceleniyor (" + (i + 1) + "/" + Math.min(MAX_SCRIPTS, ordered.size()) + ")…");
+            String body = fetch(http, ordered.get(i), "*/*", page, log);
+            if (body != null) collectPaths(body, paths);
+        }
+        log.add("    veri yolu adayları (" + paths.size() + "): " + (paths.isEmpty() ? "yok" : shorten(String.join(" ", paths), 900)));
+        int tried = 0;
+        for (String p : paths) {
+            if (tried >= MAX_PATHS) break;
+            if (!API_LIKE.matcher(p).find()) continue;
+            String url = absolute(page, p.startsWith("//") ? "https:" + p : p);
+            if (!host(url).contains(domain)) continue;
+            tried++;
+            if (progress != null) progress.step(name + " veri adresi deneniyor (" + tried + ")…");
+            String body = fetch(http, url, "application/json, text/plain, */*", page, log);
+            if (body == null) continue;
+            List<Race> r = races(body, "yanıt", log);
+            if (r == null) log.add("    JSON değil: " + shorten(body, 160));
+            else all.addAll(r);
+        }
+        return all;
+    }
+
+    static void collectPaths(String body, Set<String> paths) {
+        Matcher m = DATA_PATH.matcher(body);
+        while (m.find() && paths.size() < 40) {
+            String p = m.group(1);
+            if (p.length() < 4 || p.matches("(?i).*\\.(png|jpe?g|svg|webp|gif|css|woff2?|ico)(\\?.*)?$")) continue;
+            paths.add(p);
+        }
+    }
+
+    /** Bilyoner ve Nesine'den altılılar: {altilis: [{key, source, label, legs, odds}], log}. İstisna fırlatmaz. */
+    public static Map<String, Object> read(Http http, Instant now, Daily.Progress progress) {
+        List<Object> log = new ArrayList<>(), altilis = new ArrayList<>();
+        for (String[] s : SITES) {
+            log.add(s[0] + " (keşif: bu bölümü paylaşırsan okuma kesinleşir)");
+            List<Race> races;
+            try {
+                races = site(http, s[0], s[1], s[2], log, progress);
+            } catch (RuntimeException e) {
+                log.add("  hata: " + shorten(e.getMessage(), 200));
+                continue;
+            }
+            List<Map<String, Object>> found = altilis(s[0], races);
+            altilis.addAll(found);
+            log.add("  " + s[0] + ": " + (found.isEmpty() ? "altılı bulunamadı" : found.size() + " altılı"));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("at", now.toString());
+        out.put("altilis", altilis);
+        out.put("log", log);
+        return out;
+    }
+}

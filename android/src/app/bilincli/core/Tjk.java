@@ -420,6 +420,8 @@ public final class Tjk {
                 for (List<Horse> l : legs) n.append(n.length() == 0 ? "" : "-").append(l.size());
                 log.add(label + ": 6 ayak okundu (at sayıları " + n + ")");
                 Map<String, Object> a = new LinkedHashMap<>();
+                a.put("key", "tjk/" + c.getKey() + "/" + no);
+                a.put("source", "TJK");
                 a.put("city", c.getValue());
                 a.put("cityId", c.getKey());
                 a.put("no", no);

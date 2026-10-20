@@ -2,6 +2,7 @@ package app.bilincli.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import app.bilincli.core.AtYarisi;
 import app.bilincli.core.Calibration;
 import app.bilincli.core.Closing;
 import app.bilincli.core.CreditPlan;
@@ -57,8 +58,8 @@ final class Repo {
     /** Bilyoner Zirve Oran: son değerlendirme ve bildirilen oranlar (zirve.json). */
     private final FileStorage zirveStore;
     private final Object zirveLock = new Object();
-    /** 2.19: TJK'dan son AGF okuması (tjk.json). */
-    private final FileStorage tjkStore;
+    /** Son altılı AGF okuması: TJK (2.19), Bilyoner ve Nesine (2.20) (agf.json). */
+    private final FileStorage agfStore;
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
 
@@ -77,7 +78,7 @@ final class Repo {
         memoryStore = new FileStorage(new File(app.getFilesDir(), "dogrulama.json"));
         forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
         zirveStore = new FileStorage(new File(app.getFilesDir(), "zirve.json"));
-        tjkStore = new FileStorage(new File(app.getFilesDir(), "tjk.json"));
+        agfStore = new FileStorage(new File(app.getFilesDir(), "agf.json"));
         virtual = new Virtual(new FileStorage(new File(app.getFilesDir(), "sanal.json")));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
@@ -457,28 +458,41 @@ final class Repo {
         return new LinkedHashMap<>();
     }
 
-    private volatile String tjkRaw;
+    private volatile String agfRaw;
 
-    /** Arayüz için son TJK AGF okuması ({at, day, altilis, log}); hiç okunmadıysa ya da demodaysa null. */
-    Map<String, Object> tjkView() {
+    /** Arayüz için son altılı AGF okuması ({at, day, altilis, log}); hiç okunmadıysa ya da demodaysa null. */
+    Map<String, Object> agfView() {
         if (isDemo()) return null;
         try {
-            String raw = tjkRaw != null ? tjkRaw : tjkStore.read();
+            String raw = agfRaw != null ? agfRaw : agfStore.read();
             if (raw == null || raw.trim().isEmpty()) return null;
-            tjkRaw = raw;
+            agfRaw = raw;
             return Json.parseObject(raw);
         } catch (RuntimeException e) {
             return null; // bozuk kayıt: yeniden okunur
         }
     }
 
-    /** Günün altılılarının AGF'lerini TJK'dan okur ve saklar (kredi harcamaz). */
-    Map<String, Object> tjkRead(Daily.Progress progress) {
+    /**
+     * Günün altılılarının AGF'leri (ve varsa ganyan oranları): önce Bilyoner ve Nesine, sonra TJK. Hepsi saklanır
+     * (kredi harcamaz); altılılar sırayla, okuma ayrıntısı kaynak kaynak.
+     */
+    Map<String, Object> agfRead(Daily.Progress progress) {
         Instant now = Instant.now();
-        Map<String, Object> r = Tjk.read(new AndroidHttp(app), now.atOffset(Fmt.TR).toLocalDate(), now, progress);
+        AndroidHttp http = new AndroidHttp(app);
+        Map<String, Object> sites = AtYarisi.read(http, now, progress);
+        Map<String, Object> tjk = Tjk.read(http, now.atOffset(Fmt.TR).toLocalDate(), now, progress);
+        List<Object> altilis = new ArrayList<>(Json.arr(sites.get("altilis")));
+        altilis.addAll(Json.arr(tjk.get("altilis")));
+        List<Object> log = new ArrayList<>(Json.arr(sites.get("log")));
+        log.add("TJK");
+        for (Object line : Json.arr(tjk.get("log"))) log.add("  " + line);
+        Map<String, Object> r = new LinkedHashMap<>(tjk);
+        r.put("altilis", altilis);
+        r.put("log", log);
         String raw = Json.write(r);
-        tjkStore.write(raw);
-        tjkRaw = raw;
+        agfStore.write(raw);
+        agfRaw = raw;
         return r;
     }
 

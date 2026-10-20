@@ -57,7 +57,7 @@ public final class Bridge {
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
         extra.put("radar", repo.radarView()); // adil oran tablosu dahil: Fırsatlar açılınca hazır
         extra.put("zirve", repo.zirveView());
-        extra.put("tjk", repo.tjkView());
+        extra.put("agf", repo.agfView());
         extra.put("virtual", repo.virtualView());
         Object[] picks = repo.picks(); // 2.16: üçü tek hesapla (önce her biri ayrı ayrı baştan)
         extra.put("pick", picks[0]);
@@ -376,20 +376,23 @@ public final class Bridge {
                 if (z != null && z.get("error") != null) throw new IllegalStateException("Zirve Oran okunamadı: " + z.get("error"));
                 return note.trim().isEmpty() ? "Zirve Oran okundu." : note.trim();
             }
-            case "tjkAgf": {
+            case "agfRead": {
                 requireReal(repo);
-                progress("TJK'dan AGF okunuyor (kredi harcamaz)…");
-                Map<String, Object> r = repo.tjkRead(new Daily.Progress() {
+                progress("At yarışı verisi okunuyor (kredi harcamaz)…");
+                Map<String, Object> r = repo.agfRead(new Daily.Progress() {
                     @Override
                     public void step(String text) {
                         progress(text);
                     }
                 });
                 List<Object> found = Json.arr(r.get("altilis"));
-                if (found.isEmpty()) throw new IllegalStateException("TJK'dan AGF okunamadı. Altılı kartındaki \"Okuma ayrıntısı\"nı paylaş.");
+                if (found.isEmpty()) throw new IllegalStateException("AGF okunamadı. Altılı kartındaki \"Okuma ayrıntısı\"nı paylaş.");
                 List<String> names = new ArrayList<>();
-                for (Object a : found) names.add(String.valueOf(Json.obj(a).get("label")));
-                return "TJK AGF okundu: " + String.join(", ", names) + ".";
+                for (Object a : found) {
+                    Map<String, Object> m = Json.obj(a);
+                    names.add(m.get("label") + " (" + m.get("source") + ")");
+                }
+                return "AGF okundu: " + String.join(", ", names) + ".";
             }
             case "probe": {
                 requireReal(repo);
