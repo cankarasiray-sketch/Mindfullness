@@ -87,8 +87,10 @@ public final class DailyJob extends JobService {
     /** Altılı (2.21): AGF ve ganyan kendiliğinden okunur; ortalamada kârlı yeni kupon bildirilir (kredi harcamaz). */
     private void altili(Repo repo) {
         try {
-            String[] n = repo.altiliAuto();
-            if (n != null) Notifier.show(this, "kupon", Notifier.ID_ALTILI, n[0], n[1]);
+            String[][] n = repo.altiliAuto();
+            if (n == null) return;
+            if (n[0] != null) Notifier.show(this, "kupon", Notifier.ID_ALTILI, n[0][0], n[0][1]);
+            if (n[1] != null) Notifier.show(this, "kupon", Notifier.ID_ALTILI_HEALTH, n[1][0], n[1][1]);
         } catch (RuntimeException ignored) {
             // bir sonraki işte yeniden denenir
         }

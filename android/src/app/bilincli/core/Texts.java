@@ -162,11 +162,11 @@ public final class Texts {
         return b.toString();
     }
 
-    /** Altılı planının özeti: kombinasyon × kat = tutar, tutma olasılığı, beklenen getiri ve gerekçe. */
+    /** Altılı planının özeti: kombinasyon, misli (Bilyoner'deki adıyla kat) = tutar, tutma olasılığı, beklenen getiri ve gerekçe. */
     public static String altiliSummary(Map<String, Object> plan) {
         long units = Json.lng(plan, "units", 0), kat = Json.lng(plan, "kat", 0);
         double cost = Json.dbl(plan, "cost", 0);
-        return units + " kombinasyon" + (kat > 1 ? " × " + kat + " kat" : "") + " = " + Fmt.tl(Math.round(Math.max(1, kat) * cost * 100))
+        return units + " kombinasyon" + (kat > 1 ? ", misli " + kat : "") + " = " + Fmt.tl(Math.round(Math.max(1, kat) * cost * 100))
                 + " · tutma %" + Fmt.num(Json.dbl(plan, "hit", 0) * 100, 1) + " · beklenen getiri %" + Fmt.num(Json.dbl(plan, "roi", 0) * 100, 0)
                 + "\n" + Json.str(plan, "reason");
     }

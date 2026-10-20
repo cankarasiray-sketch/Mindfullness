@@ -129,6 +129,6 @@ public class AltiliTest {
         String coupon = Texts.altiliCoupon(p), summary = Texts.altiliSummary(p);
         assertTrue(coupon, coupon.startsWith("1) 2"));
         assertTrue(coupon, coupon.contains(" · 6) "));
-        assertTrue(summary, summary.matches("(?s)\\d+ kombinasyon( × \\d+ kat)? = [\\d.,]+ TL · tutma %[\\d,]+ · beklenen getiri %\\d+\nGanyan oranlarına göre.*"));
+        assertTrue(summary, summary.matches("(?s)\\d+ kombinasyon(, misli \\d+)? = [\\d.,]+ TL · tutma %[\\d,]+ · beklenen getiri %\\d+\nGanyan oranlarına göre.*"));
     }
 }

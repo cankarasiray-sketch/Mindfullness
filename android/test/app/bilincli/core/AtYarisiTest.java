@@ -136,4 +136,31 @@ public class AtYarisiTest {
         assertTrue(log, log.contains("Bilyoner: altılı bulunamadı"));
         assertTrue(log, log.contains("Nesine: altılı bulunamadı"));
     }
+
+    @Test
+    public void poolInfoFromSiteGoesToItsAltili() {
+        String json = "{\"hippodrome\":\"İstanbul\",\"bets\":[{\"name\":\"Ganyan\",\"unitPrice\":1},{\"name\":\"1. 6'LI GANYAN\",\"unitPrice\":\"1,25\","
+                + "\"carryOver\":\"1.500.000,50\",\"poolAmount\":4000000}],\"races\":" + races(6, 1) + "}";
+        Object root = Json.parse(json);
+        List<AtYarisi.Race> races = new ArrayList<>();
+        AtYarisi.harvest(root, "$", null, null, races, 0);
+        List<AtYarisi.PoolInfo> pools = new ArrayList<>();
+        AtYarisi.pools(root, null, pools, 0);
+        assertEquals(1, pools.size()); // "Ganyan" altılı değil
+        Map<String, Object> a = AtYarisi.altilis("Bilyoner", races, pools).get(0);
+        assertEquals(1.25, (Double) a.get("unit"), 1e-9);
+        assertEquals(1_500_000.5, (Double) a.get("devir"), 1e-6);
+        assertEquals(4_000_000, (Double) a.get("pool"), 1e-6);
+        assertEquals("İstanbul", a.get("city"));
+        assertEquals(Double.valueOf(2500), AtYarisi.amount("₺ 2.500"));
+        assertEquals(Double.valueOf(1234567.89), AtYarisi.amount("1234567.89"));
+    }
+
+    @Test
+    public void tjkPageAmounts() {
+        String html = "<div>1. ALTILI GANYAN · Devir: <b>2.345.678,90 TL</b></div><p>Toplam bahis 5.000.000 TL</p>";
+        assertEquals(2_345_678.90, Tjk.amountNear(html, Tjk.DEVIR_TEXT), 1e-6);
+        assertEquals(5_000_000, Tjk.amountNear(html, Tjk.POOL_TEXT), 1e-6);
+        assertEquals(null, Tjk.amountNear("<p>Devir yok</p>", Tjk.DEVIR_TEXT));
+    }
 }

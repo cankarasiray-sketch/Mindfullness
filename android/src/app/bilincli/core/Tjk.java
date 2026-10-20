@@ -337,6 +337,16 @@ public final class Tjk {
         return out;
     }
 
+    static final Pattern DEVIR_TEXT = Pattern.compile("(?i)(devir|devreden)[^0-9]{0,40}?(\\d{1,3}(?:\\.\\d{3})+(?:,\\d{1,2})?|\\d+(?:,\\d{1,2})?)\\s*(?:TL|₺)");
+    static final Pattern POOL_TEXT = Pattern.compile("(?i)(havuz|hasılat|hasilat|toplam bahis)[^0-9]{0,40}?(\\d{1,3}(?:\\.\\d{3})+(?:,\\d{1,2})?|\\d+(?:,\\d{1,2})?)\\s*(?:TL|₺)");
+
+    /** Sayfa metninde "Devir: 1.234.567,89 TL" gibi açık yazılmış tutar (yoksa null). */
+    static Double amountNear(String html, Pattern p) {
+        Matcher m = p.matcher(text(html));
+        if (!m.find()) return null;
+        return AtYarisi.amount(m.group(2));
+    }
+
     /** Hata ayıklama için sayfanın kısa özeti (okuma ayrıntısında paylaşılır). */
     static String excerpt(String html) {
         String clean = stripScripts(html), s = text(clean);
@@ -392,9 +402,10 @@ public final class Tjk {
                 step(progress, label + " AGF okunuyor…");
                 List<List<Horse>> legs;
                 String[] why = {null};
+                String html;
                 try {
                     requests++;
-                    String html = http.get(agfUrl(c.getKey(), day, no), headers()).body;
+                    html = http.get(agfUrl(c.getKey(), day, no), headers()).body;
                     failures = 0;
                     legs = six(parseAgf(html), no, why);
                     if (legs == null) why[0] += " (" + excerpt(html) + ")";
@@ -427,6 +438,10 @@ public final class Tjk {
                 a.put("no", no);
                 a.put("label", label);
                 a.put("legs", new ArrayList<Object>(text));
+                Double devir = amountNear(html, DEVIR_TEXT), pool = amountNear(html, POOL_TEXT); // sayfada yazıyorsa
+                if (devir != null) a.put("devir", devir);
+                if (pool != null) a.put("pool", pool);
+                if (devir != null || pool != null) log.add(label + ": devir " + devir + ", havuz " + pool + " (sayfadan)");
                 altilis.add(a);
             }
         }

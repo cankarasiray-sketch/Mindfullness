@@ -515,10 +515,14 @@ final class Repo {
         prefs.edit().putString("altiliInputs", Json.write(m)).apply();
     }
 
-    private Altili.Inputs altiliInputsFor(String key, Map<String, Object> inp) {
+    /**
+     * Planın girdileri: birim fiyat, devir ve havuz sitede okunduysa oradan (2.22), elle girilen devir/havuz önce gelir;
+     * yoksa ayardaki birim fiyat. a.inputsFrom: "okundu" / "elle" / null.
+     */
+    private Altili.Inputs altiliInputsFor(String key, Map<String, Object> inp, Map<String, Object> a) {
         Settings s = ledger.settings();
         Altili.Inputs in = new Altili.Inputs();
-        in.unit = s.altiliUnit;
+        in.unit = Json.dbl(a, "unit", s.altiliUnit);
         in.takeout = s.altiliTakeout;
         in.tax = s.altiliTax;
         in.kasa = ledger.balance() / 100.0;
@@ -529,6 +533,11 @@ final class Repo {
         if (by != null) {
             in.devir = Json.dbl(by, "devir", 0);
             in.pool = Json.dbl(by, "pool", 0);
+            a.put("inputsFrom", "elle");
+        } else if (a.get("devir") != null || a.get("pool") != null) {
+            in.devir = Json.dbl(a, "devir", 0);
+            in.pool = Json.dbl(a, "pool", 0);
+            a.put("inputsFrom", "okundu");
         }
         return in;
     }
@@ -574,10 +583,11 @@ final class Repo {
             String key = Json.str(a, "key");
             List<String> legs = new ArrayList<>();
             for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
-            Altili.Inputs in = altiliInputsFor(key, inp);
+            Altili.Inputs in = altiliInputsFor(key, inp, a);
             a.put("plan", Altili.plan(legs, in));
             a.put("devir", in.devir);
             a.put("pool", in.pool);
+            a.put("unit", in.unit);
         }
         v.put("altilis", list);
         Map<String, Object> shown = new LinkedHashMap<>();
@@ -618,7 +628,7 @@ final class Repo {
     static final int ALTILI_FROM_HOUR = 9, ALTILI_TO_HOUR = 21;
 
     /** 2.21: arka planda okuma (açıksa, 2 saatte bir, 09–21); ortalamada kârlı yeni kupon varsa bildirim [başlık, metin]. */
-    String[] altiliAuto() {
+    String[][] altiliAuto() {
         if (isDemo() || !ledger.settings().altiliAuto) return null;
         Instant now = Instant.now();
         int h = now.atOffset(Fmt.TR).getHour();
@@ -626,8 +636,57 @@ final class Repo {
         Map<String, Object> st = agfStored();
         String at = st == null ? null : Json.str(st, "at");
         if (at != null && Instant.parse(at).plusSeconds(ALTILI_GAP_S).isAfter(now)) return null;
-        agfRead(null);
-        return altiliNotice(now);
+        Map<String, Object> r = agfRead(null);
+        return new String[][] {altiliNotice(now), altiliHealth(r, now)};
+    }
+
+    /** Bu kadar gün üst üste altılı ya da ganyan okunamazsa bir kez uyarılır (en fazla haftada bir). */
+    static final int ALTILI_BAD_DAYS = 3;
+
+    /**
+     * 2.22: okuma sağlığı. Gün içindeki okumalardan "altılı bulundu" ve "ganyanlı altılı bulundu" tutulur; gün
+     * kapanınca sayaçlar güncellenir. Ekrana bakılmadığı için bozulan okuma sessiz kalmasın: 3 gün üst üste hiç altılı
+     * ya da hiç ganyan yoksa bildirim [başlık, metin].
+     */
+    String[] altiliHealth(Map<String, Object> read, Instant now) {
+        Map<String, Object> h;
+        try {
+            h = Json.parseObject(prefs.getString("altiliHealth", "{}"));
+        } catch (RuntimeException e) {
+            h = new LinkedHashMap<>();
+        }
+        String day = Fmt.dayKey(now), last = Json.str(h, "day");
+        if (last != null && !last.equals(day)) { // önceki gün kapandı
+            boolean data = Json.bool(h, "data", false), odds = Json.bool(h, "odds", false);
+            h.put("noData", data ? 0L : Json.lng(h, "noData", 0) + 1);
+            h.put("noOdds", !data ? Json.lng(h, "noOdds", 0) : odds ? 0L : Json.lng(h, "noOdds", 0) + 1);
+            h.put("data", false);
+            h.put("odds", false);
+        }
+        h.put("day", day);
+        for (Object o : Json.arr(read == null ? null : read.get("altilis"))) {
+            h.put("data", true);
+            if (Json.bool(Json.obj(o), "odds", false)) h.put("odds", true);
+        }
+        String[] notice = null;
+        String warned = Json.str(h, "warned");
+        boolean quiet = warned != null && Instant.parse(warned).plusSeconds(7 * 86400).isAfter(now);
+        if (!quiet && Json.lng(h, "noData", 0) >= ALTILI_BAD_DAYS) {
+            notice = new String[] {"Altılı verisi okunamıyor",
+                    ALTILI_BAD_DAYS + " gündür Bilyoner, Nesine ve TJK'dan altılı okunamadı; altılı bildirimi gelmez. Sitelerin biçimi"
+                            + " değişmiş olabilir: uygulamayı güncellemem gerekir."};
+        } else if (!quiet && Json.lng(h, "noOdds", 0) >= ALTILI_BAD_DAYS) {
+            notice = new String[] {"Altılıda ganyan oranı okunamıyor",
+                    ALTILI_BAD_DAYS + " gündür ganyan oranı okunamadı: AGF okunuyor ama değer (az oynanmış at) aranamıyor, kupon yalnızca"
+                            + " devirde kârlı çıkar. Okuyucunun güncellenmesi gerekir."};
+        }
+        if (notice != null) {
+            h.put("warned", now.toString());
+            h.put("noData", 0L);
+            h.put("noOdds", 0L);
+        }
+        prefs.edit().putString("altiliHealth", Json.write(h)).apply();
+        return notice;
     }
 
     /** Oynanabilir (ortalamada kârlı, kasaya uygun, başlamamış) ve bugün bildirilmemiş altılı kuponları. */

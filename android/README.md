@@ -111,6 +111,12 @@ bildirim olarak gelir.
 - Ganyan okunamazsa q = p: kâr yalnızca devirle mümkün; devir ve havuz altılı başına, o gün için girilir.
   Birim fiyat (varsayılan 1 TL), kesinti (%27) ve vergi bir kez girilir (Bilyoner'deki değerlerle kontrol et).
 
+- **2.22: her şey hazır.** Birim fiyat, devir ve havuz sitede yazıyorsa kendiliğinden alınır (Bilyoner/Nesine
+  verisinde adında "altılı"/"6'lı" geçen bahsin alanları, TJK AGF sayfasında "Devir: … TL"); elle girilen önce gelir.
+  Kupon Bilyoner diliyle: ayak ayak atlar, misli ve tutar ("Bilyoner'de: At Yarışı → hipodrom → Altılı Ganyan …").
+  Ekrana bakılmadığı için bozulan okuma sessiz kalmaz: 3 gün üst üste hiç altılı ya da hiç ganyan okunamazsa bir kez
+  (en fazla haftada bir) uyarı bildirimi gelir.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

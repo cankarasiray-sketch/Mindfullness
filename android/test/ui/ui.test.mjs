@@ -816,7 +816,7 @@ function altiliState() {
   s.agf = {at: "2026-10-20T09:00:00Z", day: "2026-10-20", log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "TJK", "  Program: İstanbul, İzmir"],
     inputs: {maxCost: 0, manual: []},
     altilis: [
-      {key: "bilyoner/İstanbul 3–8. koşu", source: "Bilyoner", label: "İstanbul 3–8. koşu", start: "14:30", odds: true, devir: 0, pool: 0,
+      {key: "bilyoner/İstanbul 3–8. koşu", source: "Bilyoner", label: "İstanbul 3–8. koşu", city: "İstanbul", start: "14:30", inputsFrom: "okundu", unit: 1.25, odds: true, devir: 0, pool: 0,
         plan: {play: true, legs: [leg(["2", "1"], 1, true), leg(["2"], 0.67, true), leg(["5", "3"], 0.6, true), leg(["4"], 0.55, true), leg(["1", "7"], 0.7, true), leg(["2"], 0.62, true)],
           units: 8, kat: 3, unit: 1.25, cost: 10, stake: 30, hit: 0.105, roi: 1.38, ev: 11.4, ifHit: 394.3, oddsLegs: 6,
           reason: "Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr."}},
@@ -833,7 +833,9 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   let card = f.$("#altiliCard").textContent;
   assert.match(card, /İstanbul 3–8\. koşu · Bilyoner · 1\. ayak 14:30/);
   assert.match(card, /1\. ayak: 2, 1 \(%100\)/);
-  assert.match(card, /Kombinasyon8 × 3 kat · 30,00 TL/);
+  assert.match(card, /Kombinasyon · misli · tutar8 · 3 · 30,00 TL/);
+  assert.match(card, /Bilyoner'de: At Yarışı → İstanbul → Altılı Ganyan; her ayakta yukarıdaki atları seç, misli 3, tutarın 30,00 TL olduğunu kontrol et, 1\. ayak 14:30 öncesi\./);
+  assert.match(card, /Devir ve havuz \(bu altılı, bugün; sitede okundu\)/);
   assert.match(card, /Tutma olasılığı%10,50/);
   assert.match(card, /Beklenen getiri%138/);
   assert.match(card, /Kazanma olasılığıganyan oranlarından \(6\/6 ayak\)/);

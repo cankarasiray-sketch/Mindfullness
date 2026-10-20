@@ -102,6 +102,69 @@ public final class AtYarisi {
         }
     }
 
+    /** 2.22: sitede altılı bahsinin birim fiyatı, devri ve havuzu yazıyorsa (hipodroma göre). */
+    public static final class PoolInfo {
+        final String place;
+        final Double unit, devir, pool;
+
+        PoolInfo(String place, Double unit, Double devir, Double pool) {
+            this.place = place;
+            this.unit = unit;
+            this.devir = devir;
+            this.pool = pool;
+        }
+    }
+
+    private static final Pattern ALTILI_NAME = Pattern.compile("(?i)(alt[ıi]l[ıi]|6\\s*'?\\s*l[ıi]\\b|\\bsix|pick\\s*6)");
+    private static final Pattern UNIT_KEY = Pattern.compile("(?i)^(unit_?price|unit_?amount|unit_?value|birim_?fiyat\\w*|birim|bet_?unit\\w*|min_?bet\\w*)$");
+    private static final Pattern DEVIR_KEY = Pattern.compile("(?i)^(devir\\w*|devreden\\w*|carry_?over\\w*|jackpot\\w*|rollover\\w*)$");
+    private static final Pattern POOL_KEY = Pattern.compile("(?i)^(pool\\w*|havuz\\w*|total_?(amount|pool|bet)\\w*|hasilat\\w*|turnover\\w*)$");
+
+    /** TL tutarı: sayı ya da "1.234.567,89", "1234567.89", "₺ 2.500" -> sayı (okunamazsa null). */
+    static Double amount(Object v) {
+        if (v instanceof Number) return ((Number) v).doubleValue();
+        if (!(v instanceof String)) return null;
+        String t = ((String) v).replaceAll("[^0-9.,]", "");
+        if (t.isEmpty()) return null;
+        if (t.indexOf(',') >= 0) t = t.replace(".", "").replace(',', '.');
+        else if (t.matches("\\d{1,3}(\\.\\d{3})+")) t = t.replace(".", "");
+        try {
+            return Double.valueOf(t);
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Altılı bahsini anlatan nesnelerde (adında "altılı"/"6'lı" geçen) birim fiyat, devir ve havuz. */
+    @SuppressWarnings("unchecked")
+    static void pools(Object node, String place, List<PoolInfo> out, int depth) {
+        if (depth > 40) return;
+        if (node instanceof List) {
+            for (Object o : (List<Object>) node) pools(o, place, out, depth + 1);
+        } else if (node instanceof Map) {
+            Map<String, Object> m = (Map<String, Object>) node;
+            boolean altili = false;
+            for (Map.Entry<String, Object> e : m.entrySet()) {
+                if (!(e.getValue() instanceof String)) continue;
+                String v = (String) e.getValue();
+                if (PLACE_KEY.matcher(e.getKey()).matches() && v.length() <= 40) place = v;
+                if (v.length() <= 60 && ALTILI_NAME.matcher(v).find()) altili = true;
+            }
+            if (altili) {
+                Double unit = null, devir = null, pool = null;
+                for (Map.Entry<String, Object> e : m.entrySet()) {
+                    Double d = amount(e.getValue());
+                    if (d == null) continue;
+                    if (UNIT_KEY.matcher(e.getKey()).matches() && d >= 0.01 && d <= 100) unit = d;
+                    else if (DEVIR_KEY.matcher(e.getKey()).matches() && d >= 0) devir = d;
+                    else if (POOL_KEY.matcher(e.getKey()).matches() && d > 0) pool = d;
+                }
+                if (unit != null || devir != null || pool != null) out.add(new PoolInfo(place, unit, devir, pool));
+            }
+            for (Map.Entry<String, Object> e : m.entrySet()) pools(e.getValue(), place, out, depth + 1);
+        }
+    }
+
     // ---- JSON'da koşucu listeleri ---------------------------------------------------------------------------
 
     private static final Pattern HORSE_KEY = Pattern.compile(
@@ -234,6 +297,18 @@ public final class AtYarisi {
      * ve son 6 ayrı ayrı sunulur (hangisinin 1. altılı olduğu sitede yazmıyorsa kullanıcı seçer).
      */
     static List<Map<String, Object>> altilis(String site, List<Race> races) {
+        return altilis(site, races, new ArrayList<PoolInfo>());
+    }
+
+    /** Hipodromun altılı bilgisi: aynı hipodromda birden çok altılı varsa sırayla (ilk altılı ilk bilgi). */
+    private static PoolInfo poolFor(String place, int nth, List<PoolInfo> pools) {
+        List<PoolInfo> same = new ArrayList<>();
+        for (PoolInfo p : pools) if (place == null ? p.place == null : place.equalsIgnoreCase(String.valueOf(p.place))) same.add(p);
+        if (same.isEmpty() && pools.size() == 1) same.add(pools.get(0));
+        return same.isEmpty() ? null : same.get(Math.min(nth, same.size() - 1));
+    }
+
+    static List<Map<String, Object>> altilis(String site, List<Race> races, List<PoolInfo> pools) {
         Map<String, List<Race>> groups = new LinkedHashMap<>();
         for (Race r : races) {
             if (!r.hasAgf()) continue;
@@ -247,6 +322,7 @@ public final class AtYarisi {
         for (List<Race> g : groups.values()) {
             if (g.size() < 6) continue;
             int[] starts = g.size() == 6 ? new int[] {0} : new int[] {0, g.size() - 6};
+            int nth = 0;
             for (int from : starts) {
                 List<Race> six = g.subList(from, from + 6);
                 List<Object> legs = new ArrayList<>();
@@ -263,9 +339,16 @@ public final class AtYarisi {
                 a.put("key", site.toLowerCase(Locale.ROOT) + "/" + place + range);
                 a.put("source", site);
                 a.put("label", place + range);
+                if (first.place != null) a.put("city", first.place);
                 a.put("legs", legs);
                 a.put("odds", odds);
                 if (first.time != null) a.put("start", first.time); // 1. ayağın saati (Türkiye)
+                PoolInfo info = poolFor(first.place, nth++, pools);
+                if (info != null) {
+                    if (info.unit != null) a.put("unit", info.unit);
+                    if (info.devir != null) a.put("devir", info.devir);
+                    if (info.pool != null) a.put("pool", info.pool);
+                }
                 out.add(a);
             }
         }
@@ -348,7 +431,7 @@ public final class AtYarisi {
     }
 
     /** JSON metnindeki koşular; JSON değilse null. */
-    private static List<Race> races(String json, String where, List<Object> log) {
+    private static List<Race> races(String json, String where, List<Object> log, List<PoolInfo> pools) {
         Object root;
         try {
             root = Json.parse(json.trim());
@@ -357,6 +440,12 @@ public final class AtYarisi {
         }
         List<Race> out = new ArrayList<>();
         harvest(root, "$", null, null, out, 0);
+        int before = pools.size();
+        pools(root, null, pools, 0);
+        for (int i = before; i < pools.size(); i++) {
+            PoolInfo p = pools.get(i);
+            log.add("    altılı bilgisi" + (p.place == null ? "" : " · " + p.place) + ": birim " + p.unit + ", devir " + p.devir + ", havuz " + p.pool);
+        }
         int agf = 0, odds = 0;
         for (Race r : out) {
             if (r.hasAgf()) agf++;
@@ -379,6 +468,10 @@ public final class AtYarisi {
 
     /** Bir sitenin sayfası, gömülü verisi, betiklerdeki veri adresleri; bulunan koşular. */
     static List<Race> site(Http http, String name, String page, String domain, List<Object> log, Daily.Progress progress) {
+        return site(http, name, page, domain, log, progress, new ArrayList<PoolInfo>());
+    }
+
+    static List<Race> site(Http http, String name, String page, String domain, List<Object> log, Daily.Progress progress, List<PoolInfo> pools) {
         List<Race> all = new ArrayList<>();
         if (progress != null) progress.step(name + " at yarışı sayfası inceleniyor…");
         String html = fetch(http, page, "text/html,application/xhtml+xml;q=0.9,*/*;q=0.8", page, log);
@@ -386,12 +479,12 @@ public final class AtYarisi {
         int blocks = 0;
         Matcher j = JSON_SCRIPT.matcher(html);
         while (j.find()) {
-            List<Race> r = races(j.group(1), "gömülü veri " + (++blocks) + " (" + j.group(1).length() / 1024 + " KB)", log);
+            List<Race> r = races(j.group(1), "gömülü veri " + (++blocks) + " (" + j.group(1).length() / 1024 + " KB)", log, pools);
             if (r != null) all.addAll(r);
         }
         Matcher st = STATE_SCRIPT.matcher(html);
         while (st.find()) {
-            List<Race> r = races(st.group(2), "window." + st.group(1), log);
+            List<Race> r = races(st.group(2), "window." + st.group(1), log, pools);
             if (r != null) all.addAll(r);
             blocks++;
         }
@@ -425,7 +518,7 @@ public final class AtYarisi {
             if (progress != null) progress.step(name + " veri adresi deneniyor (" + tried + ")…");
             String body = fetch(http, url, "application/json, text/plain, */*", page, log);
             if (body == null) continue;
-            List<Race> r = races(body, "yanıt", log);
+            List<Race> r = races(body, "yanıt", log, pools);
             if (r == null) log.add("    JSON değil: " + shorten(body, 160));
             else all.addAll(r);
         }
@@ -447,13 +540,14 @@ public final class AtYarisi {
         for (String[] s : SITES) {
             log.add(s[0] + " (keşif: bu bölümü paylaşırsan okuma kesinleşir)");
             List<Race> races;
+            List<PoolInfo> pools = new ArrayList<>();
             try {
-                races = site(http, s[0], s[1], s[2], log, progress);
+                races = site(http, s[0], s[1], s[2], log, progress, pools);
             } catch (RuntimeException e) {
                 log.add("  hata: " + shorten(e.getMessage(), 200));
                 continue;
             }
-            List<Map<String, Object>> found = altilis(s[0], races);
+            List<Map<String, Object>> found = altilis(s[0], races, pools);
             altilis.addAll(found);
             log.add("  " + s[0] + ": " + (found.isEmpty() ? "altılı bulunamadı" : found.size() + " altılı"));
         }

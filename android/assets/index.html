@@ -715,7 +715,7 @@ function altiliPlanHtml(a) {
   var tl0 = function (x) { return tl(Math.round(x * 100)); }, kat = r.kat || 0;
   return '<div class="list">'
     + item("Kupon", r.legs.map(function (l, k) { return (k + 1) + ". ayak: <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")"; }).join("<br>"))
-    + item("Kombinasyon", r.units + (kat > 1 ? " × " + kat + " kat" : "") + " · " + tl0(Math.max(1, kat) * r.cost))
+    + item("Kombinasyon · misli · tutar", r.units + " · " + Math.max(1, kat) + " · " + tl0(Math.max(1, kat) * r.cost))
     + item("Tutma olasılığı", "%" + num(r.hit * 100, 2))
     + item("Beklenen getiri", '<span class="' + cls(r.roi - 1) + '">%' + num(r.roi * 100, 0) + "</span>")
     + (r.play ? item("Tutarsa ortalama ikramiye", tl0(r.ifHit)) + item("Beklenen kazanç", '<span class="pos">' + tl0(r.ev) + "</span>") : "")
@@ -723,6 +723,8 @@ function altiliPlanHtml(a) {
     + (r.avg != null ? item("Ortalama getiri (devir dahil)", "%" + num(r.avg * 100, 1)) : "")
     + "</div>"
     + (r.play ? '<p><b class="pos">OYNA:</b> ' + esc(r.reason) + " Tutar kasanın Kelly payından: " + tl0(r.stake) + ". Çoğu gün kaybedilir; kâr uzun vadede gelir.</p>"
+        + '<p class="small">Bilyoner\'de: At Yarışı → ' + esc(a.city || a.label) + " → Altılı Ganyan; her ayakta yukarıdaki atları seç, misli " + Math.max(1, kat)
+        + ", tutarın " + tl0(Math.max(1, kat) * r.cost) + " olduğunu kontrol et" + (a.start ? ", 1. ayak " + esc(a.start) + " öncesi" : "") + ".</p>"
       : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>");
 }
 function altiliCard() {
@@ -746,13 +748,14 @@ function altiliCard() {
   if (cur) {
     html += '<h3 style="margin:12px 0 4px">' + esc(cur.label) + " · " + esc(cur.source || "TJK") + (cur.start ? " · 1. ayak " + esc(cur.start) : "") + "</h3>"
       + altiliPlanHtml(cur)
-      + '<details class="info"><summary class="small">Devir ve havuz (bu altılı, bugün)</summary>'
+      + '<details class="info"><summary class="small">Devir ve havuz (bu altılı, bugün' + (cur.inputsFrom === "okundu" ? "; sitede okundu" : cur.inputsFrom === "elle" ? "; elle" : "") + ")</summary>"
       + f("devir", "Devir (TL)", numText(cur.devir), "altiliPool()", "devreden ikramiye")
       + f("havuz", "Tahmini bugünkü altılı havuzu (TL)", numText(cur.pool), "altiliPool()", "devirle getiri ve kendi payımız için")
       + "</details>";
   }
   html += '<details class="info"><summary class="small">Birim fiyat, kesinti, bütçe</summary>'
-    + f("birim", "Birim fiyat (TL)", numText(st.altiliUnit), "altiliSave({unit: numTr(this.value)})", "Bilyoner'deki altılı birim fiyatı")
+    + f("birim", "Birim fiyat (TL)" + (cur && cur.unit && cur.unit !== st.altiliUnit ? " · sitede okunan " + num(cur.unit, 2) + " kullanılıyor" : ""), numText(st.altiliUnit),
+      "altiliSave({unit: numTr(this.value)})", "Bilyoner'deki altılı birim fiyatı")
     + f("kesinti", "Kesinti (%)", numText(Math.round((st.altiliTakeout || 0.27) * 1000) / 10), "altiliSave({takeout: numTr(this.value) / 100})", "kaynaklar %25–30")
     + f("vergi", "İkramiyeden vergi (%)", numText(Math.round((st.altiliTax || 0) * 1000) / 10), "altiliSave({tax: numTr(this.value) / 100})", "kesiliyorsa")
     + f("butce", "Kupon başına en fazla (TL)", numText(inp.maxCost), "altiliSave({maxCost: numTr(this.value)})", "boş: kasanın Kelly payı")
