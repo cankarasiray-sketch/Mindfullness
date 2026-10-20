@@ -813,7 +813,7 @@ function altiliState() {
   const s = clone(baseState);
   s.settings.altiliAuto = true; s.settings.altiliUnit = 1.25; s.settings.altiliTakeout = 0.27; s.settings.altiliTax = 0;
   const leg = (horses, share, odds) => ({horses, share, agf: share, odds});
-  s.agf = {at: "2026-10-20T09:00:00Z", day: "2026-10-20", log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "TJK", "  Program: İstanbul, İzmir"],
+  s.agf = {at: "2026-10-20T09:00:00Z", day: "2026-10-20", best: "bilyoner/İstanbul 3–8. koşu", log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "TJK", "  Program: İstanbul, İzmir"],
     inputs: {maxCost: 0, manual: []},
     altilis: [
       {key: "bilyoner/İstanbul 3–8. koşu", source: "Bilyoner", label: "İstanbul 3–8. koşu", city: "İstanbul", start: "14:30", inputsFrom: "okundu", unit: 1.25, odds: true, devir: 0, pool: 0,
@@ -841,9 +841,11 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /Kazanma olasılığıganyan oranlarından \(6\/6 ayak\)/);
   assert.match(card, /OYNA: Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr\. Tutar kasanın Kelly payından: 30,00 TL/);
   assert.ok(f.button("İstanbul 3–8. koşu · Bilyoner · OYNA"));
+  assert.match(card, /Günün en mantıklı kuponu: İstanbul 3–8\. koşu · Bilyoner \(aşağıda\)/);
   assert.ok(f.$("#altAuto").checked);
   f.button("İzmir 1. altılı · TJK").click();
   card = f.$("#altiliCard").textContent;
+  assert.match(card, /Günün en mantıklı kuponu: İstanbul 3–8\. koşu · Bilyoner\s*Göster/);
   assert.match(card, /OYNAMA: Ortalamada zarar: bu kupon/);
   assert.match(card, /Kupon \(tutma odaklı, 60,00 TL bütçe\)1\. ayak: 1, 2 \(%65\)/);
   assert.match(card, /Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı/);
@@ -863,6 +865,22 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   f.button("Altılıyı şimdi oku").click();
   assert.equal(f.calls.at(-1).action, "agfRead");
   assert.match(f.$("#altiliCard").textContent, /Program: İstanbul, İzmir/);
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: bugün seçim yoksa günün en mantıklı kuponu açılır, düğmeyle geri dönülür", async () => {
+  const s = altiliState();
+  s.agf.best = "tjk/2/1";
+  s.agf.altilis[0].plan.play = false;
+  const f = boot(s, "#firsat");
+  let card = f.$("#altiliCard").textContent;
+  assert.match(card, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK \(aşağıda\)/);
+  assert.match(card, /İzmir 1\. altılı · TJK\s*Kupon \(tutma odaklı/);
+  assert.ok(f.button("İzmir 1. altılı · TJK · en mantıklı"));
+  f.button("İstanbul 3–8. koşu · Bilyoner").click();
+  assert.match(f.$("#altiliCard").textContent, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK\s*Göster/);
+  f.button("Göster").click();
+  assert.match(f.$("#altiliCard").textContent, /\(aşağıda\)/);
   assert.deepEqual(f.errors, []);
 });
 

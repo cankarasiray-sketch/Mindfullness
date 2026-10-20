@@ -122,6 +122,12 @@ bildirim olarak gelir.
   eklenir (ayak başına en çok 10 at). Bütçe: kupon sınırı girildiyse o, yoksa tek maçtaki gibi kasanın %3'ü. Karar
   yine OYNAMA'dır; kart, tutarsa ortalama ikramiyeyi ve uzun vadeli kaybı yazar. Bildirim yalnızca kârlı kuponda.
 
+- **2.24: günün en mantıklı kuponu.** Bütün altılılar (başlamamış olanlar) aynı bütçeyle karşılaştırılır: önce
+  ortalamada kârlı olan (beklenen kazancı büyük), sonra ortalama getirisi belirgin yüksek olan, getiri aynıysa
+  tutma olasılığı en yüksek olan (favorileri net, en tahmin edilebilir koşular). Kart bugün seçim yapılmadıysa onu
+  açar; kârlı kupon yoksa 11:00'den sonra günde bir kez "Günün altılısı" bildirimi gelir (ortalamada kâr
+  beklenmediği açıkça yazılır).
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

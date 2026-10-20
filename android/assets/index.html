@@ -677,17 +677,23 @@ function singlesCard() {
 // ---- Altılı (2.18–2.21, at yarışı) ------------------------------------------------------------------
 // Kupon çekirdekte kurulur (Altili.java): arka plan bildirimi ve bu kart aynı hesabı gösterir. AGF ve ganyan
 // Bilyoner, Nesine ve TJK'dan kendiliğinden okunur; burada yalnızca seçilir ve gerekirse devir/havuz girilir.
-var altiliSel = "";
-try { altiliSel = localStorage.getItem("altiliSel") || ""; } catch (e) { /* tarayıcı deposu yok */ }
+var altiliSel = "", altiliSelDay = "";
+try { altiliSel = localStorage.getItem("altiliSel") || ""; altiliSelDay = localStorage.getItem("altiliSelDay") || ""; } catch (e) { /* tarayıcı deposu yok */ }
 function altiliList() { return (S.agf && S.agf.altilis) || []; }
-function altiliCurrent() {
+function altiliByKey(key) {
   var list = altiliList();
-  for (var i = 0; i < list.length; i++) if (list[i].key === altiliSel) return list[i];
-  return list[0] || null;
+  for (var i = 0; i < list.length; i++) if (list[i].key === key) return list[i];
+  return null;
+}
+/** Seçili altılı; bugün seçim yapılmadıysa günün en mantıklı kuponu (2.24). */
+function altiliCurrent() {
+  var day = S.agf && S.agf.day, picked = altiliSel && (altiliSelDay === day || altiliSel === "manual") ? altiliByKey(altiliSel) : null;
+  return picked || altiliByKey(S.agf && S.agf.best) || altiliList()[0] || null;
 }
 function altiliPick(key) {
   altiliSel = key;
-  try { localStorage.setItem("altiliSel", key); } catch (e) { /* kaydedilemedi */ }
+  altiliSelDay = (S.agf && S.agf.day) || "";
+  try { localStorage.setItem("altiliSel", key); localStorage.setItem("altiliSelDay", altiliSelDay); } catch (e) { /* kaydedilemedi */ }
   render();
 }
 /** Türkçe sayı: "1.000.000", "2,5", "1.25" -> sayı (boşsa 0). */
@@ -743,10 +749,14 @@ function altiliCard() {
     + '<label class="check"><input type="checkbox" id="altAuto"' + (st.altiliAuto ? " checked" : "") + ' onchange="altiliSave({auto: this.checked})">Kendiliğinden oku, kârlı kuponu bildir (2 saatte bir, 09–21)</label>'
     + '<div class="btns"><button class="b" onclick="act(\'agfRead\')">Altılıyı şimdi oku</button></div>';
   if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).") + "</p>";
+  var best = altiliByKey(t && t.best);
+  if (best) html += '<p><b>Günün en mantıklı kuponu:</b> ' + esc(best.label) + " · " + esc(best.source || "TJK")
+    + (cur && cur.key === best.key ? " (aşağıda)" : ' <button class="chip" onclick="altiliPick(S.agf.best)">Göster</button>') + "</p>"
+    + '<p class="small muted">Bütün altılılar aynı bütçeyle karşılaştırılır: önce ortalamada kârlı olan, sonra ortalama getirisi yüksek olan, getiri aynıysa tutma olasılığı en yüksek olan (favorileri net, en tahmin edilebilir koşular).</p>';
   if (list.length > 1) html += '<div class="btns">' + list.map(function (a, i) {
     var play = a.plan && a.plan.play;
     return '<button class="chip' + (cur && a.key === cur.key ? " main" : "") + '" onclick="altiliPick(altiliList()[' + i + '].key)">'
-      + esc(a.label) + " · " + esc(a.source || "TJK") + (play ? " · OYNA" : "") + "</button>";
+      + esc(a.label) + " · " + esc(a.source || "TJK") + (play ? " · OYNA" : best && a.key === best.key ? " · en mantıklı" : "") + "</button>";
   }).join(" ") + "</div>";
   if (cur) {
     html += '<h3 style="margin:12px 0 4px">' + esc(cur.label) + " · " + esc(cur.source || "TJK") + (cur.start ? " · 1. ayak " + esc(cur.start) : "") + "</h3>"

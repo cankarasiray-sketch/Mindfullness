@@ -591,6 +591,16 @@ final class Repo {
             a.put("unit", in.unit);
         }
         v.put("altilis", list);
+        // 2.24: günün en mantıklı kuponu (başlamış altılılar hariç)
+        String clock = Instant.now().atOffset(Fmt.TR).toLocalTime().toString().substring(0, 5);
+        List<Map<String, Object>> plans = new ArrayList<>();
+        for (Object o : list) {
+            Map<String, Object> a = Json.obj(o);
+            String start = Json.str(a, "start");
+            plans.add(start != null && start.compareTo(clock) <= 0 ? null : Json.obj(a.get("plan")));
+        }
+        int best = Altili.best(plans);
+        v.put("best", best < 0 ? null : Json.str(Json.obj(list.get(best)), "key"));
         Map<String, Object> shown = new LinkedHashMap<>();
         shown.put("maxCost", Json.dbl(inp, "maxCost", 0));
         shown.put("manual", manual);
@@ -627,6 +637,8 @@ final class Repo {
     /** Arka planda altılı okuması en fazla bu sıklıkta ve bu saatlerde (Türkiye). */
     static final long ALTILI_GAP_S = 2 * 3600;
     static final int ALTILI_FROM_HOUR = 9, ALTILI_TO_HOUR = 21;
+    /** Günün en mantıklı kuponu bu saatten sonra bildirilir (AGF oturmuş olsun). */
+    static final int ALTILI_DAILY_HOUR = 11;
 
     /** 2.21: arka planda okuma (açıksa, 2 saatte bir, 09–21); ortalamada kârlı yeni kupon varsa bildirim [başlık, metin]. */
     String[][] altiliAuto() {
@@ -720,9 +732,29 @@ final class Repo {
                     .append(start == null ? "" : " · 1. ayak " + start).append('\n').append(coupon).append('\n')
                     .append(Texts.altiliSummary(plan));
         }
-        if (count == 0) return null;
+        boolean daily = !day.equals(Json.str(sent, "daily"));
+        if (count == 0) { // 2.24: kârlı kupon yoksa günde bir kez günün en mantıklı kuponu (11:00'den sonra)
+            String bestKey = Json.str(v, "best");
+            if (!daily || bestKey == null || now.atOffset(Fmt.TR).getHour() < ALTILI_DAILY_HOUR) return null;
+            for (Object o : Json.arr(v.get("altilis"))) {
+                Map<String, Object> a = Json.obj(o), plan = Json.obj(a.get("plan"));
+                if (!bestKey.equals(Json.str(a, "key")) || plan == null) continue;
+                String start = Json.str(a, "start");
+                title = "Günün altılısı · " + a.get("label");
+                body.append(a.get("label")).append(" · ").append(a.get("source")).append(start == null ? "" : " · 1. ayak " + start).append('\n')
+                        .append(Texts.altiliCoupon(plan)).append('\n').append(Texts.altiliSummary(plan))
+                        .append("\nOrtalamada kâr beklenmiyor; oynayacaksan günün en mantıklı kuponu bu.");
+            }
+            if (title == null) return null;
+            sent.put("day", day);
+            sent.put("sigs", sigs);
+            sent.put("daily", day);
+            prefs.edit().putString("altiliNotified", Json.write(sent)).apply();
+            return new String[] {title, body.toString()};
+        }
         sent.put("day", day);
         sent.put("sigs", sigs);
+        sent.put("daily", day); // kârlı kupon bildirildi: ayrıca günün kuponu gerekmez
         prefs.edit().putString("altiliNotified", Json.write(sent)).apply();
         if (count > 1) title = "Altılı: " + count + " kârlı kupon";
         return new String[] {title, body.append("\n1. ayak başlamadan oyna. Garanti değil: çoğu gün kaybedilir, kâr uzun vadede.").toString()};

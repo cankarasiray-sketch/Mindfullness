@@ -482,4 +482,28 @@ public final class Altili {
         out.put("reason", why);
         return out;
     }
+
+    /**
+     * 2.24: günün en mantıklı altılısı (indeks; yoksa −1). Önce oynanabilir olanlar (beklenen kazancı büyük olan), sonra
+     * ortalama getirisi belirgin (2 puandan çok) yüksek olan, sonra aynı bütçeyle tutma olasılığı yüksek olan: getiri
+     * aynıysa favorileri net, daha tahmin edilebilir koşular. Hatalı planlar (null ya da error) dışarıda.
+     */
+    public static int best(List<Map<String, Object>> plans) {
+        int best = -1;
+        for (int i = 0; i < plans.size(); i++) {
+            Map<String, Object> p = plans.get(i);
+            if (p == null || p.get("error") != null || p.get("legs") == null) continue;
+            if (best < 0 || better(p, plans.get(best))) best = i;
+        }
+        return best;
+    }
+
+    static boolean better(Map<String, Object> a, Map<String, Object> b) {
+        boolean pa = Json.bool(a, "play", false), pb = Json.bool(b, "play", false);
+        if (pa != pb) return pa;
+        if (pa) return Json.dbl(a, "ev", 0) > Json.dbl(b, "ev", 0);
+        double ra = Json.dbl(a, "roi", 0), rb = Json.dbl(b, "roi", 0);
+        if (Math.abs(ra - rb) > 0.02) return ra > rb;
+        return Json.dbl(a, "hit", 0) > Json.dbl(b, "hit", 0);
+    }
 }

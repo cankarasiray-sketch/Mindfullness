@@ -146,6 +146,21 @@ public class AltiliTest {
     }
 
     @Test
+    public void bestAltiliOfTheDay() {
+        Altili.Inputs in = inputs(2324.20);
+        in.budget = 60;
+        Map<String, Object> open = Altili.plan(six("1:20 2:20 3:20 4:20 5:20"), in); // açık koşular: tutması zor
+        Map<String, Object> clear = Altili.plan(six("1:70 2:20 3:10"), in); // net favoriler
+        Map<String, Object> value = Altili.plan(six("1:60:3 2:40:1.5"), inputs(5000)); // ganyana göre kârlı
+        assertEquals(1, Altili.best(Arrays.asList(open, clear)));
+        assertEquals(2, Altili.best(Arrays.asList(open, clear, value)));
+        assertEquals(0, Altili.best(Arrays.asList(clear, null)));
+        assertEquals(-1, Altili.best(Arrays.asList((Map<String, Object>) null)));
+        Map<String, Object> err = Altili.plan(Arrays.asList("1:50"), in);
+        assertEquals(1, Altili.best(Arrays.asList(err, open)));
+    }
+
+    @Test
     public void notificationText() {
         Map<String, Object> p = Altili.plan(six("1:60:3 2:40:1.5"), inputs(5000));
         String coupon = Texts.altiliCoupon(p), summary = Texts.altiliSummary(p);
