@@ -821,7 +821,7 @@ function altiliState() {
           units: 8, kat: 3, unit: 1.25, cost: 10, stake: 30, hit: 0.105, roi: 1.38, ev: 11.4, ifHit: 394.3, oddsLegs: 6,
           reason: "Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr."}},
       {key: "tjk/2/1", source: "TJK", label: "İzmir 1. altılı", devir: 0, pool: 0,
-        plan: {play: false, mode: "tutma", budget: 60, legs: [leg(["1", "2"], 0.65, false), leg(["3", "1"], 0.8, false), leg(["4", "2"], 1, false), leg(["1", "2"], 0.8, false), leg(["6", "1"], 1, false), leg(["2"], 0.7, false)],
+        plan: {play: false, mode: "tutma", budget: 60, legMin: 0.8, legs: [leg(["1", "2"], 0.65, false), leg(["3", "1"], 0.8, false), leg(["4", "2"], 1, false), leg(["1", "2"], 0.8, false), leg(["6", "1"], 1, false), leg(["2"], 0.7, false)],
           units: 32, kat: 1, unit: 1.25, cost: 40, stake: 0, hit: 0.233, roi: 0.73, ev: -10.8, ifHit: 125.3, oddsLegs: 0,
           reason: "Ortalamada zarar: bu kupon her 100 TL'nin ortalama 73 TL'sini geri getirir. Ganyan oranı okunamadı: AGF tek başına kalabalığın tahmini, kâr yalnızca devirle mümkün (devir ve havuzu gir)."}}]};
   return s;
@@ -847,7 +847,16 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   card = f.$("#altiliCard").textContent;
   assert.match(card, /Günün en mantıklı kuponu: İstanbul 3–8\. koşu · Bilyoner\s*Göster/);
   assert.match(card, /OYNAMA: Ortalamada zarar: bu kupon/);
-  assert.match(card, /Kupon \(tutma odaklı, 60,00 TL bütçe\)1\. ayak: 1, 2 \(%65\)/);
+  assert.match(card, /Kupon \(tutma odaklı, 60,00 TL bütçe, her ayak en az %80\)1\. ayak: 1, 2 \(%65\)/);
+  assert.match(card, /Tutma olasılığı%23,30 \(6 ayağın birlikte tutması\)/);
+  assert.doesNotMatch(card, /Dikkat:/);
+  assert.equal(f.$("#alt_ayak").value, "80");
+  s.agf = clone(s.agf);
+  Object.assign(s.agf.altilis[1].plan, {overBudget: true, cost: 960});
+  f.w.refresh();
+  assert.match(f.$("#altiliCard").textContent, /Dikkat: her ayakta en az %80 tutma için kupon 960,00 TL; bütçe \(60,00 TL\) aşılıyor\./);
+  f.$("#alt_ayak").value = "70"; f.$("#alt_ayak").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {legProb: 0.7});
   assert.match(card, /Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı/);
   assert.match(card, /Tutarsa ortalama 125,30 TL; uzun vadede her 100 TL'de ortalama 27 TL kayıp\./);
   assert.match(card, /Kazanma olasılığıAGF'den \(ganyan okunamadı\)/);

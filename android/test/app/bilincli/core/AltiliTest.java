@@ -146,6 +146,41 @@ public class AltiliTest {
     }
 
     @Test
+    public void everyLegAtLeastEightyPercent() {
+        Altili.Inputs in = inputs(2324.20);
+        in.budget = 60;
+        in.legMin = 0.80;
+        List<String> legs = Arrays.asList("5:26 3:20 8:15 1:12 2:10 4:9 6:8", "7:31 2:25 4:15 1:12 3:10 5:7", "5:34 1:22 6:18 2:12 3:8 4:6",
+                "1:26 4:21 2:18 6:14 3:12 5:9", "5:22 2:20 7:16 1:14 3:12 4:9 6:7", "2:79 1:12 3:9");
+        Map<String, Object> p = Altili.plan(legs, in);
+        assertEquals(Boolean.FALSE, p.get("play"));
+        assertEquals("tutma", p.get("mode"));
+        @SuppressWarnings("unchecked")
+        List<Object> ls = (List<Object>) p.get("legs");
+        for (Object o : ls) {
+            @SuppressWarnings("unchecked")
+            double share = (Double) ((Map<String, Object>) o).get("share");
+            assertTrue("ayak " + share, share >= 0.80 - 1e-9);
+        }
+        assertEquals(Arrays.asList("2", "1"), horses(p, 5)); // %79'luk favori tek başına yetmez: %91
+        assertTrue((Double) p.get("hit") >= Math.pow(0.80, 6) - 1e-9);
+        assertEquals(Boolean.TRUE, p.get("overBudget")); // açık koşularda %80 için 60 TL yetmez
+        assertEquals(0.8, (Double) p.get("legMin"), 1e-9);
+        in.legMin = 0;
+        assertTrue((Double) Altili.plan(legs, in).get("cost") <= 60); // sınırsız: bütçeye sığar
+    }
+
+    @Test
+    public void legMinAlsoBindsValueCoupons() {
+        Altili.Inputs in = inputs(5000);
+        in.legMin = 0.80;
+        Map<String, Object> p = Altili.plan(six("1:60:3 2:40:1.5"), in);
+        assertEquals(Boolean.TRUE, p.get("play")); // iki at birlikte %100: getiri %137, yine kârlı
+        for (int k = 0; k < 6; k++) assertEquals(2, horses(p, k).size());
+        assertEquals(64L, p.get("units"));
+    }
+
+    @Test
     public void bestAltiliOfTheDay() {
         Altili.Inputs in = inputs(2324.20);
         in.budget = 60;

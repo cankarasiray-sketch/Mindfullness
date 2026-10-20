@@ -128,6 +128,12 @@ bildirim olarak gelir.
   açar; kârlı kupon yoksa 11:00'den sonra günde bir kez "Günün altılısı" bildirimi gelir (ortalamada kâr
   beklenmediği açıkça yazılır).
 
+- **2.25: her ayakta en az %80 tutma.** Kupon her ayakta, seçilen atların tutma olasılığı toplamı en az %80 olacak
+  kadar at içerir (ayar: Altılı → Birim fiyat, kesinti, bütçe → "Ayak başına en az tutma", 0 = sınır yok; ayak
+  başına en çok 20 at). Kârlı kupon araması da bu sınırla yapılır. Altı ayağın birlikte tutması en az %26 (0,8⁶) olur
+  ama açık koşularda kupon pahalanır: bütçeyi aşarsa kart ve bildirim uyarır; günün en mantıklı kuponu seçilirken
+  bütçeye sığan, sığmıyorsa en ucuz olan önce gelir.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

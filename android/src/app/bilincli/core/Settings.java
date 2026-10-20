@@ -242,6 +242,8 @@ public final class Settings {
     public boolean altiliAuto = true;
     /** Altılı birim fiyatı (TL), havuzdan kesinti ve ikramiyeden vergi (kesir). */
     public double altiliUnit = 1.0, altiliTakeout = 0.27, altiliTax = 0.0;
+    /** Altılı (2.25): her ayakta seçilen atların tutma olasılığı en az (0: sınır yok). */
+    public double altiliLegProb = 0.80;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -411,6 +413,7 @@ public final class Settings {
         m.put("altiliUnit", altiliUnit);
         m.put("altiliTakeout", altiliTakeout);
         m.put("altiliTax", altiliTax);
+        m.put("altiliLegProb", altiliLegProb);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -472,6 +475,7 @@ public final class Settings {
         s.altiliUnit = Json.dbl(m, "altiliUnit", s.altiliUnit);
         s.altiliTakeout = Json.dbl(m, "altiliTakeout", s.altiliTakeout);
         s.altiliTax = Json.dbl(m, "altiliTax", s.altiliTax);
+        s.altiliLegProb = Json.dbl(m, "altiliLegProb", s.altiliLegProb);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
@@ -551,6 +555,7 @@ public final class Settings {
         if (!(altiliUnit >= 0.01 && altiliUnit <= 1000)) return "Altılı birim fiyatı 0,01–1.000 TL olmalı";
         if (!(altiliTakeout >= 0.05 && altiliTakeout <= 0.50)) return "Altılı kesintisi %5–50 olmalı";
         if (!(altiliTax >= 0 && altiliTax <= 0.50)) return "Altılı ikramiye vergisi %0–50 olmalı";
+        if (!(altiliLegProb >= 0 && altiliLegProb <= 0.99)) return "Altılıda ayak başına tutma %0–99 olmalı";
         if (pickHighProb < pickMinProb || pickHighProb > 0.97) return "Yüksek olasılık katmanı, en az tutma olasılığından küçük olamaz (en fazla %97)";
         return null;
     }
