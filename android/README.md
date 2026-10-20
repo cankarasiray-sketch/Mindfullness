@@ -73,7 +73,15 @@ bildirim olarak gelir.
   (her ayakta AGF'si yüksek atlardan, kupon bedeline göre tutmayı en çok artıranı ekleyerek), beklenen
   ikramiyeyi kazananlar arasında bölüşmeyi de hesaba katarak bulur ve **OYNA / OYNAMA** der; oynamada kâr için
   gereken en az devri yazar. Kasaya göre üst sınır çeyrek Kelly'dir (tutma olasılığı düşük olduğu için küçük).
-- Girdiler telefonda saklanır. AGF'ler elle girilir (TJK/Bilyoner'den otomatik okuma yok).
+- Girdiler telefonda saklanır.
+- **2.19: AGF'ler TJK'dan okunur.** "TJK'dan AGF oku" (kredi harcamaz) önce günün programından o gün koşan
+  hipodromları, sonra her biri için 1. ve 2. altılının herkese açık AGF tablosunu (`tjk.org/AGFv2/...`) okur.
+  İlk altılı ayaklara kendiliğinden dolar; diğerleri düğmeyle seçilir. Yeniden okumada seçili altılı güncel
+  AGF'lerle yenilenir. Kupon (tahmin) birim fiyat ve bütçe girilince hemen kurulur; OYNA / OYNAMA için devir
+  ve tahmini havuz gerekir (elle girilir). TJK sayfaları VPN dışı ağdan denenir.
+- TJK resmi bir API sunmaz; okuma sayfa yapısına dayanır ve esnektir (ayaklar ayrı tablolar, sütunlar ya da
+  satırlar olabilir; her ayağın payları toplamı ~%100 olmalı). Okunamazsa kartta **Okuma ayrıntısı** neyin
+  bulunamadığını gösterir; paylaşılabilir.
 
 ## Beraberlik fırsatları (2.17)
 

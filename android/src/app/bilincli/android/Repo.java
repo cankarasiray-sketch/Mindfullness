@@ -22,6 +22,7 @@ import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
 import app.bilincli.core.Settlement;
+import app.bilincli.core.Tjk;
 import app.bilincli.core.Virtual;
 import app.bilincli.core.Zirve;
 import java.io.File;
@@ -56,6 +57,8 @@ final class Repo {
     /** Bilyoner Zirve Oran: son değerlendirme ve bildirilen oranlar (zirve.json). */
     private final FileStorage zirveStore;
     private final Object zirveLock = new Object();
+    /** 2.19: TJK'dan son AGF okuması (tjk.json). */
+    private final FileStorage tjkStore;
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
 
@@ -74,6 +77,7 @@ final class Repo {
         memoryStore = new FileStorage(new File(app.getFilesDir(), "dogrulama.json"));
         forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
         zirveStore = new FileStorage(new File(app.getFilesDir(), "zirve.json"));
+        tjkStore = new FileStorage(new File(app.getFilesDir(), "tjk.json"));
         virtual = new Virtual(new FileStorage(new File(app.getFilesDir(), "sanal.json")));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
@@ -451,6 +455,31 @@ final class Repo {
             // bozuk kayıt: yeniden okunur
         }
         return new LinkedHashMap<>();
+    }
+
+    private volatile String tjkRaw;
+
+    /** Arayüz için son TJK AGF okuması ({at, day, altilis, log}); hiç okunmadıysa ya da demodaysa null. */
+    Map<String, Object> tjkView() {
+        if (isDemo()) return null;
+        try {
+            String raw = tjkRaw != null ? tjkRaw : tjkStore.read();
+            if (raw == null || raw.trim().isEmpty()) return null;
+            tjkRaw = raw;
+            return Json.parseObject(raw);
+        } catch (RuntimeException e) {
+            return null; // bozuk kayıt: yeniden okunur
+        }
+    }
+
+    /** Günün altılılarının AGF'lerini TJK'dan okur ve saklar (kredi harcamaz). */
+    Map<String, Object> tjkRead(Daily.Progress progress) {
+        Instant now = Instant.now();
+        Map<String, Object> r = Tjk.read(new AndroidHttp(app), now.atOffset(Fmt.TR).toLocalDate(), now, progress);
+        String raw = Json.write(r);
+        tjkStore.write(raw);
+        tjkRaw = raw;
+        return r;
     }
 
     /** Kurulu sürümün numarası (güncellemeden sonra Zirve kaydını yenilemek için). */
