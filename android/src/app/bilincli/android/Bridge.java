@@ -385,14 +385,24 @@ public final class Bridge {
                         progress(text);
                     }
                 });
-                List<Object> found = Json.arr(r.get("altilis"));
-                if (found.isEmpty()) throw new IllegalStateException("AGF okunamadı. Altılı kartındaki \"Okuma ayrıntısı\"nı paylaş.");
-                List<String> names = new ArrayList<>();
-                for (Object a : found) {
-                    Map<String, Object> m = Json.obj(a);
-                    names.add(m.get("label") + " (" + m.get("source") + ")");
+                if (Json.arr(r.get("altilis")).isEmpty()) {
+                    throw new IllegalStateException("AGF okunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).");
                 }
-                return "AGF okundu: " + String.join(", ", names) + ".";
+                List<String> play = new ArrayList<>();
+                Map<String, Object> view = repo.agfView();
+                for (Object a : Json.arr(view == null ? null : view.get("altilis"))) {
+                    Map<String, Object> m = Json.obj(a);
+                    if (Json.bool(Json.obj(m.get("plan")), "play", false)) play.add(m.get("label") + " (" + m.get("source") + ")");
+                }
+                return Json.arr(r.get("altilis")).size() + " altılı okundu. "
+                        + (play.isEmpty() ? "Bugün ortalamada kârlı kupon yok: oynama." : "OYNA: " + String.join(", ", play) + ".");
+            }
+            case "altiliInputs": {
+                requireReal(repo);
+                synchronized (Repo.LOCK) {
+                    repo.saveAltiliInputs(p);
+                }
+                return "";
             }
             case "probe": {
                 requireReal(repo);

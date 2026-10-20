@@ -49,6 +49,8 @@ public final class AtYarisi {
         final String path, place;
         final Long number;
         final List<Runner> runners;
+        /** Koşu saati ("14:30") sitede varsa. */
+        String time;
 
         Race(String path, String place, Long number, List<Runner> runners) {
             this.path = path;
@@ -109,6 +111,8 @@ public final class AtYarisi {
     private static final Pattern ODDS_KEY = Pattern.compile("(?i)(ganyan|win_?odds?|^odds?$|^odd_?value$|^price$|^oran$|^winprice$)");
     private static final Pattern PLACE_KEY = Pattern.compile("(?i)^(hippodrome\\w*|hipodrom\\w*|city\\w*|sehir\\w*|track\\w*|location\\w*|venue\\w*)$");
     private static final Pattern RACE_NO_KEY = Pattern.compile("(?i)^(race_?(no|number|order)|kosu_?(no|sira|sirasi)?|run_?no)$");
+    private static final Pattern TIME_KEY = Pattern.compile("(?i)^(time|start_?time|race_?time|post_?time|saat|kosu_?saati|start_?date|race_?date|date_?time)$");
+    private static final Pattern CLOCK = Pattern.compile("(?<!\\d)([01]?\\d|2[0-3]):([0-5]\\d)(?!\\d)");
     private static final Pattern NUMBER = Pattern.compile("(\\d{1,4}(?:[.,]\\d{1,4})?)");
 
     static Double number(Object v) {
@@ -183,12 +187,19 @@ public final class AtYarisi {
     /** JSON ağacındaki tüm koşucu listeleri (sırayla); hipodrom ve koşu numarası üst nesnelerden alınır. */
     @SuppressWarnings("unchecked")
     static void harvest(Object node, String path, String place, Long number, List<Race> out, int depth) {
+        harvest(node, path, place, number, null, out, depth);
+    }
+
+    private static void harvest(Object node, String path, String place, Long number, String time, List<Race> out, int depth) {
         if (depth > 40) return;
         if (node instanceof List) {
             List<Object> l = (List<Object>) node;
             Race r = race(l, path, place, number);
-            if (r != null) out.add(r);
-            for (int i = 0; i < l.size() && i < 2000; i++) harvest(l.get(i), path + "[" + i + "]", place, number, out, depth + 1);
+            if (r != null) {
+                r.time = time;
+                out.add(r);
+            }
+            for (int i = 0; i < l.size() && i < 2000; i++) harvest(l.get(i), path + "[" + i + "]", place, number, time, out, depth + 1);
         } else if (node instanceof Map) {
             Map<String, Object> m = (Map<String, Object>) node;
             for (Map.Entry<String, Object> e : m.entrySet()) {
@@ -197,9 +208,18 @@ public final class AtYarisi {
                 } else if (RACE_NO_KEY.matcher(e.getKey()).matches()) {
                     Double d = number(e.getValue());
                     if (d != null && d == Math.rint(d) && d >= 1 && d <= 20) number = d.longValue();
+                } else if (e.getValue() instanceof String && TIME_KEY.matcher(e.getKey()).matches()) {
+                    String v = (String) e.getValue();
+                    try { // saat dilimli ISO zaman: Türkiye saatine
+                        v = java.time.OffsetDateTime.parse(v).atZoneSameInstant(Fmt.TR).toLocalTime().toString();
+                    } catch (java.time.format.DateTimeParseException ignored) {
+                        // yerel saat ("14:30", "2026-10-20T14:30:00")
+                    }
+                    Matcher c = CLOCK.matcher(v);
+                    if (c.find()) time = String.format(Locale.ROOT, "%02d:%s", Integer.parseInt(c.group(1)), c.group(2));
                 }
             }
-            for (Map.Entry<String, Object> e : m.entrySet()) harvest(e.getValue(), path + "." + e.getKey(), place, number, out, depth + 1);
+            for (Map.Entry<String, Object> e : m.entrySet()) harvest(e.getValue(), path + "." + e.getKey(), place, number, time, out, depth + 1);
         }
     }
 
@@ -245,6 +265,7 @@ public final class AtYarisi {
                 a.put("label", place + range);
                 a.put("legs", legs);
                 a.put("odds", odds);
+                if (first.time != null) a.put("start", first.time); // 1. ayağın saati (Türkiye)
                 out.add(a);
             }
         }

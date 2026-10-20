@@ -94,6 +94,23 @@ bildirim olarak gelir.
   Ayak biçimi "no:AGF:ganyan" (ör. "1:32:2.5"). Ganyan oranları yarışa kadar değişir; sonraki ayakların erken
   oranları zayıftır.
 
+## Altılı otomatik kupon (2.21)
+
+- **Kendiliğinden:** AGF ve ganyan oranları arka planda 2 saatte bir (09–21) Bilyoner, Nesine ve TJK'dan okunur,
+  her altılı için kupon kurulur; ortalamada kârlı (ve kasaya uygun, başlamamış) kupon bildirim olarak gelir
+  (aynı kupon günde bir kez). Ekranda bir şey okumak ya da hesaplamak gerekmez; kart yalnızca son durumu gösterir.
+  Kapatmak: Fırsatlar → Altılı → "Kendiliğinden oku…".
+- **Kupon (en az parayla en çok kazanç + tutma olasılığı):** hesap çekirdekte (`Altili.java`); arka plan ve kart aynı.
+  Bir birimin beklenen getirisi q/p × (1 − kesinti + devir/havuz) × (1 − vergi) (q kazanma olasılığı, p AGF payı)
+  ve ayaklara ayrılır. Kupon, kasanın uzun vadeli büyümesini (Kelly ölçütü) en çok artıran at kümesidir: ucuz tek
+  atlı kupon nadiren tutar, çok atlı kupon pahalıdır; ikisi birlikte tartılır. Her ayakta "en olası" ve "en az
+  oynanmış" sıralarından adaylar, ayak ayak iyileştirme (birkaç başlangıçtan); havuz girildiyse kendi kuponumuzun
+  ikramiyeyi bölmesi dahil kesin hesapla son iyileştirme.
+- **Tutar:** kasanın Kelly payı × Kelly çarpanı (futboldaki ayar), kupon başına en fazla kasanın futboldaki üst
+  sınırı kadar; istenirse kupon başına TL sınırı. Kupon bundan büyükse oynanmaz, küçükse aynı kupon kat kat.
+- Ganyan okunamazsa q = p: kâr yalnızca devirle mümkün; devir ve havuz altılı başına, o gün için girilir.
+  Birim fiyat (varsayılan 1 TL), kesinti (%27) ve vergi bir kez girilir (Bilyoner'deki değerlerle kontrol et).
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

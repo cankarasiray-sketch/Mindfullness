@@ -674,160 +674,97 @@ function singlesCard() {
     + (match.length > rows.length ? '<div class="btns"><button class="b ghost" onclick="singlesShow+=25;render()">Daha fazla göster (' + (match.length - rows.length) + " seçim daha)</button></div>" : "")
     + "</div>";
 }
-// ---- Altılı devir hesaplayıcı (2.18, at yarışı) --------------------------------------------------------
-// Havuz usulü: ikramiye = (havuz × (1 − kesinti) + devir) / kazanan kupon sayısı. Ganyan oranı yoksa kalabalığın tahmini
-// (AGF) doğru kabul edilir (uygulama at seçmez) ve kâr yalnızca devir kesintiyi aşınca mümkündür.
-var ALTILI_DEFAULT = {devir: "", havuz: "", kesinti: "27", vergi: "0", birim: "", butce: "", legs: ["", "", "", "", "", ""]};
-var ALTILI = loadAltili();
-function loadAltili() {
-  try {
-    var v = JSON.parse(localStorage.getItem("altili") || "null");
-    if (v && v.legs && v.legs.length === 6) return Object.assign({}, ALTILI_DEFAULT, v);
-  } catch (e) { /* tarayıcı deposu yoksa varsayılan */ }
-  return JSON.parse(JSON.stringify(ALTILI_DEFAULT));
+// ---- Altılı (2.18–2.21, at yarışı) ------------------------------------------------------------------
+// Kupon çekirdekte kurulur (Altili.java): arka plan bildirimi ve bu kart aynı hesabı gösterir. AGF ve ganyan
+// Bilyoner, Nesine ve TJK'dan kendiliğinden okunur; burada yalnızca seçilir ve gerekirse devir/havuz girilir.
+var altiliSel = "";
+try { altiliSel = localStorage.getItem("altiliSel") || ""; } catch (e) { /* tarayıcı deposu yok */ }
+function altiliList() { return (S.agf && S.agf.altilis) || []; }
+function altiliCurrent() {
+  var list = altiliList();
+  for (var i = 0; i < list.length; i++) if (list[i].key === altiliSel) return list[i];
+  return list[0] || null;
 }
-function saveAltili() { try { localStorage.setItem("altili", JSON.stringify(ALTILI)); } catch (e) { /* kaydedilemedi */ } }
-/**
- * "1:32 4:20 7:15" (at no:AGF yüzdesi) ya da "1:32:2.5" (+ ganyan oranı) -> [{no, p, odds, q}], q'ya göre azalan.
- * p kalabalığın payı (AGF), q kazanma olasılığı: ayaktaki her atın ganyanı varsa ve oranlar akla yatkınsa ganyandan
- * (1/oran, kesinti payı arındırılarak), yoksa AGF. Dizinin fromOdds alanı hangisinin kullanıldığını söyler.
- */
-function parseAgf(text) {
-  var out = [];
-  String(text || "").split(/[\s,;]+/).forEach(function (tok) {
-    var m = tok.match(/^(\d+)[:=](\d+(?:[.,]\d+)?)%?(?:[:=](\d+(?:[.,]\d+)?))?$/);
-    if (m) out.push({no: m[1], p: parseFloat(m[2].replace(",", ".")) / 100, odds: m[3] ? parseFloat(m[3].replace(",", ".")) : null});
-  });
-  var book = 0, all = out.length >= 2;
-  out.forEach(function (h) { if (h.odds > 1) book += 1 / h.odds; else all = false; });
-  var fromOdds = all && book >= 0.95 && book <= 2; // AtYarisi.MIN_BOOK–MAX_BOOK ile aynı
-  out.forEach(function (h) { h.q = fromOdds ? 1 / h.odds / book : h.p; });
-  out.sort(function (a, b) { return b.q - a.q || b.p - a.p; });
-  out.fromOdds = fromOdds;
-  return out;
+function altiliPick(key) {
+  altiliSel = key;
+  try { localStorage.setItem("altiliSel", key); } catch (e) { /* kaydedilemedi */ }
+  render();
 }
-/**
- * Kupon planı: her ayakta kazanma olasılığı en yüksek attan başlayıp, bütçe yettikçe tutma olasılığını kupon bedeline
- * göre en çok artıran atı ekler. Beklenen ikramiye her kombinasyon için q·N/(U·p + 1): q kombinasyonun kazanma
- * olasılığı, p kalabalığın payı (AGF çarpımı), N dağıtılacak tutar, U havuzdaki birim sayısı (+1: bizim kuponumuz).
- * Ganyan yoksa q = p: kâr yalnızca devirden gelir. 2.20: ganyan varsa futboldaki adil oran–iddaa karşılaştırması gibi,
- * kazanma olasılığı AGF'den yüksek (az oynanmış) atlar devirsiz de kâr getirebilir.
- */
-function altiliPlan(a) {
-  var P = numIn(a.havuz, 0), D = numIn(a.devir, 0), tau = numIn(a.kesinti, 27) / 100, tax = numIn(a.vergi, 0) / 100;
-  var b = numIn(a.birim, 0), budget = numIn(a.butce, 0);
-  if (!(b > 0) || !(budget > 0)) return {error: "Birim fiyatı ve bütçeyi gir."};
-  var legs = a.legs.map(parseAgf);
-  for (var i = 0; i < 6; i++) if (!legs[i].length) return {error: (i + 1) + ". ayağın AGF'lerini gir (ör. 1:32 4:20 7:15)."};
-  if (b > budget) return {error: "Bütçe birim fiyattan küçük."};
-  var oddsLegs = legs.filter(function (l) { return l.fromOdds; }).length;
-  var N = P * (1 - tau) + D, U = P / b;
-  var n = [1, 1, 1, 1, 1, 1], s = legs.map(function (l) { return l[0].q; }), units = 1;
-  for (;;) {
-    var best = -1, gain = 0;
-    for (var k = 0; k < 6; k++) {
-      if (n[k] >= legs[k].length) continue;
-      var cost2 = units / n[k] * (n[k] + 1) * b;
-      if (cost2 > budget + 1e-9) continue;
-      var g = Math.log((s[k] + legs[k][n[k]].q) / s[k]) / Math.log((n[k] + 1) / n[k]);
-      if (g > gain) { gain = g; best = k; }
-    }
-    if (best < 0) break;
-    s[best] += legs[best][n[best]].q;
-    units = units / n[best] * (n[best] + 1);
-    n[best]++;
-  }
-  var pick = legs.map(function (l, k) { return l.slice(0, n[k]); });
-  var hit = s.reduce(function (x, y) { return x * y; }, 1), cost = units * b;
-  if (!(P > 0)) return {pick: pick, share: s, units: units, cost: cost, hit: hit, noPool: true, oddsLegs: oddsLegs}; // 2.19: kupon havuzsuz da kurulur
-  var per = 0; // devir dışında, dağıtılacak her 1 TL'nin bize beklenen payı
-  (function walk(k, q, p) {
-    if (k === 6) { per += q / (U * p + 1); return; }
-    pick[k].forEach(function (h) { walk(k + 1, q * h.q, p * h.p); });
-  })(0, 1, 1);
-  per *= 1 - tax;
-  var gross = per * N, ev = gross - cost;
-  var odds = hit > 0 ? gross / hit / cost : 0, f = odds > 1 ? Math.max(0, (hit * odds - 1) / (odds - 1)) : 0;
-  var need = oddsLegs ? cost / per - P * (1 - tau) : P / (1 - tax) - P * (1 - tau); // ganyanlıysa bu kupona göre
-  return {pick: pick, share: s, units: units, cost: cost, hit: hit, ifHit: hit > 0 ? gross / hit : 0, ev: ev, ok: ev > 0,
-    ratio: N * (1 - tax) / P, back: gross / cost, needDevir: Math.max(0, need), kelly: f, oddsLegs: oddsLegs};
+/** Türkçe sayı: "1.000.000", "2,5", "1.25" -> sayı (boşsa 0). */
+function numTr(v) {
+  var t = String(v == null ? "" : v).trim().replace(/\s/g, "");
+  if (t.indexOf(",") >= 0) t = t.replace(/\./g, "").replace(",", ".");
+  else if (/^\d{1,3}(\.\d{3})+$/.test(t)) t = t.replace(/\./g, "");
+  var x = parseFloat(t);
+  return isFinite(x) ? x : 0;
 }
-function altiliOut() {
-  var r = altiliPlan(ALTILI);
+function numText(x) { return x ? String(x).replace(".", ",") : ""; }
+function altiliSave(p) { return act("altiliInputs", p, true); }
+function altiliPool() { var a = altiliCurrent(); if (a) altiliSave({key: a.key, devir: numTr(val("alt_devir")), pool: numTr(val("alt_havuz"))}); }
+function altiliManual() {
+  var legs = [];
+  for (var k = 0; k < 6; k++) legs.push(val("alt_leg" + k));
+  altiliSel = "manual";
+  try { localStorage.setItem("altiliSel", "manual"); } catch (e) { /* kaydedilemedi */ }
+  altiliSave({legs: legs});
+}
+function altiliShare() { act("shareText", {text: "At yarışı okuma ayrıntısı (" + S.agf.at + ")\n" + (S.agf.log || []).join("\n")}, true); }
+function altiliPlanHtml(a) {
+  var r = a.plan || {};
   if (r.error) return '<p class="small muted">' + esc(r.error) + "</p>";
-  var kasa = (S.stats && S.stats.balance) || 0, km = (S.settings && S.settings.kellyMultiplier) || 0.25;
-  var maxStake = Math.round(kasa * r.kelly * km);
-  var tl0 = function (x) { return tl(Math.round(x * 100)); };
-  var coupon = item("Kupon", r.pick.map(function (l, k) { return (k + 1) + ". ayak: " + l.map(function (h) { return h.no; }).join(", ") + " (%" + num(r.share[k] * 100, 0) + ")"; }).join("<br>"))
-    + item("Kombinasyon · bedel", r.units + " · " + tl0(r.cost))
-    + item("Tutma olasılığı", "%" + num(r.hit * 100, 2))
-    + (r.oddsLegs ? item("Kazanma olasılığı", "ganyan oranlarından (" + r.oddsLegs + "/6 ayak), kalabalığın payı AGF'den") : "");
-  if (r.noPool) return '<div class="list">' + coupon + '</div><p class="small muted">OYNA / OYNAMA kararı için devri ve tahmini havuzu gir.</p>';
+  var tl0 = function (x) { return tl(Math.round(x * 100)); }, kat = r.kat || 0;
   return '<div class="list">'
-    + item("Ortalama getiri (devir dahil)", "%" + num(r.ratio * 100, 1) + " " + (r.ratio > 1 ? '<span class="pos">kesintiyi aşıyor</span>' : '<span class="neg">kesintinin altında</span>'))
-    + coupon
-    + (r.oddsLegs ? item("Bu kuponun beklenen getirisi", "%" + num(r.back * 100, 1)) : "")
-    + item("Tutarsa ortalama ikramiye", tl0(r.ifHit))
-    + item("Beklenen sonuç", '<span class="' + cls(r.ev) + '">' + tl0(r.ev) + "</span>")
+    + item("Kupon", r.legs.map(function (l, k) { return (k + 1) + ". ayak: <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")"; }).join("<br>"))
+    + item("Kombinasyon", r.units + (kat > 1 ? " × " + kat + " kat" : "") + " · " + tl0(Math.max(1, kat) * r.cost))
+    + item("Tutma olasılığı", "%" + num(r.hit * 100, 2))
+    + item("Beklenen getiri", '<span class="' + cls(r.roi - 1) + '">%' + num(r.roi * 100, 0) + "</span>")
+    + (r.play ? item("Tutarsa ortalama ikramiye", tl0(r.ifHit)) + item("Beklenen kazanç", '<span class="pos">' + tl0(r.ev) + "</span>") : "")
+    + item("Kazanma olasılığı", r.oddsLegs ? "ganyan oranlarından (" + r.oddsLegs + "/6 ayak)" : "AGF'den (ganyan okunamadı)")
+    + (r.avg != null ? item("Ortalama getiri (devir dahil)", "%" + num(r.avg * 100, 1)) : "")
     + "</div>"
-    + (r.ok ? '<p><b class="pos">OYNA:</b> ' + (r.ratio > 1 ? "devir havuzu kesintiyi aşıyor; ortalamada kâr." : "ganyan oranlarına göre seçtiğin atlar altılıda az oynanmış; ortalamada kâr.")
-        + " Kasana göre en fazla " + tl(maxStake)
-        + (maxStake * 1 < Math.round(r.cost * 100) ? " (bu kupon kasana göre büyük: bütçeyi düşür)" : "") + ". Tutma olasılığı düşük; çoğu gün kaybedilir, kâr uzun vadede gelir.</p>"
-      : '<p><b class="neg">OYNAMA:</b> ortalamada zarar. Bu havuzla kâr için devir en az ' + tl0(r.needDevir) + " olmalı.</p>");
-}
-// 2.19–2.20: AGF (ve varsa ganyan) Bilyoner, Nesine ve TJK'dan okunur; seçili altılının ayakları dolar, yeni okumada
-// seçili altılı kendiliğinden güncellenir.
-function agfKey(a) { return a.key || a.cityId + "/" + a.no; }
-function agfFill(a, day) { ALTILI.legs = a.legs.slice(0, 6); ALTILI.agf = agfKey(a); ALTILI.agfDay = day; }
-function agfSync() {
-  var t = S.agf;
-  if (!t || !t.at || ALTILI.agfAt === t.at) return;
-  var list = t.altilis || [], pick = null;
-  list.forEach(function (a) { if (agfKey(a) === ALTILI.agf && ALTILI.agfDay === t.day) pick = a; });
-  ALTILI.agfAt = t.at;
-  if (pick || list.length) agfFill(pick || list[0], t.day);
-  saveAltili();
-}
-function agfUse(i) { agfFill(S.agf.altilis[i], S.agf.day); saveAltili(); render(); }
-function agfShare() { act("shareText", {text: "At yarışı okuma ayrıntısı (" + S.agf.at + ")\n" + (S.agf.log || []).join("\n")}, true); }
-function agfPart() {
-  var t = S.agf, html = '<div class="btns"><button class="b" onclick="act(\'agfRead\')">AGF ve oranları oku</button></div>';
-  if (!t) return html + '<p class="small muted">Bilyoner, Nesine ve TJK\'nın herkese açık sayfalarından okunur (kredi harcamaz); ayaklar kendiliğinden dolar.</p>';
-  var list = t.altilis || [];
-  html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at))
-    + (list.length ? ". Altılı seç:" : ": AGF bulunamadı (bugün yarış yoksa ya da AGF henüz yayınlanmadıysa normal; değilse aşağıdaki ayrıntıyı paylaş).") + "</p>";
-  if (list.length) html += '<div class="btns">' + list.map(function (a, i) {
-    var on = ALTILI.agf === agfKey(a) && ALTILI.agfDay === t.day;
-    return '<button class="chip' + (on ? " main" : "") + '" onclick="agfUse(' + i + ')">' + esc(a.label) + " · " + esc(a.source || "TJK") + (a.odds ? " (ganyanlı)" : "") + "</button>";
-  }).join(" ") + "</div>";
-  return html + '<details class="info"><summary class="small">Okuma ayrıntısı</summary><pre class="out">' + esc((t.log || []).join("\n"))
-    + '</pre><div class="btns"><button class="b ghost" onclick="agfShare()">Paylaş</button></div></details>';
+    + (r.play ? '<p><b class="pos">OYNA:</b> ' + esc(r.reason) + " Tutar kasanın Kelly payından: " + tl0(r.stake) + ". Çoğu gün kaybedilir; kâr uzun vadede gelir.</p>"
+      : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>");
 }
 function altiliCard() {
   if (S.demo) return "";
-  agfSync();
-  var a = ALTILI, f = function (id, label, v, hint) {
-    return '<label>' + label + '</label><input id="alt_' + id + '" inputmode="decimal" value="' + esc(v) + '" placeholder="' + esc(hint || "") + '" oninput="altiliInput()">';
+  var t = S.agf, st = S.settings, list = altiliList(), cur = altiliCurrent(), inp = (t && t.inputs) || {};
+  var f = function (id, label, v, js, hint) {
+    return '<label>' + label + '</label><input id="alt_' + id + '" inputmode="decimal" value="' + esc(v) + '" placeholder="' + esc(hint || "") + '" onchange="' + js + '">';
   };
-  return '<div class="card" id="altiliCard"><h2>Altılı devir hesaplayıcı (at yarışı)</h2><p class="small muted">At yarışı havuz usulüdür: ikramiye, havuzdan kesinti düşüldükten sonra '
-    + "kazananlara bölünür; kalabalığın tahmini (AGF) doğruysa ortalama oyuncu kesinti kadar kaybeder. Kâr, önceki günden devreden para kesintiyi aşınca ya da kazanma şansı AGF'sinden yüksek atlarla mümkün. "
-    + "Uygulama at seçmez: ganyan oranı okunabildiyse kazanma şansını ondan (futboldaki adil oran gibi), okunamadıysa AGF'den alır; kalabalığın altılıdaki payı AGF'dir. Bütçene göre tutma olasılığı en yüksek kuponu kurar ve ortalamada kâr olup olmadığını söyler. "
-    + "Kesinti resmi olarak bulunamadı; kaynaklar %25–30 diyor, TJK/Bilyoner'den kontrol et.</p>"
-    + agfPart()
-    + f("devir", "Devir (TL)", a.devir) + f("havuz", "Tahmini bugünkü altılı havuzu (TL)", a.havuz, "devir günü genelde büyür")
-    + f("kesinti", "Kesinti (%)", a.kesinti) + f("vergi", "İkramiyeden vergi (%)", a.vergi, "kesiliyorsa")
-    + f("birim", "Birim fiyat (TL)", a.birim, "Bilyoner'deki altılı birim fiyatı") + f("butce", "Bütçe (TL)", a.butce)
-    + a.legs.map(function (v, k) {
-      return '<label>' + (k + 1) + ". ayak AGF (at no:yüzde, varsa :ganyan)</label><input id=\"alt_leg" + k + '" value="' + esc(v) + '" placeholder="1:32 4:20 7:15" oninput="altiliInput()">';
-    }).join("")
-    + '<div id="altiliOut">' + altiliOut() + "</div></div>";
-}
-function altiliInput() {
-  ["devir", "havuz", "kesinti", "vergi", "birim", "butce"].forEach(function (k) { var el = document.getElementById("alt_" + k); if (el) ALTILI[k] = el.value; });
-  for (var k = 0; k < 6; k++) { var el = document.getElementById("alt_leg" + k); if (el) ALTILI.legs[k] = el.value; }
-  saveAltili();
-  var out = document.getElementById("altiliOut");
-  if (out) out.innerHTML = altiliOut();
+  var html = '<div class="card" id="altiliCard"><h2>Altılı (at yarışı)</h2><p class="small muted">At yarışı havuz usulüdür: ikramiye, havuzdan kesinti düşüldükten sonra kazananlara bölünür. '
+    + "Uygulama AGF'yi (kalabalığın altılıdaki payı) ve ganyan oranlarını (kazanma olasılığı, futboldaki adil oran gibi) Bilyoner, Nesine ve TJK'dan kendiliğinden okur. "
+    + "Kuponu kasanın uzun vadeli büyümesini en çok artıran atlarla kurar: en az parayla en çok kazanç ve tutma olasılığı birlikte. "
+    + "Kâr, ganyana göre şansı AGF'sinden yüksek (az oynanmış) atlarla ya da devirle mümkün; ikisi de yoksa OYNAMA der.</p>"
+    + '<label class="check"><input type="checkbox" id="altAuto"' + (st.altiliAuto ? " checked" : "") + ' onchange="altiliSave({auto: this.checked})">Kendiliğinden oku, kârlı kuponu bildir (2 saatte bir, 09–21)</label>'
+    + '<div class="btns"><button class="b" onclick="act(\'agfRead\')">Altılıyı şimdi oku</button></div>';
+  if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).") + "</p>";
+  if (list.length > 1) html += '<div class="btns">' + list.map(function (a, i) {
+    var play = a.plan && a.plan.play;
+    return '<button class="chip' + (cur && a.key === cur.key ? " main" : "") + '" onclick="altiliPick(altiliList()[' + i + '].key)">'
+      + esc(a.label) + " · " + esc(a.source || "TJK") + (play ? " · OYNA" : "") + "</button>";
+  }).join(" ") + "</div>";
+  if (cur) {
+    html += '<h3 style="margin:12px 0 4px">' + esc(cur.label) + " · " + esc(cur.source || "TJK") + (cur.start ? " · 1. ayak " + esc(cur.start) : "") + "</h3>"
+      + altiliPlanHtml(cur)
+      + '<details class="info"><summary class="small">Devir ve havuz (bu altılı, bugün)</summary>'
+      + f("devir", "Devir (TL)", numText(cur.devir), "altiliPool()", "devreden ikramiye")
+      + f("havuz", "Tahmini bugünkü altılı havuzu (TL)", numText(cur.pool), "altiliPool()", "devirle getiri ve kendi payımız için")
+      + "</details>";
+  }
+  html += '<details class="info"><summary class="small">Birim fiyat, kesinti, bütçe</summary>'
+    + f("birim", "Birim fiyat (TL)", numText(st.altiliUnit), "altiliSave({unit: numTr(this.value)})", "Bilyoner'deki altılı birim fiyatı")
+    + f("kesinti", "Kesinti (%)", numText(Math.round((st.altiliTakeout || 0.27) * 1000) / 10), "altiliSave({takeout: numTr(this.value) / 100})", "kaynaklar %25–30")
+    + f("vergi", "İkramiyeden vergi (%)", numText(Math.round((st.altiliTax || 0) * 1000) / 10), "altiliSave({tax: numTr(this.value) / 100})", "kesiliyorsa")
+    + f("butce", "Kupon başına en fazla (TL)", numText(inp.maxCost), "altiliSave({maxCost: numTr(this.value)})", "boş: kasanın Kelly payı")
+    + "</details>";
+  var manual = inp.manual && inp.manual.length === 6 ? inp.manual : ["", "", "", "", "", ""];
+  html += '<details class="info"><summary class="small">Elle AGF gir (okuma olmazsa)</summary>'
+    + manual.map(function (v, k) {
+      return '<label>' + (k + 1) + '. ayak (at no:AGF yüzdesi, varsa :ganyan)</label><input id="alt_leg' + k + '" value="' + esc(v) + '" placeholder="1:32:2.5 4:20:4.1 7:15">';
+    }).join("") + '<div class="btns"><button class="b ghost" onclick="altiliManual()">Hesapla</button></div></details>';
+  if (t && t.log && t.log.length) html += '<details class="info"><summary class="small">Okuma ayrıntısı</summary><pre class="out">' + esc(t.log.join("\n"))
+    + '</pre><div class="btns"><button class="b ghost" onclick="altiliShare()">Paylaş</button></div></details>';
+  return html + "</div>";
 }
 // ---- Beraberlik fırsatları (2.17) -------------------------------------------------------------------
 var drawSort = "kar", drawOnly = false, drawShow = 15;

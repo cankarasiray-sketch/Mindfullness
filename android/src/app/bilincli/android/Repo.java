@@ -2,6 +2,7 @@ package app.bilincli.android;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import app.bilincli.core.Altili;
 import app.bilincli.core.AtYarisi;
 import app.bilincli.core.Calibration;
 import app.bilincli.core.Closing;
@@ -23,6 +24,7 @@ import app.bilincli.core.Recheck;
 import app.bilincli.core.ScanPlan;
 import app.bilincli.core.Settings;
 import app.bilincli.core.Settlement;
+import app.bilincli.core.Texts;
 import app.bilincli.core.Tjk;
 import app.bilincli.core.Virtual;
 import app.bilincli.core.Zirve;
@@ -459,10 +461,9 @@ final class Repo {
     }
 
     private volatile String agfRaw;
+    private final Object agfLock = new Object();
 
-    /** Arayüz için son altılı AGF okuması ({at, day, altilis, log}); hiç okunmadıysa ya da demodaysa null. */
-    Map<String, Object> agfView() {
-        if (isDemo()) return null;
+    private Map<String, Object> agfStored() {
         try {
             String raw = agfRaw != null ? agfRaw : agfStore.read();
             if (raw == null || raw.trim().isEmpty()) return null;
@@ -473,27 +474,198 @@ final class Repo {
         }
     }
 
+    /** Altılı girdileri (2.21): devir/havuz altılı başına ve yalnızca girildiği gün; bütçe üst sınırı kalıcı. */
+    private Map<String, Object> altiliInputs() {
+        try {
+            Map<String, Object> m = Json.parseObject(prefs.getString("altiliInputs", "{}"));
+            if (!Fmt.dayKey(Instant.now()).equals(Json.str(m, "day"))) { // dünün devri ve elle girilen ayakları geçersiz
+                m.remove("byKey");
+                m.remove("manual");
+            }
+            return m;
+        } catch (RuntimeException e) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /** Arayüzden: birim/kesinti/vergi/otomatik (ayar), seçili altılının devri ve havuzu, bütçe sınırı, elle ayaklar. */
+    void saveAltiliInputs(Map<String, Object> p) {
+        Settings s = ledger.settings();
+        if (p.get("unit") instanceof Number) s.altiliUnit = Json.dbl(p, "unit", s.altiliUnit);
+        if (p.get("takeout") instanceof Number) s.altiliTakeout = Json.dbl(p, "takeout", s.altiliTakeout);
+        if (p.get("tax") instanceof Number) s.altiliTax = Json.dbl(p, "tax", s.altiliTax);
+        if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
+        String err = s.validate();
+        if (err != null) throw new IllegalArgumentException(err);
+        ledger.saveSettings(s);
+        Map<String, Object> m = altiliInputs();
+        m.put("day", Fmt.dayKey(Instant.now()));
+        if (p.get("maxCost") instanceof Number) m.put("maxCost", Math.max(0, Json.dbl(p, "maxCost", 0)));
+        String key = Json.str(p, "key");
+        if (key != null && (p.get("devir") instanceof Number || p.get("pool") instanceof Number)) {
+            Map<String, Object> by = Json.obj(m.get("byKey"));
+            by = by == null ? new LinkedHashMap<String, Object>() : by;
+            Map<String, Object> v = new LinkedHashMap<>();
+            v.put("devir", Math.max(0, Json.dbl(p, "devir", 0)));
+            v.put("pool", Math.max(0, Json.dbl(p, "pool", 0)));
+            by.put(key, v);
+            m.put("byKey", by);
+        }
+        if (p.get("legs") instanceof List) m.put("manual", Json.arr(p.get("legs")));
+        prefs.edit().putString("altiliInputs", Json.write(m)).apply();
+    }
+
+    private Altili.Inputs altiliInputsFor(String key, Map<String, Object> inp) {
+        Settings s = ledger.settings();
+        Altili.Inputs in = new Altili.Inputs();
+        in.unit = s.altiliUnit;
+        in.takeout = s.altiliTakeout;
+        in.tax = s.altiliTax;
+        in.kasa = ledger.balance() / 100.0;
+        in.km = s.kellyMultiplier;
+        in.maxFraction = s.maxStakeFraction;
+        in.maxCost = Json.dbl(inp, "maxCost", 0);
+        Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
+        if (by != null) {
+            in.devir = Json.dbl(by, "devir", 0);
+            in.pool = Json.dbl(by, "pool", 0);
+        }
+        return in;
+    }
+
+    /**
+     * Arayüz için son altılı okuması ({at, day, altilis: [.. + plan, devir, pool], log, inputs}); elle girilen ayaklar
+     * "Elle girilen" altılısı olarak eklenir. Hiç veri yoksa ya da demodaysa null. Planlar her seferinde güncel kasa ve
+     * girdilerle hesaplanır.
+     */
+    Map<String, Object> agfView() {
+        if (isDemo()) return null;
+        Settings st = ledger.settings();
+        String cacheKey = agfRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+        Object[] cached = agfViewCache;
+        if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
+        Map<String, Object> v = agfViewFresh();
+        if (agfRaw != null) agfViewCache = new Object[] {cacheKey, v}; // aynı veri ve girdilerle planlar yeniden aranmaz
+        return v;
+    }
+
+    /** Son görünüm: {anahtar, görünüm}. */
+    private volatile Object[] agfViewCache;
+
+    private Map<String, Object> agfViewFresh() {
+        Map<String, Object> stored = agfStored(), inp = altiliInputs();
+        List<Object> manual = Json.arr(inp.get("manual"));
+        if (stored == null && manual.size() < 6) return null;
+        Map<String, Object> v = stored == null ? new LinkedHashMap<String, Object>() : stored;
+        List<Object> list = new ArrayList<>();
+        if (manual.size() >= 6) {
+            Map<String, Object> a = new LinkedHashMap<>();
+            a.put("key", "manual");
+            a.put("source", "Elle");
+            a.put("label", "Elle girilen");
+            a.put("legs", manual);
+            list.add(a);
+        }
+        list.addAll(Json.arr(v.get("altilis")));
+        Map<String, Object> byKey = Json.obj(inp.get("byKey"));
+        for (Object o : list) {
+            Map<String, Object> a = Json.obj(o);
+            String key = Json.str(a, "key");
+            List<String> legs = new ArrayList<>();
+            for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
+            Altili.Inputs in = altiliInputsFor(key, inp);
+            a.put("plan", Altili.plan(legs, in));
+            a.put("devir", in.devir);
+            a.put("pool", in.pool);
+        }
+        v.put("altilis", list);
+        Map<String, Object> shown = new LinkedHashMap<>();
+        shown.put("maxCost", Json.dbl(inp, "maxCost", 0));
+        shown.put("manual", manual);
+        shown.put("hasByKey", byKey != null && !byKey.isEmpty());
+        v.put("inputs", shown);
+        return v;
+    }
+
     /**
      * Günün altılılarının AGF'leri (ve varsa ganyan oranları): önce Bilyoner ve Nesine, sonra TJK. Hepsi saklanır
      * (kredi harcamaz); altılılar sırayla, okuma ayrıntısı kaynak kaynak.
      */
     Map<String, Object> agfRead(Daily.Progress progress) {
+        synchronized (agfLock) {
+            Instant now = Instant.now();
+            AndroidHttp http = new AndroidHttp(app);
+            Map<String, Object> sites = AtYarisi.read(http, now, progress);
+            Map<String, Object> tjk = Tjk.read(http, now.atOffset(Fmt.TR).toLocalDate(), now, progress);
+            List<Object> altilis = new ArrayList<>(Json.arr(sites.get("altilis")));
+            altilis.addAll(Json.arr(tjk.get("altilis")));
+            List<Object> log = new ArrayList<>(Json.arr(sites.get("log")));
+            log.add("TJK");
+            for (Object line : Json.arr(tjk.get("log"))) log.add("  " + line);
+            Map<String, Object> r = new LinkedHashMap<>(tjk);
+            r.put("altilis", altilis);
+            r.put("log", log);
+            String raw = Json.write(r);
+            agfStore.write(raw);
+            agfRaw = raw;
+            return r;
+        }
+    }
+
+    /** Arka planda altılı okuması en fazla bu sıklıkta ve bu saatlerde (Türkiye). */
+    static final long ALTILI_GAP_S = 2 * 3600;
+    static final int ALTILI_FROM_HOUR = 9, ALTILI_TO_HOUR = 21;
+
+    /** 2.21: arka planda okuma (açıksa, 2 saatte bir, 09–21); ortalamada kârlı yeni kupon varsa bildirim [başlık, metin]. */
+    String[] altiliAuto() {
+        if (isDemo() || !ledger.settings().altiliAuto) return null;
         Instant now = Instant.now();
-        AndroidHttp http = new AndroidHttp(app);
-        Map<String, Object> sites = AtYarisi.read(http, now, progress);
-        Map<String, Object> tjk = Tjk.read(http, now.atOffset(Fmt.TR).toLocalDate(), now, progress);
-        List<Object> altilis = new ArrayList<>(Json.arr(sites.get("altilis")));
-        altilis.addAll(Json.arr(tjk.get("altilis")));
-        List<Object> log = new ArrayList<>(Json.arr(sites.get("log")));
-        log.add("TJK");
-        for (Object line : Json.arr(tjk.get("log"))) log.add("  " + line);
-        Map<String, Object> r = new LinkedHashMap<>(tjk);
-        r.put("altilis", altilis);
-        r.put("log", log);
-        String raw = Json.write(r);
-        agfStore.write(raw);
-        agfRaw = raw;
-        return r;
+        int h = now.atOffset(Fmt.TR).getHour();
+        if (h < ALTILI_FROM_HOUR || h >= ALTILI_TO_HOUR) return null;
+        Map<String, Object> st = agfStored();
+        String at = st == null ? null : Json.str(st, "at");
+        if (at != null && Instant.parse(at).plusSeconds(ALTILI_GAP_S).isAfter(now)) return null;
+        agfRead(null);
+        return altiliNotice(now);
+    }
+
+    /** Oynanabilir (ortalamada kârlı, kasaya uygun, başlamamış) ve bugün bildirilmemiş altılı kuponları. */
+    String[] altiliNotice(Instant now) {
+        Map<String, Object> v = agfView();
+        if (v == null) return null;
+        String day = Fmt.dayKey(now), clock = now.atOffset(Fmt.TR).toLocalTime().toString().substring(0, 5);
+        Map<String, Object> sent;
+        try {
+            sent = Json.parseObject(prefs.getString("altiliNotified", "{}"));
+        } catch (RuntimeException e) {
+            sent = new LinkedHashMap<>();
+        }
+        List<Object> sigs = day.equals(Json.str(sent, "day")) ? new ArrayList<>(Json.arr(sent.get("sigs"))) : new ArrayList<Object>();
+        StringBuilder body = new StringBuilder();
+        String title = null;
+        int count = 0;
+        for (Object o : Json.arr(v.get("altilis"))) {
+            Map<String, Object> a = Json.obj(o), plan = Json.obj(a.get("plan"));
+            if (plan == null || !Json.bool(plan, "play", false)) continue;
+            String start = Json.str(a, "start");
+            if (start != null && start.compareTo(clock) <= 0) continue; // 1. ayak başlamış
+            String coupon = Texts.altiliCoupon(plan);
+            String sig = Json.str(a, "key") + "|" + coupon + "|" + Json.lng(plan, "kat", 0);
+            if (sigs.contains(sig)) continue;
+            sigs.add(sig);
+            count++;
+            if (title == null) title = "Altılı: OYNA · " + a.get("label");
+            body.append(body.length() == 0 ? "" : "\n\n").append(a.get("label")).append(" · ").append(a.get("source"))
+                    .append(start == null ? "" : " · 1. ayak " + start).append('\n').append(coupon).append('\n')
+                    .append(Texts.altiliSummary(plan));
+        }
+        if (count == 0) return null;
+        sent.put("day", day);
+        sent.put("sigs", sigs);
+        prefs.edit().putString("altiliNotified", Json.write(sent)).apply();
+        if (count > 1) title = "Altılı: " + count + " kârlı kupon";
+        return new String[] {title, body.append("\n1. ayak başlamadan oyna. Garanti değil: çoğu gün kaybedilir, kâr uzun vadede.").toString()};
     }
 
     /** Kurulu sürümün numarası (güncellemeden sonra Zirve kaydını yenilemek için). */

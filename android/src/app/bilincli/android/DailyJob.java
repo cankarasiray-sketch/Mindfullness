@@ -27,6 +27,7 @@ public final class DailyJob extends JobService {
                             zirve(repo, false); // 10 dk sınırı geçerli
                             profit(repo);
                         }
+                        altili(repo); // 2 saatte bir, 09–21
                         return;
                     }
                     if (radar) {
@@ -81,6 +82,16 @@ public final class DailyJob extends JobService {
     private void profit(Repo repo) {
         String[] n = repo.profitCheck();
         if (n != null) Notifier.show(this, "kupon", Notifier.ID_PROFIT, n[0], n[1]);
+    }
+
+    /** Altılı (2.21): AGF ve ganyan kendiliğinden okunur; ortalamada kârlı yeni kupon bildirilir (kredi harcamaz). */
+    private void altili(Repo repo) {
+        try {
+            String[] n = repo.altiliAuto();
+            if (n != null) Notifier.show(this, "kupon", Notifier.ID_ALTILI, n[0], n[1]);
+        } catch (RuntimeException ignored) {
+            // bir sonraki işte yeniden denenir
+        }
     }
 
     /** Bilyoner Zirve Oran kontrolü (kredi harcamaz); yeni değerli oran bildirilir. */
