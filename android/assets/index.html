@@ -695,7 +695,7 @@ function altiliRankNote(a) {
   bits.push(p.play ? '<b class="pos">Oyna</b>' : p.lowReturn ? '<b class="neg">Önerilmez</b>' : "Ortalamada zarar, yine de oynarsan");
   if (p.cost) bits.push(num(p.play ? p.stake : p.cost, 0) + " TL" + (p.play && p.kat > 1 ? " (" + p.kat + " misli)" : ""));
   if (p.roi) bits.push("100 TL'den ort. " + num(p.roi * 100, 0) + " TL döner");
-  if (p.overBudget) bits.push("bütçeyi aşıyor");
+  if (p.overBudget) bits.push(p.cap ? num(p.cap, 0) + " TL'yi aşıyor, oynama" : "bütçeyi aşıyor");
   if (a.start) bits.push("1. ayak " + esc(a.start));
   if (a.kept) bits.push("AGF " + esc(hm(a.kept)) + " okumasından");
   return bits.join(" · ");
@@ -828,11 +828,11 @@ function altiliPlanHtml(a) {
         + ", tutarın " + tl0(Math.max(1, kat) * r.cost) + " olduğunu kontrol et" + (a.start ? ", 1. ayak " + esc(a.start) + " öncesi" : "") + ".</p>"
       : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>"
 
-        + (r.overBudget ? '<p class="small"><b>Dikkat:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost) + "; bütçe (" + tl0(r.budget)
+        + (r.overBudget && r.cap ? '<p class="neg"><b>Bu altılıyı oynama:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost)
+          + "; en fazla " + tl0(r.cap) + " kuralına sığmıyor. Her ayağı %" + num(r.legMin * 100, 0) + " tutan ve " + tl0(r.cap) + "'ye sığan bir altılı seç.</p>"
+        : r.overBudget ? '<p class="small"><b>Dikkat:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost) + "; bütçe (" + tl0(r.budget)
           + ") aşılıyor. Bu altılı açık koşulardan oluşuyor; bütçeye sığan bir altılı seç ya da ayak sınırını düşür.</p>" : "")
-        + (r.capped ? '<p class="small"><b>Dikkat:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " için kupon " + tl0(r.cap)
-          + "'yi aşıyordu; tavana sığması için bazı ayaklar %" + num(r.legMin * 100, 0) + "'in altında (yüzdeler yukarıda, her ayağın yanında).</p>" : "")
-        + (r.mode === "tutma" ? '<p class="small">Yine de oynarsan: kupon her ayağı en az %' + num((r.legMin || 0) * 100, 0) + " tutmaya tamamlar"
+        + (r.mode === "tutma" && !(r.overBudget && r.cap) ? '<p class="small">Yine de oynarsan: kupon her ayağı en az %' + num((r.legMin || 0) * 100, 0) + " tutmaya tamamlar"
           + (r.minCost ? ", " + num(r.minCost, 0) + " TL'ye kadar tutmayı en çok artıran atları ekler, üstüne yalnızca beklenen kazancı artıran (kârlı) atları" : "")
           + (r.cap ? "; en fazla " + tl0(r.cap) + ". " : "; kasanın " + pctOf((S.settings && S.settings.altiliBudgetShare) || 0.07) + " üst sınır. ")
           + "Tutarsa ortalama " + tl0(r.ifHit) + "; uzun vadede her 100 TL'de ortalama " + num(Math.max(0, 1 - r.roi) * 100, 0) + " TL kayıp.</p>" : ""));
@@ -851,6 +851,9 @@ function altiliCard() {
     + '<div class="btns"><button class="b" onclick="act(\'agfRead\')">Altılıyı şimdi oku</button></div>';
   if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı." + altiliWhy(t.log)) + "</p>";
   var best = altiliByKey(t && t.best);
+  var unfit = list.filter(function (x) { var p = x.plan || {}; return !altiliStarted(x) && !p.error && p.legs; });
+  if (!best && unfit.length && unfit.every(function (x) { return x.plan.overBudget && x.plan.cap; })) // 2.32.10
+    html += '<p class="neg"><b>Bugün kurallara uyan altılı yok:</b> her ayağı %' + num(unfit[0].plan.legMin * 100, 0) + " tutan ve " + num(unfit[0].plan.cap, 0) + " TL'ye sığan altılı bulunamadı. Oynama.</p>";
   if (best) html += '<p><b>Günün en mantıklı kuponu:</b> ' + esc(best.label) + " · " + esc(best.source || "TJK")
     + (cur && cur.key === best.key ? " (aşağıda)" : ' <button class="chip" onclick="altiliPick(S.agf.best)">Göster</button>') + "</p>"
     + '<p class="small muted">Sıralama kâr ve tutma olasılığını birlikte tartar: kuponun kasanı uzun vadede ne kadar büyüttüğü (Kelly ölçütü). Önce ortalamada kârlı olanlar; getiri aynıysa tutma olasılığı yüksek olan (favorileri net, en tahmin edilebilir koşular). '

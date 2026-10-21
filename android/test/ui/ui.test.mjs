@@ -1013,17 +1013,23 @@ test("altılı: oynamaya en değer olandan başlayarak numaralı liste", async (
   assert.deepEqual(f.errors, []);
 });
 
-test("altılı: kupon en fazla 320 TL (kesin tavan), sığmazsa ayaklar daraltılır", async () => {
+test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () => {
   const s = altiliState();
-  Object.assign(s.agf.altilis[1].plan, {legMin: 0.7, minCost: 60, cap: 320, capped: true, units: 288, cost: 288, budget: 320});
+  Object.assign(s.agf.altilis[1].plan, {legMin: 0.7, minCost: 60, cap: 320, overBudget: true, units: 1296, cost: 1296, budget: 320});
   const f = boot(s, "#firsat");
   assert.equal(f.$("#alt_tavan").value, "320");
+  const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
+  assert.match(rows[1], /1\.296 TL · 100 TL'den ort\. 73 TL döner · 320 TL'yi aşıyor, oynama$/);
   f.chip("İzmir 1. altılı · TJK").click();
   const card = f.$("#altiliCard").textContent;
   assert.match(card, /Kupon \(her ayak en az %70, en az 60 TL, en fazla 320 TL, üstü yalnızca kârlı atlar\)/);
-  assert.match(card, /Dikkat: her ayakta en az %70 için kupon 320,00 TL'yi aşıyordu; tavana sığması için bazı ayaklar %70'in altında/);
-  assert.match(card, /; en fazla 320,00 TL\. Tutarsa/);
-  assert.doesNotMatch(card, /bütçeyi aşıyor|aşılıyor\./);
+  assert.match(card, /Bu altılıyı oynama: her ayakta en az %70 tutma için kupon 1\.296,00 TL; en fazla 320,00 TL kuralına sığmıyor/);
+  assert.doesNotMatch(card, /Yine de oynarsan/);
+  assert.doesNotMatch(card, /Bugün kurallara uyan altılı yok/); // İstanbul kurala uyuyor
+  const none = altiliState();
+  none.agf.altilis = [none.agf.altilis[1]]; none.agf.best = null;
+  Object.assign(none.agf.altilis[0].plan, {legMin: 0.7, cap: 320, overBudget: true, cost: 1296});
+  assert.match(boot(none, "#firsat").$("#altiliCard").textContent, /Bugün kurallara uyan altılı yok: her ayağı %70 tutan ve 320 TL'ye sığan altılı bulunamadı\. Oynama\./);
   f.$("#alt_tavan").value = "250"; f.$("#alt_tavan").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {cap: 250});
   assert.deepEqual(f.errors, []);

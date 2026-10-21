@@ -230,6 +230,9 @@ bildirim olarak gelir.
 - **2.32.9:** Kullanıcı istedi: altılı kuponu en fazla 320 TL ("Kupon en fazla (TL)", kesin tavan; 0 yazılırsa eskisi gibi
   kasanın payı). %70 ayak sınırı tavana sığmazsa, sığana dek tutmayı bedele göre en az düşüren at çıkarılır, kalan payla
   sınırın altındaki ayaklara at eklenir; kartta "bazı ayaklar %70'in altında" uyarısı ve her ayağın yüzdesi.
+- **2.32.10:** Kullanıcı Belmont Park 2. altılı kuponunun (her ayak %70–81, 192 TL) kurallarını istedi: ayaklar artık
+  daraltılmaz. Her ayak en az %70 ve kupon en fazla 320 TL birlikte; ikisi sağlanamıyorsa altılı "320 TL'yi aşıyor,
+  oynama" diye sıranın sonunda, günün kuponu olarak önerilmez ve "yine de oynarsan" kuponu verilmez.
 
 ## Beraberlik fırsatları (2.17)
 

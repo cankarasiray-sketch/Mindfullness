@@ -307,8 +307,8 @@ public class AltiliTest {
     }
 
     @Test
-    public void hardCapTrimsLegsToFit() {
-        // 2.32.9: kupon en fazla 320 TL (kesin); %70 sınırı sığmazsa tutmayı en az düşüren atlar çıkarılır
+    public void legMinAndCapTogetherOrNoPlay() {
+        // 2.32.10: Belmont kuponunun kuralları: her ayak en az %70 ve kupon en fazla 320 TL; sığmazsa daraltılmaz, oynanmaz
         assertEquals(320.0, new Settings().altiliCap, 1e-9);
         Altili.Inputs in = rule();
         in.legMin = 0.70;
@@ -316,22 +316,23 @@ public class AltiliTest {
         List<String> fits = Arrays.asList("1:40 2:25 3:15 4:10 5:10", "1:40 2:25 3:15 4:10 5:10", "1:30 2:15 3:15 4:15 5:15 6:10",
                 "1:60 2:40", "1:55 2:25 3:20", "1:50 2:30 3:20");
         Map<String, Object> p = Altili.plan(fits, in);
-        assertEquals(288.0, (Double) p.get("cost"), 1e-9); // %70 için 288 TL: tavanın altında, aynen
-        assertEquals(null, p.get("capped"));
+        assertEquals(288.0, (Double) p.get("cost"), 1e-9); // her ayak %70+, 288 TL: kurala uyar
         assertEquals(null, p.get("overBudget"));
+        assertEquals(320.0, (Double) p.get("cap"), 1e-9);
+        for (int k = 0; k < 6; k++) {
+            double s = 0;
+            for (Object h : horses(p, k)) s += share(fits.get(k), String.valueOf(h));
+            assertTrue("ayak " + (k + 1) + " %" + s, s >= 70 - 1e-9);
+        }
         List<String> wide = Arrays.asList("1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:45 2:20 3:15 4:10 5:10", "1:25 2:20 3:15 4:15 5:10 6:10 7:5",
                 "1:50 2:20 3:15 4:15", "1:30 2:25 3:20 4:15 5:10", "1:40 2:30 3:15 4:15");
-        Map<String, Object> c = Altili.plan(wide, in);
-        double cost = (Double) c.get("cost");
-        assertTrue("kupon " + cost, cost <= 320 + 1e-9 && cost > 160); // tavana sığar, payı boşa harcamaz
-        assertEquals(true, c.get("capped"));
-        assertEquals(null, c.get("overBudget"));
-        in.maxCost = 0; // tavan yoksa eskisi gibi: %70 için 432 TL, bütçe (210) aşıldı uyarısı
-        Map<String, Object> soft = Altili.plan(wide, in);
-        assertEquals(432.0, (Double) soft.get("cost"), 1e-9);
-        assertEquals(true, soft.get("overBudget"));
-        assertTrue((Double) c.get("hit") > 0.6 * (Double) soft.get("hit"));
-        for (int k = 0; k < 6; k++) assertTrue(horses(c, k).size() >= 1);
+        Map<String, Object> w = Altili.plan(wide, in);
+        assertEquals(432.0, (Double) w.get("cost"), 1e-9); // ayaklar daraltılmaz
+        assertEquals(true, w.get("overBudget"));
+        // kurala sığmayan günün kuponu olarak önerilmez; hiçbiri sığmıyorsa öneri yok
+        assertEquals(0, Altili.best(Arrays.asList(p, w)));
+        assertEquals(1, Altili.best(Arrays.asList(w, p)));
+        assertEquals(-1, Altili.best(Arrays.asList(w)));
     }
 
     static double share(String leg, String horse) {

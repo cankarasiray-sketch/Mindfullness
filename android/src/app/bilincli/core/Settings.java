@@ -246,7 +246,7 @@ public final class Settings {
     public double altiliBudgetShare = 0.07, altiliLegMin = 0.70; // 2.32.6: kullanıcı istedi (önce %50)
     /** Altılı (2.31–2.32): kupon en az (TL); üstüne yalnızca kârlı atlar, üst sınır kasanın altiliBudgetShare kadarı. */
     public double altiliMinCost = 60; // 2.32.4: kâr için en makul (TL başına en çok tutma)
-    /** 2.32.9: altılı kuponu en fazla bu kadar TL (kesin tavan; ayak sınırı sığmazsa ayaklar daraltılır). 0: kasanın payı. */
+    /** 2.32.9: altılı kuponu en fazla bu kadar TL; 2.32.10: ayak sınırı buna sığmazsa altılı oynanmaz. 0: kasanın payı. */
     public double altiliCap = 320;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
