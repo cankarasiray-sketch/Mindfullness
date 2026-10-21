@@ -198,6 +198,11 @@ bildirim olarak gelir.
   öğrenilmiş düzeltme varsa değerli atlar), eşitse en az atlı seçim; yani her ayağı %50'ye tamamlayan en ucuz kupon.
   Gereksiz kombinasyonla para yatırılmaz.
 
+- **2.31: kupon 60–90 TL, her ayak en az %50.** Oynanmayacak günde kupon önce her ayağı %50'ye tamamlar (değerli atlar
+  varsa onlar); 60 TL'nin altındaysa 90 TL'yi aşmadan tutmayı kupon bedeline göre en çok artıran atları ekler. %50 kuralı
+  tek başına 90 TL'den fazlasını gerektiriyorsa gerektiği kadar (en fazla kasanın %7'si; aşarsa uyarı). Ayarlar:
+  "Kupon en az (TL)", "Kupon en fazla (TL)". Kârlı kupon Kelly ölçütüyle, en fazla kasanın %7'si.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

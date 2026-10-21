@@ -71,6 +71,11 @@ public final class Altili {
         public double legMin = 0;
         /** 2.29: beklenen getirisi bunun altındaki kupon önerilmez (her 100 TL'nin en az 50 TL'si geri dönmeli). */
         public double minRoi = 0.5;
+        /**
+         * 2.31: oynanmayacak günde kupon en az minCost TL (kalan bütçe tutmayı en çok artıran atlara); doldururken fillMax
+         * TL'yi aşmaz. Ayak sınırı (legMin) tek başına fazlasını gerektiriyorsa gerektiği kadar (bütçe = kasanın %7'si).
+         */
+        public double minCost = 0, fillMax = 0;
     }
 
     private static double num(String s) {
@@ -361,6 +366,49 @@ public final class Altili {
     }
 
     /**
+     * 2.31: kupon minCost TL'nin altındaysa, fillMax TL'yi aşmadan, her adımda tutma olasılığını kupon bedeline göre en
+     * çok artıran at eklenir (ayakta seçilmemiş atlar, olasılığa göre).
+     */
+    static void fill(List<List<Horse>> pick, List<Leg> legs, Inputs in) {
+        if (!(in.minCost > 0)) return;
+        long units = 1;
+        for (List<Horse> hs : pick) units *= hs.size();
+        long minUnits = (long) Math.ceil(in.minCost / in.unit - 1e-9), maxUnits = (long) Math.floor(Math.max(in.fillMax, in.minCost) / in.unit + 1e-9);
+        while (units < minUnits) {
+            int best = -1;
+            Horse add = null;
+            double gain = 0;
+            for (int k = 0; k < 6; k++) {
+                List<Horse> hs = pick.get(k);
+                int m = hs.size();
+                if (m >= MAX_PER_LEG || units / m * (m + 1) > maxUnits) continue;
+                double sq = 0;
+                for (Horse h : hs) sq += h.q;
+                Horse next = null;
+                for (Horse h : legs.get(k).horses) if (!hs.contains(h) && (next == null || h.q > next.q)) next = h;
+                if (next == null) continue;
+                double g = Math.log((sq + next.q) / sq) / Math.log((m + 1.0) / m);
+                if (g > gain) {
+                    gain = g;
+                    best = k;
+                    add = next;
+                }
+            }
+            if (best < 0) return;
+            units = units / pick.get(best).size() * (pick.get(best).size() + 1);
+            pick.get(best).add(add);
+        }
+        for (List<Horse> hs : pick) hs.sort(BY_Q);
+    }
+
+    private static final Comparator<Horse> BY_Q = new Comparator<Horse>() {
+        @Override
+        public int compare(Horse a, Horse b) {
+            return a.q != b.q ? Double.compare(b.q, a.q) : Double.compare(b.p, a.p);
+        }
+    };
+
+    /**
      * 2.30: ayakta en kârlı seçim. Kuponun getirisi ayaklara ayrılır: her ayakta seçilen atların ortalama değeri (q/p
      * toplamı / at sayısı) çarpılır; bedel at sayılarının çarpımıdır. Ayak sınırını (en az %50) sağlayan adaylardan
      * ortalama değeri en yüksek olan, eşitse en az atlı (en ucuz, ortalamada en az kayıp), eşitse en çok tutan seçilir.
@@ -470,18 +518,22 @@ public final class Altili {
         boolean play = e.kat >= 1 && e.roi > 1;
         double kellyRoi = e.roi, kellyStake = e.stake, budget = in.maxCost > 0 ? in.maxCost : in.budget;
         boolean tutma = !play && budget >= in.unit;
-        if (tutma) { // 2.30: oynanmayacak günde en kârlı (en az zararlı) kupon; bütçe yalnızca üst sınır
+        if (tutma) { // 2.30: oynanmayacak günde ayak sınırını sağlayan en kârlı (en az zararlı) seçim; bütçe üst sınır
             pick.clear();
+            for (int k = 0; k < 6; k++) pick.add(new ArrayList<>(chosen(legs.get(k), mostProfitable(cands.get(k)))));
+            fill(pick, legs, in); // 2.31: en az 60 TL'ye kadar tutmayı en çok artıran atlar (90 TL'yi aşmadan)
             r = 1;
             double hit = 1;
             long units = 1;
-            for (int k = 0; k < 6; k++) {
-                Cand c = mostProfitable(cands.get(k));
-                List<Horse> hs = chosen(legs.get(k), c);
-                pick.add(hs);
-                hit *= c.sq;
-                r *= c.sr;
-                units *= c.m;
+            for (List<Horse> hs : pick) {
+                double sq = 0, sr = 0;
+                for (Horse h : hs) {
+                    sq += h.q;
+                    sr += h.q / h.p;
+                }
+                hit *= sq;
+                r *= sr;
+                units *= hs.size();
             }
             double roi = in.pool > 0 && units <= MAX_EXACT ? exactRoi(pick, units, 1, in) : factor(in) * r / units;
             e = eval(hit, roi, units, in);
@@ -507,6 +559,10 @@ public final class Altili {
         if (tutma) {
             out.put("mode", "tutma");
             out.put("budget", budget);
+            if (in.minCost > 0) {
+                out.put("minCost", in.minCost);
+                out.put("fillMax", Math.max(in.fillMax, in.minCost));
+            }
             if (e.cost > budget + 1e-9) out.put("overBudget", true); // ayak başına en az tutma için bütçe aşıldı
         }
         if (in.legMin > 0) out.put("legMin", in.legMin);

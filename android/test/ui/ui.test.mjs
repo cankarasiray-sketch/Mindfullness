@@ -862,7 +862,7 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /Koşu numaraları ve saatleri okunamadı: Bilyoner'de altılının 1\. ayağının hangi koşu olduğunu kontrol et\./);
   assert.match(card, /Neden: programda koşu tablosu bulunamadı \(4 KB, 0 tablo: "İZMİR"\)/);
   assert.match(card, /Kupon \(en kârlı, en fazla 60,00 TL\)1\. ayak: 1, 2 \(%65\)/);
-  assert.match(card, /Yine de oynarsan: ortalamada kâr yokken en kârlı kupon en az zarar edendir/);
+  assert.match(card, /Yine de oynarsan: kupon her ayağı en az %0 tutmaya tamamlar; kasanın %7'si üst sınır/);
   assert.match(card, /Tutarsa ortalama 125,30 TL; uzun vadede her 100 TL'de ortalama 27 TL kayıp\./);
   assert.match(card, /Kazanma olasılığıAGF'den \(ganyan okunamadı\)/);
   assert.match(f.chip("İzmir 1. altılı · TJK").className, /main/);
@@ -966,15 +966,34 @@ test("altılı: kasanın %7'si bütçe, her ayak en az %50, bütçe aşılırsa 
   const f = boot(s, "#firsat");
   f.chip("İzmir 1. altılı · TJK").click();
   const card = f.$("#altiliCard").textContent;
-  assert.match(card, /Kupon \(en kârlı, her ayak en az %50, en fazla 210,00 TL\)/);
+  assert.match(card, /Kupon \(her ayak en az %50, en kârlı, en fazla 210,00 TL\)/);
   assert.match(card, /Dikkat: her ayakta en az %50 tutma için kupon 486,00 TL; bütçe \(210,00 TL\) aşılıyor\./);
-  assert.match(card, /kasanın %7'si yalnızca üst sınır/);
+  assert.match(card, /kupon her ayağı en az %50 tutmaya tamamlar; kasanın %7'si üst sınır/);
   assert.equal(f.$("#alt_pay").value, "7");
   assert.equal(f.$("#alt_ayak").value, "50");
   f.$("#alt_pay").value = "5"; f.$("#alt_pay").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {budgetShare: 0.05});
   f.$("#alt_ayak").value = "60"; f.$("#alt_ayak").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {legMin: 0.6});
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: kupon en az 60 TL, doldururken en fazla 90 TL, ayak sınırı gerektirirse fazlası", async () => {
+  const s = altiliState();
+  s.settings.altiliMinCost = 60; s.settings.altiliMaxCost = 90;
+  Object.assign(s.agf.altilis[1].plan, {legMin: 0.5, minCost: 60, fillMax: 90, units: 108, cost: 135, budget: 210});
+  const f = boot(s, "#firsat");
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Kupon \(her ayak en az %50, 60–90 TL\)/);
+  assert.match(card, /Her ayakta en az %50 tutma için kupon 135,00 TL \(90 TL'yi aştı; gerektiği kadar, en fazla kasanın %7'si\)\./);
+  assert.match(card, /60 TL'ye kadar tutmayı en çok artıran atları ekler \(90 TL'yi aşmadan\)/);
+  assert.equal(f.$("#alt_enaz").value, "60");
+  assert.equal(f.$("#alt_enfazla").value, "90");
+  f.$("#alt_enaz").value = "50"; f.$("#alt_enaz").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {minCost: 50});
+  f.$("#alt_enfazla").value = "120"; f.$("#alt_enfazla").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {maxCostTl: 120});
   assert.deepEqual(f.errors, []);
 });
 

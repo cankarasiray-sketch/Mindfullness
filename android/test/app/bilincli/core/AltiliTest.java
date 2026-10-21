@@ -251,4 +251,34 @@ public class AltiliTest {
         assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(low, normal)));
         assertEquals(1, Altili.best(Arrays.asList(low, normal)));
     }
+
+    static Altili.Inputs rule() {
+        Altili.Inputs in = inputs(3124.67);
+        in.budget = 210;
+        in.legMin = 0.50;
+        in.minCost = 60;
+        in.fillMax = 90;
+        return in;
+    }
+
+    @Test
+    public void couponNeverBelowSixtyFillsForHitUpToNinety() {
+        // her ayakta favori %55: %50 için tek at yeter (1 TL); 60 TL'ye kadar tutmayı en çok artıran atlar eklenir
+        Map<String, Object> p = Altili.plan(six("1:55 2:25 3:20"), rule());
+        long units = (Long) p.get("units");
+        assertTrue("kupon " + units, units >= 60 && units <= 90);
+        assertTrue((Double) p.get("hit") >= Math.pow(0.80, 6) - 1e-9); // tek favorili kupon %2,8; doldurulmuş en az %26
+        for (int k = 0; k < 6; k++) assertEquals("1", horses(p, k).get(0));
+        assertEquals(60.0, (Double) p.get("minCost"), 1e-9);
+        assertEquals(90.0, (Double) p.get("fillMax"), 1e-9);
+        // %50 kapsaması zaten 60 TL'nin üstündeyse eklenmez
+        Map<String, Object> q = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), rule());
+        assertEquals(64L, q.get("units"));
+        // %50 için 90 TL'den fazlası gerekiyorsa gerektiği kadar (kasanın %7'sine kadar), işaretlenmeden
+        List<String> legs = Arrays.asList("1:40 2:25 3:20 4:15", "1:40 2:25 3:20 4:15", "1:30 2:15 3:15 4:15 5:15 6:10", "1:30 2:15 3:15 4:15 5:15 6:10",
+                "1:30 2:15 3:15 4:15 5:15 6:10", "1:60 2:40");
+        Map<String, Object> wide = Altili.plan(legs, rule());
+        assertEquals(108L, wide.get("units"));
+        assertEquals(null, wide.get("overBudget"));
+    }
 }
