@@ -210,6 +210,8 @@ bildirim olarak gelir.
 
 - **2.32.1:** 1. ayağı başlamış altılı çipte "başladı" diye işaretlenir ve sona gider; seçiliyse "artık oynanamaz" yazar.
 - **2.32.2:** "Kupon en az (TL)" varsayılanı 120 TL (eski varsayılan 60 kayıtlıysa 120'ye taşınır); üst sınır yine kasanın %7'si.
+- **2.32.3:** "Ayak başına en az tutma" varsayılanı %80 (eski varsayılan %50 kayıtlıysa %80'e taşınır). %80 için gereken
+  kupon kasanın %7'sini aşarsa kupon yine kurulur, kartta "bütçe aşıldı" uyarısı çıkar ve sıralamada sona gider.
 
 ## Beraberlik fırsatları (2.17)
 

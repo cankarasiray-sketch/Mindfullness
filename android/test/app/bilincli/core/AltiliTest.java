@@ -275,6 +275,38 @@ public class AltiliTest {
     }
 
     @Test
+    public void legMinimumDefaultsTo80AndOldDefaultMoves() {
+        assertEquals(0.80, new Settings().altiliLegMin, 1e-9);
+        Map<String, Object> v10 = new Settings().toMap();
+        v10.put("v", 10L);
+        v10.put("altiliLegMin", 0.50);
+        assertEquals(0.80, Settings.fromMap(v10).altiliLegMin, 1e-9);
+        v10.put("altiliLegMin", 0.60); // kullanıcının kendi seçimi korunur
+        assertEquals(0.60, Settings.fromMap(v10).altiliLegMin, 1e-9);
+        Settings mine = new Settings();
+        mine.altiliLegMin = 0.50; // yeni sürümde bilerek %50'ye çeken korunur
+        assertEquals(0.50, Settings.fromMap(mine.toMap()).altiliLegMin, 1e-9);
+        // %80 kuralı: her ayak en az %80; bütçeyi aşarsa kupon yine kurulur, uyarı işaretlenir
+        Altili.Inputs in = rule();
+        in.legMin = 0.80;
+        List<String> legs = Arrays.asList("1:40 2:25 3:15 4:10 5:10", "1:40 2:25 3:15 4:10 5:10", "1:30 2:15 3:15 4:15 5:15 6:10",
+                "1:60 2:40", "1:55 2:25 3:20", "1:50 2:30 3:20");
+        Map<String, Object> p = Altili.plan(legs, in);
+        for (int k = 0; k < 6; k++) {
+            double s = 0;
+            for (Object h : horses(p, k)) s += share(legs.get(k), String.valueOf(h));
+            assertTrue("ayak " + (k + 1) + " %" + s, s >= 80 - 1e-9);
+        }
+        assertEquals(true, p.get("overBudget"));
+        assertEquals(0.80, (Double) p.get("legMin"), 1e-9);
+    }
+
+    static double share(String leg, String horse) {
+        for (String t : leg.split(" ")) if (t.startsWith(horse + ":")) return Double.parseDouble(t.substring(horse.length() + 1));
+        return 0;
+    }
+
+    @Test
     public void couponNeverBelowSixtyAndAboveOnlyProfitableHorses() {
         // her ayakta favori %55: %50 için tek at yeter (1 TL); 60 TL'ye kadar tutmayı en çok artıran atlar eklenir
         Map<String, Object> p = Altili.plan(six("1:55 2:25 3:20"), rule());
