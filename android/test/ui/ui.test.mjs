@@ -934,7 +934,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Ayak tahminibeklenen %62, gerçekleşen %60 \(144 ayak\)/);
   assert.match(k, /AGF favorisikazandı %38 · AGF'nin verdiği %34 \(144 ayak\)/);
   assert.match(k, /AGF düzeltmesikullanılmıyor/);
-  assert.match(k, /Bütçekasanın %6'sı \(geçmişte en iyi getiri\)/);
+  assert.match(k, /Bütçekasanın %7'si \(ayar\) · geçmişte en iyi getiri %6'sı/);
   assert.match(k, /Veri az \(144\/150 ayak\)/);
   assert.match(k, /kasanın %6'sı: 4\/24 tuttu, getiri %80/);
   assert.match(k, /21\.10 · Bursa 1\. altılı · önerildi60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
@@ -956,6 +956,25 @@ test("altılı: çipler sunucunun sıralamasıyla (en mantıklı önce)", async 
   const chips = f.$$("#altiliCard .btns .chip").map((b) => b.textContent);
   assert.ok(chips[0].startsWith("İzmir 1. altılı"), chips.join(" | "));
   assert.ok(chips[1].startsWith("İstanbul 3–8. koşu"));
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: kasanın %7'si bütçe, her ayak en az %50, bütçe aşılırsa uyarı, ayarlar", async () => {
+  const s = altiliState();
+  s.settings.altiliBudgetShare = 0.07; s.settings.altiliLegMin = 0.5;
+  Object.assign(s.agf.altilis[1].plan, {budget: 210, legMin: 0.5, overBudget: true, cost: 486});
+  const f = boot(s, "#firsat");
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Kupon \(tutma odaklı, 210,00 TL bütçe, her ayak en az %50\)/);
+  assert.match(card, /Dikkat: her ayakta en az %50 tutma için kupon 486,00 TL; bütçe \(210,00 TL\) aşılıyor\./);
+  assert.match(card, /bütçe kupon sınırı ya da kasanın %7'si/);
+  assert.equal(f.$("#alt_pay").value, "7");
+  assert.equal(f.$("#alt_ayak").value, "50");
+  f.$("#alt_pay").value = "5"; f.$("#alt_pay").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {budgetShare: 0.05});
+  f.$("#alt_ayak").value = "60"; f.$("#alt_ayak").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {legMin: 0.6});
   assert.deepEqual(f.errors, []);
 });
 

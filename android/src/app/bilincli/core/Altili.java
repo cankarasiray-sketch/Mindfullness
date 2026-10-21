@@ -26,7 +26,8 @@ public final class Altili {
 
     /** Ganyan oranlarının ima ettiği olasılıklar toplamı bu aralıkta değilse oranlar kullanılmaz (AtYarisi ile aynı). */
     static final double MIN_BOOK = 0.95, MAX_BOOK = 2.0;
-    static final int MAX_PER_LEG = 10;
+    /** Ayak başına en çok at (2.29: en az %50 tutma için açık koşularda çok at gerekebilir). */
+    static final int MAX_PER_LEG = 16;
     static final long MAX_UNITS = 20000;
     /** Havuz biliniyorsa ikramiye bu kadar kombinasyona kadar tek tek hesaplanır (bizim kuponumuzun payı dahil). */
     static final long MAX_EXACT = MAX_UNITS;
@@ -66,6 +67,10 @@ public final class Altili {
         public double kasa = 0, km = 0.25, maxFraction = 0.05;
         /** Oynanmayacak günde tutma odaklı kuponun bütçesi (TL; tek maçtaki tutar: kasanın %3'ü). */
         public double budget = 0;
+        /** 2.29: her ayakta seçilen atların tutma olasılığı en az (0: sınır yok). */
+        public double legMin = 0;
+        /** 2.29: beklenen getirisi bunun altındaki kupon önerilmez (her 100 TL'nin en az 50 TL'si geri dönmeli). */
+        public double minRoi = 0.5;
     }
 
     private static double num(String s) {
@@ -153,6 +158,19 @@ public final class Altili {
         return new ArrayList<>(out.values());
     }
 
+    /** 2.29: ayakta tutma olasılığı en az legMin olan adaylar; hiçbiri yetmiyorsa en yüksek tutmalı aday. */
+    static List<Cand> covering(List<Cand> cs, double legMin) {
+        if (!(legMin > 0)) return cs;
+        List<Cand> out = new ArrayList<>();
+        Cand top = null;
+        for (Cand c : cs) {
+            if (c.sq >= legMin - 1e-9) out.add(c);
+            if (top == null || c.sq > top.sq) top = c;
+        }
+        if (out.isEmpty() && top != null) out.add(top);
+        return out;
+    }
+
     /** Bir kuponun değerlendirmesi (büyük havuz yaklaşımı ya da kesin ikramiyeyle). */
     static final class Eval {
         double hit, roi, growth, score, cost, stake, x;
@@ -233,6 +251,15 @@ public final class Altili {
         starts.add(fav);
         starts.add(top2);
         starts.add(value);
+        int[] cheap = new int[6]; // ayak sınırı varken en ucuz kapsama
+        for (int k = 0; k < 6; k++) {
+            List<Cand> cs = cands.get(k);
+            for (int i = 0; i < cs.size(); i++) {
+                Cand c = cs.get(i), ch = cs.get(cheap[k]);
+                if (c.m < ch.m || (c.m == ch.m && c.sq > ch.sq)) cheap[k] = i;
+            }
+        }
+        starts.add(cheap);
         int[] best = null;
         double bestScore = Double.NEGATIVE_INFINITY;
         for (int[] s : starts) {
@@ -338,12 +365,20 @@ public final class Altili {
      * at eklenir; ayak başına en çok MAX_PER_LEG at). Ayak başına seçilen at sayısı.
      */
     static int[] mostLikely(List<Leg> legs, long maxUnits) {
+        return mostLikely(legs, maxUnits, 0);
+    }
+
+    /** 2.29: önce her ayakta en az legMin tutma (bütçeyi aşsa da), sonra bütçe yettikçe tutmayı en çok artıran atlar. */
+    static int[] mostLikely(List<Leg> legs, long maxUnits, double legMin) {
         int[] n = new int[6];
         double[] s = new double[6];
         long units = 1;
         for (int k = 0; k < 6; k++) {
+            List<Horse> hs = legs.get(k).horses;
             n[k] = 1;
-            s[k] = legs.get(k).horses.get(0).q;
+            s[k] = hs.get(0).q;
+            while (s[k] < legMin - 1e-9 && n[k] < Math.min(hs.size(), MAX_PER_LEG)) s[k] += hs.get(n[k]++).q;
+            units *= n[k];
         }
         for (;;) {
             int best = -1;
@@ -390,7 +425,7 @@ public final class Altili {
         List<List<Cand>> cands = new ArrayList<>();
         int oddsLegs = 0;
         for (Leg l : legs) {
-            cands.add(candidates(l.horses));
+            cands.add(covering(candidates(l.horses), in.legMin)); // 2.29: ayak başına en az tutma
             if (l.fromOdds) oddsLegs++;
         }
         int[] best = search(cands, legs, in);
@@ -417,7 +452,7 @@ public final class Altili {
         double kellyRoi = e.roi, kellyStake = e.stake, budget = in.maxCost > 0 ? in.maxCost : in.budget;
         boolean tutma = !play && budget >= in.unit;
         if (tutma) { // oynanmayacak günde tek atlı kupon yerine bütçeyle tutma olasılığı en yüksek, alternatifli kupon
-            int[] n = mostLikely(legs, (long) Math.floor(budget / in.unit + 1e-9));
+            int[] n = mostLikely(legs, (long) Math.floor(budget / in.unit + 1e-9), in.legMin);
             pick.clear();
             r = 1;
             double hit = 1;
@@ -458,7 +493,11 @@ public final class Altili {
         if (tutma) {
             out.put("mode", "tutma");
             out.put("budget", budget);
+            if (e.cost > budget + 1e-9) out.put("overBudget", true); // ayak başına en az tutma için bütçe aşıldı
         }
+        if (in.legMin > 0) out.put("legMin", in.legMin);
+        boolean low = !play && e.roi < in.minRoi;
+        if (low) out.put("lowReturn", true); // önerilmez
         out.put("legs", legsOut);
         out.put("units", e.units);
         out.put("kat", e.kat);
@@ -497,6 +536,7 @@ public final class Altili {
             if (oddsLegs == 0) why += " Ganyan oranı okunamadı: AGF tek başına kalabalığın tahmini, kâr yalnızca devirle mümkün"
                     + (in.pool > 0 ? "." : " (devir ve havuzu gir).");
         }
+        if (low) why += " Beklenen getiri %" + Fmt.num(in.minRoi * 100, 0) + "'nin altında: önerilmez.";
         out.put("reason", why);
         return out;
     }
@@ -528,6 +568,10 @@ public final class Altili {
         Double ga = Json.num(a, "growth"), gb = Json.num(b, "growth");
         if (pa && ga != null && gb != null && Math.abs(ga - gb) > 1e-12) return ga > gb;
         if (pa) return Json.dbl(a, "ev", 0) > Json.dbl(b, "ev", 0);
+        boolean la = Json.bool(a, "lowReturn", false), lb = Json.bool(b, "lowReturn", false);
+        if (la != lb) return !la; // beklenen getirisi %50'nin altındakiler sonda
+        boolean oa = Json.bool(a, "overBudget", false), ob = Json.bool(b, "overBudget", false);
+        if (oa != ob) return !oa; // bütçeye sığan önce
         double ra = Json.dbl(a, "roi", 0), rb = Json.dbl(b, "roi", 0);
         if (Math.abs(ra - rb) > 0.02) return ra > rb;
         return Json.dbl(a, "hit", 0) > Json.dbl(b, "hit", 0);

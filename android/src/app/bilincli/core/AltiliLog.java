@@ -33,7 +33,8 @@ public final class AltiliLog {
     static final int MIN_LEGS = 150, MIN_SETTLED = 20, HISTORY = 12;
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
     static final double PRIOR_LEGS = 200;
-    static final double[] FRACTIONS = {0.01, 0.03, 0.06};
+    /** Karşılaştırılan bütçeler (2.29: kullanıcının %7'si dahil; bilgi için, bütçe ayardan). */
+    static final double[] FRACTIONS = {0.03, 0.07, 0.10};
     /** Kazanan at AGF listesinde yoksa payı (tahmini ikramiye için). */
     static final double MISSING_P = 0.005;
 
@@ -304,6 +305,11 @@ public final class AltiliLog {
      * calib: {n, alpha, lr, holdout, use, alphaUse, why}, strategies: [{fraction, …}], fraction?, history}.
      */
     public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today) {
+        return analyze(store, unit, kasa, today, 0);
+    }
+
+    /** legMin: kuponlar ayak başına bu tutmayla yeniden kurulur (uygulamadaki kural). */
+    public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin) {
         String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
         List<Map<String, Object>> settled = new ArrayList<>();
         int pending = 0;
@@ -408,7 +414,7 @@ public final class AltiliLog {
                 boolean ok = true;
                 for (Altili.Leg l : ls) ok &= !l.horses.isEmpty();
                 if (!ok) continue;
-                int[] cnt = Altili.mostLikely(ls, maxUnits);
+                int[] cnt = Altili.mostLikely(ls, maxUnits, legMin);
                 long units = 1;
                 boolean hit = true;
                 for (int k = 0; k < 6; k++) {

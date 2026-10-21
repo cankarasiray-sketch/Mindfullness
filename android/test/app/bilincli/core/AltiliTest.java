@@ -190,4 +190,54 @@ public class AltiliTest {
         assertTrue((Double) a.get("hit") < (Double) b.get("hit"));
         assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(a, b)));
     }
+
+    @Test
+    public void sevenPercentBudgetAndHalfEveryLeg() {
+        Altili.Inputs in = inputs(3124.67);
+        in.budget = 210; // kasanın %7'si, 10 TL'ye yuvarlı
+        in.maxFraction = 0.07;
+        in.legMin = 0.50;
+        List<String> legs = Arrays.asList("5:30 9:25 3:15 6:12 1:10 10:8", "4:40 2:30 7:20 9:10", "1:35 2:25 3:15 5:10 8:8 10:7", "3:45 1:25 4:15 6:10 9:5",
+                "2:30 4:22 5:18 7:15 9:10 11:5", "1:20 2:15 3:12 4:10 5:9 6:8 7:7 8:6 9:5 10:4 12:2 14:1 15:1");
+        Map<String, Object> p = Altili.plan(legs, in);
+        assertEquals("tutma", p.get("mode"));
+        @SuppressWarnings("unchecked")
+        List<Object> ls = (List<Object>) p.get("legs");
+        for (Object o : ls) {
+            @SuppressWarnings("unchecked")
+            double share = (Double) ((Map<String, Object>) o).get("share");
+            assertTrue("ayak " + share, share >= 0.50 - 1e-9);
+        }
+        assertTrue((Double) p.get("cost") <= 210); // %50 kapsama bütçeye sığdı, kalan bütçe tutmayı artırdı
+        assertEquals(null, p.get("overBudget"));
+        assertEquals(0.5, (Double) p.get("legMin"), 1e-9);
+        // çok açık koşular: %50 için bütçe yetmez, işaretlenir ve sıralamada sona kalır
+        Map<String, Object> open = Altili.plan(six("1:9 2:9 3:9 4:9 5:8 6:8 7:8 8:8 9:8 10:8 11:8 12:8"), in);
+        assertEquals(Boolean.TRUE, open.get("overBudget"));
+        assertEquals(Arrays.asList(0, 1), Altili.order(Arrays.asList(p, open)));
+        // kârlı kuponda da üst sınır kasanın %7'si ve her ayak en az %50
+        Altili.Inputs v = inputs(3124.67);
+        v.maxFraction = 0.07;
+        v.legMin = 0.50;
+        Map<String, Object> value = Altili.plan(six("1:60:3 2:40:1.5"), v);
+        assertEquals(Boolean.TRUE, value.get("play"));
+        assertTrue((Double) value.get("stake") <= 3124.67 * 0.07 + 1e-6);
+        for (int k = 0; k < 6; k++) assertEquals("2", horses(value, k).get(0)); // her ayakta önce az oynanmış 2 numara (%67 ≥ %50)
+    }
+
+    @Test
+    public void returnBelowHalfIsNotRecommended() {
+        Altili.Inputs in = inputs(3124.67);
+        in.budget = 210;
+        in.pool = 150; // küçük havuz: kendi kuponumuz ikramiyeyi böler
+        Map<String, Object> low = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), in);
+        assertTrue("getiri " + low.get("roi"), (Double) low.get("roi") < 0.5);
+        assertEquals(Boolean.TRUE, low.get("lowReturn"));
+        assertTrue((String) low.get("reason"), ((String) low.get("reason")).endsWith("Beklenen getiri %50'nin altında: önerilmez."));
+        Altili.Inputs ok = inputs(3124.67);
+        ok.budget = 210;
+        Map<String, Object> normal = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), ok);
+        assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(low, normal)));
+        assertEquals(1, Altili.best(Arrays.asList(low, normal)));
+    }
 }

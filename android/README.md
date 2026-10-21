@@ -186,6 +186,13 @@ bildirim olarak gelir.
   eşleştirme: AGF'de payı %0 olan atlar listede yoksa ayaklar koşuların alt kümesidir; her ayağın atlarının en az %85'i
   koşuda bulunan art arda 6 koşu seçilir.
 
+- **2.29: bütçe kasanın %7'si, her ayak en az %50.** Kupon bütçesi kasanın %7'si (önce %3; kârlı kuponda da üst sınır;
+  ayar). Her ayakta seçilen atların tutma olasılığı en az %50 (ayar, 0 = sınır yok); önce her ayak %50'ye tamamlanır,
+  kalan bütçe tutmayı en çok artıran atlara gider. Kârlı kupon araması da bu sınırlarla yapılır (kârlılık korunur).
+  Beklenen getirisi %50'nin altındaki kupon (ör. küçük havuzda kendi kuponumuz ikramiyeyi bölüyorsa) önerilmez ve
+  sıralamada sona kalır; %50 için bütçeyi aşan altılı uyarılır ve bütçeye sığanların arkasına geçer. Karnedeki bütçe
+  karşılaştırması (%3/%7/%10) bilgi içindir.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

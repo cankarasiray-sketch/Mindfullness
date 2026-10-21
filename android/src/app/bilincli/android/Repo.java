@@ -498,6 +498,8 @@ final class Repo {
         if (p.get("unit") instanceof Number) s.altiliUnit = Json.dbl(p, "unit", s.altiliUnit);
         if (p.get("takeout") instanceof Number) s.altiliTakeout = Json.dbl(p, "takeout", s.altiliTakeout);
         if (p.get("tax") instanceof Number) s.altiliTax = Json.dbl(p, "tax", s.altiliTax);
+        if (p.get("budgetShare") instanceof Number) s.altiliBudgetShare = Json.dbl(p, "budgetShare", s.altiliBudgetShare);
+        if (p.get("legMin") instanceof Number) s.altiliLegMin = Json.dbl(p, "legMin", s.altiliLegMin);
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -531,14 +533,13 @@ final class Repo {
         in.tax = s.altiliTax;
         in.kasa = ledger.balance() / 100.0;
         in.km = s.kellyMultiplier;
-        in.maxFraction = s.maxStakeFraction;
+        in.maxFraction = s.altiliBudgetShare; // 2.29: kârlı kuponda da üst sınır kasanın %7'si
         in.maxCost = Json.dbl(inp, "maxCost", 0);
-        in.budget = Pick.stake(s, ledger.balance()) / 100.0; // 2.23: oynanmayacak günde tutma odaklı kupon, tek maçtaki tutarla
+        // 2.29: kupon bütçesi kasanın %7'si (kullanıcı ayarı; öğrenilen bütçe yalnızca karnede karşılaştırılır)
+        in.budget = Math.max(10, Math.floor(s.altiliBudgetShare * in.kasa / 10) * 10);
+        in.legMin = s.altiliLegMin; // her ayakta en az %50 tutma
         Map<String, Object> learn = altiliLearn;
-        if (learn != null) { // 2.26: geçmiş sonuçlardan öğrenilen bütçe ve AGF düzeltmesi
-            if (learn.get("fraction") != null) in.budget = Math.max(10, Math.floor(Json.dbl(learn, "fraction", 0.03) * in.kasa / 10) * 10);
-            in.alpha = Json.dbl(Json.obj(learn.get("calib")), "alphaUse", 1);
-        }
+        if (learn != null) in.alpha = Json.dbl(Json.obj(learn.get("calib")), "alphaUse", 1); // 2.26: öğrenilen AGF düzeltmesi
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
             in.devir = Json.dbl(by, "devir", 0);
@@ -561,7 +562,7 @@ final class Repo {
         if (isDemo()) return null;
         Settings st = ledger.settings();
         String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();
@@ -599,7 +600,7 @@ final class Repo {
     private Map<String, Object> agfViewFresh() {
         Map<String, Object> stored = agfStored(), inp = altiliInputs();
         Settings ls = ledger.settings();
-        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()));
+        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()), ls.altiliLegMin);
         altiliLearn = learn; // planlar öğrenilenlerle kurulur
         List<Object> manual = Json.arr(inp.get("manual"));
         if (stored == null && manual.size() < 6) return null;
