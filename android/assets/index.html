@@ -748,7 +748,8 @@ function altiliCard() {
     + "Kâr, ganyana göre şansı AGF'sinden yüksek (az oynanmış) atlarla ya da devirle mümkün; ikisi de yoksa OYNAMA der.</p>"
     + '<label class="check"><input type="checkbox" id="altAuto"' + (st.altiliAuto ? " checked" : "") + ' onchange="altiliSave({auto: this.checked})">Kendiliğinden oku, kârlı kuponu bildir (2 saatte bir, 09–21)</label>'
     + '<div class="btns"><button class="b" onclick="act(\'agfRead\')">Altılıyı şimdi oku</button></div>';
-  if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).") + "</p>";
+  if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı (bugün ve yarın yarış yoksa ya da AGF henüz yayınlanmadıysa normal)."
+      + ((t.log || []).filter(function (l) { return /Program|bağlan|okunamadı/.test(l); }).slice(0, 4).map(function (l) { return "<br>" + esc(l.trim()); }).join(""))) + "</p>";
   var best = altiliByKey(t && t.best);
   if (best) html += '<p><b>Günün en mantıklı kuponu:</b> ' + esc(best.label) + " · " + esc(best.source || "TJK")
     + (cur && cur.key === best.key ? " (aşağıda)" : ' <button class="chip" onclick="altiliPick(S.agf.best)">Göster</button>') + "</p>"

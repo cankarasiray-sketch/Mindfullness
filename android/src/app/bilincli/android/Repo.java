@@ -599,7 +599,15 @@ final class Repo {
             String start = Json.str(a, "start");
             plans.add(start != null && start.compareTo(clock) <= 0 ? null : Json.obj(a.get("plan")));
         }
-        int best = Altili.best(plans);
+        // önce bugünün altılıları; bugün yoksa yarınki (TJK'da günü yazılı olanlar)
+        String today = Instant.now().atOffset(Fmt.TR).toLocalDate().toString();
+        List<Map<String, Object>> todays = new ArrayList<>();
+        for (int i = 0; i < list.size(); i++) {
+            String d = Json.str(Json.obj(list.get(i)), "day");
+            todays.add(d == null || d.equals(today) ? plans.get(i) : null);
+        }
+        int best = Altili.best(todays);
+        if (best < 0) best = Altili.best(plans);
         v.put("best", best < 0 ? null : Json.str(Json.obj(list.get(best)), "key"));
         Map<String, Object> shown = new LinkedHashMap<>();
         shown.put("maxCost", Json.dbl(inp, "maxCost", 0));
@@ -618,12 +626,23 @@ final class Repo {
             Instant now = Instant.now();
             AndroidHttp http = new AndroidHttp(app);
             Map<String, Object> sites = AtYarisi.read(http, now, progress);
-            Map<String, Object> tjk = Tjk.read(http, now.atOffset(Fmt.TR).toLocalDate(), now, progress);
+            java.time.LocalDate today = now.atOffset(Fmt.TR).toLocalDate(), tomorrow = today.plusDays(1);
+            Map<String, Object> tjk = Tjk.read(http, today, now, progress);
+            // 2.25.2: Bilyoner yarının altılısını önceden satar; bugün koşu yoksa (ya da bittiyse) yarınki de okunur
+            Map<String, Object> next = Tjk.read(http, tomorrow, now, progress);
             List<Object> altilis = new ArrayList<>(Json.arr(sites.get("altilis")));
             altilis.addAll(Json.arr(tjk.get("altilis")));
+            String prefix = String.format(java.util.Locale.ROOT, "%02d.%02d · ", tomorrow.getDayOfMonth(), tomorrow.getMonthValue());
+            for (Object o : Json.arr(next.get("altilis"))) {
+                Map<String, Object> a = Json.obj(o);
+                a.put("label", prefix + a.get("label"));
+                altilis.add(a);
+            }
             List<Object> log = new ArrayList<>(Json.arr(sites.get("log")));
-            log.add("TJK");
+            log.add("TJK bugün (" + today + ")");
             for (Object line : Json.arr(tjk.get("log"))) log.add("  " + line);
+            log.add("TJK yarın (" + tomorrow + ")");
+            for (Object line : Json.arr(next.get("log"))) log.add("  " + line);
             Map<String, Object> r = new LinkedHashMap<>(tjk);
             r.put("altilis", altilis);
             r.put("log", log);

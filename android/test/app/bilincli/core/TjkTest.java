@@ -158,6 +158,8 @@ public class TjkTest {
         assertEquals(1, Json.arr(r.get("altilis")).size());
         Map<String, Object> a = altili(r, 0);
         assertEquals("İstanbul 1. altılı", a.get("label"));
+        assertEquals("tjk/2026-10-20/3/1", a.get("key")); // gün anahtarda: bugünkü ve yarınki ayrı
+        assertEquals("2026-10-20", a.get("day"));
         assertEquals(3, ((Number) a.get("cityId")).intValue());
         assertEquals("2:45.5 7:30.5 4:24", Json.arr(a.get("legs")).get(1));
         String log = String.join("\n", (List) Json.arr(r.get("log")));

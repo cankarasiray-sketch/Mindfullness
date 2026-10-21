@@ -884,6 +884,20 @@ test("altılı: bugün seçim yoksa günün en mantıklı kuponu açılır, dü�
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı: hiç altılı yoksa nedeni (TJK programı) kartta görünür", async () => {
+  const s = clone(baseState);
+  s.settings.altiliAuto = true; s.settings.altiliUnit = 1;
+  s.agf = {at: "2026-10-21T03:51:00Z", day: "2026-10-21", altilis: [], inputs: {maxCost: 0, manual: []},
+    log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "  Bilyoner: altılı bulunamadı", "TJK bugün (2026-10-21)", "  Program: şehir bağlantısı bulunamadı (3 KB, 0 tablo: \"\")",
+      "TJK yarın (2026-10-22)", "  Program: Bursa, Ankara, Karma, İzmir", "  Bursa 1. altılı: AGF tablosu bulunamadı"]};
+  const f = boot(s, "#firsat");
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Son okuma 21\.10 06:51: altılı bulunamadı \(bugün ve yarın yarış yoksa ya da AGF henüz yayınlanmadıysa normal\)\./);
+  assert.match(card, /Program: Bursa, Ankara, Karma, İzmir/);
+  assert.match(card, /Bursa 1\. altılı: AGF tablosu bulunamadı/);
+  assert.deepEqual(f.errors, []);
+});
+
 test("altılı: okuma yokken elle AGF ve ganyan girilir", async () => {
   const s = clone(baseState);
   s.settings.altiliAuto = true; s.settings.altiliUnit = 1;

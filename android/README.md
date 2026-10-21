@@ -131,6 +131,11 @@ bildirim olarak gelir.
 - **2.25.1:** 2.25'teki "her ayakta en az %80 tutma" kuralı kullanıcı isteğiyle geri alındı (açık koşularda kupon
   kasadan pahalı oluyordu, getiri değişmiyordu); kupon 2.24'teki gibi bütçeyle tutma olasılığı en yüksek olanı.
 
+- **2.25.2: yarının altılıları.** Bilyoner yarının altılısını önceden satar (ör. 21 Ekim sabahı 22 Ekim koşuları);
+  TJK bugünün yanında yarının programını ve AGF'sini de okur ("22.10 · Bursa 1. altılı"). Günün en mantıklı kuponu
+  önce bugünün altılılarından, bugün yoksa yarınkilerden seçilir. Hiç altılı yoksa kart nedenini (TJK programı,
+  AGF yayınlanmadı) kısaca gösterir.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den
