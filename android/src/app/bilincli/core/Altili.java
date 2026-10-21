@@ -361,6 +361,25 @@ public final class Altili {
     }
 
     /**
+     * 2.30: ayakta en kârlı seçim. Kuponun getirisi ayaklara ayrılır: her ayakta seçilen atların ortalama değeri (q/p
+     * toplamı / at sayısı) çarpılır; bedel at sayılarının çarpımıdır. Ayak sınırını (en az %50) sağlayan adaylardan
+     * ortalama değeri en yüksek olan, eşitse en az atlı (en ucuz, ortalamada en az kayıp), eşitse en çok tutan seçilir.
+     * Ganyan ya da öğrenilmiş düzeltme yoksa değerler eşittir: her ayağı sınıra tamamlayan en ucuz kupon.
+     */
+    static Cand mostProfitable(List<Cand> cs) {
+        Cand best = null;
+        for (Cand c : cs) {
+            if (best == null) {
+                best = c;
+                continue;
+            }
+            double v = c.sr / c.m, bv = best.sr / best.m;
+            if (v > bv + 1e-9 || (Math.abs(v - bv) <= 1e-9 && (c.m < best.m || (c.m == best.m && c.sq > best.sq)))) best = c;
+        }
+        return best;
+    }
+
+    /**
      * 2.23: bütçeyle tutma olasılığı en yüksek kupon (her ayakta en olası atlardan, bedele göre tutmayı en çok artıran
      * at eklenir; ayak başına en çok MAX_PER_LEG at). Ayak başına seçilen at sayısı.
      */
@@ -451,23 +470,18 @@ public final class Altili {
         boolean play = e.kat >= 1 && e.roi > 1;
         double kellyRoi = e.roi, kellyStake = e.stake, budget = in.maxCost > 0 ? in.maxCost : in.budget;
         boolean tutma = !play && budget >= in.unit;
-        if (tutma) { // oynanmayacak günde tek atlı kupon yerine bütçeyle tutma olasılığı en yüksek, alternatifli kupon
-            int[] n = mostLikely(legs, (long) Math.floor(budget / in.unit + 1e-9), in.legMin);
+        if (tutma) { // 2.30: oynanmayacak günde en kârlı (en az zararlı) kupon; bütçe yalnızca üst sınır
             pick.clear();
             r = 1;
             double hit = 1;
             long units = 1;
             for (int k = 0; k < 6; k++) {
-                List<Horse> hs = new ArrayList<>(legs.get(k).horses.subList(0, n[k]));
-                double sq = 0, sr = 0;
-                for (Horse h : hs) {
-                    sq += h.q;
-                    sr += h.q / h.p;
-                }
+                Cand c = mostProfitable(cands.get(k));
+                List<Horse> hs = chosen(legs.get(k), c);
                 pick.add(hs);
-                hit *= sq;
-                r *= sr;
-                units *= n[k];
+                hit *= c.sq;
+                r *= c.sr;
+                units *= c.m;
             }
             double roi = in.pool > 0 && units <= MAX_EXACT ? exactRoi(pick, units, 1, in) : factor(in) * r / units;
             e = eval(hit, roi, units, in);

@@ -861,8 +861,8 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /OYNAMA: Ortalamada zarar: bu kupon/);
   assert.match(card, /Koşu numaraları ve saatleri okunamadı: Bilyoner'de altılının 1\. ayağının hangi koşu olduğunu kontrol et\./);
   assert.match(card, /Neden: programda koşu tablosu bulunamadı \(4 KB, 0 tablo: "İZMİR"\)/);
-  assert.match(card, /Kupon \(tutma odaklı, 60,00 TL bütçe\)1\. ayak: 1, 2 \(%65\)/);
-  assert.match(card, /Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı/);
+  assert.match(card, /Kupon \(en kârlı, en fazla 60,00 TL\)1\. ayak: 1, 2 \(%65\)/);
+  assert.match(card, /Yine de oynarsan: ortalamada kâr yokken en kârlı kupon en az zarar edendir/);
   assert.match(card, /Tutarsa ortalama 125,30 TL; uzun vadede her 100 TL'de ortalama 27 TL kayıp\./);
   assert.match(card, /Kazanma olasılığıAGF'den \(ganyan okunamadı\)/);
   assert.match(f.chip("İzmir 1. altılı · TJK").className, /main/);
@@ -889,7 +889,7 @@ test("altılı: bugün seçim yoksa günün en mantıklı kuponu açılır, dü�
   const f = boot(s, "#firsat");
   let card = f.$("#altiliCard").textContent;
   assert.match(card, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK \(aşağıda\)/);
-  assert.match(card, /İzmir 1\. altılı · TJK\s*Koşu numaraları ve saatleri okunamadı[^]*?Kupon \(tutma odaklı/);
+  assert.match(card, /İzmir 1\. altılı · TJK\s*Koşu numaraları ve saatleri okunamadı[^]*?Kupon \(en kârlı/);
   assert.ok(f.chip("İzmir 1. altılı · TJK · en mantıklı"));
   f.chip("İstanbul 3–8. koşu · Bilyoner").click();
   assert.match(f.$("#altiliCard").textContent, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK\s*Göster/);
@@ -966,9 +966,9 @@ test("altılı: kasanın %7'si bütçe, her ayak en az %50, bütçe aşılırsa 
   const f = boot(s, "#firsat");
   f.chip("İzmir 1. altılı · TJK").click();
   const card = f.$("#altiliCard").textContent;
-  assert.match(card, /Kupon \(tutma odaklı, 210,00 TL bütçe, her ayak en az %50\)/);
+  assert.match(card, /Kupon \(en kârlı, her ayak en az %50, en fazla 210,00 TL\)/);
   assert.match(card, /Dikkat: her ayakta en az %50 tutma için kupon 486,00 TL; bütçe \(210,00 TL\) aşılıyor\./);
-  assert.match(card, /bütçe kupon sınırı ya da kasanın %7'si/);
+  assert.match(card, /kasanın %7'si yalnızca üst sınır/);
   assert.equal(f.$("#alt_pay").value, "7");
   assert.equal(f.$("#alt_ayak").value, "50");
   f.$("#alt_pay").value = "5"; f.$("#alt_pay").dispatchEvent(new f.w.Event("change"));

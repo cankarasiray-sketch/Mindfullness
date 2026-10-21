@@ -193,6 +193,11 @@ bildirim olarak gelir.
   sıralamada sona kalır; %50 için bütçeyi aşan altılı uyarılır ve bütçeye sığanların arkasına geçer. Karnedeki bütçe
   karşılaştırması (%3/%7/%10) bilgi içindir.
 
+- **2.30: %7 yalnızca üst sınır, kupon en kârlı.** Bütçe doldurulmaz. Kârlı kupon varsa Kelly ölçütüyle en çok kazandıran
+  (en fazla kasanın %7'si); yoksa en kârlı kupon en az zarar edendir: her ayakta ortalama değeri en yüksek (ganyan ya da
+  öğrenilmiş düzeltme varsa değerli atlar), eşitse en az atlı seçim; yani her ayağı %50'ye tamamlayan en ucuz kupon.
+  Gereksiz kombinasyonla para yatırılmaz.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

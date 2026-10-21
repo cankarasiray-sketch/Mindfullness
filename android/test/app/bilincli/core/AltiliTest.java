@@ -50,24 +50,35 @@ public class AltiliTest {
     }
 
     @Test
-    public void noPlayDayStillGivesAlternativesWithinBudget() {
-        Altili.Inputs in = inputs(2324.20);
-        in.budget = 60; // tek maçtaki gibi kasanın %3'ü (10 TL'ye yuvarlı)
+    public void noPlayDayTakesTheCheapestCouponThatMeetsTheLegRule() {
+        // 2.30: bütçe yalnızca üst sınır; kâr yokken en kârlı kupon en az zarar eden: her ayağı %50'ye tamamlayan en ucuz kupon
+        Altili.Inputs in = inputs(3124.67);
+        in.budget = 210;
+        in.legMin = 0.50;
         Map<String, Object> p = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), in);
         assertEquals(Boolean.FALSE, p.get("play"));
         assertEquals("tutma", p.get("mode"));
-        long units = (Long) p.get("units");
-        assertTrue("bütçe: " + units, units <= 60 && units >= 32);
-        int multi = 0;
-        for (int k = 0; k < 6; k++) if (horses(p, k).size() > 1) multi++;
-        assertTrue(multi >= 5); // ayakların çoğu alternatifli
-        assertTrue((Double) p.get("hit") > Math.pow(0.4, 6) * 10); // tek favorili kupondan çok daha sık tutar
+        for (int k = 0; k < 6; k++) assertEquals(Arrays.<Object>asList("1", "2"), horses(p, k)); // %65 ≥ %50, tek at %40 yetmez
+        assertEquals(64L, p.get("units"));
+        assertEquals(64.0, (Double) p.get("cost"), 1e-9); // 210 TL'nin hepsi harcanmaz
         assertEquals(0.73, (Double) p.get("roi"), 1e-9);
         assertEquals(1L, p.get("kat"));
         assertEquals(0.0, (Double) p.get("stake"), 0);
+        assertEquals(null, p.get("overBudget"));
         assertTrue((String) p.get("reason"), ((String) p.get("reason")).startsWith("Ortalamada zarar: bu kupon"));
-        in.maxCost = 8; // kupon sınırı bütçenin yerine geçer
-        assertTrue((Long) Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), in).get("units") <= 8);
+        in.legMin = 0; // ayak sınırı yoksa en ucuz: her ayakta favori
+        assertEquals(1L, Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), in).get("units"));
+    }
+
+    @Test
+    public void learnedValuePicksBetterHorsesWithinTheLegRule() {
+        Altili.Inputs in = inputs(3124.67);
+        in.budget = 210;
+        in.legMin = 0.50;
+        in.alpha = 1.5; // öğrenilmiş: favoriler AGF'nin verdiğinden sık kazanıyor
+        Map<String, Object> p = Altili.plan(six("1:45 2:30 3:15 4:10"), in);
+        for (int k = 0; k < 6; k++) assertEquals("1", horses(p, k).get(0));
+        assertTrue((Double) p.get("roi") > 0.73); // değeri yüksek atlarla getiri artar
     }
 
     @Test
