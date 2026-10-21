@@ -837,6 +837,7 @@ function altiliState() {
 test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otomatik ayarı ve şimdi oku", async () => {
   const s = altiliState();
   const f = boot(s, "#firsat");
+  assert.equal(f.$("#alt_enaz").value, "120"); // 2.32.2 varsayılanı
   let card = f.$("#altiliCard").textContent;
   assert.match(card, /İstanbul 3–8\. koşu · Bilyoner · 1\. ayak 14:30/);
   assert.match(card, /1\. ayak \(3\. koşu · 14:30\): 2, 1 \(%100\)/);

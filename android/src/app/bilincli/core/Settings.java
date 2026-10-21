@@ -245,7 +245,7 @@ public final class Settings {
     /** Altılı (2.29): kupon bütçesi kasanın bu kadarı (kârlı kuponda da üst sınır) ve ayak başına en az tutma. */
     public double altiliBudgetShare = 0.07, altiliLegMin = 0.50;
     /** Altılı (2.31–2.32): kupon en az (TL); üstüne yalnızca kârlı atlar, üst sınır kasanın altiliBudgetShare kadarı. */
-    public double altiliMinCost = 60;
+    public double altiliMinCost = 120; // 2.32.2: kullanıcı istedi (önce 60)
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -406,7 +406,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 9L);
+        m.put("v", 10L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -525,6 +525,10 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 9 && s.kgEvents == 0) {
             // 2.15.3: kullanıcı istedi: Karşılıklı Gol açık (günde 12 maç), kredi planı kısmaz
             s.kgEvents = 12;
+        }
+        if (Json.lng(m, "v", 1) < 10 && Math.abs(s.altiliMinCost - 60) < 1e-9) {
+            // 2.32.2: kullanıcı istedi: altılı kupon en az 120 TL (eski varsayılan 60)
+            s.altiliMinCost = 120;
         }
         s.profile = s.detectProfile();
         return s;

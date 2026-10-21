@@ -558,7 +558,7 @@ public final class Altili {
         if (tutma) { // 2.30: oynanmayacak günde ayak sınırını sağlayan en kârlı (en az zararlı) seçim; bütçe üst sınır
             pick.clear();
             for (int k = 0; k < 6; k++) pick.add(new ArrayList<>(chosen(legs.get(k), mostProfitable(cands.get(k)))));
-            fill(pick, legs, in, budget); // 2.31–2.32: en az 60 TL'ye kadar tutmayı artıran, üstüne yalnızca kârlı atlar
+            fill(pick, legs, in, budget); // 2.31–2.32: en az minCost TL'ye kadar tutmayı artıran, üstüne yalnızca kârlı atlar
             r = 1;
             double hit = 1;
             long units = 1;

@@ -209,6 +209,7 @@ bildirim olarak gelir.
   (gereksiz para yatırılmaz). "Kupon en fazla (TL)" ayarı kaldırıldı.
 
 - **2.32.1:** 1. ayağı başlamış altılı çipte "başladı" diye işaretlenir ve sona gider; seçiliyse "artık oynanamaz" yazar.
+- **2.32.2:** "Kupon en az (TL)" varsayılanı 120 TL (eski varsayılan 60 kayıtlıysa 120'ye taşınır); üst sınır yine kasanın %7'si.
 
 ## Beraberlik fırsatları (2.17)
 

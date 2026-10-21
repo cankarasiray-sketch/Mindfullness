@@ -539,7 +539,7 @@ final class Repo {
         // 2.29: kupon bütçesi kasanın %7'si (kullanıcı ayarı; öğrenilen bütçe yalnızca karnede karşılaştırılır)
         in.budget = Math.max(10, Math.floor(s.altiliBudgetShare * in.kasa / 10) * 10);
         in.legMin = s.altiliLegMin; // her ayakta en az %50 tutma
-        in.minCost = s.altiliMinCost; // 2.31: kupon en az 60 TL; üstüne yalnızca kârlı atlar (2.32)
+        in.minCost = s.altiliMinCost; // 2.31: kupon en az minCost TL (2.32.2: 120); üstüne yalnızca kârlı atlar (2.32)
         Map<String, Object> learn = altiliLearn;
         if (learn != null) in.alpha = Json.dbl(Json.obj(learn.get("calib")), "alphaUse", 1); // 2.26: öğrenilen AGF düzeltmesi
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));

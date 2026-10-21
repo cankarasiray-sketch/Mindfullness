@@ -261,6 +261,20 @@ public class AltiliTest {
     }
 
     @Test
+    public void minimumCouponDefaultsTo120AndOldDefaultMoves() {
+        assertEquals(120.0, new Settings().altiliMinCost, 1e-9);
+        Map<String, Object> v9 = new Settings().toMap();
+        v9.put("v", 9L);
+        v9.put("altiliMinCost", 60.0);
+        assertEquals(120.0, Settings.fromMap(v9).altiliMinCost, 1e-9);
+        v9.put("altiliMinCost", 80.0); // kullanıcının kendi seçimi korunur
+        assertEquals(80.0, Settings.fromMap(v9).altiliMinCost, 1e-9);
+        Settings mine = new Settings();
+        mine.altiliMinCost = 60; // yeni sürümde bilerek 60'a çeken korunur
+        assertEquals(60.0, Settings.fromMap(mine.toMap()).altiliMinCost, 1e-9);
+    }
+
+    @Test
     public void couponNeverBelowSixtyAndAboveOnlyProfitableHorses() {
         // her ayakta favori %55: %50 için tek at yeter (1 TL); 60 TL'ye kadar tutmayı en çok artıran atlar eklenir
         Map<String, Object> p = Altili.plan(six("1:55 2:25 3:20"), rule());
