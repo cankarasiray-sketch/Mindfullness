@@ -257,28 +257,54 @@ public class AltiliTest {
         in.budget = 210;
         in.legMin = 0.50;
         in.minCost = 60;
-        in.fillMax = 90;
         return in;
     }
 
     @Test
-    public void couponNeverBelowSixtyFillsForHitUpToNinety() {
+    public void couponNeverBelowSixtyAndAboveOnlyProfitableHorses() {
         // her ayakta favori %55: %50 için tek at yeter (1 TL); 60 TL'ye kadar tutmayı en çok artıran atlar eklenir
         Map<String, Object> p = Altili.plan(six("1:55 2:25 3:20"), rule());
         long units = (Long) p.get("units");
-        assertTrue("kupon " + units, units >= 60 && units <= 90);
-        assertTrue((Double) p.get("hit") >= Math.pow(0.80, 6) - 1e-9); // tek favorili kupon %2,8; doldurulmuş en az %26
+        assertTrue("kupon " + units, units >= 60 && units < 120); // 60'ı geçince durur: değer yoksa kârlı at yok
+        assertTrue((Double) p.get("hit") >= Math.pow(0.80, 6) - 1e-9);
         for (int k = 0; k < 6; k++) assertEquals("1", horses(p, k).get(0));
         assertEquals(60.0, (Double) p.get("minCost"), 1e-9);
-        assertEquals(90.0, (Double) p.get("fillMax"), 1e-9);
+        assertEquals(0.73, (Double) p.get("roi"), 1e-9);
         // %50 kapsaması zaten 60 TL'nin üstündeyse eklenmez
-        Map<String, Object> q = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), rule());
-        assertEquals(64L, q.get("units"));
-        // %50 için 90 TL'den fazlası gerekiyorsa gerektiği kadar (kasanın %7'sine kadar), işaretlenmeden
+        assertEquals(64L, Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), rule()).get("units"));
+        // %50 için 90 TL'den fazlası gerekiyorsa gerektiği kadar (kasanın %7'sine kadar)
         List<String> legs = Arrays.asList("1:40 2:25 3:20 4:15", "1:40 2:25 3:20 4:15", "1:30 2:15 3:15 4:15 5:15 6:10", "1:30 2:15 3:15 4:15 5:15 6:10",
                 "1:30 2:15 3:15 4:15 5:15 6:10", "1:60 2:40");
         Map<String, Object> wide = Altili.plan(legs, rule());
         assertEquals(108L, wide.get("units"));
         assertEquals(null, wide.get("overBudget"));
+    }
+
+    @Test
+    public void profitableHorsesAreAddedAboveTheMinimum() {
+        // ganyana göre 2 numaranın kazanma şansı %40, AGF payı %20: değeri 2 (q/p); favori 1 numaranın değeri 1
+        List<Altili.Leg> legs = new ArrayList<>();
+        List<List<Altili.Horse>> pick = new ArrayList<>();
+        for (int k = 0; k < 6; k++) {
+            Altili.Leg l = Altili.leg("1:50:2 2:20:2.5 3:30:10");
+            legs.add(l);
+            pick.add(new ArrayList<>(l.horses.subList(0, 1)));
+        }
+        Altili.Inputs in = inputs(3124.67);
+        Altili.fill(pick, legs, in, 1000); // en az tutar yok: yalnızca kârlı atlar
+        for (List<Altili.Horse> hs : pick) {
+            boolean two = false;
+            for (Altili.Horse h : hs) two |= h.no.equals("2");
+            assertTrue(two);
+        }
+        List<List<Altili.Horse>> plain = new ArrayList<>();
+        List<Altili.Leg> plainLegs = new ArrayList<>();
+        for (int k = 0; k < 6; k++) {
+            Altili.Leg l = Altili.leg("1:50 2:20 3:30");
+            plainLegs.add(l);
+            plain.add(new ArrayList<>(l.horses.subList(0, 1)));
+        }
+        Altili.fill(plain, plainLegs, in, 1000);
+        for (List<Altili.Horse> hs : plain) assertEquals(1, hs.size()); // değer yoksa hiç at eklenmez
     }
 }

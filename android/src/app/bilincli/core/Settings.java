@@ -244,8 +244,8 @@ public final class Settings {
     public double altiliUnit = 1.0, altiliTakeout = 0.27, altiliTax = 0.0;
     /** Altılı (2.29): kupon bütçesi kasanın bu kadarı (kârlı kuponda da üst sınır) ve ayak başına en az tutma. */
     public double altiliBudgetShare = 0.07, altiliLegMin = 0.50;
-    /** Altılı (2.31): oynanmayacak günde kupon en az / doldururken en fazla (TL); ayak sınırı gerektirirse fazlası. */
-    public double altiliMinCost = 60, altiliMaxCost = 90;
+    /** Altılı (2.31–2.32): kupon en az (TL); üstüne yalnızca kârlı atlar, üst sınır kasanın altiliBudgetShare kadarı. */
+    public double altiliMinCost = 60;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -418,7 +418,6 @@ public final class Settings {
         m.put("altiliBudgetShare", altiliBudgetShare);
         m.put("altiliLegMin", altiliLegMin);
         m.put("altiliMinCost", altiliMinCost);
-        m.put("altiliMaxCost", altiliMaxCost);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -483,7 +482,6 @@ public final class Settings {
         s.altiliBudgetShare = Json.dbl(m, "altiliBudgetShare", s.altiliBudgetShare);
         s.altiliLegMin = Json.dbl(m, "altiliLegMin", s.altiliLegMin);
         s.altiliMinCost = Json.dbl(m, "altiliMinCost", s.altiliMinCost);
-        s.altiliMaxCost = Json.dbl(m, "altiliMaxCost", s.altiliMaxCost);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
@@ -565,7 +563,7 @@ public final class Settings {
         if (!(altiliTax >= 0 && altiliTax <= 0.50)) return "Altılı ikramiye vergisi %0–50 olmalı";
         if (!(altiliBudgetShare >= 0.005 && altiliBudgetShare <= 0.20)) return "Altılı bütçesi kasanın %0,5–20'si olmalı";
         if (!(altiliLegMin >= 0 && altiliLegMin <= 0.95)) return "Altılıda ayak başına tutma %0–95 olmalı";
-        if (!(altiliMinCost >= 0 && altiliMaxCost >= altiliMinCost && altiliMaxCost <= 100000)) return "Altılı kupon en az/en fazla tutarı geçersiz (en fazla, en azdan küçük olamaz)";
+        if (!(altiliMinCost >= 0 && altiliMinCost <= 100000)) return "Altılı kupon en az tutarı geçersiz";
         if (pickHighProb < pickMinProb || pickHighProb > 0.97) return "Yüksek olasılık katmanı, en az tutma olasılığından küçük olamaz (en fazla %97)";
         return null;
     }

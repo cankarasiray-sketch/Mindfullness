@@ -203,6 +203,11 @@ bildirim olarak gelir.
   tek başına 90 TL'den fazlasını gerektiriyorsa gerektiği kadar (en fazla kasanın %7'si; aşarsa uyarı). Ayarlar:
   "Kupon en az (TL)", "Kupon en fazla (TL)". Kârlı kupon Kelly ölçütüyle, en fazla kasanın %7'si.
 
+- **2.32: 90 TL üst sınır değil, kârlılık.** Kupon en az 60 TL (eksik kısım tutmayı en çok artıran atlara); üstüne
+  yalnızca kuponun beklenen kazancını artıran (eklenen kombinasyonların getirisi bedelinden yüksek) atlar eklenir, en çok
+  artıran önce; üst sınır kasanın %7'si. Ganyan ya da öğrenilmiş AGF düzeltmesi değer göstermiyorsa hiç eklenmez
+  (gereksiz para yatırılmaz). "Kupon en fazla (TL)" ayarı kaldırıldı.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

@@ -501,7 +501,6 @@ final class Repo {
         if (p.get("budgetShare") instanceof Number) s.altiliBudgetShare = Json.dbl(p, "budgetShare", s.altiliBudgetShare);
         if (p.get("legMin") instanceof Number) s.altiliLegMin = Json.dbl(p, "legMin", s.altiliLegMin);
         if (p.get("minCost") instanceof Number) s.altiliMinCost = Json.dbl(p, "minCost", s.altiliMinCost);
-        if (p.get("maxCostTl") instanceof Number) s.altiliMaxCost = Json.dbl(p, "maxCostTl", s.altiliMaxCost);
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -540,8 +539,7 @@ final class Repo {
         // 2.29: kupon bütçesi kasanın %7'si (kullanıcı ayarı; öğrenilen bütçe yalnızca karnede karşılaştırılır)
         in.budget = Math.max(10, Math.floor(s.altiliBudgetShare * in.kasa / 10) * 10);
         in.legMin = s.altiliLegMin; // her ayakta en az %50 tutma
-        in.minCost = s.altiliMinCost; // 2.31: kupon en az 60 TL, doldururken en fazla 90 TL
-        in.fillMax = s.altiliMaxCost;
+        in.minCost = s.altiliMinCost; // 2.31: kupon en az 60 TL; üstüne yalnızca kârlı atlar (2.32)
         Map<String, Object> learn = altiliLearn;
         if (learn != null) in.alpha = Json.dbl(Json.obj(learn.get("calib")), "alphaUse", 1); // 2.26: öğrenilen AGF düzeltmesi
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
@@ -566,7 +564,7 @@ final class Repo {
         if (isDemo()) return null;
         Settings st = ledger.settings();
         String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliMaxCost + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();
