@@ -224,6 +224,9 @@ bildirim olarak gelir.
 - **2.32.7:** Yabancı hipodromlu günlerde akşam AGF'leri oluşunca 30 sayfalık okuma sınırı doluyor, sona kalan altılılar
   (Belmont Park gibi) listeden düşüyordu: sınır 80 sayfa. Ayrıca bir kez okunmuş bugünkü/yarınki altılı sonraki okumada
   bulunamazsa önceki AGF'yle listede kalır ("AGF HH:MM okumasından").
+- **2.32.8:** TJK AGF tablosunda sıra numarası olmayan satırlar (payı bir sütun solda) ayrı "ayak" sanılıyor, ayaklar
+  kayıyor ve altılı "N. ayak okunamadı" diye düşüyordu (Belmont Avustralya, Bursa; Belmont Park ABD): bu satırlar artık
+  kendi ayağında. 1. altılının tablosu okunamazsa 2. altılı yine denenir (önceden hiç denenmiyordu).
 
 ## Beraberlik fırsatları (2.17)
 

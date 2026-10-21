@@ -223,9 +223,13 @@ public final class Tjk {
         return out;
     }
 
-    /** Bir tablodaki ayaklar: sütunlar, satırlar ya da tablonun tamamı (ayrı hücrede at no ve pay) — en iyisi. */
+    /**
+     * Bir tablodaki ayaklar: sütunlar, satırlar, tablonun tamamı (ayrı hücrede at no ve pay) ya da tablodaki bütün
+     * girdiler tek ayak (2.32.8: TJK'da sıra numarası olmayan satırların payı bir sütun solda; ayrı ayak sanılmasın) — en iyisi.
+     */
     static List<List<Horse>> tableLegs(String table) {
-        Map<Integer, List<Horse>> byCol = new TreeMap<>(), byRow = new TreeMap<>(), whole = new TreeMap<>();
+        Map<Integer, List<Horse>> byCol = new TreeMap<>(), byRow = new TreeMap<>(), whole = new TreeMap<>(), all = new TreeMap<>();
+        Set<String> inAll = new HashSet<>();
         String[] rows = table.split("(?i)<tr\\b");
         int horseCol = -1; // başlıkta "At No" / "N" sütunu varsa at numarası oradan (yoksa satırın ilk sayısı; sıra sütunu karışmasın)
         for (int r = 1; r < rows.length; r++) {
@@ -240,6 +244,7 @@ public final class Tjk {
                     double pct = number(e.group(2));
                     add(byCol, c, e.group(1), pct);
                     add(byRow, r, e.group(1), pct);
+                    if (inAll.add(String.valueOf(Integer.parseInt(e.group(1))))) add(all, 0, e.group(1), pct);
                     entries = true;
                 }
                 if (entries || done) continue;
@@ -256,7 +261,7 @@ public final class Tjk {
         }
         List<List<Horse>> best = new ArrayList<>();
         double bestScore = Double.NEGATIVE_INFINITY;
-        for (Map<Integer, List<Horse>> m : java.util.Arrays.asList(byCol, byRow, whole)) {
+        for (Map<Integer, List<Horse>> m : java.util.Arrays.asList(byCol, byRow, whole, all)) {
             List<List<Horse>> legs = atLeastTwo(m);
             if (legs.isEmpty()) continue;
             double s = score(legs);
@@ -422,14 +427,15 @@ public final class Tjk {
                 }
                 String label = c.getValue() + " " + no + ". altılı";
                 step(progress, label + " AGF okunuyor…");
-                List<List<Horse>> legs;
+                List<List<Horse>> legs, parsed;
                 String[] why = {null};
                 String html;
                 try {
                     requests++;
                     html = http.get(agfUrl(c.getKey(), day, no), headers()).body;
                     failures = 0;
-                    legs = six(parseAgf(html), no, why);
+                    parsed = parseAgf(html);
+                    legs = six(parsed, no, why);
                     if (legs == null && notYet(html)) {
                         why[0] = WAITING;
                         waiting++;
@@ -445,7 +451,8 @@ public final class Tjk {
                 }
                 if (legs == null) {
                     log.add(label + ": " + why[0]);
-                    break; // 1. altılı yoksa 2. de yoktur
+                    if (parsed.isEmpty() || WAITING.equals(why[0])) break; // 1. altılı yoksa (ya da AGF yoksa) 2. de yoktur
+                    continue; // 2.32.8: 1. altılının tablosu okunamadıysa 2. yine denenir
                 }
                 List<String> text = texts(legs);
                 if (!seen.add(String.join("|", text))) {

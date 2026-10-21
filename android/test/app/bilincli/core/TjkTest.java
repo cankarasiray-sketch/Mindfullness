@@ -176,6 +176,57 @@ public class TjkTest {
         assertEquals(NOW.toString(), r.get("at"));
     }
 
+    /** 2.32.8: TJK biçimi: her ayak ayrı tablo, "Sıra | At No (%pay)"; "*" ile başlayan atın satırında sıra hücresi yok. */
+    static String perLegTables(String[][][] legs) {
+        StringBuilder b = new StringBuilder();
+        for (int k = 0; k < legs.length; k++) {
+            b.append("<table><tr><th colspan=\"2\">").append(k + 1).append(". AYAK</th></tr><tr><th>Sıra</th><th>AT NO</th></tr>");
+            int rank = 0;
+            for (String[] h : legs[k]) {
+                b.append("<tr>");
+                if (!h[0].startsWith("*")) b.append("<td>").append(++rank).append("</td>");
+                b.append("<td><b>").append(h[0].replace("*", "")).append("</b> (%").append(h[1]).append(")</td></tr>");
+            }
+            b.append("</table>");
+        }
+        return b.toString();
+    }
+
+    @Test
+    public void rowsWithoutRankStayInTheirLeg() {
+        // Belmont Avustralya / Bursa: sırasız satırlar ayrı "ayak" sanılıyor, ayaklar kayıyordu ("4. ayak okunamadı, %0.48")
+        String[][][] legs = LEGS.clone();
+        legs[0] = new String[][] {{"1", "39,97"}, {"2", "27,25"}, {"7", "16,85"}, {"8", "10,56"}, {"6", "1,4"}, {"5", "1,29"}, {"3", "1,2"}, {"*4", "1,48"}};
+        legs[3] = new String[][] {{"4", "59,52"}, {"1", "25"}, {"2", "15"}, {"*5", "0,2"}, {"*6", "0,18"}, {"*7", "0,1"}};
+        List<List<Tjk.Horse>> parsed = Tjk.parseAgf(page(perLegTables(legs)));
+        String[] why = {null};
+        List<List<Tjk.Horse>> six = Tjk.six(parsed, 1, why);
+        assertEquals(why[0], 6, six == null ? 0 : six.size());
+        assertEquals("1:39.97 2:27.25 7:16.85 8:10.56 4:1.48 6:1.4 5:1.29 3:1.2", Tjk.legText(six.get(0)));
+        assertEquals("4:59.52 1:25 2:15 5:0.2 6:0.18 7:0.1", Tjk.legText(six.get(3)));
+        assertEquals("2:45.5 7:30.5 4:24", Tjk.legText(six.get(1)));
+        // tek tabloda altı ayak (sütunlar) yine ayrı ayrı okunur
+        assertEquals(6, Tjk.parseAgf(page(columns(LEGS))).size());
+    }
+
+    @Test
+    public void secondAltiliIsTriedWhenFirstCannotBeRead() {
+        // 2.32.8: 1. altılının tablosu bozuksa (bir ayak %30) 2. altılı yine okunur (Belmont Park ABD 2. altılı)
+        Map<String, String> pages = new LinkedHashMap<>();
+        pages.put(Tjk.programUrl(DAY), "<a href=\"?SehirId=31&SehirAdi=Belmont+Park+ABD\">B</a>");
+        String[][][] broken = LEGS.clone();
+        broken[2] = new String[][] {{"1", "20"}, {"6", "10"}};
+        pages.put(Tjk.agfUrl(31, DAY, 1), page(perLegTables(broken)));
+        String[][][] second = LEGS.clone();
+        second[0] = new String[][] {{"9", "70"}, {"3", "30"}};
+        pages.put(Tjk.agfUrl(31, DAY, 2), page(perLegTables(second)));
+        Map<String, Object> r = Tjk.read(fake(pages, new ArrayList<String>()), DAY, NOW, null);
+        assertEquals(1, Json.arr(r.get("altilis")).size());
+        assertEquals("Belmont Park ABD 2. altılı", altili(r, 0).get("label"));
+        String log = String.join("\n", (List) Json.arr(r.get("log")));
+        assertTrue(log, log.contains("Belmont Park ABD 1. altılı: 3. ayak okunamadı (paylar toplamı %30, 2 at)"));
+    }
+
     @Test
     public void manyTracksAreAllRead() {
         // 2.32.7: yabancı hipodromlu gün: 16 hipodrom × 2 altılı + programlar 30 sayfayı aşar; sona kalan da okunur
