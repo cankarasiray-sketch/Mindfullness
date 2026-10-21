@@ -685,6 +685,7 @@ final class Repo {
             r.put("altilis", altilis);
             r.put("log", log);
             r.put("waiting", Json.lng(tjk, "waiting", 0) + Json.lng(next, "waiting", 0));
+            r.put("app", appVersion()); // güncellemeden sonra yeni okuyucuyla hemen yeniden okunur
             String raw = Json.write(r);
             agfStore.write(raw);
             agfRaw = raw;
@@ -763,7 +764,8 @@ final class Repo {
         Map<String, Object> st = agfStored();
         String at = st == null ? null : Json.str(st, "at");
         long gap = st != null && Json.arr(st.get("altilis")).isEmpty() ? ALTILI_RETRY_S : ALTILI_GAP_S; // AGF henüz yoksa daha sık
-        if (at != null && Instant.parse(at).plusSeconds(gap).isAfter(now)) return null;
+        boolean updated = st != null && Json.lng(st, "app", 0) != appVersion(); // uygulama güncellendiyse beklemeden
+        if (!updated && at != null && Instant.parse(at).plusSeconds(gap).isAfter(now)) return null;
         try {
             altiliSettle(false, null); // 2.26: önceki günlerin sonuçları (3 saatte bir)
         } catch (RuntimeException ignored) {

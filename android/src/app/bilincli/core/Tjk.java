@@ -727,7 +727,7 @@ public final class Tjk {
             Matcher nm = CITY_NAME.matcher(href);
             String name = nm.find() ? urlDecode(nm.group(1)) : "";
             if (name.isEmpty()) name = text(m.group(2));
-            out.put(city, new String[] {cityName(city, name), AtYarisi.absolute(page, href)});
+            out.put(city, new String[] {cityName(city, name), AtYarisi.safeUrl(AtYarisi.absolute(page, href.trim()))});
         }
         return out;
     }

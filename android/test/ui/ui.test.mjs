@@ -836,6 +836,7 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /1\. ayak \(3\. koşu · 14:30\): 2, 1 \(%100\)/);
   assert.match(card, /6\. ayak \(8\. koşu · 17:00\): 2 \(%62\)/);
   assert.match(card, /Koşular: İstanbul 3–8\. koşular, 1\. ayak 14:30, son ayak 17:00\. Bilyoner'de altılının 1\. ayağının 3\. koşu olduğunu kontrol et\./);
+  assert.ok(card.indexOf("Koşular: İstanbul") < card.indexOf("Kombinasyon · misli"), "koşular kuponun üstünde, kaydırmadan görünür");
   assert.match(card, /Kombinasyon · misli · tutar8 · 3 · 30,00 TL/);
   assert.match(card, /Bilyoner'de: At Yarışı → İstanbul → Altılı Ganyan; her ayakta yukarıdaki atları seç, misli 3, tutarın 30,00 TL olduğunu kontrol et, 1\. ayak 14:30 öncesi\./);
   assert.match(card, /Devir ve havuz \(bu altılı, bugün; sitede okundu\)/);
@@ -880,7 +881,7 @@ test("altılı: bugün seçim yoksa günün en mantıklı kuponu açılır, dü�
   const f = boot(s, "#firsat");
   let card = f.$("#altiliCard").textContent;
   assert.match(card, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK \(aşağıda\)/);
-  assert.match(card, /İzmir 1\. altılı · TJK\s*Kupon \(tutma odaklı/);
+  assert.match(card, /İzmir 1\. altılı · TJK\s*Koşu numaraları ve saatleri okunamadı[^]*?Kupon \(tutma odaklı/);
   assert.ok(f.button("İzmir 1. altılı · TJK · en mantıklı"));
   f.button("İstanbul 3–8. koşu · Bilyoner").click();
   assert.match(f.$("#altiliCard").textContent, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK\s*Göster/);

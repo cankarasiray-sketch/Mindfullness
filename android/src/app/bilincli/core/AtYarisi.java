@@ -387,10 +387,35 @@ public final class AtYarisi {
     static String absolute(String page, String src) {
         if (src.startsWith("http://") || src.startsWith("https://")) return src;
         if (src.startsWith("//")) return "https:" + src;
-        if (src.startsWith("?")) return page.replaceFirst("\\?.*$", "") + src; // yalnızca sorgu: aynı sayfa
-        int host = page.indexOf('/', page.indexOf("//") + 2);
-        String origin = host < 0 ? page : page.substring(0, host);
-        return src.startsWith("/") ? origin + src : origin + "/" + src;
+        String base = page.replaceFirst("[?#].*$", "");
+        if (src.startsWith("?")) return base + src; // yalnızca sorgu: aynı sayfa
+        int host = base.indexOf('/', base.indexOf("//") + 2);
+        String origin = host < 0 ? base : base.substring(0, host);
+        if (src.startsWith("/")) return origin + src;
+        // 2.27.2: göreli yol sayfanın klasörüne göre ("GunlukYarisProgrami?…" -> ".../Info/Page/GunlukYarisProgrami?…")
+        String dir = host < 0 ? origin + "/" : base.substring(0, base.lastIndexOf('/') + 1);
+        String rel = src;
+        while (rel.startsWith("./") || rel.startsWith("../")) {
+            if (rel.startsWith("./")) rel = rel.substring(2);
+            else {
+                rel = rel.substring(3);
+                int up = dir.lastIndexOf('/', dir.length() - 2);
+                if (up > origin.length()) dir = dir.substring(0, up + 1);
+            }
+        }
+        return dir + rel;
+    }
+
+    /** 2.27.2: adresteki boşluk ve Türkçe harfler (ör. "SehirAdi=Belmont Park ABD") yüzde kodlanır. */
+    static String safeUrl(String url) {
+        StringBuilder b = new StringBuilder();
+        for (byte x : url.getBytes(java.nio.charset.StandardCharsets.UTF_8)) {
+            int c = x & 0xff;
+            if (c <= 0x20 || c >= 0x7f || c == '"' || c == '<' || c == '>' || c == '`' || c == '{' || c == '}' || c == '|' || c == '\\' || c == '^') {
+                b.append('%').append(String.format(Locale.ROOT, "%02X", c));
+            } else b.append((char) c);
+        }
+        return b.toString();
     }
 
     private static String host(String url) {

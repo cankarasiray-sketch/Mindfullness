@@ -314,4 +314,18 @@ public class TjkTest {
         assertEquals(null, a.get("start"));
         assertTrue((String) a.get("racesWhy"), ((String) a.get("racesWhy")).startsWith("programda koşu tablosu bulunamadı ("));
     }
+
+    @Test
+    public void cityLinksResolveRelativePathsAndEncodeNames() {
+        String page = Tjk.programUrl(DAY);
+        assertEquals("https://www.tjk.org/TR/YarisSever/Info/Page/GunlukYarisProgrami?SehirId=3", AtYarisi.absolute(page, "GunlukYarisProgrami?SehirId=3"));
+        assertEquals("https://www.tjk.org/TR/YarisSever/Info/Sehir/GunlukYarisProgrami?SehirId=3", AtYarisi.absolute(page, "../Sehir/GunlukYarisProgrami?SehirId=3"));
+        assertEquals("https://www.tjk.org/TR/x?SehirId=3", AtYarisi.absolute(page, "/TR/x?SehirId=3"));
+        assertEquals("https://www.tjk.org/TR/YarisSever/Info/Page/GunlukYarisProgrami?SehirId=3", AtYarisi.absolute(page, "?SehirId=3"));
+        assertEquals("https://x.org/a?SehirAdi=Belmont%20Park%20ABD&b=%C4%B0stanbul", AtYarisi.safeUrl("https://x.org/a?SehirAdi=Belmont Park ABD&b=İstanbul"));
+        assertEquals("https://x.org/a?b=%C4%B0", AtYarisi.safeUrl("https://x.org/a?b=%C4%B0")); // kodlanmış olan bozulmaz
+        Map<Integer, String[]> links = Tjk.cityLinks("<a href=\" GunlukYarisProgrami?SehirId=41&amp;SehirAdi=Belmont Park ABD\">Belmont Park ABD</a>", page);
+        assertEquals("https://www.tjk.org/TR/YarisSever/Info/Page/GunlukYarisProgrami?SehirId=41&SehirAdi=Belmont%20Park%20ABD", links.get(41)[1]);
+        assertEquals("Belmont Park ABD", links.get(41)[0]);
+    }
 }

@@ -801,7 +801,6 @@ function altiliPlanHtml(a) {
     + item("Kazanma olasılığı", r.oddsLegs ? "ganyan oranlarından (" + r.oddsLegs + "/6 ayak)" : "AGF'den (ganyan okunamadı)")
     + (r.avg != null ? item("Ortalama getiri (devir dahil)", "%" + num(r.avg * 100, 1)) : "")
     + "</div>"
-    + altiliRaceNote(a)
     + (r.play ? '<p><b class="pos">OYNA:</b> ' + esc(r.reason) + " Tutar kasanın Kelly payından: " + tl0(r.stake) + ". Çoğu gün kaybedilir; kâr uzun vadede gelir.</p>"
         + '<p class="small">Bilyoner\'de: At Yarışı → ' + esc(a.city || a.label) + " → Altılı Ganyan; her ayakta yukarıdaki atları seç, misli " + Math.max(1, kat)
         + ", tutarın " + tl0(Math.max(1, kat) * r.cost) + " olduğunu kontrol et" + (a.start ? ", 1. ayak " + esc(a.start) + " öncesi" : "") + ".</p>"
@@ -833,6 +832,7 @@ function altiliCard() {
   }).join(" ") + "</div>";
   if (cur) {
     html += '<h3 style="margin:12px 0 4px">' + esc(cur.label) + " · " + esc(cur.source || "TJK") + (cur.start ? " · 1. ayak " + esc(cur.start) : "") + "</h3>"
+      + altiliRaceNote(cur) // 2.27.2: koşular (ya da neden) başlığın hemen altında, kaydırmadan görünür
       + altiliPlanHtml(cur)
       + '<details class="info"><summary class="small">Devir ve havuz (bu altılı, bugün' + (cur.inputsFrom === "okundu" ? "; sitede okundu" : cur.inputsFrom === "elle" ? "; elle" : "") + ")</summary>"
       + f("devir", "Devir (TL)", numText(cur.devir), "altiliPool()", "devreden ikramiye")

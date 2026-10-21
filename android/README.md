@@ -167,6 +167,11 @@ bildirim olarak gelir.
   sekmesinin içerik adresi ("/Info/Page/" ↔ "/Info/Sehir/"); at tablosunda numara başlığı yoksa numara sütunu
   kendiliğinden bulunur. Saat bulunamazsa nedeni kartta yazar.
 
+- **2.27.2:** şehir bağlantısı sayfaya göreli yazılmışsa ("GunlukYarisProgrami?SehirId=…") adres sayfanın klasörüne
+  göre kurulur (önce site köküne gidip "sayfa yok" alıyordu); şehir adındaki boşluk ve Türkçe harfler adreste kodlanır.
+  Koşular (ya da bulunamama nedeni) altılı başlığının hemen altında, kaydırmadan görünür. Uygulama güncellenince
+  altılılar arka planda beklemeden yeni okuyucuyla yeniden okunur.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den
