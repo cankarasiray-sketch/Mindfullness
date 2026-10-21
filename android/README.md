@@ -163,6 +163,10 @@ bildirim olarak gelir.
   olduğunu kontrol uyarısı; okunamazsa açıkça yazar. Bildirimde ayak başına bir satır. 1. ayağın saati bilindiği için
   başlamış altılı bildirilmez ve günün en mantıklı kuponuna girmez.
 
+- **2.27.1:** koşu saatleri üç yoldan aranır: AGF sayfasının ayak başlıkları, şehrin program bağlantısı, olmazsa şehir
+  sekmesinin içerik adresi ("/Info/Page/" ↔ "/Info/Sehir/"); at tablosunda numara başlığı yoksa numara sütunu
+  kendiliğinden bulunur. Saat bulunamazsa nedeni kartta yazar.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

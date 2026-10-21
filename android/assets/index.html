@@ -781,7 +781,8 @@ function altiliRaceNote(a) {
       + (last.time ? ", son ayak " + esc(last.time) : "") + ". Bilyoner'de altılının 1. ayağının " + first.no + ". koşu olduğunu kontrol et.</p>";
   }
   if (rs.length === 6 && first.time) return '<p class="small"><b>Koşular:</b> 1. ayak ' + esc(first.time) + ". Bilyoner'de saatleri kontrol et.</p>";
-  return '<p class="small muted">Koşu numaraları ve saatleri okunamadı: Bilyoner\'de altılının 1. ayağının hangi koşu olduğunu kontrol et.</p>';
+  return '<p class="small muted">Koşu numaraları ve saatleri okunamadı: Bilyoner\'de altılının 1. ayağının hangi koşu olduğunu kontrol et.'
+    + (a.racesWhy ? "<br>Neden: " + esc(a.racesWhy) : "") + "</p>";
 }
 function altiliPlanHtml(a) {
   var r = a.plan || {};

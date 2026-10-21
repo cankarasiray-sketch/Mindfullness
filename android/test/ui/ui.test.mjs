@@ -821,7 +821,7 @@ function altiliState() {
         plan: {play: true, legs: [leg(["2", "1"], 1, true), leg(["2"], 0.67, true), leg(["5", "3"], 0.6, true), leg(["4"], 0.55, true), leg(["1", "7"], 0.7, true), leg(["2"], 0.62, true)],
           units: 8, kat: 3, unit: 1.25, cost: 10, stake: 30, hit: 0.105, roi: 1.38, ev: 11.4, ifHit: 394.3, oddsLegs: 6,
           reason: "Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr."}},
-      {key: "tjk/2/1", source: "TJK", label: "İzmir 1. altılı", devir: 0, pool: 0,
+      {key: "tjk/2/1", source: "TJK", label: "İzmir 1. altılı", devir: 0, pool: 0, racesWhy: "programda koşu tablosu bulunamadı (4 KB, 0 tablo: \"İZMİR\")",
         plan: {play: false, mode: "tutma", budget: 60, legs: [leg(["1", "2"], 0.65, false), leg(["3", "1"], 0.8, false), leg(["4", "2"], 1, false), leg(["1", "2"], 0.8, false), leg(["6", "1"], 1, false), leg(["2"], 0.7, false)],
           units: 32, kat: 1, unit: 1.25, cost: 40, stake: 0, hit: 0.233, roi: 0.73, ev: -10.8, ifHit: 125.3, oddsLegs: 0,
           reason: "Ortalamada zarar: bu kupon her 100 TL'nin ortalama 73 TL'sini geri getirir. Ganyan oranı okunamadı: AGF tek başına kalabalığın tahmini, kâr yalnızca devirle mümkün (devir ve havuzu gir)."}}]};
@@ -851,6 +851,7 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /Günün en mantıklı kuponu: İstanbul 3–8\. koşu · Bilyoner\s*Göster/);
   assert.match(card, /OYNAMA: Ortalamada zarar: bu kupon/);
   assert.match(card, /Koşu numaraları ve saatleri okunamadı: Bilyoner'de altılının 1\. ayağının hangi koşu olduğunu kontrol et\./);
+  assert.match(card, /Neden: programda koşu tablosu bulunamadı \(4 KB, 0 tablo: "İZMİR"\)/);
   assert.match(card, /Kupon \(tutma odaklı, 60,00 TL bütçe\)1\. ayak: 1, 2 \(%65\)/);
   assert.match(card, /Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı/);
   assert.match(card, /Tutarsa ortalama 125,30 TL; uzun vadede her 100 TL'de ortalama 27 TL kayıp\./);

@@ -412,7 +412,7 @@ public final class Tjk {
             log.add("Yerli hipodromlar tek tek deneniyor.");
         }
         Set<String> seen = new HashSet<>();
-        Map<Integer, List<ProgramRace>> programs = new LinkedHashMap<>();
+        Map<Integer, Object[]> programs = new LinkedHashMap<>();
         outer:
         for (Map.Entry<Integer, String> c : cities.entrySet()) {
             for (int no = 1; no <= 2; no++) {
@@ -464,27 +464,33 @@ public final class Tjk {
                 a.put("no", no);
                 a.put("label", label);
                 a.put("legs", new ArrayList<Object>(text));
-                if (links.containsKey(c.getKey())) { // 2.27: her ayağın koşu numarası ve saati (yanlış koşuya oynanmasın)
-                    List<ProgramRace> program = programs.get(c.getKey());
-                    if (program == null) {
-                        try {
-                            requests++;
-                            program = programRaces(http.get(links.get(c.getKey())[1], headers()).body);
-                        } catch (Http.ProviderException e) {
-                            program = new ArrayList<>();
-                            log.add(c.getValue() + " programı okunamadı: " + shortMessage(e.getMessage()));
-                        }
-                        programs.put(c.getKey(), program);
+                // 2.27: her ayağın koşu numarası ve saati (yanlış koşuya oynanmasın). Önce AGF sayfasındaki ayak başlıkları,
+                // sonra şehrin programı (bağlantıdaki sayfa, olmazsa şehir sekmesinin adresi); bulunamazsa nedeni kartta.
+                List<Object> races = agfLegRaces(html);
+                String raceWhy = null;
+                if (races == null && links.containsKey(c.getKey())) {
+                    Object[] prog = programs.get(c.getKey());
+                    if (prog == null) {
+                        step(progress, c.getValue() + " programı okunuyor (koşu saatleri)…");
+                        prog = program(http, links.get(c.getKey())[1]);
+                        requests += 2;
+                        programs.put(c.getKey(), prog);
                     }
-                    List<Object> races = legRaces(legs, program);
-                    if (races != null) {
-                        a.put("races", races);
-                        String start = Json.str(Json.obj(races.get(0)), "time");
-                        if (start != null) a.put("start", start);
-                        log.add(label + ": koşular " + raceText(races));
-                    } else {
-                        log.add(label + ": koşu saatleri bulunamadı (programda " + program.size() + " koşu tablosu)");
-                    }
+                    @SuppressWarnings("unchecked")
+                    List<ProgramRace> program = (List<ProgramRace>) prog[0];
+                    races = legRaces(legs, program);
+                    if (races == null) raceWhy = program.isEmpty() ? (String) prog[1] : "programdaki " + program.size() + " koşu ayaklarla eşleşmedi";
+                } else if (races == null) {
+                    raceWhy = "şehrin program bağlantısı bulunamadı";
+                }
+                if (races != null) {
+                    a.put("races", races);
+                    String start = Json.str(Json.obj(races.get(0)), "time");
+                    if (start != null) a.put("start", start);
+                    log.add(label + ": koşular " + raceText(races));
+                } else {
+                    a.put("racesWhy", raceWhy);
+                    log.add(label + ": koşu saatleri bulunamadı: " + raceWhy);
                 }
                 Double devir = amountNear(html, DEVIR_TEXT), pool = amountNear(html, POOL_TEXT); // sayfada yazıyorsa
                 if (devir != null) a.put("devir", devir);
@@ -529,22 +535,42 @@ public final class Tjk {
         return String.format(Locale.ROOT, "%02d:%s", Integer.parseInt(c.group(1)), c.group(2));
     }
 
-    /** Tablodaki atlar (başlıkta "N"/"No"/"At No" sütunu). */
+    /**
+     * Tablodaki atlar: başlıkta "N"/"No"/"At No" sütunu; başlık yoksa (2.27.1) her hücresi farklı bir tam sayı (1–30)
+     * olan en dolu sütun (programda atlar numara sırasıyla yazılır).
+     */
     static List<String> runners(String table) {
         String[] rows = table.split("(?i)<tr\\b");
         int horseCol = -1;
+        List<List<String>> all = new ArrayList<>();
         List<String> out = new ArrayList<>();
         for (int r = 1; r < rows.length; r++) {
             String[] cells = rows[r].split("(?i)<t[dh]\\b");
             List<String> ts = new ArrayList<>();
             for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
+            all.add(ts);
             if (horseCol < 0) {
                 for (int c = 0; c < ts.size(); c++) if (HORSE_HEADER.matcher(ts.get(c)).matches()) horseCol = c;
                 continue;
             }
             if (horseCol < ts.size() && NUMBER_CELL.matcher(ts.get(horseCol)).matches()) out.add(String.valueOf(Integer.parseInt(ts.get(horseCol))));
         }
-        return out;
+        if (horseCol >= 0) return out;
+        int width = 0;
+        for (List<String> ts : all) width = Math.max(width, ts.size());
+        List<String> best = new ArrayList<>();
+        for (int c = 0; c < width; c++) {
+            List<String> col = new ArrayList<>();
+            int rowsWith = 0;
+            for (List<String> ts : all) {
+                if (c >= ts.size()) continue;
+                rowsWith++;
+                if (NUMBER_CELL.matcher(ts.get(c)).matches()) col.add(String.valueOf(Integer.parseInt(ts.get(c))));
+            }
+            boolean distinct = new HashSet<>(col).size() == col.size();
+            if (distinct && col.size() >= 2 && col.size() >= rowsWith * 0.7 && col.size() > best.size()) best = col;
+        }
+        return best;
     }
 
     /**
@@ -583,6 +609,62 @@ public final class Tjk {
             }
             prev = span[1];
         }
+        return out;
+    }
+
+    /** Programın şehir sekmesi adresi (sayfa yerine yalnızca içerik: "/Info/Page/" ↔ "/Info/Sehir/"). */
+    static String programAlternative(String url) {
+        if (url.contains("/Info/Page/")) return url.replace("/Info/Page/", "/Info/Sehir/");
+        if (url.contains("/Info/Sehir/")) return url.replace("/Info/Sehir/", "/Info/Page/");
+        return null;
+    }
+
+    /** Şehir programındaki koşular ve bulunamazsa nedeni: {List<ProgramRace>, neden}. Önce bağlantı, olmazsa diğer adres. */
+    static Object[] program(Http http, String url) {
+        String why = null;
+        for (String u : new String[] {url, programAlternative(url)}) {
+            if (u == null) continue;
+            try {
+                String body = http.get(u, headers()).body;
+                List<ProgramRace> races = programRaces(body);
+                if (!races.isEmpty()) return new Object[] {races, null};
+                if (why == null) why = "programda koşu tablosu bulunamadı (" + excerpt(body) + ")";
+            } catch (Http.ProviderException e) {
+                if (why == null) why = "program okunamadı: " + shortMessage(e.getMessage());
+            }
+        }
+        return new Object[] {new ArrayList<ProgramRace>(), why};
+    }
+
+    private static final Pattern AYAK_HEAD = Pattern.compile("(?i)(?<!\\d)([1-6])\\s*\\.\\s*ayak");
+
+    /**
+     * AGF sayfasının ayak başlıklarında koşu numarası ya da saati yazıyorsa ("1. AYAK (4. Koşu 14:30)"): 6 ayağın
+     * {no, time}; 1. ayakta hiçbiri yoksa null.
+     */
+    static List<Object> agfLegRaces(String html) {
+        String t = text(stripScripts(html));
+        Map<Integer, Map<String, Object>> found = new TreeMap<>();
+        Matcher m = AYAK_HEAD.matcher(t);
+        List<int[]> heads = new ArrayList<>();
+        while (m.find()) heads.add(new int[] {Integer.parseInt(m.group(1)), m.end(), m.start()});
+        for (int i = 0; i < heads.size(); i++) {
+            int k = heads.get(i)[0];
+            if (found.containsKey(k)) continue;
+            int end = Math.min(t.length(), heads.get(i)[1] + 60);
+            if (i + 1 < heads.size()) end = Math.min(end, heads.get(i + 1)[2]);
+            String seg = t.substring(heads.get(i)[1], end);
+            Map<String, Object> r = new LinkedHashMap<>();
+            Matcher no = RACE_NO.matcher(seg);
+            if (no.find()) r.put("no", Long.parseLong(no.group(1)));
+            String time = clock(seg);
+            if (time != null) r.put("time", time);
+            found.put(k, r);
+        }
+        Map<String, Object> first = found.get(1);
+        if (first == null || first.isEmpty()) return null;
+        List<Object> out = new ArrayList<>();
+        for (int k = 1; k <= 6; k++) out.add(found.containsKey(k) ? found.get(k) : new LinkedHashMap<String, Object>());
         return out;
     }
 

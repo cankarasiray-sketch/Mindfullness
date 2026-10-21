@@ -169,9 +169,10 @@ public class TjkTest {
         assertTrue(log, log.contains("İstanbul 2. altılı: önceki altılıyla aynı tablo"));
         assertTrue(log, log.contains("Ankara 1. altılı: AGF henüz oluşmadı")); // sayfa var, paylar boş (2.25.3)
         assertEquals(1L, r.get("waiting"));
-        assertEquals(5, asked.size()); // + İstanbul programı (koşu saatleri); Ankara'nın 1. altılısı yoksa 2.si istenmez
-        assertTrue(log, log.contains("İstanbul programı okunamadı"));
+        assertEquals(6, asked.size()); // + İstanbul programı (sayfa ve şehir sekmesi); Ankara'nın 1. altılısı yoksa 2.si istenmez
+        assertTrue(log, log.contains("İstanbul 1. altılı: koşu saatleri bulunamadı: program okunamadı"));
         assertEquals(null, a.get("races"));
+        assertTrue((String) a.get("racesWhy"), ((String) a.get("racesWhy")).startsWith("program okunamadı"));
         assertEquals(NOW.toString(), r.get("at"));
     }
 
@@ -276,5 +277,41 @@ public class TjkTest {
         assertTrue(coupon, coupon.startsWith("1. ayak (4. koşu 14:30): 5"));
         assertTrue(coupon, coupon.contains("\n6. ayak (9. koşu 17:00): 7"));
         assertEquals(Texts.altiliCoupon(plan), Texts.altiliCoupon(plan, null));
+    }
+
+    @Test
+    public void raceTimesFromAgfHeadersOrCityTabOrHeaderlessTables() {
+        // 1) AGF sayfasının ayak başlıklarında koşu ve saat: program hiç istenmez
+        String agf = page(columns(LEGS));
+        for (int k = 1; k <= 6; k++) agf = agf.replace("<th>" + k + ". Ayak</th>", "<th>" + k + ". Ayak (" + (k + 3) + ".Koşu " + (13 + k) + ":15)</th>");
+        List<Object> fromAgf = Tjk.agfLegRaces(agf);
+        assertEquals(4L, Json.obj(fromAgf.get(0)).get("no"));
+        assertEquals("14:15", Json.obj(fromAgf.get(0)).get("time"));
+        assertEquals("19:15", Json.obj(fromAgf.get(5)).get("time"));
+        assertEquals(null, Tjk.agfLegRaces(page(columns(LEGS)))); // başlıkta bilgi yok
+        Map<String, String> pages = new LinkedHashMap<>();
+        pages.put(Tjk.programUrl(DAY), "<a href=\"?SehirId=3&SehirAdi=Bursa\">Bursa</a>");
+        pages.put(Tjk.agfUrl(3, DAY, 1), agf);
+        List<String> asked = new ArrayList<>();
+        Map<String, Object> a = altili(Tjk.read(fake(pages, asked), DAY, NOW, null), 0);
+        assertEquals("14:15", a.get("start"));
+        for (String u : asked) assertFalse(u, u.contains("SehirId")); // şehir programı istenmedi
+        // 2) bağlantıdaki program sayfası boş (içerik sekmeyle yükleniyor): şehir sekmesi adresi denenir
+        String page = "https://www.tjk.org/TR/YarisSever/Info/Page/GunlukYarisProgrami?SehirId=3&SehirAdi=Bursa";
+        pages.put(Tjk.agfUrl(3, DAY, 1), page(columns(LEGS)));
+        pages.put(page, "<html><body><div id=\"tabs\">Bursa</div><script>load()</script></body></html>");
+        pages.put(Tjk.programAlternative(page), cityProgram());
+        a = altili(Tjk.read(fake(pages, new ArrayList<String>()), DAY, NOW, null), 0);
+        assertEquals("14:30", a.get("start"));
+        assertEquals("https://www.tjk.org/TR/YarisSever/Info/Sehir/GunlukYarisProgrami?SehirId=3&SehirAdi=Bursa", Tjk.programAlternative(page));
+        // 3) at tablosunda "N" başlığı yok: numara sütunu kendiliğinden bulunur
+        pages.put(Tjk.programAlternative(page), cityProgram().replace("<tr><th>N</th><th>At İsmi</th><th>Sıklet</th><th>AGF</th></tr>", "<tr><th></th><th>At</th><th>Kilo</th><th>Agf</th></tr>"));
+        a = altili(Tjk.read(fake(pages, new ArrayList<String>()), DAY, NOW, null), 0);
+        assertEquals("14:30", a.get("start"));
+        // 4) hiçbiri yoksa neden kartta
+        pages.remove(Tjk.programAlternative(page));
+        a = altili(Tjk.read(fake(pages, new ArrayList<String>()), DAY, NOW, null), 0);
+        assertEquals(null, a.get("start"));
+        assertTrue((String) a.get("racesWhy"), ((String) a.get("racesWhy")).startsWith("programda koşu tablosu bulunamadı ("));
     }
 }
