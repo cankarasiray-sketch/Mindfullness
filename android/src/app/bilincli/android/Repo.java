@@ -3,6 +3,7 @@ package app.bilincli.android;
 import android.content.Context;
 import android.content.SharedPreferences;
 import app.bilincli.core.Altili;
+import app.bilincli.core.AltiliLog;
 import app.bilincli.core.AtYarisi;
 import app.bilincli.core.Calibration;
 import app.bilincli.core.Closing;
@@ -62,6 +63,8 @@ final class Repo {
     private final Object zirveLock = new Object();
     /** Son altılı AGF okuması: TJK (2.19), Bilyoner ve Nesine (2.20) (agf.json). */
     private final FileStorage agfStore;
+    /** 2.26: altılı defteri (öneriler, sonuçlar, öğrenme; altili_defter.json). */
+    private final FileStorage altiliLogStore;
     private Ledger demoLedger;
     Map<String, Object> demoSummary;
 
@@ -81,6 +84,7 @@ final class Repo {
         forecasts = new Forecasts(new FileStorage(new File(app.getFilesDir(), "tahmin.json")));
         zirveStore = new FileStorage(new File(app.getFilesDir(), "zirve.json"));
         agfStore = new FileStorage(new File(app.getFilesDir(), "agf.json"));
+        altiliLogStore = new FileStorage(new File(app.getFilesDir(), "altili_defter.json"));
         virtual = new Virtual(new FileStorage(new File(app.getFilesDir(), "sanal.json")));
         String m = memoryStore.read();
         memory = m == null || m.trim().isEmpty() ? new java.util.LinkedHashMap<String, Object>() : Json.parseObject(m);
@@ -530,6 +534,11 @@ final class Repo {
         in.maxFraction = s.maxStakeFraction;
         in.maxCost = Json.dbl(inp, "maxCost", 0);
         in.budget = Pick.stake(s, ledger.balance()) / 100.0; // 2.23: oynanmayacak günde tutma odaklı kupon, tek maçtaki tutarla
+        Map<String, Object> learn = altiliLearn;
+        if (learn != null) { // 2.26: geçmiş sonuçlardan öğrenilen bütçe ve AGF düzeltmesi
+            if (learn.get("fraction") != null) in.budget = Math.max(10, Math.floor(Json.dbl(learn, "fraction", 0.03) * in.kasa / 10) * 10);
+            in.alpha = Json.dbl(Json.obj(learn.get("calib")), "alphaUse", 1);
+        }
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
             in.devir = Json.dbl(by, "devir", 0);
@@ -551,7 +560,7 @@ final class Repo {
     Map<String, Object> agfView() {
         if (isDemo()) return null;
         Settings st = ledger.settings();
-        String cacheKey = agfRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
+        String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
                 + st.altiliTakeout + "|" + st.altiliTax + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
@@ -563,8 +572,35 @@ final class Repo {
     /** Son görünüm: {anahtar, görünüm}. */
     private volatile Object[] agfViewCache;
 
+    /** Son analizdeki öğrenilenler (planlar bununla kurulur). */
+    private volatile Map<String, Object> altiliLearn;
+    private volatile String altiliLogRaw;
+    private final Object altiliLogLock = new Object();
+
+    private Map<String, Object> altiliLog() {
+        try {
+            String raw = altiliLogRaw != null ? altiliLogRaw : altiliLogStore.read();
+            if (raw != null && !raw.trim().isEmpty()) {
+                altiliLogRaw = raw;
+                return Json.parseObject(raw);
+            }
+        } catch (RuntimeException ignored) {
+            // bozuk defter: yeniden başlar
+        }
+        return new LinkedHashMap<>();
+    }
+
+    private void saveAltiliLog(Map<String, Object> log) {
+        String raw = Json.write(log);
+        altiliLogStore.write(raw);
+        altiliLogRaw = raw;
+    }
+
     private Map<String, Object> agfViewFresh() {
         Map<String, Object> stored = agfStored(), inp = altiliInputs();
+        Settings ls = ledger.settings();
+        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()));
+        altiliLearn = learn; // planlar öğrenilenlerle kurulur
         List<Object> manual = Json.arr(inp.get("manual"));
         if (stored == null && manual.size() < 6) return null;
         Map<String, Object> v = stored == null ? new LinkedHashMap<String, Object>() : stored;
@@ -609,6 +645,8 @@ final class Repo {
         int best = Altili.best(todays);
         if (best < 0) best = Altili.best(plans);
         v.put("best", best < 0 ? null : Json.str(Json.obj(list.get(best)), "key"));
+        v.put("learn", learn);
+        v.put("settleLog", altiliLog().get("settleLog"));
         Map<String, Object> shown = new LinkedHashMap<>();
         shown.put("maxCost", Json.dbl(inp, "maxCost", 0));
         shown.put("manual", manual);
@@ -650,8 +688,62 @@ final class Repo {
             String raw = Json.write(r);
             agfStore.write(raw);
             agfRaw = raw;
+            recordAltili();
             return r;
         }
+    }
+
+    /** 2.26: günün altılıları (son AGF'leri ve kurulan kupon) deftere. */
+    private void recordAltili() {
+        Map<String, Object> v = agfView();
+        if (v == null) return;
+        synchronized (altiliLogLock) {
+            Map<String, Object> log = altiliLog();
+            AltiliLog.record(log, Fmt.dayKey(Instant.now()), Json.arr(v.get("altilis")));
+            saveAltiliLog(log);
+        }
+    }
+
+    /** Sonuçlar en fazla bu sıklıkta denenir (arka plan). */
+    static final long ALTILI_SETTLE_GAP_S = 3 * 3600;
+
+    /**
+     * 2.26: sonucu bekleyen günlerin TJK sonuçları okunur, öneriler ve kurulan kuponlar sonuçlanır (kredi harcamaz).
+     * force: elle (bugün de denenir, aralık beklenmez). Sonuçlanan altılı sayısı.
+     */
+    int altiliSettle(boolean force, Daily.Progress progress) {
+        if (isDemo()) return 0;
+        Instant now = Instant.now();
+        long last = prefs.getLong("altiliSettleAt", 0);
+        if (!force && now.toEpochMilli() - last < ALTILI_SETTLE_GAP_S * 1000) return 0;
+        String today = Fmt.dayKey(now);
+        List<String> days;
+        synchronized (altiliLogLock) {
+            days = AltiliLog.pendingDays(altiliLog(), force ? java.time.LocalDate.parse(today).plusDays(1).toString() : today);
+        }
+        if (days.isEmpty()) return 0;
+        prefs.edit().putLong("altiliSettleAt", now.toEpochMilli()).apply();
+        Settings s = ledger.settings();
+        AndroidHttp http = new AndroidHttp(app);
+        int n = 0;
+        List<Object> lines = new ArrayList<>();
+        for (String day : days) {
+            Map<String, Object> res = Tjk.results(http, java.time.LocalDate.parse(day), progress);
+            lines.add("Sonuçlar " + day);
+            for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
+            synchronized (altiliLogLock) {
+                Map<String, Object> log = altiliLog();
+                int k = AltiliLog.settle(log, day, res, s.altiliUnit, s.altiliTakeout, s.altiliTax, today, now);
+                n += k;
+                lines.add("  " + k + " altılı sonuçlandı");
+                Map<String, Object> sl = new LinkedHashMap<>();
+                sl.put("at", now.toString());
+                sl.put("log", lines);
+                log.put("settleLog", sl);
+                saveAltiliLog(log);
+            }
+        }
+        return n;
     }
 
     /** Arka planda altılı okuması en fazla bu sıklıkta ve bu saatlerde (Türkiye). */
@@ -672,6 +764,11 @@ final class Repo {
         String at = st == null ? null : Json.str(st, "at");
         long gap = st != null && Json.arr(st.get("altilis")).isEmpty() ? ALTILI_RETRY_S : ALTILI_GAP_S; // AGF henüz yoksa daha sık
         if (at != null && Instant.parse(at).plusSeconds(gap).isAfter(now)) return null;
+        try {
+            altiliSettle(false, null); // 2.26: önceki günlerin sonuçları (3 saatte bir)
+        } catch (RuntimeException ignored) {
+            // bir sonraki işte yeniden
+        }
         Map<String, Object> r = agfRead(null);
         return new String[][] {altiliNotice(now), altiliHealth(r, now)};
     }
@@ -750,6 +847,7 @@ final class Repo {
             if (sigs.contains(sig)) continue;
             sigs.add(sig);
             count++;
+            noteNotified(a, plan, day, now);
             if (title == null) title = "Altılı: OYNA · " + a.get("label");
             body.append(body.length() == 0 ? "" : "\n\n").append(a.get("label")).append(" · ").append(a.get("source"))
                     .append(start == null ? "" : " · 1. ayak " + start).append('\n').append(coupon).append('\n')
@@ -764,6 +862,7 @@ final class Repo {
                 if (!bestKey.equals(Json.str(a, "key")) || plan == null) continue;
                 String start = Json.str(a, "start");
                 title = "Günün altılısı · " + a.get("label");
+                noteNotified(a, plan, day, now);
                 body.append(a.get("label")).append(" · ").append(a.get("source")).append(start == null ? "" : " · 1. ayak " + start).append('\n')
                         .append(Texts.altiliCoupon(plan)).append('\n').append(Texts.altiliSummary(plan))
                         .append("\nOrtalamada kâr beklenmiyor; oynayacaksan günün en mantıklı kuponu bu.");
@@ -781,6 +880,16 @@ final class Repo {
         prefs.edit().putString("altiliNotified", Json.write(sent)).apply();
         if (count > 1) title = "Altılı: " + count + " kârlı kupon";
         return new String[] {title, body.append("\n1. ayak başlamadan oyna. Garanti değil: çoğu gün kaybedilir, kâr uzun vadede.").toString()};
+    }
+
+    /** Bildirilen kupon defterde dondurulur (önerilerin karnesi bununla). */
+    private void noteNotified(Map<String, Object> a, Map<String, Object> plan, String today, Instant now) {
+        synchronized (altiliLogLock) {
+            Map<String, Object> log = altiliLog();
+            String d = Json.str(a, "day") != null ? Json.str(a, "day") : today;
+            AltiliLog.markNotified(log, d, Json.str(a, "key"), plan, now);
+            saveAltiliLog(log);
+        }
     }
 
     /** Kurulu sürümün numarası (güncellemeden sonra Zirve kaydını yenilemek için). */

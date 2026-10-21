@@ -468,4 +468,128 @@ public final class Tjk {
         out.put("waiting", (long) waiting);
         return out;
     }
+
+    // ---- 2.26: sonuçlar (önerilerin tutup tutmadığı ve öğrenme için) -----------------------------------------
+
+    static String resultsUrl(LocalDate day) {
+        return HOST + "/TR/YarisSever/Info/Page/GunlukYarisSonuclari?QueryParameter_Tarih=" + day.format(DMY).replace("/", "%2F");
+    }
+
+    /** Sonuç sayfasındaki şehir bağlantıları: şehir no → {ad, mutlak adres}. */
+    static Map<Integer, String[]> cityLinks(String html, String page) {
+        Map<Integer, String[]> out = new LinkedHashMap<>();
+        Matcher m = LINK.matcher(html);
+        while (m.find()) {
+            String href = decode(m.group(1));
+            Matcher id = CITY_ID.matcher(href);
+            if (!id.find()) continue;
+            int city = Integer.parseInt(id.group(1));
+            if (city <= 0 || out.containsKey(city)) continue;
+            Matcher nm = CITY_NAME.matcher(href);
+            String name = nm.find() ? urlDecode(nm.group(1)) : "";
+            if (name.isEmpty()) name = text(m.group(2));
+            out.put(city, new String[] {cityName(city, name), AtYarisi.absolute(page, href)});
+        }
+        return out;
+    }
+
+    /** "6'LI GANYAN 3/5/1/7/2/4 … 12.345,67 TL": kazanan kombinasyon ve (varsa) ikramiye, sayfadaki sırayla. */
+    static final Pattern ALTILI_COMBO = Pattern.compile(
+            "(?i)(?:6\\s*['’]?\\s*l[ıiİI]|alt[ıi]l[ıi])\\s*ganyan[^0-9]{0,60}?(\\d{1,2}(?:\\s*[/-]\\s*\\d{1,2}){5})(?![\\d/])(?:[^0-9]{0,40}?(\\d{1,3}(?:\\.\\d{3})*,\\d{2}))?");
+    private static final Pattern POS_HEADER = Pattern.compile("(?i)^(s|sıra|sira|sn|#|yer|sonuç|sonuc)$");
+
+    static List<Map<String, Object>> combos(String html) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        Matcher m = ALTILI_COMBO.matcher(text(html));
+        while (m.find()) {
+            List<Object> nos = new ArrayList<>();
+            for (String n : m.group(1).split("\\s*[/-]\\s*")) nos.add(String.valueOf(Integer.parseInt(n.trim())));
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("nos", nos);
+            if (m.group(2) != null) c.put("payout", AtYarisi.amount(m.group(2)));
+            out.add(c);
+        }
+        return out;
+    }
+
+    /** Koşu tabloları: başlıkta at no sütunu olanlar; kazanan, sıra sütununda 1 olan (sıra sütunu yoksa ilk satır). */
+    static List<Map<String, Object>> raceResults(String html) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (String table : innerTables(stripScripts(html))) {
+            String[] rows = table.split("(?i)<tr\\b");
+            int horseCol = -1, posCol = -1;
+            List<Object> runners = new ArrayList<>();
+            String winner = null, first = null;
+            for (int r = 1; r < rows.length; r++) {
+                String[] cells = rows[r].split("(?i)<t[dh]\\b");
+                List<String> ts = new ArrayList<>();
+                for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
+                if (horseCol < 0) {
+                    for (int c = 0; c < ts.size(); c++) {
+                        if (HORSE_HEADER.matcher(ts.get(c)).matches()) horseCol = c;
+                        else if (posCol < 0 && POS_HEADER.matcher(ts.get(c)).matches()) posCol = c;
+                    }
+                    continue;
+                }
+                if (horseCol >= ts.size() || !NUMBER_CELL.matcher(ts.get(horseCol)).matches()) continue;
+                String no = String.valueOf(Integer.parseInt(ts.get(horseCol)));
+                runners.add(no);
+                if (first == null) first = no;
+                if (posCol >= 0 && posCol < ts.size() && ts.get(posCol).matches("0*1\\.?")) winner = no;
+            }
+            if (runners.size() < 2) continue;
+            Map<String, Object> race = new LinkedHashMap<>();
+            race.put("runners", runners);
+            race.put("winner", winner != null ? winner : posCol < 0 ? first : null);
+            out.add(race);
+        }
+        return out;
+    }
+
+    /**
+     * Günün sonuçları: {cities: [{cityId, city, combos: [{nos, payout?}], races: [{runners, winner}]}], log}. Önce sonuç
+     * sayfasından şehirler, sonra her şehrin sonuç sayfası okunur. İstisna fırlatmaz.
+     */
+    public static Map<String, Object> results(Http http, LocalDate day, Daily.Progress progress) {
+        List<Object> log = new ArrayList<>(), cities = new ArrayList<>();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("day", day.toString());
+        out.put("cities", cities);
+        out.put("log", log);
+        step(progress, "TJK sonuçları okunuyor (" + day + ")…");
+        String page = resultsUrl(day), html;
+        try {
+            html = http.get(page, headers()).body;
+        } catch (Http.ProviderException e) {
+            log.add("Sonuç sayfası okunamadı: " + shortMessage(e.getMessage()));
+            return out;
+        }
+        Map<Integer, String[]> links = cityLinks(html, page);
+        if (links.isEmpty()) {
+            log.add("Sonuç sayfasında şehir bağlantısı yok (" + excerpt(html) + ")");
+            return out;
+        }
+        int requests = 0;
+        for (Map.Entry<Integer, String[]> c : links.entrySet()) {
+            if (++requests > MAX_REQUESTS) break;
+            step(progress, c.getValue()[0] + " sonuçları okunuyor…");
+            String body;
+            try {
+                body = http.get(c.getValue()[1], headers()).body;
+            } catch (Http.ProviderException e) {
+                log.add(c.getValue()[0] + ": " + shortMessage(e.getMessage()));
+                continue;
+            }
+            List<Map<String, Object>> combos = combos(body), races = raceResults(body);
+            Map<String, Object> city = new LinkedHashMap<>();
+            city.put("cityId", c.getKey());
+            city.put("city", c.getValue()[0]);
+            city.put("combos", new ArrayList<Object>(combos));
+            city.put("races", new ArrayList<Object>(races));
+            cities.add(city);
+            log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu, " + races.size() + " koşu"
+                    + (combos.isEmpty() && races.isEmpty() ? " (" + excerpt(body) + ")" : ""));
+        }
+        return out;
+    }
 }

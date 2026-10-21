@@ -731,6 +731,47 @@ function altiliWhy(log) {
       + (s.wait ? "<br>" + s.wait + " altılıda AGF henüz oluşmadı (TJK'da paylar boş)" : "") + s.other.map(function (o) { return "<br>" + esc(o); }).join("");
   }).join("") + (waiting ? "<br>Sabah erken normal: bahisler başlayınca TJK doldurur, uygulama 09:00–21:00 arası saatte bir kendisi yeniden okur." : "");
 }
+/** "%6'sı", "%3'ü", "%1'i": yüzdenin iyelik eki (sayının okunuşuna göre). */
+function pctOf(x) {
+  var n = Math.round(x * 100), d = n % 10, t = n % 100;
+  var suf = n === 100 ? "ü" : d ? ["", "i", "si", "ü", "ü", "i", "sı", "si", "i", "u"][d] : {10: "u", 20: "si", 30: "u", 40: "ı", 50: "si", 60: "ı", 70: "i", 80: "i", 90: "ı"}[t];
+  return "%" + n + "'" + suf;
+}
+/** 2.26: altılı karnesi: önerilerin ve bütün altılıların sonuçları, ayak tahmini, öğrenilen düzeltme ve bütçe. */
+function altiliKarne(L, sl) {
+  if (!L) return "";
+  var tl0 = function (x) { return tl(Math.round(x * 100)); }, pc = function (x) { return "%" + num(x * 100, 0); };
+  var s = L.suggested || {}, a = L.all || {}, c = L.calib || {}, lg = L.legs || {}, fv = L.fav || {};
+  var html = '<div id="altiliKarne"><h3 style="margin:14px 0 4px">Altılı karnesi</h3>';
+  if (!L.settled) {
+    html += '<p class="small muted">Henüz sonuçlanan altılı yok' + (L.pending ? " (" + L.pending + " altılı sonuç bekliyor)" : "")
+      + ". Uygulama her gün önerdiği kuponu ve bütün altılıları kaydeder, sonuçları ertesi sabah TJK'dan okur.</p>";
+  } else {
+    var f = L.fraction, strat = (L.strategies || []).map(function (x) {
+      return "kasanın " + pctOf(x.fraction) + ": " + x.hits + "/" + x.n + " tuttu, getiri " + pc(x.roi);
+    }).join("<br>");
+    html += '<div class="list">'
+      + item("Önerilerim", s.n ? s.hits + "/" + s.n + " tuttu · " + tl0(s.cost) + " → " + tl0(s.ret) + ' <span class="' + cls(s.ret - s.cost) + '">(' + pc(s.roi) + ")</span>"
+        : "bildirilen kupon henüz sonuçlanmadı")
+      + item("Bütün altılılar (en mantıklı kupon)", a.hits + "/" + a.n + " tuttu · getiri " + '<span class="' + cls(a.ret - a.cost) + '">' + pc(a.roi) + "</span>")
+      + item("Ayak tahmini", "beklenen " + pc(lg.expected) + ", gerçekleşen " + pc(lg.actual) + " (" + lg.n + " ayak)")
+      + item("AGF favorisi", "kazandı " + pc(fv.win) + " · AGF'nin verdiği " + pc(fv.agf) + " (" + fv.n + " ayak)")
+      + item("AGF düzeltmesi", c.use ? "kullanılıyor (α " + num(c.alphaUse, 2) + ")" : "kullanılmıyor")
+      + item("Bütçe", f ? "kasanın " + pctOf(f) + " (geçmişte en iyi getiri)" : "kasanın %3'ü (seçim için en az 20 sonuç gerekli, şu an " + L.settled + ")")
+      + "</div>"
+      + '<p class="small muted">' + esc(c.why || "") + " Bütçe karşılaştırması (geçmiş altılılar her bütçeyle yeniden kurulup sonuçlarıyla):<br>" + strat
+      + "<br>İkramiye sonuç sayfasında yoksa AGF'den tahmin edilir (birim × (1 − kesinti) / kazanan kombinasyonun AGF payı).</p>";
+  }
+  var hist = L.history || [];
+  if (hist.length) html += '<details class="info"><summary class="small">Son altılılar (' + hist.length + ")</summary>" + hist.map(function (h) {
+    var st = h.status === "tuttu" ? '<b class="pos">tuttu</b> · ' + tl0(h.ret) + (h.estimated ? " (tahmini)" : "")
+      : h.status === "tutmadı" ? '<span class="neg">tutmadı</span> (' + h.legs + "/6 ayak)" : esc(h.status);
+    return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "") + "</span><span>" + tl0(h.cost) + " · " + st + "</span></div>";
+  }).join("") + "</details>";
+  html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları şimdi kontrol et</button></div>';
+  if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
+  return html + "</div>";
+}
 function altiliShare() { act("shareText", {text: "At yarışı okuma ayrıntısı (" + S.agf.at + ")\n" + (S.agf.log || []).join("\n")}, true); }
 function altiliPlanHtml(a) {
   var r = a.plan || {};
@@ -783,6 +824,7 @@ function altiliCard() {
       + f("havuz", "Tahmini bugünkü altılı havuzu (TL)", numText(cur.pool), "altiliPool()", "devirle getiri ve kendi payımız için")
       + "</details>";
   }
+  if (t) html += altiliKarne(t.learn, t.settleLog);
   html += '<details class="info"><summary class="small">Birim fiyat, kesinti, bütçe</summary>'
     + f("birim", "Birim fiyat (TL)" + (cur && cur.unit && cur.unit !== st.altiliUnit ? " · sitede okunan " + num(cur.unit, 2) + " kullanılıyor" : ""), numText(st.altiliUnit),
       "altiliSave({unit: numTr(this.value)})", "Bilyoner'deki altılı birim fiyatı")

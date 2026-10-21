@@ -141,6 +141,22 @@ bildirim olarak gelir.
   sayılır; kart her gün için programı ve kaç altılının beklediğini gösterir. Son okumada hiç altılı yoksa arka plan
   okuması 2 saat yerine saatte bir yapılır.
 
+## Altılı karnesi ve öğrenen strateji (2.26)
+
+- **Defter:** her okumada günün (ve yarının) altılıları son AGF'leriyle ve kurulan kuponla kaydedilir; bildirilen kupon
+  ("Günün altılısı" ya da OYNA) ayrıca dondurulur. 150 gün tutulur (`altili_defter.json`).
+- **Sonuçlar:** arka planda 3 saatte bir (ve "Sonuçları şimdi kontrol et"), sonucu bekleyen günlerin (en çok 5 gün geriye)
+  TJK sonuç sayfaları okunur. Kazananlar önce sayfadaki "6'LI GANYAN 3/5/1/7/2/4 … TL" satırından (ayaklarla tutarlıysa,
+  ikramiyesiyle), yoksa koşu tablolarından (at no sütunu, sıra 1) bulunur; koşular ayaklara at kümelerinin
+  benzerliğiyle eşlenir. İkramiye yoksa AGF'den tahmin: birim × (1 − kesinti) / kazanan kombinasyonun AGF payı.
+- **Karne:** önerilen kuponlar (tuttu/yatırılan/dönen/getiri), bütün altılılar, ayak tahmini (beklenen ve gerçekleşen
+  tutma), AGF favorisinin kazanma oranı (AGF'nin verdiğiyle), son 12 altılı.
+- **Öğrenme:** (1) AGF düzeltmesi q ∝ p^α, en çok olabilirlikle; yalnızca en az 150 ayak, olabilirlik oranı testi
+  (%5) ve öğrenmede kullanılmayan son üçte birlik dönemde doğrulama varsa ve 1'e doğru büzülerek kullanılır (α > 1:
+  kalabalık favorileri az oynuyor; bu durumda kupon favorilere kayar ve getiri hesabına girer). (2) Bütçe: geçmiş
+  altılılar kasanın %1, %3 ve %6'sıyla yeniden kurulup sonuçlarıyla karşılaştırılır; en az 20 sonuçtan sonra getirisi en
+  iyi olan bütçe kullanılır, öncesinde %3.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

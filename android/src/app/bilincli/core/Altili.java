@@ -59,6 +59,8 @@ public final class Altili {
     }
 
     public static final class Inputs {
+        /** 2.26: geçmiş sonuçlardan öğrenilen AGF düzeltmesi (ganyan yokken q ∝ p^alpha; 1: düzeltme yok). */
+        public double alpha = 1;
         public double takeout = 0.27, tax = 0, unit = 1, devir = 0, pool = 0, maxCost = 0;
         /** Kasa (TL), Kelly çarpanı ve kupon başına kasanın en fazla payı (futboldaki sınırla aynı). */
         public double kasa = 0, km = 0.25, maxFraction = 0.05;
@@ -72,6 +74,14 @@ public final class Altili {
 
     /** "1:32 4:20 7:15" ya da "1:32:2.5" (no:AGF yüzdesi[:ganyan]) -> q'ya göre azalan atlar. */
     static Leg leg(String text) {
+        return leg(text, 1);
+    }
+
+    /**
+     * alpha ≠ 1 (2.26, öğrenilen): ganyan yoksa kazanma olasılığı AGF'nin üssüyle düzeltilir, q = p^alpha / Σ p^alpha
+     * (alpha > 1: kalabalık favorileri az oynuyor, sürprizleri çok).
+     */
+    static Leg leg(String text, double alpha) {
         List<Horse> out = new ArrayList<>();
         for (String tok : String.valueOf(text == null ? "" : text).trim().split("[\\s;]+")) {
             String[] f = tok.split("[:=]");
@@ -91,7 +101,9 @@ public final class Altili {
             else all = false;
         }
         boolean fromOdds = all && book >= MIN_BOOK && book <= MAX_BOOK;
-        for (Horse h : out) h.q = fromOdds ? 1 / h.odds / book : h.p;
+        double pow = 0;
+        for (Horse h : out) pow += Math.pow(h.p, alpha);
+        for (Horse h : out) h.q = fromOdds ? 1 / h.odds / book : alpha == 1 ? h.p : Math.pow(h.p, alpha) / pow;
         out.sort(new Comparator<Horse>() {
             @Override
             public int compare(Horse a, Horse b) {
@@ -364,7 +376,7 @@ public final class Altili {
         }
         List<Leg> legs = new ArrayList<>();
         for (int k = 0; k < 6; k++) {
-            Leg l = leg(legTexts.get(k));
+            Leg l = leg(legTexts.get(k), in.alpha);
             if (l.horses.isEmpty()) {
                 out.put("error", (k + 1) + ". ayağın AGF'si okunamadı.");
                 return out;

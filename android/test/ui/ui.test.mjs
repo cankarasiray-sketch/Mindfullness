@@ -900,6 +900,41 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
+  const s = altiliState();
+  s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
+    legs: {n: 144, expected: 0.62, actual: 0.6}, fav: {n: 144, win: 0.38, agf: 0.34},
+    calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor."},
+    strategies: [{fraction: 0.01, budget: 20, n: 24, hits: 0, cost: 480, ret: 0, roi: 0}, {fraction: 0.03, budget: 60, n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
+      {fraction: 0.06, budget: 120, n: 24, hits: 4, cost: 2880, ret: 2300, roi: 0.799}], fraction: 0.06,
+    history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", notified: true, cost: 60, status: "tuttu", legs: 6, ret: 410, estimated: true},
+      {day: "2026-10-21", label: "Karma 1. altılı", source: "TJK", notified: false, cost: 60, status: "tutmadı", legs: 4, ret: 0},
+      {day: "2026-10-22", label: "Ankara 1. altılı", source: "TJK", notified: false, cost: 60, status: "bekliyor"}]};
+  s.agf.settleLog = {at: "2026-10-22T07:00:00Z", log: ["Sonuçlar 2026-10-21", "  Bursa: 1 altılı sonucu, 9 koşu", "  1 altılı sonuçlandı"]};
+  const f = boot(s, "#firsat");
+  const k = f.$("#altiliKarne").textContent;
+  assert.match(k, /Önerilerim1\/10 tuttu · 600,00 TL → 410,00 TL \(%68\)/);
+  assert.match(k, /kasanın %1'i: 0\/24 tuttu, getiri %0/);
+  assert.match(k, /kasanın %3'ü: 2\/24 tuttu/);
+  assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu · getiri %70/);
+  assert.match(k, /Ayak tahminibeklenen %62, gerçekleşen %60 \(144 ayak\)/);
+  assert.match(k, /AGF favorisikazandı %38 · AGF'nin verdiği %34 \(144 ayak\)/);
+  assert.match(k, /AGF düzeltmesikullanılmıyor/);
+  assert.match(k, /Bütçekasanın %6'sı \(geçmişte en iyi getiri\)/);
+  assert.match(k, /Veri az \(144\/150 ayak\)/);
+  assert.match(k, /kasanın %6'sı: 4\/24 tuttu, getiri %80/);
+  assert.match(k, /21\.10 · Bursa 1\. altılı · önerildi60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
+  assert.match(k, /Karma 1\. altılı60,00 TL · tutmadı \(4\/6 ayak\)/);
+  assert.match(k, /Ankara 1\. altılı60,00 TL · bekliyor/);
+  assert.match(k, /Bursa: 1 altılı sonucu, 9 koşu/);
+  f.button("Sonuçları şimdi kontrol et").click();
+  assert.equal(f.calls.at(-1).action, "altiliSettle");
+  s.agf.learn = {settled: 0, pending: 3, history: []};
+  f.w.refresh();
+  assert.match(f.$("#altiliKarne").textContent, /Henüz sonuçlanan altılı yok \(3 altılı sonuç bekliyor\)/);
+  assert.deepEqual(f.errors, []);
+});
+
 test("altılı: okuma yokken elle AGF ve ganyan girilir", async () => {
   const s = clone(baseState);
   s.settings.altiliAuto = true; s.settings.altiliUnit = 1;

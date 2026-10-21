@@ -400,6 +400,17 @@ public final class Bridge {
                 return Json.arr(r.get("altilis")).size() + " altılı okundu. "
                         + (play.isEmpty() ? "Bugün ortalamada kârlı kupon yok: oynama." : "OYNA: " + String.join(", ", play) + ".");
             }
+            case "altiliSettle": {
+                requireReal(repo);
+                progress("Altılı sonuçları okunuyor (kredi harcamaz)…");
+                int n = repo.altiliSettle(true, new Daily.Progress() {
+                    @Override
+                    public void step(String text) {
+                        progress(text);
+                    }
+                });
+                return n > 0 ? n + " altılının sonucu işlendi." : "Yeni sonuçlanan altılı yok (sonuçlar henüz yayınlanmadıysa ya da okunamadıysa karne aynı kalır).";
+            }
             case "altiliInputs": {
                 requireReal(repo);
                 synchronized (Repo.LOCK) {

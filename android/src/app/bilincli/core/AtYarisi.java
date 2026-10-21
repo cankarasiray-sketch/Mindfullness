@@ -377,6 +377,7 @@ public final class AtYarisi {
     static String absolute(String page, String src) {
         if (src.startsWith("http://") || src.startsWith("https://")) return src;
         if (src.startsWith("//")) return "https:" + src;
+        if (src.startsWith("?")) return page.replaceFirst("\\?.*$", "") + src; // yalnızca sorgu: aynı sayfa
         int host = page.indexOf('/', page.indexOf("//") + 2);
         String origin = host < 0 ? page : page.substring(0, host);
         return src.startsWith("/") ? origin + src : origin + "/" + src;
