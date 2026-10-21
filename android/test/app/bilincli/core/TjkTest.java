@@ -1,6 +1,7 @@
 package app.bilincli.core;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -166,8 +167,8 @@ public class TjkTest {
         assertTrue(log, log.contains("Program: İstanbul, Ankara"));
         assertTrue(log, log.contains("İstanbul 1. altılı: 6 ayak okundu (at sayıları 5-3-4-3-3-3)"));
         assertTrue(log, log.contains("İstanbul 2. altılı: önceki altılıyla aynı tablo"));
-        assertTrue(log, log.contains("Ankara 1. altılı: AGF tablosu bulunamadı"));
-        assertTrue(log, log.contains("henüz yayınlanmadı"));
+        assertTrue(log, log.contains("Ankara 1. altılı: AGF henüz oluşmadı")); // sayfa var, paylar boş (2.25.3)
+        assertEquals(1L, r.get("waiting"));
         assertEquals(4, asked.size()); // Ankara'nın 1. altılısı yoksa 2.si istenmez
         assertEquals(NOW.toString(), r.get("at"));
     }
@@ -194,5 +195,32 @@ public class TjkTest {
         assertEquals(1, asked.size());
         assertEquals(0, Json.arr(r.get("altilis")).size());
         assertTrue(String.valueOf(r.get("log")).contains("Program okunamadı"));
+    }
+
+    @Test
+    public void emptyAgfIsReportedAsNotYetFormed() {
+        // 21.10 07:00 gerçek görüntüsü: yerli sayfada yalnızca başlıklar, yurt dışında bütün atlar %0
+        String domestic = "<html><body><h3>1. 6'LI GANYAN AGF TABLOSU (GAYRİ RESMİ)</h3><table><tr><th>1. AYAK</th><th>2. AYAK</th><th>3. AYAK</th>"
+                + "<th>4. AYAK</th><th>5. AYAK</th><th>6. AYAK</th></tr></table><p>At noya göre sıralamak için tıklayınız...</p><p>Son güncellenme zamanı :</p></body></html>";
+        StringBuilder zeros = new StringBuilder("<h3>AVUSTRALYA AGF TABLOSU (GAYRİ RESMİ)</h3>");
+        for (int k = 1; k <= 6; k++) {
+            zeros.append("<table><tr><th>").append(k).append(". AYAK</th></tr>");
+            for (int h = 1; h <= 8; h++) zeros.append("<tr><td>").append(h).append(" (%0)</td></tr>");
+            zeros.append("</table>");
+        }
+        assertTrue(Tjk.notYet(domestic));
+        assertTrue(Tjk.notYet(zeros.toString()));
+        assertFalse(Tjk.notYet(page(columns(LEGS))));
+        assertFalse(Tjk.notYet("<p>Sayfa bulunamadı</p>"));
+        Map<String, String> pages = new LinkedHashMap<>();
+        pages.put(Tjk.programUrl(DAY), "<a href=\"?SehirId=3&SehirAdi=Bursa\">Bursa</a> <a href=\"?SehirId=31&SehirAdi=Avustralya\">Avustralya</a>");
+        pages.put(Tjk.agfUrl(3, DAY, 1), domestic);
+        pages.put(Tjk.agfUrl(31, DAY, 1), zeros.toString());
+        Map<String, Object> r = Tjk.read(fake(pages, new ArrayList<String>()), DAY, NOW, null);
+        assertEquals(0, Json.arr(r.get("altilis")).size());
+        assertEquals(2L, r.get("waiting"));
+        String log = String.valueOf(r.get("log"));
+        assertTrue(log, log.contains("Bursa 1. altılı: AGF henüz oluşmadı (TJK'da paylar boş; bahisler başlayınca dolar)"));
+        assertTrue(log, log.contains("Avustralya 1. altılı: AGF henüz oluşmadı"));
     }
 }

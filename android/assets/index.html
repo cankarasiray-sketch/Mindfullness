@@ -714,6 +714,23 @@ function altiliManual() {
   try { localStorage.setItem("altiliSel", "manual"); } catch (e) { /* kaydedilemedi */ }
   altiliSave({legs: legs});
 }
+/** 2.25.3: altılı bulunamadıysa TJK'nın her günü için kısa neden: program, AGF'si henüz oluşmayan altılı sayısı, diğer hatalar. */
+function altiliWhy(log) {
+  var secs = [], sec = null;
+  (log || []).forEach(function (l) {
+    var x = String(l).trim();
+    if (/^TJK /.test(x)) { sec = {name: x, prog: "", wait: 0, other: []}; secs.push(sec); return; }
+    if (!sec) return;
+    if (/^Program/.test(x)) sec.prog = x;
+    else if (/henüz oluşmadı/.test(x)) sec.wait++;
+    else if (/bulunamadı|okunamadı|bağlan|HTTP/.test(x) && sec.other.length < 2) sec.other.push(x.length > 140 ? x.slice(0, 140) + "…" : x);
+  });
+  var waiting = secs.some(function (s) { return s.wait; });
+  return secs.map(function (s) {
+    return "<br><b>" + esc(s.name) + "</b>: " + esc(s.prog || "program okunamadı")
+      + (s.wait ? "<br>" + s.wait + " altılıda AGF henüz oluşmadı (TJK'da paylar boş)" : "") + s.other.map(function (o) { return "<br>" + esc(o); }).join("");
+  }).join("") + (waiting ? "<br>Sabah erken normal: bahisler başlayınca TJK doldurur, uygulama 09:00–21:00 arası saatte bir kendisi yeniden okur." : "");
+}
 function altiliShare() { act("shareText", {text: "At yarışı okuma ayrıntısı (" + S.agf.at + ")\n" + (S.agf.log || []).join("\n")}, true); }
 function altiliPlanHtml(a) {
   var r = a.plan || {};
@@ -748,8 +765,7 @@ function altiliCard() {
     + "Kâr, ganyana göre şansı AGF'sinden yüksek (az oynanmış) atlarla ya da devirle mümkün; ikisi de yoksa OYNAMA der.</p>"
     + '<label class="check"><input type="checkbox" id="altAuto"' + (st.altiliAuto ? " checked" : "") + ' onchange="altiliSave({auto: this.checked})">Kendiliğinden oku, kârlı kuponu bildir (2 saatte bir, 09–21)</label>'
     + '<div class="btns"><button class="b" onclick="act(\'agfRead\')">Altılıyı şimdi oku</button></div>';
-  if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı (bugün ve yarın yarış yoksa ya da AGF henüz yayınlanmadıysa normal)."
-      + ((t.log || []).filter(function (l) { return /Program|bağlan|okunamadı/.test(l); }).slice(0, 4).map(function (l) { return "<br>" + esc(l.trim()); }).join(""))) + "</p>";
+  if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı." + altiliWhy(t.log)) + "</p>";
   var best = altiliByKey(t && t.best);
   if (best) html += '<p><b>Günün en mantıklı kuponu:</b> ' + esc(best.label) + " · " + esc(best.source || "TJK")
     + (cur && cur.key === best.key ? " (aşağıda)" : ' <button class="chip" onclick="altiliPick(S.agf.best)">Göster</button>') + "</p>"

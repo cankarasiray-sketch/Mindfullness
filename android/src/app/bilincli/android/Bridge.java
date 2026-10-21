@@ -386,7 +386,10 @@ public final class Bridge {
                     }
                 });
                 if (Json.arr(r.get("altilis")).isEmpty()) {
-                    throw new IllegalStateException("AGF okunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).");
+                    long waiting = Json.lng(r, "waiting", 0);
+                    throw new IllegalStateException(waiting > 0
+                            ? "AGF henüz oluşmadı: TJK'da " + waiting + " altılının payları boş (bahisler başlayınca dolar). Uygulama 09:00–21:00 arası saatte bir kendisi yeniden okur."
+                            : "AGF okunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).");
                 }
                 List<String> play = new ArrayList<>();
                 Map<String, Object> view = repo.agfView();

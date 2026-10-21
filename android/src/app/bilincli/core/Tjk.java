@@ -347,6 +347,17 @@ public final class Tjk {
         return AtYarisi.amount(m.group(2));
     }
 
+    /** 2.25.3: AGF sayfası var ama paylar boş (sabah erken: yalnızca başlıklar ya da bütün atlar %0). */
+    static final String WAITING = "AGF henüz oluşmadı (TJK'da paylar boş; bahisler başlayınca dolar)";
+
+    static boolean notYet(String html) {
+        String t = text(stripScripts(html));
+        if (!t.toUpperCase(Locale.ROOT).contains("AGF")) return false;
+        Matcher e = ENTRY.matcher(t);
+        while (e.find()) if (number(e.group(2)) > 0) return false; // payı olan at var: başka bir sorun
+        return true;
+    }
+
     /** Hata ayıklama için sayfanın kısa özeti (okuma ayrıntısında paylaşılır). */
     static String excerpt(String html) {
         String clean = stripScripts(html), s = text(clean);
@@ -372,7 +383,7 @@ public final class Tjk {
      */
     public static Map<String, Object> read(Http http, LocalDate day, Instant now, Daily.Progress progress) {
         List<Object> log = new ArrayList<>(), altilis = new ArrayList<>();
-        int requests = 0, failures = 0;
+        int requests = 0, failures = 0, waiting = 0;
         boolean reachable = true;
         Map<Integer, String> cities = new LinkedHashMap<>();
         step(progress, "TJK yarış programı okunuyor…");
@@ -408,7 +419,10 @@ public final class Tjk {
                     html = http.get(agfUrl(c.getKey(), day, no), headers()).body;
                     failures = 0;
                     legs = six(parseAgf(html), no, why);
-                    if (legs == null) why[0] += " (" + excerpt(html) + ")";
+                    if (legs == null && notYet(html)) {
+                        why[0] = WAITING;
+                        waiting++;
+                    } else if (legs == null) why[0] += " (" + excerpt(html) + ")";
                 } catch (Http.ProviderException e) {
                     String msg = String.valueOf(e.getMessage());
                     log.add(label + ": " + shortMessage(msg));
@@ -451,6 +465,7 @@ public final class Tjk {
         out.put("day", day.toString());
         out.put("altilis", altilis);
         out.put("log", log);
+        out.put("waiting", (long) waiting);
         return out;
     }
 }

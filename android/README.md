@@ -136,6 +136,11 @@ bildirim olarak gelir.
   önce bugünün altılılarından, bugün yoksa yarınkilerden seçilir. Hiç altılı yoksa kart nedenini (TJK programı,
   AGF yayınlanmadı) kısaca gösterir.
 
+- **2.25.3: AGF henüz oluşmadı.** Sabah erken TJK'nın AGF sayfası boş gelir (yerli: yalnızca "1. AYAK … 6. AYAK"
+  başlıkları, "Son güncellenme zamanı" boş; yurt dışı: bütün atlar %0). Bu artık "AGF henüz oluşmadı" diye ayrı
+  sayılır; kart her gün için programı ve kaç altılının beklediğini gösterir. Son okumada hiç altılı yoksa arka plan
+  okuması 2 saat yerine saatte bir yapılır.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

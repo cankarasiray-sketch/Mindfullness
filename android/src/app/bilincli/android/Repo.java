@@ -646,6 +646,7 @@ final class Repo {
             Map<String, Object> r = new LinkedHashMap<>(tjk);
             r.put("altilis", altilis);
             r.put("log", log);
+            r.put("waiting", Json.lng(tjk, "waiting", 0) + Json.lng(next, "waiting", 0));
             String raw = Json.write(r);
             agfStore.write(raw);
             agfRaw = raw;
@@ -655,6 +656,8 @@ final class Repo {
 
     /** Arka planda altılı okuması en fazla bu sıklıkta ve bu saatlerde (Türkiye). */
     static final long ALTILI_GAP_S = 2 * 3600;
+    /** Son okumada hiç altılı yoksa (AGF henüz oluşmadıysa) bir sonraki okuma 1 saat sonra. */
+    static final long ALTILI_RETRY_S = 3600;
     static final int ALTILI_FROM_HOUR = 9, ALTILI_TO_HOUR = 21;
     /** Günün en mantıklı kuponu bu saatten sonra bildirilir (AGF oturmuş olsun). */
     static final int ALTILI_DAILY_HOUR = 11;
@@ -667,7 +670,8 @@ final class Repo {
         if (h < ALTILI_FROM_HOUR || h >= ALTILI_TO_HOUR) return null;
         Map<String, Object> st = agfStored();
         String at = st == null ? null : Json.str(st, "at");
-        if (at != null && Instant.parse(at).plusSeconds(ALTILI_GAP_S).isAfter(now)) return null;
+        long gap = st != null && Json.arr(st.get("altilis")).isEmpty() ? ALTILI_RETRY_S : ALTILI_GAP_S; // AGF henüz yoksa daha sık
+        if (at != null && Instant.parse(at).plusSeconds(gap).isAfter(now)) return null;
         Map<String, Object> r = agfRead(null);
         return new String[][] {altiliNotice(now), altiliHealth(r, now)};
     }

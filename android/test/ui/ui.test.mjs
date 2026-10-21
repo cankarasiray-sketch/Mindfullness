@@ -884,17 +884,19 @@ test("altılı: bugün seçim yoksa günün en mantıklı kuponu açılır, dü�
   assert.deepEqual(f.errors, []);
 });
 
-test("altılı: hiç altılı yoksa nedeni (TJK programı) kartta görünür", async () => {
+test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı) kartta görünür", async () => {
   const s = clone(baseState);
   s.settings.altiliAuto = true; s.settings.altiliUnit = 1;
-  s.agf = {at: "2026-10-21T03:51:00Z", day: "2026-10-21", altilis: [], inputs: {maxCost: 0, manual: []},
-    log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "  Bilyoner: altılı bulunamadı", "TJK bugün (2026-10-21)", "  Program: şehir bağlantısı bulunamadı (3 KB, 0 tablo: \"\")",
-      "TJK yarın (2026-10-22)", "  Program: Bursa, Ankara, Karma, İzmir", "  Bursa 1. altılı: AGF tablosu bulunamadı"]};
+  s.agf = {at: "2026-10-21T03:59:00Z", day: "2026-10-21", altilis: [], inputs: {maxCost: 0, manual: []}, waiting: 6,
+    log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "  Bilyoner: altılı bulunamadı", "TJK bugün (2026-10-21)", "  Program: Bursa, İstanbul, Elazığ, Karma",
+      "  Bursa 1. altılı: AGF henüz oluşmadı (TJK'da paylar boş; bahisler başlayınca dolar)", "  İstanbul 1. altılı: AGF henüz oluşmadı (TJK'da paylar boş; bahisler başlayınca dolar)",
+      "  Elazığ 1. altılı: 3. ayak okunamadı (paylar toplamı %240, 3 at)",
+      "TJK yarın (2026-10-22)", "  Program: Bursa, Ankara, İzmir, Karma", "  Bursa 1. altılı: AGF henüz oluşmadı (TJK'da paylar boş; bahisler başlayınca dolar)"]};
   const f = boot(s, "#firsat");
   const card = f.$("#altiliCard").textContent;
-  assert.match(card, /Son okuma 21\.10 06:51: altılı bulunamadı \(bugün ve yarın yarış yoksa ya da AGF henüz yayınlanmadıysa normal\)\./);
-  assert.match(card, /Program: Bursa, Ankara, Karma, İzmir/);
-  assert.match(card, /Bursa 1\. altılı: AGF tablosu bulunamadı/);
+  assert.match(card, /Son okuma 21\.10 06:59: altılı bulunamadı\.TJK bugün \(2026-10-21\): Program: Bursa, İstanbul, Elazığ, Karma2 altılıda AGF henüz oluşmadı \(TJK'da paylar boş\)Elazığ 1\. altılı: 3\. ayak okunamadı/);
+  assert.match(card, /TJK yarın \(2026-10-22\): Program: Bursa, Ankara, İzmir, Karma1 altılıda AGF henüz oluşmadı/);
+  assert.match(card, /Sabah erken normal: bahisler başlayınca TJK doldurur, uygulama 09:00–21:00 arası saatte bir kendisi yeniden okur\./);
   assert.deepEqual(f.errors, []);
 });
 
