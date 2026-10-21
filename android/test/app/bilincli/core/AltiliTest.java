@@ -262,21 +262,25 @@ public class AltiliTest {
 
     @Test
     public void reasonableDefaultsAndRevertOf2322And2323() {
-        // 2.32.4: kâr için en makul: her ayak %50, kupon en az 60 TL
-        assertEquals(0.50, new Settings().altiliLegMin, 1e-9);
+        // 2.32.4: kupon en az 60 TL; 2.32.6: kullanıcı istedi, her ayak en az %70
+        assertEquals(0.70, new Settings().altiliLegMin, 1e-9);
         assertEquals(60.0, new Settings().altiliMinCost, 1e-9);
         Map<String, Object> v11 = new Settings().toMap();
         v11.put("v", 11L);
         v11.put("altiliLegMin", 0.80);
         v11.put("altiliMinCost", 120.0);
         Settings back = Settings.fromMap(v11);
-        assertEquals(0.50, back.altiliLegMin, 1e-9);
+        assertEquals(0.70, back.altiliLegMin, 1e-9);
         assertEquals(60.0, back.altiliMinCost, 1e-9);
         v11.put("altiliLegMin", 0.60); // kullanıcının kendi seçimi korunur
         v11.put("altiliMinCost", 90.0);
         assertEquals(0.60, Settings.fromMap(v11).altiliLegMin, 1e-9);
         assertEquals(90.0, Settings.fromMap(v11).altiliMinCost, 1e-9);
         Settings mine = new Settings();
+        Map<String, Object> v12 = new Settings().toMap();
+        v12.put("v", 12L);
+        v12.put("altiliLegMin", 0.50); // 2.32.4–2.32.5 varsayılanı %70'e taşınır
+        assertEquals(0.70, Settings.fromMap(v12).altiliLegMin, 1e-9);
         mine.altiliLegMin = 0.80; // yeni sürümde bilerek %80'e çeken korunur
         mine.altiliMinCost = 120;
         assertEquals(0.80, Settings.fromMap(mine.toMap()).altiliLegMin, 1e-9);

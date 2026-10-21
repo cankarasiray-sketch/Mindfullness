@@ -219,6 +219,8 @@ bildirim olarak gelir.
   öğrenilmiş AGF düzeltmesi) olduğunda %80 sınırı kârlı "OYNA" kuponlarını da çoğu zaman eliyordu.
 - **2.32.5:** Altılılar oynamaya en değer olandan başlayarak numaralı listede (1 en iyisi): her satırda karar (Oyna /
   ortalamada zarar / önerilmez), kupon tutarı, 100 TL'den ortalama dönüş ve 1. ayak saati. Başlamışlar ayrı, en altta.
+- **2.32.6:** Kullanıcı istedi: her ayak en az %70 tutma (kayıtlı %50 bir kez %70'e taşınır). Kupon en az 60 TL; %70 için
+  gereken kupon kasanın %7'sini aşarsa yine kurulur, "bütçeyi aşıyor" uyarısı çıkar ve sırada sona gider.
 
 ## Beraberlik fırsatları (2.17)
 
