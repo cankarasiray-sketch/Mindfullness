@@ -824,11 +824,14 @@ function altiliCard() {
   var best = altiliByKey(t && t.best);
   if (best) html += '<p><b>Günün en mantıklı kuponu:</b> ' + esc(best.label) + " · " + esc(best.source || "TJK")
     + (cur && cur.key === best.key ? " (aşağıda)" : ' <button class="chip" onclick="altiliPick(S.agf.best)">Göster</button>') + "</p>"
-    + '<p class="small muted">Bütün altılılar aynı bütçeyle karşılaştırılır: önce ortalamada kârlı olan, sonra ortalama getirisi yüksek olan, getiri aynıysa tutma olasılığı en yüksek olan (favorileri net, en tahmin edilebilir koşular).</p>';
-  if (list.length > 1) html += '<div class="btns">' + list.map(function (a, i) {
-    var play = a.plan && a.plan.play;
+    + '<p class="small muted">Sıralama kâr ve tutma olasılığını birlikte tartar: kuponun kasanı uzun vadede ne kadar büyüttüğü (Kelly ölçütü). Önce ortalamada kârlı olanlar; getiri aynıysa tutma olasılığı yüksek olan (favorileri net, en tahmin edilebilir koşular). '
+    + "Çiplerde: tutma olasılığı ve tutarsa ortalama ikramiye. Kupon, altılı kapanmadan (1. ayak) 30 dk önce son AGF'yle bildirilir.</p>";
+  var order = (t && t.order && t.order.length === list.length) ? t.order : list.map(function (x, i) { return i; });
+  if (list.length > 1) html += '<div class="btns">' + order.map(function (i) {
+    var a = list[i], p = a.plan || {}, play = p.play;
     return '<button class="chip' + (cur && a.key === cur.key ? " main" : "") + '" onclick="altiliPick(altiliList()[' + i + '].key)">'
-      + esc(a.label) + " · " + esc(a.source || "TJK") + (play ? " · OYNA" : best && a.key === best.key ? " · en mantıklı" : "") + "</button>";
+      + esc(a.label) + " · " + esc(a.source || "TJK") + (play ? " · OYNA" : best && a.key === best.key ? " · en mantıklı" : "")
+      + (p.hit ? '<span class="muted"> · %' + num(p.hit * 100, p.hit < 0.1 ? 1 : 0) + (p.ifHit ? " · ~" + num(p.ifHit, 0) + " TL" : "") + "</span>" : "") + "</button>";
   }).join(" ") + "</div>";
   if (cur) {
     html += '<h3 style="margin:12px 0 4px">' + esc(cur.label) + " · " + esc(cur.source || "TJK") + (cur.start ? " · 1. ayak " + esc(cur.start) : "") + "</h3>"

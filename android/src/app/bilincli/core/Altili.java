@@ -471,6 +471,12 @@ public final class Altili {
         out.put("ev", play ? e.kat * e.cost * (e.roi - 1) : e.cost * (e.roi - 1));
         out.put("ifHit", e.hit > 0 ? (play ? e.kat : 1) * e.cost * e.roi / e.hit : 0.0);
         out.put("oddsLegs", (long) oddsLegs);
+        // 2.28: kâr ve tutma olasılığı tek ölçüde: bu kuponla kasanın beklenen log büyümesi (tutar = önerilen ya da 1 kat)
+        double stakeTl = (play ? e.kat : 1) * e.cost;
+        if (in.kasa > 0 && e.hit > 0 && stakeTl < in.kasa) {
+            double f = stakeTl / in.kasa, x = e.roi / e.hit;
+            out.put("growth", e.hit * Math.log(1 + f * (x - 1)) + (1 - e.hit) * Math.log(1 - f));
+        }
         if (in.pool > 0) {
             out.put("avg", factor(in));
             if (!play) {
@@ -510,12 +516,35 @@ public final class Altili {
         return best;
     }
 
+    /**
+     * Sıralama (2.28: kâr ve tutma birlikte): önce oynanabilir olan; sonra kasanın beklenen log büyümesi (Kelly ölçütü:
+     * getiri yüksekse ve aynı getiride tutma olasılığı yüksekse büyük); hesaplanamıyorsa getiri, sonra tutma olasılığı.
+     */
     static boolean better(Map<String, Object> a, Map<String, Object> b) {
         boolean pa = Json.bool(a, "play", false), pb = Json.bool(b, "play", false);
         if (pa != pb) return pa;
+        Double ga = Json.num(a, "growth"), gb = Json.num(b, "growth");
+        if (ga != null && gb != null && Math.abs(ga - gb) > 1e-12) return ga > gb;
         if (pa) return Json.dbl(a, "ev", 0) > Json.dbl(b, "ev", 0);
         double ra = Json.dbl(a, "roi", 0), rb = Json.dbl(b, "roi", 0);
         if (Math.abs(ra - rb) > 0.02) return ra > rb;
         return Json.dbl(a, "hit", 0) > Json.dbl(b, "hit", 0);
+    }
+
+    /** Planların sırası (en mantıklı önce); null planlar sonda. */
+    public static List<Integer> order(final List<Map<String, Object>> plans) {
+        List<Integer> idx = new ArrayList<>();
+        for (int i = 0; i < plans.size(); i++) idx.add(i);
+        idx.sort(new Comparator<Integer>() {
+            @Override
+            public int compare(Integer x, Integer y) {
+                Map<String, Object> a = plans.get(x), b = plans.get(y);
+                boolean va = a != null && a.get("error") == null && a.get("legs") != null, vb = b != null && b.get("error") == null && b.get("legs") != null;
+                if (va != vb) return va ? -1 : 1;
+                if (!va) return Integer.compare(x, y);
+                return better(a, b) ? -1 : better(b, a) ? 1 : Integer.compare(x, y);
+            }
+        });
+        return idx;
     }
 }

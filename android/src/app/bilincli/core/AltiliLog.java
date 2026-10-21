@@ -94,8 +94,13 @@ public final class AltiliLog {
 
     /** Bildirilen kupon dondurulur (bir kez): "önerilerim ne yaptı" bunun üzerinden. */
     public static void markNotified(Map<String, Object> store, String day, String key, Map<String, Object> plan, Instant now) {
+        markNotified(store, day, key, plan, now, false);
+    }
+
+    /** replace: yarış öncesi son AGF'yle bildirilen kupon öncekinin yerine geçer (oynanacak olan budur). */
+    public static void markNotified(Map<String, Object> store, String day, String key, Map<String, Object> plan, Instant now, boolean replace) {
         Map<String, Object> r = find(store, day, key);
-        if (r == null || r.get("notified") != null || plan == null) return;
+        if (r == null || (r.get("notified") != null && !replace) || plan == null || r.get("result") != null) return;
         Map<String, Object> c = coupon(plan);
         c.put("at", now.toString());
         r.put("notified", c);

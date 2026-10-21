@@ -644,6 +644,11 @@ final class Repo {
         }
         int best = Altili.best(todays);
         if (best < 0) best = Altili.best(plans);
+        // 2.28: çipler en mantıklıdan başlayarak (önce bugün, kâr ve tutma birlikte: kasanın beklenen büyümesi)
+        List<Object> order = new ArrayList<>();
+        for (int i : Altili.order(todays)) if (todays.get(i) != null) order.add((long) i);
+        for (int i : Altili.order(plans)) if (!order.contains((long) i)) order.add((long) i);
+        v.put("order", order);
         v.put("best", best < 0 ? null : Json.str(Json.obj(list.get(best)), "key"));
         v.put("learn", learn);
         v.put("settleLog", altiliLog().get("settleLog"));
@@ -859,6 +864,7 @@ final class Repo {
         if (count == 0) { // 2.24: kârlı kupon yoksa günde bir kez günün en mantıklı kuponu (11:00'den sonra)
             String bestKey = Json.str(v, "best");
             if (!daily || bestKey == null || now.atOffset(Fmt.TR).getHour() < ALTILI_DAILY_HOUR) return null;
+            if (altiliPreRaceTime() != null) return null; // 2.28: 1. ayağın saati biliniyor: kupon yarıştan 30 dk önce son AGF'yle
             for (Object o : Json.arr(v.get("altilis"))) {
                 Map<String, Object> a = Json.obj(o), plan = Json.obj(a.get("plan"));
                 if (!bestKey.equals(Json.str(a, "key")) || plan == null) continue;
@@ -886,12 +892,84 @@ final class Repo {
 
     /** Bildirilen kupon defterde dondurulur (önerilerin karnesi bununla). */
     private void noteNotified(Map<String, Object> a, Map<String, Object> plan, String today, Instant now) {
+        noteNotified(a, plan, today, now, false);
+    }
+
+    private void noteNotified(Map<String, Object> a, Map<String, Object> plan, String today, Instant now, boolean replace) {
         synchronized (altiliLogLock) {
             Map<String, Object> log = altiliLog();
             String d = Json.str(a, "day") != null ? Json.str(a, "day") : today;
-            AltiliLog.markNotified(log, d, Json.str(a, "key"), plan, now);
+            AltiliLog.markNotified(log, d, Json.str(a, "key"), plan, now, replace);
             saveAltiliLog(log);
         }
+    }
+
+    /** 2.28: kupon, altılı kapanmadan (1. ayak) bu kadar önce son AGF'yle bildirilir. */
+    static final long ALTILI_PRE_S = 30 * 60;
+
+    /** Günün en mantıklı (ya da kârlı) altılısı: bugünkü, 1. ayağının saati bilinen ve henüz başlamamış olan. */
+    private Map<String, Object> altiliTarget(Map<String, Object> v, Instant now) {
+        if (v == null) return null;
+        String today = Fmt.dayKey(now), bestKey = Json.str(v, "best");
+        Map<String, Object> best = null;
+        for (Object o : Json.arr(v.get("altilis"))) {
+            Map<String, Object> a = Json.obj(o), plan = Json.obj(a.get("plan"));
+            String day = Json.str(a, "day") != null ? Json.str(a, "day") : today;
+            if (plan == null || !today.equals(day) || startOf(a, day) == null || !startOf(a, day).isAfter(now)) continue;
+            if (Json.bool(plan, "play", false)) return a; // kârlı olan önce
+            if (Json.str(a, "key").equals(bestKey)) best = a;
+        }
+        return best;
+    }
+
+    private static Instant startOf(Map<String, Object> a, String day) {
+        String start = Json.str(a, "start");
+        if (start == null || !start.matches("\\d{2}:\\d{2}")) return null;
+        return java.time.LocalDate.parse(day).atTime(java.time.LocalTime.parse(start)).atOffset(Fmt.TR).toInstant();
+    }
+
+    /** Yarış öncesi son okumanın zamanı (1. ayaktan 30 dk önce); hedef yoksa ya da bugün yapıldıysa null. */
+    Instant altiliPreRaceTime() {
+        if (isDemo() || !ledger.settings().altiliAuto) return null;
+        Instant now = Instant.now();
+        Map<String, Object> a = altiliTarget(agfView(), now);
+        if (a == null) return null;
+        String done = prefs.getString("altiliFinal", "");
+        if (done.equals(Fmt.dayKey(now) + "|" + Json.str(a, "key"))) return null;
+        Instant start = startOf(a, Fmt.dayKey(now));
+        Instant pre = start.minusSeconds(ALTILI_PRE_S);
+        return pre.isBefore(now) ? now : pre;
+    }
+
+    /**
+     * 2.28: 1. ayaktan 30 dk önce AGF yeniden okunur ve kupon son AGF'yle bildirilir (oynanacak kupon budur; karnede
+     * önerilen kupon olarak bunun yerine geçer). Zamanı gelmediyse null.
+     */
+    String[] altiliPreRace() {
+        Instant now = Instant.now(), pre = altiliPreRaceTime();
+        if (pre == null || pre.isAfter(now.plusSeconds(60))) return null;
+        String today = Fmt.dayKey(now);
+        Map<String, Object> target = altiliTarget(agfView(), now);
+        if (target == null) return null;
+        String key = Json.str(target, "key");
+        prefs.edit().putString("altiliFinal", today + "|" + key).apply(); // tekrar tekrar denenmesin
+        try {
+            agfRead(null);
+        } catch (RuntimeException e) {
+            // okunamadıysa son okumadaki kupon bildirilir
+        }
+        Map<String, Object> v = agfView(), a = null;
+        for (Object o : Json.arr(v == null ? null : v.get("altilis"))) if (key.equals(Json.str(Json.obj(o), "key"))) a = Json.obj(o);
+        if (a == null) a = target;
+        Map<String, Object> plan = Json.obj(a.get("plan"));
+        if (plan == null || plan.get("error") != null) return null;
+        noteNotified(a, plan, today, now, true);
+        boolean play = Json.bool(plan, "play", false);
+        String title = (play ? "Altılı: OYNA · " : "Altılı kuponu · ") + a.get("label") + " · 1. ayak " + a.get("start");
+        String body = a.get("label") + " · " + a.get("source") + " · son AGF " + now.atOffset(Fmt.TR).toLocalTime().toString().substring(0, 5) + "\n"
+                + Texts.altiliCoupon(plan, Json.arr(a.get("races"))) + "\n" + Texts.altiliSummary(plan)
+                + (play ? "\n1. ayak başlamadan oyna. Garanti değil." : "\nOrtalamada kâr beklenmiyor; oynayacaksan günün en mantıklı kuponu bu, 1. ayak başlamadan.");
+        return new String[] {title, body};
     }
 
     /** Kurulu sürümün numarası (güncellemeden sonra Zirve kaydını yenilemek için). */
@@ -1538,6 +1616,8 @@ final class Repo {
         Instant next = a == null ? b : b == null ? a : a.isBefore(b) ? a : b;
         Instant c = Settlement.nextLiveCheck(ledger, now, lastLiveCheck); // 2.16.4: canlı skor
         if (c != null && (next == null || c.isBefore(next))) next = c;
+        Instant d = altiliPreRaceTime(); // 2.28: altılı kuponu yarıştan 30 dk önce
+        if (d != null && (next == null || d.isBefore(next))) next = d.isAfter(now) ? d : now.plusSeconds(30);
         if (next != null && !next.isAfter(now)) {
             // vadesi gelmiş iş: hemen. Son 10 dk içinde zaten denendiyse (ağ hatası, kapanış oranı
             // yayında yok) 10 dk sonra; böylece döngüye girip kredi harcamaz.

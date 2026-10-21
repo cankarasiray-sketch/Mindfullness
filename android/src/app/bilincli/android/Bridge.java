@@ -385,6 +385,7 @@ public final class Bridge {
                         progress(text);
                     }
                 });
+                Scheduler.scheduleNextEvent(activity); // 2.28: yarış öncesi son kupon bildirimi için
                 if (Json.arr(r.get("altilis")).isEmpty()) {
                     long waiting = Json.lng(r, "waiting", 0);
                     throw new IllegalStateException(waiting > 0

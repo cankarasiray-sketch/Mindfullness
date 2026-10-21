@@ -479,7 +479,7 @@ public final class Tjk {
                     @SuppressWarnings("unchecked")
                     List<ProgramRace> program = (List<ProgramRace>) prog[0];
                     races = legRaces(legs, program);
-                    if (races == null) raceWhy = program.isEmpty() ? (String) prog[1] : "programdaki " + program.size() + " koşu ayaklarla eşleşmedi";
+                    if (races == null) raceWhy = program.isEmpty() ? (String) prog[1] : matchWhy(legs, program);
                 } else if (races == null) {
                     raceWhy = "şehrin program bağlantısı bulunamadı";
                 }
@@ -514,12 +514,53 @@ public final class Tjk {
         final int no;
         final String time;
         final Set<String> runners;
+        /** 2.27.3: at numarası olabilecek sütunlar (başlıklı sütun önce); eşleşmede en benzeri kullanılır. */
+        final List<Set<String>> candidates;
 
         ProgramRace(int no, String time, Set<String> runners) {
+            this(no, time, java.util.Collections.singletonList(runners));
+        }
+
+        ProgramRace(int no, String time, List<Set<String>> candidates) {
             this.no = no;
             this.time = time;
-            this.runners = runners;
+            this.runners = candidates.get(0);
+            this.candidates = candidates;
         }
+    }
+
+    /** Hücre başındaki at numarası: "5", "5A" (eküri), "5 SECRETARIAT (USA)", "5.". */
+    private static final Pattern LEAD_NUM = Pattern.compile("^(\\d{1,2})[A-Za-z]?(?:[\\s.)\\-].*)?$");
+
+    /** Tablodaki at numarası adayları: başlıklı sütun, sonra 1–30 arası numaralar taşıyan her sütun. */
+    static List<Set<String>> runnerCandidates(String table) {
+        List<Set<String>> out = new ArrayList<>();
+        List<String> head = runners(table);
+        if (head.size() >= 2) out.add(new LinkedHashSet<>(head));
+        String[] rows = table.split("(?i)<tr\\b");
+        List<List<String>> all = new ArrayList<>();
+        int width = 0;
+        for (int r = 1; r < rows.length; r++) {
+            String[] cells = rows[r].split("(?i)<t[dh]\\b");
+            List<String> ts = new ArrayList<>();
+            for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
+            all.add(ts);
+            width = Math.max(width, ts.size());
+        }
+        for (int c = 0; c < width; c++) {
+            Set<String> set = new LinkedHashSet<>();
+            int rowsWith = 0;
+            for (List<String> ts : all) {
+                if (c >= ts.size()) continue;
+                rowsWith++;
+                Matcher m = LEAD_NUM.matcher(ts.get(c));
+                if (!m.matches()) continue;
+                int n = Integer.parseInt(m.group(1));
+                if (n >= 1 && n <= 30) set.add(String.valueOf(n));
+            }
+            if (set.size() >= 2 && set.size() >= rowsWith * 0.6 && !out.contains(set)) out.add(set);
+        }
+        return out;
     }
 
     private static final Pattern RACE_NO = Pattern.compile("(?<!\\d)(\\d{1,2})\\s*\\.\\s*[Kk][Oo][ŞşSs][Uu]");
@@ -594,10 +635,10 @@ public final class Tjk {
             String t = clock(at >= 0 ? gap.substring(at) : gap);
             if (t != null) time = t;
             String table = clean.substring(span[0], span[1]);
-            List<String> rs = runners(table);
-            if (rs.size() >= 2) {
+            List<Set<String>> rs = runnerCandidates(table);
+            if (!rs.isEmpty()) {
                 if (time == null) time = clock(text(table.substring(0, Math.min(table.length(), 400)))); // saat tablo başlığında
-                out.add(new ProgramRace(no, time, new LinkedHashSet<>(rs)));
+                out.add(new ProgramRace(no, time, rs));
             } else {
                 String inTable = text(table);
                 Matcher r = RACE_NO.matcher(inTable); // başlık tablosu: "4. Koşu 14:30"
@@ -669,20 +710,65 @@ public final class Tjk {
     }
 
     /** Ayakların koşuları ({no, time}) at kümelerinin benzerliğiyle; biri eşleşmezse null. */
-    static List<Object> legRaces(List<List<Horse>> legs, List<ProgramRace> program) {
+    static Set<String> legSet(List<Horse> leg) {
+        Set<String> nos = new LinkedHashSet<>();
+        for (Horse h : leg) nos.add(h.no);
+        return nos;
+    }
+
+    /** Ayak ile koşu benzerliği: koşunun at numarası adaylarından en benzeri (Jaccard). */
+    static double similarity(Set<String> leg, ProgramRace r) {
+        double best = 0;
+        for (Set<String> c : r.candidates) {
+            Set<String> u = new HashSet<>(leg), x = new HashSet<>(leg);
+            u.addAll(c);
+            x.retainAll(c);
+            best = Math.max(best, u.isEmpty() ? 0 : (double) x.size() / u.size());
+        }
+        return best;
+    }
+
+    private static List<Object> info(List<ProgramRace> six) {
         List<Object> out = new ArrayList<>();
+        for (ProgramRace r : six) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            if (r.no > 0) m.put("no", (long) r.no);
+            if (r.time != null) m.put("time", r.time);
+            out.add(m);
+        }
+        return out;
+    }
+
+    /**
+     * Ayakların koşuları ({no, time}). 2.27.3: altılı art arda 6 koşudur; programda ayaklara toplamda en çok benzeyen art
+     * arda 6 koşu seçilir (yalnızca at sayısı aynı olan koşular karışmasın). Olmazsa ayak ayak en benzer koşu; biri
+     * eşleşmezse null.
+     */
+    static List<Object> legRaces(List<List<Horse>> legs, List<ProgramRace> program) {
+        int n = program.size();
+        int bestO = -1;
+        double bestS = 0;
+        for (int o = 0; o + 6 <= n; o++) {
+            double s = 0, min = 1;
+            for (int k = 0; k < 6; k++) {
+                double j = similarity(legSet(legs.get(k)), program.get(o + k));
+                s += j;
+                min = Math.min(min, j);
+            }
+            if (min >= 0.4 && s / 6 >= 0.6 && s > bestS + 1e-9) {
+                bestS = s;
+                bestO = o;
+            }
+        }
+        if (bestO >= 0) return info(program.subList(bestO, bestO + 6));
+        List<ProgramRace> six = new ArrayList<>();
         Set<Integer> used = new HashSet<>();
         for (List<Horse> leg : legs) {
-            Set<String> nos = new HashSet<>();
-            for (Horse h : leg) nos.add(h.no);
             int best = -1;
             double score = 0.6;
-            for (int i = 0; i < program.size(); i++) {
+            for (int i = 0; i < n; i++) {
                 if (used.contains(i)) continue;
-                Set<String> u = new HashSet<>(nos), x = new HashSet<>(nos);
-                u.addAll(program.get(i).runners);
-                x.retainAll(program.get(i).runners);
-                double j = (double) x.size() / u.size();
+                double j = similarity(legSet(leg), program.get(i));
                 if (j >= score) {
                     score = j;
                     best = i;
@@ -690,13 +776,25 @@ public final class Tjk {
             }
             if (best < 0) return null;
             used.add(best);
-            ProgramRace r = program.get(best);
-            Map<String, Object> m = new LinkedHashMap<>();
-            if (r.no > 0) m.put("no", (long) r.no);
-            if (r.time != null) m.put("time", r.time);
-            out.add(m);
+            six.add(program.get(best));
         }
-        return out;
+        return info(six);
+    }
+
+    private static String list(Set<String> s) {
+        List<String> l = new ArrayList<>(s);
+        return String.join(",", l.subList(0, Math.min(12, l.size()))) + (l.size() > 12 ? "…" : "");
+    }
+
+    /** Eşleşmeme nedeni (düzeltmek için): ayakların ve koşuların at sayıları, 1. ayak ve 1. koşunun atları. */
+    static String matchWhy(List<List<Horse>> legs, List<ProgramRace> program) {
+        StringBuilder b = new StringBuilder("programdaki " + program.size() + " koşu ayaklarla eşleşmedi (ayak at sayıları ");
+        for (int k = 0; k < legs.size(); k++) b.append(k == 0 ? "" : "/").append(legs.get(k).size());
+        b.append("; koşular");
+        for (ProgramRace r : program) b.append(' ').append(r.no > 0 ? r.no + ":" : "").append(r.runners.size()).append(r.candidates.size() > 1 ? "+" : "");
+        b.append("; 1. ayak ").append(list(legSet(legs.get(0))));
+        if (!program.isEmpty()) b.append("; 1. koşu ").append(list(program.get(0).runners));
+        return b.append(')').toString();
     }
 
     static String raceText(List<Object> races) {

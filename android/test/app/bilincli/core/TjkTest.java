@@ -328,4 +328,43 @@ public class TjkTest {
         assertEquals("https://www.tjk.org/TR/YarisSever/Info/Page/GunlukYarisProgrami?SehirId=41&SehirAdi=Belmont%20Park%20ABD", links.get(41)[1]);
         assertEquals("Belmont Park ABD", links.get(41)[0]);
     }
+
+    static List<Tjk.Horse> leg(int n) {
+        List<Tjk.Horse> l = new ArrayList<>();
+        for (int i = 1; i <= n; i++) l.add(new Tjk.Horse(String.valueOf(i), 100.0 / n));
+        return l;
+    }
+
+    @Test
+    public void consecutiveRacesResolveSameFieldSizes() {
+        int[] sizes = {8, 6, 7, 6, 9, 5, 8, 7, 10}; // 2. ve 4. koşu aynı at sayısında
+        List<Tjk.ProgramRace> program = new ArrayList<>();
+        for (int r = 0; r < sizes.length; r++) {
+            java.util.Set<String> set = new java.util.LinkedHashSet<>();
+            for (int i = 1; i <= sizes[r]; i++) set.add(String.valueOf(i));
+            program.add(new Tjk.ProgramRace(r + 1, String.format(java.util.Locale.ROOT, "%02d:00", 12 + r), set));
+        }
+        List<List<Tjk.Horse>> legs = new ArrayList<>();
+        for (int r = 3; r < 9; r++) legs.add(leg(sizes[r]));
+        List<Object> races = Tjk.legRaces(legs, program);
+        assertEquals(4L, Json.obj(races.get(0)).get("no")); // eski ayak ayak eşleme 2. koşuyu seçerdi
+        assertEquals("15:00", Json.obj(races.get(0)).get("time"));
+        assertEquals(9L, Json.obj(races.get(5)).get("no"));
+        // eşleşmeyince neden: ayak ve koşu at sayıları
+        List<List<Tjk.Horse>> other = new ArrayList<>();
+        for (int k = 0; k < 6; k++) other.add(leg(14));
+        assertEquals(null, Tjk.legRaces(other, program.subList(0, 3)));
+        String why = Tjk.matchWhy(other, program.subList(0, 3));
+        assertEquals("programdaki 3 koşu ayaklarla eşleşmedi (ayak at sayıları 14/14/14/14/14/14; koşular 1:8 2:6 3:7; 1. ayak 1,2,3,4,5,6,7,8,9,10,11,12…; 1. koşu 1,2,3,4,5,6,7,8)", why);
+    }
+
+    @Test
+    public void horseNumbersWithEkuriOrNamesInCells() {
+        String table = "<table><tr><th>N</th><th>At</th></tr><tr><td>1</td><td>A</td></tr><tr><td>1A</td><td>B</td></tr><tr><td>2 SECRETARIAT (USA)</td><td>C</td></tr>"
+                + "<tr><td>3</td><td>D</td></tr></table>";
+        List<java.util.Set<String>> cs = Tjk.runnerCandidates(table);
+        boolean found = false;
+        for (java.util.Set<String> c : cs) found |= c.containsAll(Arrays.asList("1", "2", "3"));
+        assertTrue(String.valueOf(cs), found);
+    }
 }

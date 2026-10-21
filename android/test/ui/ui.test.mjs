@@ -35,8 +35,13 @@ function boot(state, hash = "") {
     assert.ok(b, `buton yok: ${text}`);
     return b;
   };
+  const chip = (prefix) => {
+    const b = $$("button").find((x) => x.textContent.trim().startsWith(prefix));
+    assert.ok(b, `buton yok: ${prefix}…`);
+    return b;
+  };
   const tick = () => new Promise((r) => setTimeout(r, 5));
-  return { w, $, $$, button, calls, errors, tick, text: () => w.document.body.textContent };
+  return { w, $, $$, button, chip, calls, errors, tick, text: () => w.document.body.textContent };
 }
 
 const tests = [];
@@ -844,10 +849,13 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /Beklenen getiri%138/);
   assert.match(card, /Kazanma olasılığıganyan oranlarından \(6\/6 ayak\)/);
   assert.match(card, /OYNA: Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr\. Tutar kasanın Kelly payından: 30,00 TL/);
-  assert.ok(f.button("İstanbul 3–8. koşu · Bilyoner · OYNA"));
+  assert.ok(f.chip("İstanbul 3–8. koşu · Bilyoner · OYNA"));
+  assert.match(f.chip("İstanbul 3–8. koşu · Bilyoner · OYNA").textContent, /· %1[01] · ~394 TL$/); // tutma ve tutarsa ikramiye
+  assert.match(f.chip("İzmir 1. altılı · TJK").textContent, /· %23 · ~125 TL$/);
+  assert.match(card, /Sıralama kâr ve tutma olasılığını birlikte tartar/);
   assert.match(card, /Günün en mantıklı kuponu: İstanbul 3–8\. koşu · Bilyoner \(aşağıda\)/);
   assert.ok(f.$("#altAuto").checked);
-  f.button("İzmir 1. altılı · TJK").click();
+  f.chip("İzmir 1. altılı · TJK").click();
   card = f.$("#altiliCard").textContent;
   assert.match(card, /Günün en mantıklı kuponu: İstanbul 3–8\. koşu · Bilyoner\s*Göster/);
   assert.match(card, /OYNAMA: Ortalamada zarar: bu kupon/);
@@ -857,7 +865,7 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   assert.match(card, /Yine de oynarsan: yukarıdaki kupon bu bütçeyle tutma olasılığı en yüksek olanı/);
   assert.match(card, /Tutarsa ortalama 125,30 TL; uzun vadede her 100 TL'de ortalama 27 TL kayıp\./);
   assert.match(card, /Kazanma olasılığıAGF'den \(ganyan okunamadı\)/);
-  assert.match(f.button("İzmir 1. altılı · TJK").className, /main/);
+  assert.match(f.chip("İzmir 1. altılı · TJK").className, /main/);
   f.$("#alt_devir").value = "1.500.000"; f.$("#alt_havuz").value = "4.000.000";
   f.$("#alt_havuz").dispatchEvent(new f.w.Event("change"));
   await f.tick();
@@ -882,8 +890,8 @@ test("altılı: bugün seçim yoksa günün en mantıklı kuponu açılır, dü�
   let card = f.$("#altiliCard").textContent;
   assert.match(card, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK \(aşağıda\)/);
   assert.match(card, /İzmir 1\. altılı · TJK\s*Koşu numaraları ve saatleri okunamadı[^]*?Kupon \(tutma odaklı/);
-  assert.ok(f.button("İzmir 1. altılı · TJK · en mantıklı"));
-  f.button("İstanbul 3–8. koşu · Bilyoner").click();
+  assert.ok(f.chip("İzmir 1. altılı · TJK · en mantıklı"));
+  f.chip("İstanbul 3–8. koşu · Bilyoner").click();
   assert.match(f.$("#altiliCard").textContent, /Günün en mantıklı kuponu: İzmir 1\. altılı · TJK\s*Göster/);
   f.button("Göster").click();
   assert.match(f.$("#altiliCard").textContent, /\(aşağıda\)/);
@@ -938,6 +946,16 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   s.agf.learn = {settled: 0, pending: 3, history: []};
   f.w.refresh();
   assert.match(f.$("#altiliKarne").textContent, /Henüz sonuçlanan altılı yok \(3 altılı sonuç bekliyor\)/);
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: çipler sunucunun sıralamasıyla (en mantıklı önce)", async () => {
+  const s = altiliState();
+  s.agf.order = [1, 0];
+  const f = boot(s, "#firsat");
+  const chips = f.$$("#altiliCard .btns .chip").map((b) => b.textContent);
+  assert.ok(chips[0].startsWith("İzmir 1. altılı"), chips.join(" | "));
+  assert.ok(chips[1].startsWith("İstanbul 3–8. koşu"));
   assert.deepEqual(f.errors, []);
 });
 

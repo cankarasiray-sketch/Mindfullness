@@ -168,4 +168,15 @@ public class AltiliTest {
         assertTrue(coupon, coupon.contains(" · 6) "));
         assertTrue(summary, summary.matches("(?s)\\d+ kombinasyon(, misli \\d+)? = [\\d.,]+ TL · tutma %[\\d,]+ · beklenen getiri %\\d+\nGanyan oranlarına göre.*"));
     }
+
+    @Test
+    public void rankingWeighsProfitAndHitTogether() {
+        Altili.Inputs in = inputs(3124.67);
+        in.budget = 90;
+        Map<String, Object> open = Altili.plan(six("1:20 2:20 3:20 4:20 5:20"), in), clear = Altili.plan(six("1:70 2:20 3:10"), in);
+        Map<String, Object> value = Altili.plan(six("1:60:3 2:40:1.5"), inputs(3124.67));
+        assertTrue((Double) open.get("growth") < (Double) clear.get("growth")); // aynı getiri: tutması kolay olan kasaya az zarar
+        assertTrue((Double) value.get("growth") > 0); // kârlı kupon kasayı büyütür
+        assertEquals(Arrays.asList(2, 1, 0, 3), Altili.order(Arrays.asList(open, clear, value, null)));
+    }
 }

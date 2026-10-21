@@ -172,6 +172,15 @@ bildirim olarak gelir.
   Koşular (ya da bulunamama nedeni) altılı başlığının hemen altında, kaydırmadan görünür. Uygulama güncellenince
   altılılar arka planda beklemeden yeni okuyucuyla yeniden okunur.
 
+- **2.28: sıralama, koşu eşleştirme, yarış öncesi kupon.**
+  - Sıralama kâr ve tutma olasılığını birlikte tartar: kuponun kasayı beklenen log büyümesi (Kelly ölçütü; kârlı
+    kuponlar önde, getiri aynıysa tutması kolay olan). Çipler bu sırayla, tutma olasılığı ve tutarsa ortalama ikramiyeyle.
+  - Koşu eşleştirme: altılı art arda 6 koşu olduğundan programda ayaklara toplamda en çok benzeyen art arda 6 koşu
+    seçilir (yalnızca at sayısı aynı olan koşular karışmaz); at numarası başlıksız ya da "1A", "5 SECRETARIAT" gibi
+    yazılmışsa da bulunur. Eşleşmezse neden ayak ve koşu at sayılarıyla yazılır.
+  - Kupon, altılı kapanmadan (1. ayak) 30 dk önce AGF yeniden okunarak son haliyle bildirilir (saat biliniyorsa;
+    11:00 bildirimi o zaman gönderilmez). Karnede önerilen kupon bu son kupondur.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

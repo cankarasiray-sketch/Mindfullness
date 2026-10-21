@@ -50,6 +50,12 @@ public final class DailyJob extends JobService {
                     if (event || !daily) {
                         for (String[] n : repo.events()) Notifier.show(DailyJob.this, "kupon", 13, n[0], n[1]);
                         Notifier.settled(DailyJob.this, repo.takeLiveMessages()); // 2.16.4: maç sürerken tutan kupon
+                        try {
+                            String[] pre = repo.altiliPreRace(); // 2.28: altılı kuponu son AGF'yle, 1. ayaktan 30 dk önce
+                            if (pre != null) Notifier.show(DailyJob.this, "kupon", Notifier.ID_ALTILI, pre[0], pre[1]);
+                        } catch (RuntimeException ignored) {
+                            // bir sonraki olayda
+                        }
                     }
                     if (event) return;
                     Repo.BackgroundResult r = repo.background(daily);
