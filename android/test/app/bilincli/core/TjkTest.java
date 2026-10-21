@@ -177,6 +177,62 @@ public class TjkTest {
     }
 
     @Test
+    public void manyTracksAreAllRead() {
+        // 2.32.7: yabancı hipodromlu gün: 16 hipodrom × 2 altılı + programlar 30 sayfayı aşar; sona kalan da okunur
+        Map<String, String> pages = new LinkedHashMap<>();
+        StringBuilder program = new StringBuilder();
+        for (int c = 11; c <= 26; c++) {
+            program.append("<a href=\"?SehirId=").append(c).append("&SehirAdi=Hipodrom").append(c).append("\">H</a> ");
+            for (int no = 1; no <= 2; no++) {
+                String[][][] legs = LEGS.clone();
+                legs[0] = new String[][] {{String.valueOf(c * 2 + no), "60"}, {"1", "40"}}; // her altılının tablosu farklı
+                pages.put(Tjk.agfUrl(c, DAY, no), page(columns(legs)));
+            }
+        }
+        pages.put(Tjk.programUrl(DAY), program.toString());
+        List<String> asked = new ArrayList<>();
+        Map<String, Object> r = Tjk.read(fake(pages, asked), DAY, NOW, null);
+        assertEquals(32, Json.arr(r.get("altilis")).size());
+        assertEquals("Hipodrom26 2. altılı", altili(r, 31).get("label"));
+        assertTrue(asked.size() > 30);
+        assertTrue(asked.size() <= Tjk.MAX_REQUESTS);
+    }
+
+    @Test
+    public void previouslyReadAltiliIsKept() {
+        // 2.32.7: önceki okumada olan bugünkü/yarınki TJK altılısı yeni okumada yoksa önceki AGF'yle kalır
+        Map<String, Object> prev = new LinkedHashMap<>();
+        prev.put("at", "2026-10-21T14:49:00Z");
+        List<Object> old = new ArrayList<>();
+        String[][] rows = {{"tjk/2026-10-21/31/2", "2026-10-21", "Belmont Park ABD 2. altılı", null}, {"tjk/2026-10-21/3/1", "2026-10-21", "İstanbul 1. altılı", null},
+            {"tjk/2026-10-20/3/1", "2026-10-20", "dünkü", null}, {"tjk/2026-10-22/3/1", "2026-10-22", "22.10 · İstanbul 1. altılı", "2026-10-21T08:00:00Z"},
+            {"bilyoner/x", "2026-10-21", "site", null}};
+        for (String[] row : rows) {
+            Map<String, Object> a = new LinkedHashMap<>();
+            a.put("key", row[0]);
+            a.put("day", row[1]);
+            a.put("label", row[2]);
+            if (row[3] != null) a.put("kept", row[3]);
+            old.add(a);
+        }
+        prev.put("altilis", old);
+        List<Object> fresh = new ArrayList<>();
+        Map<String, Object> ist = new LinkedHashMap<>();
+        ist.put("key", "tjk/2026-10-21/3/1");
+        ist.put("day", "2026-10-21");
+        fresh.add(ist);
+        List<Object> log = new ArrayList<>();
+        assertEquals(2, Tjk.keepMissing(fresh, prev, "2026-10-21", log));
+        assertEquals(3, fresh.size());
+        assertEquals(null, Json.obj(fresh.get(0)).get("kept")); // yeni okunan aynen
+        assertEquals("Belmont Park ABD 2. altılı", Json.obj(fresh.get(1)).get("label"));
+        assertEquals("2026-10-21T14:49:00Z", Json.obj(fresh.get(1)).get("kept"));
+        assertEquals("2026-10-21T08:00:00Z", Json.obj(fresh.get(2)).get("kept")); // AGF'nin asıl okunduğu an korunur
+        assertEquals("Belmont Park ABD 2. altılı: bu okumada yok, önceki okumadaki AGF kullanılıyor", log.get(0));
+        assertEquals(0, Tjk.keepMissing(fresh, null, "2026-10-21", log));
+    }
+
+    @Test
     public void programWithoutLinksTriesKnownTracks() {
         Map<String, String> pages = new LinkedHashMap<>();
         pages.put(Tjk.programUrl(DAY), "<html><body>Program</body></html>");

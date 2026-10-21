@@ -27,8 +27,8 @@ public final class Tjk {
     public static final String HOST = "https://www.tjk.org";
     /** Program sayfası şehir bağlantısı vermezse denenen yerli hipodromlar (TJK şehir numarası = dizi sırası). */
     static final String[] KNOWN = {"", "Adana", "İzmir", "İstanbul", "Bursa", "Ankara", "Şanlıurfa", "Elazığ", "Diyarbakır", "Kocaeli", "Antalya"};
-    /** Bir okumada en fazla bu kadar sayfa indirilir. */
-    static final int MAX_REQUESTS = 30;
+    /** Bir okumada en fazla bu kadar sayfa indirilir (2.32.7: 30 yetmiyordu; yabancı hipodromlu günde akşam ABD altılıları kalıyordu). */
+    static final int MAX_REQUESTS = 80;
     /** Bir ayağın payları toplamı bu aralıkta değilse tablo yanlış okunmuştur. */
     static final double MIN_SUM = 60, MAX_SUM = 130;
     private static final DateTimeFormatter DMY = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT);
@@ -506,6 +506,29 @@ public final class Tjk {
         out.put("log", log);
         out.put("waiting", (long) waiting);
         return out;
+    }
+
+    /**
+     * 2.32.7: önceki okumada bulunan, bugünün ya da sonraki günün TJK altılısı yeni okumada yoksa (sayfa sınırı, geçici hata)
+     * listeden düşmez: önceki AGF'yle eklenir, "kept" alanında o AGF'nin okunduğu an. Eklenen sayısı.
+     */
+    public static int keepMissing(List<Object> fresh, Map<String, Object> previous, String today, List<Object> log) {
+        if (previous == null) return 0;
+        Set<String> keys = new HashSet<>();
+        for (Object o : fresh) keys.add(Json.str(Json.obj(o), "key"));
+        int n = 0;
+        for (Object o : Json.arr(previous.get("altilis"))) {
+            Map<String, Object> a = Json.obj(o);
+            String key = Json.str(a, "key"), day = Json.str(a, "day");
+            if (key == null || !key.startsWith("tjk/") || keys.contains(key) || day == null || day.compareTo(today) < 0) continue;
+            Map<String, Object> k = new LinkedHashMap<>(a);
+            if (Json.str(k, "kept") == null && Json.str(previous, "at") != null) k.put("kept", Json.str(previous, "at"));
+            fresh.add(k);
+            keys.add(key);
+            n++;
+            log.add(Json.str(a, "label") + ": bu okumada yok, önceki okumadaki AGF kullanılıyor");
+        }
+        return n;
     }
 
     // ---- 2.27: şehir programı: koşu numarası, saati ve atları --------------------------------------------------

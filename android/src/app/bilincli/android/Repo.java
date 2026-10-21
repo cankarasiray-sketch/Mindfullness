@@ -689,6 +689,11 @@ final class Repo {
             for (Object line : Json.arr(tjk.get("log"))) log.add("  " + line);
             log.add("TJK yarın (" + tomorrow + ")");
             for (Object line : Json.arr(next.get("log"))) log.add("  " + line);
+            List<Object> keptLog = new ArrayList<>();
+            if (Tjk.keepMissing(altilis, agfStored(), today.toString(), keptLog) > 0) { // 2.32.7: okunmuş altılı listeden düşmez
+                log.add("Önceki okumadan korunan");
+                for (Object line : keptLog) log.add("  " + line);
+            }
             Map<String, Object> r = new LinkedHashMap<>(tjk);
             r.put("altilis", altilis);
             r.put("log", log);

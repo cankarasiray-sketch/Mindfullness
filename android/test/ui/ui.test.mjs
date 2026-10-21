@@ -1001,11 +1001,14 @@ test("altılı: kupon en az 60 TL, üstüne yalnızca kârlı atlar", async () =
 test("altılı: oynamaya en değer olandan başlayarak numaralı liste", async () => {
   const s = altiliState();
   s.agf.order = [0, 1];
+  s.agf.altilis[1].kept = "2026-10-21T16:02:00Z"; // 2.32.7: son okumada yoktu, önceki AGF
   const f = boot(s, "#firsat");
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.equal(rows.length, 2);
   assert.match(rows[0], /^İstanbul 3–8\. koşu · Bilyoner · OYNA.*Oyna · 30 TL \(3 misli\) · 100 TL'den ort\. 138 TL döner · 1\. ayak 14:30$/);
-  assert.match(rows[1], /^İzmir 1\. altılı · TJK.*Ortalamada zarar, yine de oynarsan · 40 TL · 100 TL'den ort\. 73 TL döner$/);
+  assert.match(rows[1], /^İzmir 1\. altılı · TJK.*Ortalamada zarar, yine de oynarsan · 40 TL · 100 TL'den ort\. 73 TL döner · AGF 19:02 okumasından$/);
+  f.chip("İzmir 1. altılı · TJK").click();
+  assert.match(f.$("#altiliCard").textContent, /Son okumada bu altılı okunamadı; AGF 21\.10 19:02 okumasından\./);
   assert.match(f.$("#altiliCard").textContent, /Oynamaya en değerden başlayarak \(1 en iyisi\)/);
   assert.deepEqual(f.errors, []);
 });

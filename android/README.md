@@ -221,6 +221,9 @@ bildirim olarak gelir.
   ortalamada zarar / önerilmez), kupon tutarı, 100 TL'den ortalama dönüş ve 1. ayak saati. Başlamışlar ayrı, en altta.
 - **2.32.6:** Kullanıcı istedi: her ayak en az %70 tutma (kayıtlı %50 bir kez %70'e taşınır). Kupon en az 60 TL; %70 için
   gereken kupon kasanın %7'sini aşarsa yine kurulur, "bütçeyi aşıyor" uyarısı çıkar ve sırada sona gider.
+- **2.32.7:** Yabancı hipodromlu günlerde akşam AGF'leri oluşunca 30 sayfalık okuma sınırı doluyor, sona kalan altılılar
+  (Belmont Park gibi) listeden düşüyordu: sınır 80 sayfa. Ayrıca bir kez okunmuş bugünkü/yarınki altılı sonraki okumada
+  bulunamazsa önceki AGF'yle listede kalır ("AGF HH:MM okumasından").
 
 ## Beraberlik fırsatları (2.17)
 

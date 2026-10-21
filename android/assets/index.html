@@ -697,6 +697,7 @@ function altiliRankNote(a) {
   if (p.roi) bits.push("100 TL'den ort. " + num(p.roi * 100, 0) + " TL döner");
   if (p.overBudget) bits.push("bütçeyi aşıyor");
   if (a.start) bits.push("1. ayak " + esc(a.start));
+  if (a.kept) bits.push("AGF " + esc(hm(a.kept)) + " okumasından");
   return bits.join(" · ");
 }
 function altiliByKey(key) {
@@ -868,6 +869,7 @@ function altiliCard() {
   if (cur) {
     html += '<h3 style="margin:12px 0 4px">' + esc(cur.label) + " · " + esc(cur.source || "TJK") + (cur.start ? " · 1. ayak " + esc(cur.start) : "") + "</h3>"
       + (altiliStarted(cur) ? '<p class="neg"><b>Bu altılı başladı (1. ayak ' + esc(cur.start) + "): artık oynanamaz.</b></p>" : "")
+      + (cur.kept ? '<p class="small muted">Son okumada bu altılı okunamadı; AGF ' + esc(dm(cur.kept)) + " " + esc(hm(cur.kept)) + " okumasından.</p>" : "") // 2.32.7
       + altiliRaceNote(cur) // 2.27.2: koşular (ya da neden) başlığın hemen altında, kaydırmadan görünür
       + altiliPlanHtml(cur)
       + '<details class="info"><summary class="small">Devir ve havuz (bu altılı, bugün' + (cur.inputsFrom === "okundu" ? "; sitede okundu" : cur.inputsFrom === "elle" ? "; elle" : "") + ")</summary>"
