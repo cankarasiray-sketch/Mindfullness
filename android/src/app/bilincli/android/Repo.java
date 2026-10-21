@@ -501,6 +501,7 @@ final class Repo {
         if (p.get("budgetShare") instanceof Number) s.altiliBudgetShare = Json.dbl(p, "budgetShare", s.altiliBudgetShare);
         if (p.get("legMin") instanceof Number) s.altiliLegMin = Json.dbl(p, "legMin", s.altiliLegMin);
         if (p.get("minCost") instanceof Number) s.altiliMinCost = Json.dbl(p, "minCost", s.altiliMinCost);
+        if (p.get("cap") instanceof Number) s.altiliCap = Json.dbl(p, "cap", s.altiliCap);
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -535,7 +536,7 @@ final class Repo {
         in.kasa = ledger.balance() / 100.0;
         in.km = s.kellyMultiplier;
         in.maxFraction = s.altiliBudgetShare; // 2.29: kârlı kuponda da üst sınır kasanın %7'si
-        in.maxCost = 0; // 2.31: eski "kupon başına en fazla" girdisi yerine ayarlardaki 60–90 TL ve kasanın %7'si
+        in.maxCost = s.altiliCap; // 2.32.9: kesin tavan (varsayılan 320 TL; 0: kasanın payı)
         // 2.29: kupon bütçesi kasanın %7'si (kullanıcı ayarı; öğrenilen bütçe yalnızca karnede karşılaştırılır)
         in.budget = Math.max(10, Math.floor(s.altiliBudgetShare * in.kasa / 10) * 10);
         in.legMin = s.altiliLegMin; // her ayakta en az legMin tutma (varsayılan %70)
@@ -564,7 +565,7 @@ final class Repo {
         if (isDemo()) return null;
         Settings st = ledger.settings();
         String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();

@@ -1013,6 +1013,22 @@ test("altılı: oynamaya en değer olandan başlayarak numaralı liste", async (
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı: kupon en fazla 320 TL (kesin tavan), sığmazsa ayaklar daraltılır", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {legMin: 0.7, minCost: 60, cap: 320, capped: true, units: 288, cost: 288, budget: 320});
+  const f = boot(s, "#firsat");
+  assert.equal(f.$("#alt_tavan").value, "320");
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Kupon \(her ayak en az %70, en az 60 TL, en fazla 320 TL, üstü yalnızca kârlı atlar\)/);
+  assert.match(card, /Dikkat: her ayakta en az %70 için kupon 320,00 TL'yi aşıyordu; tavana sığması için bazı ayaklar %70'in altında/);
+  assert.match(card, /; en fazla 320,00 TL\. Tutarsa/);
+  assert.doesNotMatch(card, /bütçeyi aşıyor|aşılıyor\./);
+  f.$("#alt_tavan").value = "250"; f.$("#alt_tavan").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {cap: 250});
+  assert.deepEqual(f.errors, []);
+});
+
 test("altılı: 1. ayağı başlamış altılı işaretlenir, sona gider", async () => {
   const s = altiliState();
   s.agf.day = "2026-10-21";

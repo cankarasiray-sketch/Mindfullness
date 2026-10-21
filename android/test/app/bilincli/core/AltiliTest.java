@@ -306,6 +306,34 @@ public class AltiliTest {
         assertTrue((Double) lean.get("hit") / -(Double) lean.get("ev") > (Double) p.get("hit") / -(Double) p.get("ev"));
     }
 
+    @Test
+    public void hardCapTrimsLegsToFit() {
+        // 2.32.9: kupon en fazla 320 TL (kesin); %70 sınırı sığmazsa tutmayı en az düşüren atlar çıkarılır
+        assertEquals(320.0, new Settings().altiliCap, 1e-9);
+        Altili.Inputs in = rule();
+        in.legMin = 0.70;
+        in.maxCost = 320;
+        List<String> fits = Arrays.asList("1:40 2:25 3:15 4:10 5:10", "1:40 2:25 3:15 4:10 5:10", "1:30 2:15 3:15 4:15 5:15 6:10",
+                "1:60 2:40", "1:55 2:25 3:20", "1:50 2:30 3:20");
+        Map<String, Object> p = Altili.plan(fits, in);
+        assertEquals(288.0, (Double) p.get("cost"), 1e-9); // %70 için 288 TL: tavanın altında, aynen
+        assertEquals(null, p.get("capped"));
+        assertEquals(null, p.get("overBudget"));
+        List<String> wide = Arrays.asList("1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:45 2:20 3:15 4:10 5:10", "1:25 2:20 3:15 4:15 5:10 6:10 7:5",
+                "1:50 2:20 3:15 4:15", "1:30 2:25 3:20 4:15 5:10", "1:40 2:30 3:15 4:15");
+        Map<String, Object> c = Altili.plan(wide, in);
+        double cost = (Double) c.get("cost");
+        assertTrue("kupon " + cost, cost <= 320 + 1e-9 && cost > 160); // tavana sığar, payı boşa harcamaz
+        assertEquals(true, c.get("capped"));
+        assertEquals(null, c.get("overBudget"));
+        in.maxCost = 0; // tavan yoksa eskisi gibi: %70 için 432 TL, bütçe (210) aşıldı uyarısı
+        Map<String, Object> soft = Altili.plan(wide, in);
+        assertEquals(432.0, (Double) soft.get("cost"), 1e-9);
+        assertEquals(true, soft.get("overBudget"));
+        assertTrue((Double) c.get("hit") > 0.6 * (Double) soft.get("hit"));
+        for (int k = 0; k < 6; k++) assertTrue(horses(c, k).size() >= 1);
+    }
+
     static double share(String leg, String horse) {
         for (String t : leg.split(" ")) if (t.startsWith(horse + ":")) return Double.parseDouble(t.substring(horse.length() + 1));
         return 0;

@@ -227,6 +227,9 @@ bildirim olarak gelir.
 - **2.32.8:** TJK AGF tablosunda sıra numarası olmayan satırlar (payı bir sütun solda) ayrı "ayak" sanılıyor, ayaklar
   kayıyor ve altılı "N. ayak okunamadı" diye düşüyordu (Belmont Avustralya, Bursa; Belmont Park ABD): bu satırlar artık
   kendi ayağında. 1. altılının tablosu okunamazsa 2. altılı yine denenir (önceden hiç denenmiyordu).
+- **2.32.9:** Kullanıcı istedi: altılı kuponu en fazla 320 TL ("Kupon en fazla (TL)", kesin tavan; 0 yazılırsa eskisi gibi
+  kasanın payı). %70 ayak sınırı tavana sığmazsa, sığana dek tutmayı bedele göre en az düşüren at çıkarılır, kalan payla
+  sınırın altındaki ayaklara at eklenir; kartta "bazı ayaklar %70'in altında" uyarısı ve her ayağın yüzdesi.
 
 ## Beraberlik fırsatları (2.17)
 

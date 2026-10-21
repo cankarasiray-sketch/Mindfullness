@@ -438,6 +438,70 @@ public final class Altili {
         for (List<Horse> hs : pick) hs.sort(BY_Q);
     }
 
+    private static double sumQ(List<Horse> hs) {
+        double s = 0;
+        for (Horse h : hs) s += h.q;
+        return s;
+    }
+
+    /**
+     * 2.32.9: kupon tavanı (en fazla TL, kesin) aşılıyorsa, tavana sığana dek her adımda tutmayı bedele göre en az düşüren
+     * at (ayağın en az olası atı) çıkarılır; kalan payla ayak sınırının altına düşen ayaklara tutmayı en çok artıran
+     * atlar geri eklenir. Sınırın altında ayak kaldıysa true.
+     */
+    static boolean cap(List<List<Horse>> pick, List<Leg> legs, Inputs in, double maxCost) {
+        long maxUnits = (long) Math.floor(maxCost / in.unit + 1e-9), units = 1;
+        for (List<Horse> hs : pick) units *= hs.size();
+        if (units <= maxUnits) return false;
+        for (List<Horse> hs : pick) hs.sort(BY_Q);
+        while (units > maxUnits) {
+            int best = -1;
+            double loss = Double.POSITIVE_INFINITY;
+            for (int k = 0; k < 6; k++) {
+                List<Horse> hs = pick.get(k);
+                int m = hs.size();
+                if (m < 2) continue;
+                double sq = sumQ(hs), l = Math.log(sq / (sq - hs.get(m - 1).q)) / Math.log(m / (m - 1.0));
+                if (l < loss) {
+                    loss = l;
+                    best = k;
+                }
+            }
+            if (best < 0) break;
+            List<Horse> hs = pick.get(best);
+            units = units / hs.size() * (hs.size() - 1);
+            hs.remove(hs.size() - 1);
+        }
+        for (;;) { // kalan payla sınırın altındaki ayaklar
+            int best = -1;
+            Horse add = null;
+            double gain = 0;
+            for (int k = 0; k < 6; k++) {
+                List<Horse> hs = pick.get(k);
+                int m = hs.size();
+                double sq = sumQ(hs);
+                if (sq >= in.legMin - 1e-9 || m >= MAX_PER_LEG || units / m * (m + 1) > maxUnits) continue;
+                Horse next = nextHorse(hs, legs.get(k));
+                if (next == null) continue;
+                double g = Math.log((sq + next.q) / sq) / Math.log((m + 1.0) / m);
+                if (g > gain) {
+                    gain = g;
+                    best = k;
+                    add = next;
+                }
+            }
+            if (best < 0) break;
+            units = units / pick.get(best).size() * (pick.get(best).size() + 1);
+            pick.get(best).add(add);
+        }
+        boolean below = false;
+        for (List<Horse> hs : pick) {
+            hs.sort(BY_Q);
+            if (sumQ(hs) < in.legMin - 1e-9) below = true;
+        }
+        return below;
+    }
+
     private static final Comparator<Horse> BY_Q = new Comparator<Horse>() {
         @Override
         public int compare(Horse a, Horse b) {
@@ -559,6 +623,7 @@ public final class Altili {
             pick.clear();
             for (int k = 0; k < 6; k++) pick.add(new ArrayList<>(chosen(legs.get(k), mostProfitable(cands.get(k)))));
             fill(pick, legs, in, budget); // 2.31–2.32: en az minCost TL'ye kadar tutmayı artıran, üstüne yalnızca kârlı atlar
+            if (in.maxCost > 0 && cap(pick, legs, in, in.maxCost)) out.put("capped", true); // 2.32.9: kesin tavan
             r = 1;
             double hit = 1;
             long units = 1;
@@ -597,6 +662,7 @@ public final class Altili {
             out.put("mode", "tutma");
             out.put("budget", budget);
             if (in.minCost > 0) out.put("minCost", in.minCost);
+            if (in.maxCost > 0) out.put("cap", in.maxCost); // 2.32.9: kesin tavan
             if (e.cost > budget + 1e-9) out.put("overBudget", true); // ayak başına en az tutma için bütçe aşıldı
         }
         if (in.legMin > 0) out.put("legMin", in.legMin);
