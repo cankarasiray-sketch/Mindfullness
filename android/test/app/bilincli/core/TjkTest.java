@@ -169,7 +169,9 @@ public class TjkTest {
         assertTrue(log, log.contains("İstanbul 2. altılı: önceki altılıyla aynı tablo"));
         assertTrue(log, log.contains("Ankara 1. altılı: AGF henüz oluşmadı")); // sayfa var, paylar boş (2.25.3)
         assertEquals(1L, r.get("waiting"));
-        assertEquals(4, asked.size()); // Ankara'nın 1. altılısı yoksa 2.si istenmez
+        assertEquals(5, asked.size()); // + İstanbul programı (koşu saatleri); Ankara'nın 1. altılısı yoksa 2.si istenmez
+        assertTrue(log, log.contains("İstanbul programı okunamadı"));
+        assertEquals(null, a.get("races"));
         assertEquals(NOW.toString(), r.get("at"));
     }
 
@@ -222,5 +224,57 @@ public class TjkTest {
         String log = String.valueOf(r.get("log"));
         assertTrue(log, log.contains("Bursa 1. altılı: AGF henüz oluşmadı (TJK'da paylar boş; bahisler başlayınca dolar)"));
         assertTrue(log, log.contains("Avustralya 1. altılı: AGF henüz oluşmadı"));
+    }
+
+    /** Şehir programı: 1–3. koşular başka atlarla, 4–9. koşular altılının ayakları; başlık bazen ayrı tabloda, saat noktalı. */
+    static String cityProgram() {
+        StringBuilder b = new StringBuilder("<html><body><h1>İSTANBUL GÜNLÜK YARIŞ PROGRAMI</h1>");
+        String[][] others = {{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"}, {"21", "22", "23"}, {"13", "14"}};
+        for (int r = 1; r <= 9; r++) {
+            String time = String.format(java.util.Locale.ROOT, "%02d:%02d", 13 + (r - 1) / 2, (r - 1) % 2 * 30);
+            String[] horses;
+            if (r <= 3) horses = others[r - 1];
+            else {
+                String[][] leg = LEGS[r - 4];
+                horses = new String[leg.length + 1];
+                for (int i = 0; i < leg.length; i++) horses[i] = leg[i][0];
+                horses[leg.length] = "12"; // AGF'de olmayan (payı 0) bir at daha
+            }
+            if (r == 5) b.append("<table><tr><td>").append(r).append(". KOŞU ").append(time.replace(':', '.')).append(" 1400 Kum</td></tr></table>");
+            else b.append("<div class=\"race\"><h3>").append(r).append(". Koşu</h3><span>").append(time).append("</span> <span>1. 6'LI GANYAN</span></div>");
+            b.append("<table><tr><th>N</th><th>At İsmi</th><th>Sıklet</th><th>AGF</th></tr>");
+            for (String h : horses) b.append("<tr><td>").append(h).append("</td><td>AT").append(h).append("</td><td>58.5</td><td>%1,00(3)</td></tr>");
+            b.append("</table>");
+        }
+        return b.append("</body></html>").toString();
+    }
+
+    @Test
+    public void raceNumbersAndTimesFromCityProgram() {
+        List<Tjk.ProgramRace> races = Tjk.programRaces(cityProgram());
+        assertEquals(9, races.size());
+        assertEquals(5, races.get(4).no);
+        assertEquals("15:00", races.get(4).time);
+        assertEquals("13:00", races.get(0).time);
+        Map<String, String> pages = new LinkedHashMap<>();
+        pages.put(Tjk.programUrl(DAY), "<a href=\"?SehirId=3&SehirAdi=%C4%B0stanbul\">İstanbul</a>");
+        pages.put(Tjk.agfUrl(3, DAY, 1), page(columns(LEGS)));
+        pages.put("https://www.tjk.org/TR/YarisSever/Info/Page/GunlukYarisProgrami?SehirId=3&SehirAdi=%C4%B0stanbul", cityProgram());
+        Map<String, Object> r = Tjk.read(fake(pages, new ArrayList<String>()), DAY, NOW, null);
+        Map<String, Object> a = altili(r, 0);
+        List<Object> rs = Json.arr(a.get("races"));
+        assertEquals(6, rs.size());
+        assertEquals(4L, Json.obj(rs.get(0)).get("no"));
+        assertEquals("14:30", Json.obj(rs.get(0)).get("time"));
+        assertEquals(9L, Json.obj(rs.get(5)).get("no"));
+        assertEquals("17:00", Json.obj(rs.get(5)).get("time"));
+        assertEquals("14:30", a.get("start")); // başlamış altılı bildirilmez
+        assertTrue(String.valueOf(r.get("log")).contains("İstanbul 1. altılı: koşular 4 (14:30), 5 (15:00), 6 (15:30), 7 (16:00), 8 (16:30), 9 (17:00)"));
+        // kupon metni koşu numarası ve saatiyle
+        Map<String, Object> plan = Altili.plan(Tjk.texts(Tjk.parseAgf(page(columns(LEGS)))), AltiliLogTest.inputs());
+        String coupon = Texts.altiliCoupon(plan, rs);
+        assertTrue(coupon, coupon.startsWith("1. ayak (4. koşu 14:30): 5"));
+        assertTrue(coupon, coupon.contains("\n6. ayak (9. koşu 17:00): 7"));
+        assertEquals(Texts.altiliCoupon(plan), Texts.altiliCoupon(plan, null));
     }
 }

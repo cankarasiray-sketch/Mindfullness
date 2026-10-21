@@ -850,7 +850,7 @@ final class Repo {
             noteNotified(a, plan, day, now);
             if (title == null) title = "Altılı: OYNA · " + a.get("label");
             body.append(body.length() == 0 ? "" : "\n\n").append(a.get("label")).append(" · ").append(a.get("source"))
-                    .append(start == null ? "" : " · 1. ayak " + start).append('\n').append(coupon).append('\n')
+                    .append(start == null ? "" : " · 1. ayak " + start).append('\n').append(Texts.altiliCoupon(plan, Json.arr(a.get("races")))).append('\n')
                     .append(Texts.altiliSummary(plan));
         }
         boolean daily = !day.equals(Json.str(sent, "daily"));
@@ -864,7 +864,7 @@ final class Repo {
                 title = "Günün altılısı · " + a.get("label");
                 noteNotified(a, plan, day, now);
                 body.append(a.get("label")).append(" · ").append(a.get("source")).append(start == null ? "" : " · 1. ayak " + start).append('\n')
-                        .append(Texts.altiliCoupon(plan)).append('\n').append(Texts.altiliSummary(plan))
+                        .append(Texts.altiliCoupon(plan, Json.arr(a.get("races")))).append('\n').append(Texts.altiliSummary(plan))
                         .append("\nOrtalamada kâr beklenmiyor; oynayacaksan günün en mantıklı kuponu bu.");
             }
             if (title == null) return null;

@@ -343,6 +343,16 @@ public final class AtYarisi {
                 a.put("legs", legs);
                 a.put("odds", odds);
                 if (first.time != null) a.put("start", first.time); // 1. ayağın saati (Türkiye)
+                List<Object> raceInfo = new ArrayList<>(); // 2.27: ayak ayak koşu numarası ve saati
+                boolean any = false;
+                for (Race r : six) {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    if (r.number != null) m.put("no", r.number);
+                    if (r.time != null) m.put("time", r.time);
+                    any |= !m.isEmpty();
+                    raceInfo.add(m);
+                }
+                if (any) a.put("races", raceInfo);
                 PoolInfo info = poolFor(first.place, nth++, pools);
                 if (info != null) {
                     if (info.unit != null) a.put("unit", info.unit);

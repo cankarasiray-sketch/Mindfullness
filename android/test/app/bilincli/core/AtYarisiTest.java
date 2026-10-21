@@ -62,6 +62,10 @@ public class AtYarisiTest {
         assertEquals(1, a.size());
         assertEquals("İstanbul 3–8. koşu", a.get(0).get("label"));
         assertEquals(Boolean.TRUE, a.get(0).get("odds"));
+        List<Object> rs = Json.arr(a.get(0).get("races"));
+        assertEquals(6, rs.size()); // 2.27: ayak ayak koşu numarası
+        assertEquals(3L, Json.obj(rs.get(0)).get("no"));
+        assertEquals(8L, Json.obj(rs.get(5)).get("no"));
         assertEquals(6, ((List<?>) a.get(0).get("legs")).size());
     }
 

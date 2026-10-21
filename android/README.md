@@ -157,6 +157,12 @@ bildirim olarak gelir.
   altılılar kasanın %1, %3 ve %6'sıyla yeniden kurulup sonuçlarıyla karşılaştırılır; en az 20 sonuçtan sonra getirisi en
   iyi olan bütçe kullanılır, öncesinde %3.
 
+- **2.27: koşu numarası ve saati.** Yanlış koşuya oynanmasın diye her ayağın koşusu yazılır: "1. ayak (4. koşu · 14:30)".
+  TJK'da şehrin programı okunur; ayaklar koşulara at numarası kümelerinin benzerliğiyle eşlenir (sıra ya da başlık
+  biçimi değişse de). Kartta "Koşular: İstanbul 4–9. koşular, 1. ayak 14:30 …" ve Bilyoner'de 1. ayağın hangi koşu
+  olduğunu kontrol uyarısı; okunamazsa açıkça yazar. Bildirimde ayak başına bir satır. 1. ayağın saati bilindiği için
+  başlamış altılı bildirilmez ve günün en mantıklı kuponuna girmez.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den

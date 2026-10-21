@@ -162,6 +162,25 @@ public final class Texts {
         return b.toString();
     }
 
+    /**
+     * 2.27: koşu numarası ve saatiyle, ayak başına bir satır ("1. ayak (4. koşu 14:30): 5, 3"); koşular bilinmiyorsa
+     * tek satır.
+     */
+    public static String altiliCoupon(Map<String, Object> plan, List<Object> races) {
+        if (races == null || races.size() != 6) return altiliCoupon(plan);
+        StringBuilder b = new StringBuilder();
+        List<Object> legs = Json.arr(plan.get("legs"));
+        for (int k = 0; k < legs.size(); k++) {
+            List<String> nos = new ArrayList<>();
+            for (Object h : Json.arr(Json.obj(legs.get(k)).get("horses"))) nos.add(String.valueOf(h));
+            Map<String, Object> r = Json.obj(races.get(k));
+            String race = (r == null || r.get("no") == null ? "" : Json.str(r, "no") + ". koşu") + (r == null || r.get("time") == null ? "" : " " + r.get("time"));
+            b.append(k == 0 ? "" : "\n").append(k + 1).append(". ayak").append(race.trim().isEmpty() ? "" : " (" + race.trim() + ")").append(": ")
+                    .append(String.join(", ", nos));
+        }
+        return b.toString();
+    }
+
     /** Altılı planının özeti: kombinasyon, misli (Bilyoner'deki adıyla kat) = tutar, tutma olasılığı, beklenen getiri ve gerekçe. */
     public static String altiliSummary(Map<String, Object> plan) {
         long units = Json.lng(plan, "units", 0), kat = Json.lng(plan, "kat", 0);

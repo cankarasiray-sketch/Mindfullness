@@ -8,6 +8,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -161,12 +162,19 @@ public final class Tjk {
     /** İç içe tablolarda en içtekiler (veri tablosu), sayfadaki sırayla. */
     static List<String> innerTables(String html) {
         List<String> out = new ArrayList<>();
+        for (int[] s : innerTableSpans(html)) out.add(html.substring(s[0], s[1]));
+        return out;
+    }
+
+    /** En içteki tabloların yerleri {başı, sonu} (sonu: kapanış etiketinin başı). */
+    static List<int[]> innerTableSpans(String html) {
+        List<int[]> out = new ArrayList<>();
         Matcher m = TABLE_TAG.matcher(html);
         int open = -1;
         while (m.find()) {
             if (m.group(1).isEmpty()) open = m.start();
             else if (open >= 0) {
-                out.add(html.substring(open, m.start()));
+                out.add(new int[] {open, m.start()});
                 open = -1;
             }
         }
@@ -386,11 +394,13 @@ public final class Tjk {
         int requests = 0, failures = 0, waiting = 0;
         boolean reachable = true;
         Map<Integer, String> cities = new LinkedHashMap<>();
+        Map<Integer, String[]> links = new LinkedHashMap<>();
         step(progress, "TJK yarış programı okunuyor…");
         try {
             requests++;
             String html = http.get(programUrl(day), headers()).body;
             cities = cities(html);
+            links = cityLinks(html, programUrl(day)); // 2.27: şehir programı (koşu saatleri)
             log.add(cities.isEmpty() ? "Program: şehir bağlantısı bulunamadı (" + excerpt(html) + ")"
                     : "Program: " + String.join(", ", cities.values()));
         } catch (Http.ProviderException e) {
@@ -402,6 +412,7 @@ public final class Tjk {
             log.add("Yerli hipodromlar tek tek deneniyor.");
         }
         Set<String> seen = new HashSet<>();
+        Map<Integer, List<ProgramRace>> programs = new LinkedHashMap<>();
         outer:
         for (Map.Entry<Integer, String> c : cities.entrySet()) {
             for (int no = 1; no <= 2; no++) {
@@ -453,6 +464,28 @@ public final class Tjk {
                 a.put("no", no);
                 a.put("label", label);
                 a.put("legs", new ArrayList<Object>(text));
+                if (links.containsKey(c.getKey())) { // 2.27: her ayağın koşu numarası ve saati (yanlış koşuya oynanmasın)
+                    List<ProgramRace> program = programs.get(c.getKey());
+                    if (program == null) {
+                        try {
+                            requests++;
+                            program = programRaces(http.get(links.get(c.getKey())[1], headers()).body);
+                        } catch (Http.ProviderException e) {
+                            program = new ArrayList<>();
+                            log.add(c.getValue() + " programı okunamadı: " + shortMessage(e.getMessage()));
+                        }
+                        programs.put(c.getKey(), program);
+                    }
+                    List<Object> races = legRaces(legs, program);
+                    if (races != null) {
+                        a.put("races", races);
+                        String start = Json.str(Json.obj(races.get(0)), "time");
+                        if (start != null) a.put("start", start);
+                        log.add(label + ": koşular " + raceText(races));
+                    } else {
+                        log.add(label + ": koşu saatleri bulunamadı (programda " + program.size() + " koşu tablosu)");
+                    }
+                }
                 Double devir = amountNear(html, DEVIR_TEXT), pool = amountNear(html, POOL_TEXT); // sayfada yazıyorsa
                 if (devir != null) a.put("devir", devir);
                 if (pool != null) a.put("pool", pool);
@@ -467,6 +500,130 @@ public final class Tjk {
         out.put("log", log);
         out.put("waiting", (long) waiting);
         return out;
+    }
+
+    // ---- 2.27: şehir programı: koşu numarası, saati ve atları --------------------------------------------------
+
+    static final class ProgramRace {
+        final int no;
+        final String time;
+        final Set<String> runners;
+
+        ProgramRace(int no, String time, Set<String> runners) {
+            this.no = no;
+            this.time = time;
+            this.runners = runners;
+        }
+    }
+
+    private static final Pattern RACE_NO = Pattern.compile("(?<!\\d)(\\d{1,2})\\s*\\.\\s*[Kk][Oo][ŞşSs][Uu]");
+    private static final Pattern CLOCK_COLON = Pattern.compile("(?<![\\d:.])([01]?\\d|2[0-3]):([0-5]\\d)(?![\\d:])");
+    private static final Pattern CLOCK_DOT = Pattern.compile("(?<![\\d:.])([01]?\\d|2[0-3])\\.([0-5]\\d)(?![\\d.])");
+
+    private static String clock(String text) {
+        Matcher c = CLOCK_COLON.matcher(text);
+        if (!c.find()) {
+            c = CLOCK_DOT.matcher(text);
+            if (!c.find()) return null;
+        }
+        return String.format(Locale.ROOT, "%02d:%s", Integer.parseInt(c.group(1)), c.group(2));
+    }
+
+    /** Tablodaki atlar (başlıkta "N"/"No"/"At No" sütunu). */
+    static List<String> runners(String table) {
+        String[] rows = table.split("(?i)<tr\\b");
+        int horseCol = -1;
+        List<String> out = new ArrayList<>();
+        for (int r = 1; r < rows.length; r++) {
+            String[] cells = rows[r].split("(?i)<t[dh]\\b");
+            List<String> ts = new ArrayList<>();
+            for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
+            if (horseCol < 0) {
+                for (int c = 0; c < ts.size(); c++) if (HORSE_HEADER.matcher(ts.get(c)).matches()) horseCol = c;
+                continue;
+            }
+            if (horseCol < ts.size() && NUMBER_CELL.matcher(ts.get(horseCol)).matches()) out.add(String.valueOf(Integer.parseInt(ts.get(horseCol))));
+        }
+        return out;
+    }
+
+    /**
+     * Şehir programındaki koşular: her at tablosu, ondan önceki metinde geçen son "N. Koşu" ve saatle (tablolar arasında
+     * taşınır: başlık ayrı tablodaysa da).
+     */
+    static List<ProgramRace> programRaces(String html) {
+        String clean = stripScripts(html);
+        List<ProgramRace> out = new ArrayList<>();
+        int prev = 0, no = 0;
+        String time = null;
+        for (int[] span : innerTableSpans(clean)) {
+            String gap = text(clean.substring(prev, span[0]));
+            Matcher m = RACE_NO.matcher(gap);
+            int at = -1;
+            while (m.find()) {
+                no = Integer.parseInt(m.group(1));
+                at = m.end();
+                time = null;
+            }
+            String t = clock(at >= 0 ? gap.substring(at) : gap);
+            if (t != null) time = t;
+            String table = clean.substring(span[0], span[1]);
+            List<String> rs = runners(table);
+            if (rs.size() >= 2) {
+                if (time == null) time = clock(text(table.substring(0, Math.min(table.length(), 400)))); // saat tablo başlığında
+                out.add(new ProgramRace(no, time, new LinkedHashSet<>(rs)));
+            } else {
+                String inTable = text(table);
+                Matcher r = RACE_NO.matcher(inTable); // başlık tablosu: "4. Koşu 14:30"
+                while (r.find()) {
+                    no = Integer.parseInt(r.group(1));
+                    String tt = clock(inTable.substring(r.end()));
+                    time = tt;
+                }
+            }
+            prev = span[1];
+        }
+        return out;
+    }
+
+    /** Ayakların koşuları ({no, time}) at kümelerinin benzerliğiyle; biri eşleşmezse null. */
+    static List<Object> legRaces(List<List<Horse>> legs, List<ProgramRace> program) {
+        List<Object> out = new ArrayList<>();
+        Set<Integer> used = new HashSet<>();
+        for (List<Horse> leg : legs) {
+            Set<String> nos = new HashSet<>();
+            for (Horse h : leg) nos.add(h.no);
+            int best = -1;
+            double score = 0.6;
+            for (int i = 0; i < program.size(); i++) {
+                if (used.contains(i)) continue;
+                Set<String> u = new HashSet<>(nos), x = new HashSet<>(nos);
+                u.addAll(program.get(i).runners);
+                x.retainAll(program.get(i).runners);
+                double j = (double) x.size() / u.size();
+                if (j >= score) {
+                    score = j;
+                    best = i;
+                }
+            }
+            if (best < 0) return null;
+            used.add(best);
+            ProgramRace r = program.get(best);
+            Map<String, Object> m = new LinkedHashMap<>();
+            if (r.no > 0) m.put("no", (long) r.no);
+            if (r.time != null) m.put("time", r.time);
+            out.add(m);
+        }
+        return out;
+    }
+
+    static String raceText(List<Object> races) {
+        StringBuilder b = new StringBuilder();
+        for (int k = 0; k < races.size(); k++) {
+            Map<String, Object> r = Json.obj(races.get(k));
+            b.append(k == 0 ? "" : ", ").append(r.get("no") == null ? "?" : r.get("no")).append(r.get("time") == null ? "" : " (" + r.get("time") + ")");
+        }
+        return b.toString();
     }
 
     // ---- 2.26: sonuçlar (önerilerin tutup tutmadığı ve öğrenme için) -----------------------------------------
