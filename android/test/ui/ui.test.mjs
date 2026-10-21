@@ -818,7 +818,8 @@ function altiliState() {
   const s = clone(baseState);
   s.settings.altiliAuto = true; s.settings.altiliUnit = 1.25; s.settings.altiliTakeout = 0.27; s.settings.altiliTax = 0;
   const leg = (horses, share, odds) => ({horses, share, agf: share, odds});
-  s.agf = {at: "2026-10-20T09:00:00Z", day: "2026-10-20", best: "bilyoner/İstanbul 3–8. koşu", log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "TJK", "  Program: İstanbul, İzmir"],
+  const tomorrow = new Date(Date.parse(s.now) + 27 * 3600000).toISOString().slice(0, 10); // Türkiye günüyle yarın: hiçbiri başlamamış
+  s.agf = {at: "2026-10-20T09:00:00Z", day: tomorrow, best: "bilyoner/İstanbul 3–8. koşu", log: ["Bilyoner (keşif: bu bölümü paylaşırsan okuma kesinleşir)", "TJK", "  Program: İstanbul, İzmir"],
     inputs: {maxCost: 0, manual: []},
     altilis: [
       {key: "bilyoner/İstanbul 3–8. koşu", source: "Bilyoner", label: "İstanbul 3–8. koşu", city: "İstanbul", start: "14:30", inputsFrom: "okundu", unit: 1.25,
@@ -992,6 +993,23 @@ test("altılı: kupon en az 60 TL, üstüne yalnızca kârlı atlar", async () =
   assert.equal(f.$("#alt_enfazla"), null);
   f.$("#alt_enaz").value = "50"; f.$("#alt_enaz").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {minCost: 50});
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: 1. ayağı başlamış altılı işaretlenir, sona gider", async () => {
+  const s = altiliState();
+  s.agf.day = "2026-10-21";
+  s.agf.altilis[0].start = "13:30"; s.agf.altilis[0].day = "2026-10-21";
+  s.agf.altilis[1].start = "23:50"; s.agf.altilis[1].day = "2026-10-21";
+  s.now = "2026-10-21T11:37:00Z";
+  const f = boot(s, "#firsat");
+  const chips = f.$$("button").map((b) => b.textContent.trim()).filter((t) => /İstanbul 3–8|İzmir 1\./.test(t));
+  assert.match(chips.at(-1), /^İstanbul 3–8\. koşu · Bilyoner · başladı/);
+  assert.match(f.$("#altiliCard").textContent, /Bu altılı başladı \(1\. ayak 13:30\): artık oynanamaz/);
+  assert.equal(f.w.altiliStarted(s.agf.altilis[0], "2026-10-21T11:37:00Z"), true); // 14:37 TR
+  assert.equal(f.w.altiliStarted(s.agf.altilis[1], "2026-10-21T11:37:00Z"), false);
+  assert.equal(f.w.altiliStarted({start: "21:00", day: "2026-10-20"}, "2026-10-21T05:00:00Z"), true); // dünkü
+  assert.equal(f.w.altiliStarted({label: "saat yok"}), false);
   assert.deepEqual(f.errors, []);
 });
 

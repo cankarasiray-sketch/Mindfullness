@@ -208,6 +208,8 @@ bildirim olarak gelir.
   artıran önce; üst sınır kasanın %7'si. Ganyan ya da öğrenilmiş AGF düzeltmesi değer göstermiyorsa hiç eklenmez
   (gereksiz para yatırılmaz). "Kupon en fazla (TL)" ayarı kaldırıldı.
 
+- **2.32.1:** 1. ayağı başlamış altılı çipte "başladı" diye işaretlenir ve sona gider; seçiliyse "artık oynanamaz" yazar.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den
