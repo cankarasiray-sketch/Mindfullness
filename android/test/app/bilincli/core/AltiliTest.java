@@ -261,31 +261,26 @@ public class AltiliTest {
     }
 
     @Test
-    public void minimumCouponDefaultsTo120AndOldDefaultMoves() {
-        assertEquals(120.0, new Settings().altiliMinCost, 1e-9);
-        Map<String, Object> v9 = new Settings().toMap();
-        v9.put("v", 9L);
-        v9.put("altiliMinCost", 60.0);
-        assertEquals(120.0, Settings.fromMap(v9).altiliMinCost, 1e-9);
-        v9.put("altiliMinCost", 80.0); // kullanıcının kendi seçimi korunur
-        assertEquals(80.0, Settings.fromMap(v9).altiliMinCost, 1e-9);
+    public void reasonableDefaultsAndRevertOf2322And2323() {
+        // 2.32.4: kâr için en makul: her ayak %50, kupon en az 60 TL
+        assertEquals(0.50, new Settings().altiliLegMin, 1e-9);
+        assertEquals(60.0, new Settings().altiliMinCost, 1e-9);
+        Map<String, Object> v11 = new Settings().toMap();
+        v11.put("v", 11L);
+        v11.put("altiliLegMin", 0.80);
+        v11.put("altiliMinCost", 120.0);
+        Settings back = Settings.fromMap(v11);
+        assertEquals(0.50, back.altiliLegMin, 1e-9);
+        assertEquals(60.0, back.altiliMinCost, 1e-9);
+        v11.put("altiliLegMin", 0.60); // kullanıcının kendi seçimi korunur
+        v11.put("altiliMinCost", 90.0);
+        assertEquals(0.60, Settings.fromMap(v11).altiliLegMin, 1e-9);
+        assertEquals(90.0, Settings.fromMap(v11).altiliMinCost, 1e-9);
         Settings mine = new Settings();
-        mine.altiliMinCost = 60; // yeni sürümde bilerek 60'a çeken korunur
-        assertEquals(60.0, Settings.fromMap(mine.toMap()).altiliMinCost, 1e-9);
-    }
-
-    @Test
-    public void legMinimumDefaultsTo80AndOldDefaultMoves() {
-        assertEquals(0.80, new Settings().altiliLegMin, 1e-9);
-        Map<String, Object> v10 = new Settings().toMap();
-        v10.put("v", 10L);
-        v10.put("altiliLegMin", 0.50);
-        assertEquals(0.80, Settings.fromMap(v10).altiliLegMin, 1e-9);
-        v10.put("altiliLegMin", 0.60); // kullanıcının kendi seçimi korunur
-        assertEquals(0.60, Settings.fromMap(v10).altiliLegMin, 1e-9);
-        Settings mine = new Settings();
-        mine.altiliLegMin = 0.50; // yeni sürümde bilerek %50'ye çeken korunur
-        assertEquals(0.50, Settings.fromMap(mine.toMap()).altiliLegMin, 1e-9);
+        mine.altiliLegMin = 0.80; // yeni sürümde bilerek %80'e çeken korunur
+        mine.altiliMinCost = 120;
+        assertEquals(0.80, Settings.fromMap(mine.toMap()).altiliLegMin, 1e-9);
+        assertEquals(120.0, Settings.fromMap(mine.toMap()).altiliMinCost, 1e-9);
         // %80 kuralı: her ayak en az %80; bütçeyi aşarsa kupon yine kurulur, uyarı işaretlenir
         Altili.Inputs in = rule();
         in.legMin = 0.80;
@@ -299,6 +294,12 @@ public class AltiliTest {
         }
         assertEquals(true, p.get("overBudget"));
         assertEquals(0.80, (Double) p.get("legMin"), 1e-9);
+        // ganyan yokken ikisi de paranın %73'ünü geri getirir; %50 / 60 TL kuponu kaybedilen TL başına daha çok tutar
+        in.legMin = 0.50;
+        Map<String, Object> lean = Altili.plan(legs, in);
+        assertEquals((Double) p.get("roi"), (Double) lean.get("roi"), 1e-9);
+        assertTrue((Double) lean.get("cost") < (Double) p.get("cost") / 3);
+        assertTrue((Double) lean.get("hit") / -(Double) lean.get("ev") > (Double) p.get("hit") / -(Double) p.get("ev"));
     }
 
     static double share(String leg, String horse) {

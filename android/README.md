@@ -212,6 +212,11 @@ bildirim olarak gelir.
 - **2.32.2:** "Kupon en az (TL)" varsayılanı 120 TL (eski varsayılan 60 kayıtlıysa 120'ye taşınır); üst sınır yine kasanın %7'si.
 - **2.32.3:** "Ayak başına en az tutma" varsayılanı %80 (eski varsayılan %50 kayıtlıysa %80'e taşınır). %80 için gereken
   kupon kasanın %7'sini aşarsa kupon yine kurulur, kartta "bütçe aşıldı" uyarısı çıkar ve sıralamada sona gider.
+- **2.32.4: kâr için en makul ayar.** Varsayılanlar yeniden her ayak en az %50, kupon en az 60 TL (2.32.2–2.32.3'te kayıtlı
+  120 TL / %80 bir kez buna döner). Ganyan yokken her kupon ortalamada parasının ~%73'ünü geri getirir; kupon büyüdükçe
+  tutma artar ama zarar daha hızlı artar: örnek altılıda %50/60 TL → 80 TL, tutma %16,7, ortalama zarar 22 TL;
+  %80 → 360 TL, tutma %36,9, ortalama zarar 97 TL. TL başına en çok tutmayı en küçük kupon verir. Değer (ganyan ya da
+  öğrenilmiş AGF düzeltmesi) olduğunda %80 sınırı kârlı "OYNA" kuponlarını da çoğu zaman eliyordu.
 
 ## Beraberlik fırsatları (2.17)
 
