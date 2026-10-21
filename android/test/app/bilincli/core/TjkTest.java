@@ -367,4 +367,27 @@ public class TjkTest {
         for (java.util.Set<String> c : cs) found |= c.containsAll(Arrays.asList("1", "2", "3"));
         assertTrue(String.valueOf(cs), found);
     }
+
+    static List<Tjk.Horse> horses(int... nos) {
+        List<Tjk.Horse> l = new ArrayList<>();
+        for (int n : nos) l.add(new Tjk.Horse(String.valueOf(n), 100.0 / nos.length));
+        return l;
+    }
+
+    @Test
+    public void agfWithoutZeroHorsesMatchesByContainment() {
+        // 21.10 Keeneland 2. altılı: AGF'de payı %0 olan atlar yok (ayak at sayıları 6/4/7/5/6/13; koşular 9,9,11,9,11,9,11,16)
+        int[] sizes = {9, 9, 11, 9, 11, 9, 11, 16};
+        List<Tjk.ProgramRace> program = new ArrayList<>();
+        for (int r = 0; r < sizes.length; r++) {
+            java.util.Set<String> set = new java.util.LinkedHashSet<>();
+            for (int i = 1; i <= sizes[r]; i++) set.add(String.valueOf(i));
+            program.add(new Tjk.ProgramRace(r + 1, null, set));
+        }
+        List<List<Tjk.Horse>> legs = Arrays.asList(horses(5, 9, 3, 6, 1, 10), horses(2, 4, 7, 9), horses(1, 2, 3, 5, 8, 10, 11), horses(1, 3, 4, 6, 9),
+                horses(2, 4, 5, 7, 9, 11), horses(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15));
+        List<Object> races = Tjk.legRaces(legs, program);
+        assertEquals(3L, Json.obj(races.get(0)).get("no"));
+        assertEquals(8L, Json.obj(races.get(5)).get("no"));
+    }
 }

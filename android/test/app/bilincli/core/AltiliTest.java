@@ -179,4 +179,15 @@ public class AltiliTest {
         assertTrue((Double) value.get("growth") > 0); // kârlı kupon kasayı büyütür
         assertEquals(Arrays.asList(2, 1, 0, 3), Altili.order(Arrays.asList(open, clear, value, null)));
     }
+
+    @Test
+    public void unprofitableCouponsRankByHitNotByCheapness() {
+        Altili.Inputs cheap = inputs(3124.67), full = inputs(3124.67);
+        cheap.budget = 70;
+        full.budget = 90;
+        // 21.10: 71 TL'lik %16'lık kupon, 80 TL'lik %30'luk kuponun önüne geçiyordu
+        Map<String, Object> a = Altili.plan(six("1:40 2:25 3:15 4:10 5:10"), cheap), b = Altili.plan(six("1:70 2:20 3:10"), full);
+        assertTrue((Double) a.get("hit") < (Double) b.get("hit"));
+        assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(a, b)));
+    }
 }

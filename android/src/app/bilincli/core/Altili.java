@@ -517,14 +517,16 @@ public final class Altili {
     }
 
     /**
-     * Sıralama (2.28: kâr ve tutma birlikte): önce oynanabilir olan; sonra kasanın beklenen log büyümesi (Kelly ölçütü:
-     * getiri yüksekse ve aynı getiride tutma olasılığı yüksekse büyük); hesaplanamıyorsa getiri, sonra tutma olasılığı.
+     * Sıralama: önce oynanabilir (ortalamada kârlı) olanlar, kendi aralarında kasanın beklenen log büyümesiyle (Kelly:
+     * kâr ve tutma birlikte). Kârlı olmayanlar ortalama getiriyle, getiri aynıysa tutma olasılığıyla (2.28.1: büyüme
+     * ölçüsü zararlı kuponlarda yalnızca ucuz olanı öne çıkarıyordu; tutarlar aynı bütçeden, karşılaştırma getiri ve
+     * tutmayla adil).
      */
     static boolean better(Map<String, Object> a, Map<String, Object> b) {
         boolean pa = Json.bool(a, "play", false), pb = Json.bool(b, "play", false);
         if (pa != pb) return pa;
         Double ga = Json.num(a, "growth"), gb = Json.num(b, "growth");
-        if (ga != null && gb != null && Math.abs(ga - gb) > 1e-12) return ga > gb;
+        if (pa && ga != null && gb != null && Math.abs(ga - gb) > 1e-12) return ga > gb;
         if (pa) return Json.dbl(a, "ev", 0) > Json.dbl(b, "ev", 0);
         double ra = Json.dbl(a, "roi", 0), rb = Json.dbl(b, "roi", 0);
         if (Math.abs(ra - rb) > 0.02) return ra > rb;

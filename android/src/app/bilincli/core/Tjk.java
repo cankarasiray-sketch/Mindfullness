@@ -728,6 +728,21 @@ public final class Tjk {
         return best;
     }
 
+    /**
+     * 2.28.1: ayağın atlarının koşuda bulunma oranı (AGF payı %0 olan atlar AGF listesinde yok: ayak, koşunun alt
+     * kümesidir) ve fazlalık (koşuda olup ayakta olmayan atların payı); adaylardan en iyisi {içerme, fazlalık}.
+     */
+    static double[] containment(Set<String> leg, ProgramRace r) {
+        double[] best = {0, 1};
+        for (Set<String> c : r.candidates) {
+            Set<String> x = new HashSet<>(leg);
+            x.retainAll(c);
+            double in = leg.isEmpty() ? 0 : (double) x.size() / leg.size(), extra = c.isEmpty() ? 1 : (double) (c.size() - x.size()) / c.size();
+            if (in > best[0] + 1e-9 || (Math.abs(in - best[0]) < 1e-9 && extra < best[1])) best = new double[] {in, extra};
+        }
+        return best;
+    }
+
     private static List<Object> info(List<ProgramRace> six) {
         List<Object> out = new ArrayList<>();
         for (ProgramRace r : six) {
@@ -756,6 +771,24 @@ public final class Tjk {
                 min = Math.min(min, j);
             }
             if (min >= 0.4 && s / 6 >= 0.6 && s > bestS + 1e-9) {
+                bestS = s;
+                bestO = o;
+            }
+        }
+        if (bestO >= 0) return info(program.subList(bestO, bestO + 6));
+        // 2.28.1: AGF'de payı %0 olan atlar yoksa ayaklar koşuların alt kümesidir: her ayağın atları koşuda bulunmalı
+        // (en az %85), art arda 6 koşu arasından en çok içeren, eşitse fazlalığı en az olan seçilir.
+        bestS = -1;
+        for (int o = 0; o + 6 <= n; o++) {
+            double in = 0, extra = 0, min = 1;
+            for (int k = 0; k < 6; k++) {
+                double[] c = containment(legSet(legs.get(k)), program.get(o + k));
+                in += c[0];
+                extra += c[1];
+                min = Math.min(min, c[0]);
+            }
+            double s = in - 0.01 * extra;
+            if (min >= 0.85 && s > bestS + 1e-9) {
                 bestS = s;
                 bestO = o;
             }

@@ -181,6 +181,11 @@ bildirim olarak gelir.
   - Kupon, altılı kapanmadan (1. ayak) 30 dk önce AGF yeniden okunarak son haliyle bildirilir (saat biliniyorsa;
     11:00 bildirimi o zaman gönderilmez). Karnede önerilen kupon bu son kupondur.
 
+- **2.28.1:** kârlı olmayan altılılar yine ortalama getiri, sonra tutma olasılığıyla sıralanır (büyüme ölçüsü zararlı
+  kuponlarda yalnızca ucuz olanı öne çıkarıyordu); büyüme yalnızca kârlı kuponları kendi aralarında sıralar. Koşu
+  eşleştirme: AGF'de payı %0 olan atlar listede yoksa ayaklar koşuların alt kümesidir; her ayağın atlarının en az %85'i
+  koşuda bulunan art arda 6 koşu seçilir.
+
 ## Beraberlik fırsatları (2.17)
 
 - Fırsatlar'da yeni kart: önümüzdeki 2 günde **tek oynanabilen beraberlikler** (en az %30 olası; 2.17.1'den
