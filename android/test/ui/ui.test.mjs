@@ -956,7 +956,7 @@ test("altılı: çipler sunucunun sıralamasıyla (en mantıklı önce)", async 
   const s = altiliState();
   s.agf.order = [1, 0];
   const f = boot(s, "#firsat");
-  const chips = f.$$("#altiliCard .btns .chip").map((b) => b.textContent);
+  const chips = f.$$("#altiliCard ol.rank .chip").map((b) => b.textContent);
   assert.ok(chips[0].startsWith("İzmir 1. altılı"), chips.join(" | "));
   assert.ok(chips[1].startsWith("İstanbul 3–8. koşu"));
   assert.deepEqual(f.errors, []);
@@ -998,6 +998,18 @@ test("altılı: kupon en az 60 TL, üstüne yalnızca kârlı atlar", async () =
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı: oynamaya en değer olandan başlayarak numaralı liste", async () => {
+  const s = altiliState();
+  s.agf.order = [0, 1];
+  const f = boot(s, "#firsat");
+  const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
+  assert.equal(rows.length, 2);
+  assert.match(rows[0], /^İstanbul 3–8\. koşu · Bilyoner · OYNA.*Oyna · 30 TL \(3 misli\) · 100 TL'den ort\. 138 TL döner · 1\. ayak 14:30$/);
+  assert.match(rows[1], /^İzmir 1\. altılı · TJK.*Ortalamada zarar, yine de oynarsan · 40 TL · 100 TL'den ort\. 73 TL döner$/);
+  assert.match(f.$("#altiliCard").textContent, /Oynamaya en değerden başlayarak \(1 en iyisi\)/);
+  assert.deepEqual(f.errors, []);
+});
+
 test("altılı: 1. ayağı başlamış altılı işaretlenir, sona gider", async () => {
   const s = altiliState();
   s.agf.day = "2026-10-21";
@@ -1008,6 +1020,8 @@ test("altılı: 1. ayağı başlamış altılı işaretlenir, sona gider", async
   const chips = f.$$("button").map((b) => b.textContent.trim()).filter((t) => /İstanbul 3–8|İzmir 1\./.test(t));
   assert.match(chips.at(-1), /^İstanbul 3–8\. koşu · Bilyoner · başladı/);
   assert.match(f.$("#altiliCard").textContent, /Bu altılı başladı \(1\. ayak 13:30\): artık oynanamaz/);
+  assert.equal(f.$$("#altiliCard ol.rank li").length, 1); // başlamış altılı sırada değil, ayrı listede
+  assert.match(f.$("#altiliCard").textContent, /Başlamış \(artık oynanamaz\):İstanbul 3–8\. koşu · Bilyoner · başladı/);
   assert.equal(f.w.altiliStarted(s.agf.altilis[0], "2026-10-21T11:37:00Z"), true); // 14:37 TR
   assert.equal(f.w.altiliStarted(s.agf.altilis[1], "2026-10-21T11:37:00Z"), false);
   assert.equal(f.w.altiliStarted({start: "21:00", day: "2026-10-20"}, "2026-10-21T05:00:00Z"), true); // dünkü

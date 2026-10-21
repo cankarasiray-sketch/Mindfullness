@@ -217,6 +217,8 @@ bildirim olarak gelir.
   tutma artar ama zarar daha hızlı artar: örnek altılıda %50/60 TL → 80 TL, tutma %16,7, ortalama zarar 22 TL;
   %80 → 360 TL, tutma %36,9, ortalama zarar 97 TL. TL başına en çok tutmayı en küçük kupon verir. Değer (ganyan ya da
   öğrenilmiş AGF düzeltmesi) olduğunda %80 sınırı kârlı "OYNA" kuponlarını da çoğu zaman eliyordu.
+- **2.32.5:** Altılılar oynamaya en değer olandan başlayarak numaralı listede (1 en iyisi): her satırda karar (Oyna /
+  ortalamada zarar / önerilmez), kupon tutarı, 100 TL'den ortalama dönüş ve 1. ayak saati. Başlamışlar ayrı, en altta.
 
 ## Beraberlik fırsatları (2.17)
 
