@@ -505,6 +505,7 @@ final class Repo {
         if (p.get("minHit") instanceof Number) s.altiliMinHit = Json.dbl(p, "minHit", s.altiliMinHit);
         if (p.get("minEdge") instanceof Number) s.altiliMinEdge = Json.dbl(p, "minEdge", s.altiliMinEdge);
         if (p.get("playNoEdge") instanceof Boolean) s.altiliPlayNoEdge = (Boolean) p.get("playNoEdge");
+        if (p.get("minHitAuto") instanceof Boolean) s.altiliMinHitAuto = (Boolean) p.get("minHitAuto");
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -544,6 +545,7 @@ final class Repo {
         in.budget = Math.max(10, Math.floor(s.altiliBudgetShare * in.kasa / 10) * 10);
         in.legMin = s.altiliLegMin; // her ayakta en az legMin tutma (2.33: varsayılan yok)
         in.minHit = s.altiliMinHit; // 2.37: 6/6 olasılığı düşük altılı oynanmaz
+        if (s.altiliMinHitAuto && altiliLearn != null) in.minHit = Json.dbl(altiliLearn, "minHitUse", s.altiliMinHit); // 2.49: karnedeki en iyi eşik
         in.minEdge = s.altiliMinEdge; // 2.45: kâr kuralı (beklenen dönüş en az %110)
         in.profitRule = !s.altiliPlayNoEdge; // 2.48: 6/6 modu açıksa kârsız günde de kurallara uyan altılı önerilir
         in.maxHit = s.altiliCap > 0; // 2.33: tavan varsa kupon tavana kadar en yüksek tutmayla (para önce zayıf ayaklara)
@@ -578,7 +580,7 @@ final class Repo {
         Settings st = ledger.settings();
         String cacheKey = (agfRaw == null ? 0 : agfRaw.hashCode()) + "|" + (altiliLogRaw == null ? 0 : altiliLogRaw.hashCode()) + "|" // 2.46: büyük defter
                 + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinHitAuto + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();
@@ -618,7 +620,8 @@ final class Repo {
     private Map<String, Object> agfViewFresh() {
         Map<String, Object> stored = agfStored(), inp = altiliInputs();
         Settings ls = ledger.settings();
-        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()), ls.altiliLegMin, ls.altiliMinHit, ls.altiliMinEdge);
+        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()), ls.altiliLegMin, ls.altiliMinHit, ls.altiliMinEdge,
+                ls.altiliMinHitAuto);
         altiliLearn = learn; // planlar öğrenilenlerle kurulur
         List<Object> manual = Json.arr(inp.get("manual"));
         if (stored == null && manual.size() < 6) return null;

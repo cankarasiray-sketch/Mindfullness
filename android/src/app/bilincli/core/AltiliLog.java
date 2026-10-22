@@ -34,6 +34,8 @@ public final class AltiliLog {
     static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12;
     /** 2.48: strateji tablosunun 6/6 olasılığı aralıkları: <%10, %10–15, %15–25, %25–40, ≥%40. */
     static final double[] HIT_EDGES = {0.10, 0.15, 0.25, 0.40};
+    /** 2.49: eşik taraması: 6/6 kuralının (6/6 olasılığı ≥ eşik, AGF'si tutan bölge) eşikleri; en iyisi en az MIN_SETTLED kuponla. */
+    static final double[] SWEEP = {0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40};
     /** 2.42: bölge kuralı için en az doğrulanmış ayak (3 altılı). */
     static final int REGION_MIN_LEGS = 18; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
@@ -42,6 +44,24 @@ public final class AltiliLog {
     static final double[] FRACTIONS = {0.03, 0.07, 0.10};
     /** Kazanan at AGF listesinde yoksa payı (tahmini ikramiye için). */
     static final double MISSING_P = 0.005;
+
+    /** 2.49: 6/6 kuralına (eşik ve bölge kuralı) uyan kuponların sonucu: agg + expected, minHit. */
+    private static Map<String, Object> rule(List<double[]> coupons, Map<String, Object> trustRegion, double t) {
+        int n = 0, h = 0;
+        double e = 0, c = 0, ret = 0;
+        for (double[] x : coupons) {
+            if (x[0] < t - 1e-12 || Json.bool(Json.obj(trustRegion.get(x[1] > 0 ? "yerli" : "yabancı")), "weak", false)) continue;
+            n++;
+            e += x[0];
+            c += x[2];
+            h += (int) x[3];
+            ret += x[4];
+        }
+        Map<String, Object> row = agg(n, h, c, ret);
+        row.put("expected", e);
+        row.put("minHit", t);
+        return row;
+    }
 
     // ---- kayıt ----------------------------------------------------------------------------------------------
 
@@ -597,6 +617,15 @@ public final class AltiliLog {
     /** minEdge: kâr kuralı (beklenen dönüş en az 1 + minEdge); karnede bu kurala uyanlar ayrı (2.45). */
     public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit,
             double minEdge) {
+        return analyze(store, unit, kasa, today, legMin, minHit, minEdge, false);
+    }
+
+    /**
+     * auto (2.49): 6/6 eşiği eşik taramasının en iyisi (en az MIN_SETTLED kupon); yoksa minHit. Kullanılan eşik
+     * "minHitUse"; "Oynanacak olanlar" satırı onunla ve bölge kuralıyla.
+     */
+    public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit,
+            double minEdge, boolean auto) {
         String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
         List<Map<String, Object>> settled = new ArrayList<>();
         int pending = 0;
@@ -613,9 +642,10 @@ public final class AltiliLog {
                 return String.valueOf(a.get("day")).compareTo(String.valueOf(b.get("day")));
             }
         });
-        int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0, rn = 0, rh = 0, en = 0;
-        double ae = 0, re = 0, rc = 0, rr = 0; // 2.43: beklenen 6/6 (tahmin edilen olasılıkların toplamı); kurala uyanlar
+        int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0, en = 0;
+        double ae = 0; // 2.43: beklenen 6/6 (tahmin edilen olasılıkların toplamı)
         int pn = 0, ph6 = 0, rwn = 0;
+        List<double[]> coupons = new ArrayList<>(); // 2.49: {6/6 olasılığı, yerli, bedel, tuttu, ikramiye}
         Map<String, double[]> table = new LinkedHashMap<>(); // 2.48: {kupon, tuttu, beklenen, bedel, dönüş}
         double pc6 = 0, pr6 = 0, pe = 0, rwSum = 0, rwCost = 0; // 2.45: kâr kuralına uyanlar; bütün kuponların tahmini dönüşü
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
@@ -700,15 +730,7 @@ public final class AltiliLog {
                 if (ph != null) {
                     en++;
                     ae += ph;
-                    if (ph >= minHit - 1e-12) { // uygulamanın oynatacağı kupon
-                        rn++;
-                        re += ph;
-                        rc += Json.dbl(pc, "cost", 0);
-                        if (h[6]) {
-                            rh++;
-                            rr += payout;
-                        }
-                    }
+                    coupons.add(new double[] {ph, domestic(r) ? 1 : 0, Json.dbl(pc, "cost", 0), h[6] ? 1 : 0, h[6] ? payout : 0});
                 }
                 List<Object> horses = Json.arr(pc.get("horses"));
                 int miss = -1, misses = 0; // 2.33: tek ayakla kaçan kupon ve yatan ayak tek atlı (banko) mıydı
@@ -793,10 +815,6 @@ public final class AltiliLog {
         if (en > 0) { // 2.43
             Json.obj(out.get("all")).put("expected", ae);
             Json.obj(out.get("all")).put("withHit", (long) en);
-            Map<String, Object> rule = agg(rn, rh, rc, rr);
-            rule.put("expected", re);
-            rule.put("minHit", minHit);
-            out.put("rule", rule);
         }
         Map<String, Object> lg = new LinkedHashMap<>();
         lg.put("n", (long) legN);
@@ -864,6 +882,31 @@ public final class AltiliLog {
             trustRegion.put(k[0], t);
         }
         out.put("regionTrust", trustRegion);
+        // 2.49: eşik taraması: 6/6 kuralı (AGF'si tutmayan bölge hariç, 6/6 olasılığı ≥ eşik) her eşikte nasıl dönerdi;
+        // en iyi eşik en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik: daha çok oyun)
+        List<Object> sweep = new ArrayList<>();
+        Double bestT = null;
+        double bestRoi6 = -1;
+        for (double t : SWEEP) {
+            Map<String, Object> row = rule(coupons, trustRegion, t);
+            sweep.add(row);
+            if (Json.lng(row, "n", 0) >= MIN_SETTLED && Json.dbl(row, "roi", 0) > bestRoi6 + 1e-12) {
+                bestRoi6 = Json.dbl(row, "roi", 0);
+                bestT = t;
+            }
+        }
+        double use = auto && bestT != null ? bestT : minHit;
+        out.put("minHitUse", use);
+        if (en > 0) {
+            Map<String, Object> sw = new LinkedHashMap<>();
+            sw.put("rows", sweep);
+            if (bestT != null) sw.put("best", bestT);
+            sw.put("min", (long) MIN_SETTLED);
+            out.put("sweep", sw);
+            Map<String, Object> rule = rule(coupons, trustRegion, use); // 2.43: uygulamanın oynatacağı kuponlar
+            if (auto && bestT != null) rule.put("auto", true);
+            out.put("rule", rule);
+        }
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
         double bestRoi = -1, bestFraction = 0;

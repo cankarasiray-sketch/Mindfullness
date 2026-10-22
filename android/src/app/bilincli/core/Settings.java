@@ -255,8 +255,10 @@ public final class Settings {
      * 2.48: kârsız günde de 6/6 stratejisi: kâr kuralına uymayan (devirsiz) günde de kurallara uyan en iyi altılı (yerli,
      * 6/6 olasılığı en az altiliMinHit, düzeltilmiş AGF) önerilir; beklenen dönüş %100'ün altında olduğu açıkça yazar.
      */
-    public boolean altiliPlayNoEdge = false;
-    public double altiliMinHit = 0.15; // 2.44: geriye dönük veri: 600 TL ile 6/6 olasılığı ortalama ~%9; %30 hiçbir altılıyı geçirmiyordu
+    public boolean altiliPlayNoEdge = true; // 2.49: kullanıcı istedi: kural 6/6 (önce kâr modu)
+    public double altiliMinHit = 0.20; // 2.49: kullanıcı istedi: %20 (2.44: %15); otomatikte veri azken bu
+    /** 2.49: 6/6 eşiği karnedeki eşik taramasının en iyisi (en az 20 doğrulanmış kuponla en yüksek dönüş); yoksa altiliMinHit. */
+    public boolean altiliMinHitAuto = true;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -417,7 +419,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 16L);
+        m.put("v", 17L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -433,6 +435,7 @@ public final class Settings {
         m.put("altiliMinHit", altiliMinHit);
         m.put("altiliMinEdge", altiliMinEdge);
         m.put("altiliPlayNoEdge", altiliPlayNoEdge);
+        m.put("altiliMinHitAuto", altiliMinHitAuto);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -501,6 +504,7 @@ public final class Settings {
         s.altiliMinHit = Json.dbl(m, "altiliMinHit", s.altiliMinHit);
         s.altiliMinEdge = Json.dbl(m, "altiliMinEdge", s.altiliMinEdge);
         s.altiliPlayNoEdge = Json.bool(m, "altiliPlayNoEdge", s.altiliPlayNoEdge);
+        s.altiliMinHitAuto = Json.bool(m, "altiliMinHitAuto", s.altiliMinHitAuto);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
@@ -561,6 +565,12 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 16 && Math.abs(s.altiliMinHit - 0.30) < 1e-9) {
             // 2.44: geriye dönük veride son bir haftada 6/6 olasılığı %30'u geçen altılı yoktu: eşik %15
             s.altiliMinHit = 0.15;
+        }
+        if (Json.lng(m, "v", 1) < 17) {
+            // 2.49: kullanıcı istedi: kural 6/6 (kârsız günde de), eşik %20 ya da karnedeki en iyi (otomatik)
+            s.altiliPlayNoEdge = true;
+            if (Math.abs(s.altiliMinHit - 0.15) < 1e-9) s.altiliMinHit = 0.20;
+            s.altiliMinHitAuto = true;
         }
         if (Json.lng(m, "v", 1) < 15 && Math.abs(s.altiliCap - 320) < 1e-9) {
             // 2.35.1: kullanıcı istedi: altılı kuponu en fazla 600 TL (önceki varsayılan 320)

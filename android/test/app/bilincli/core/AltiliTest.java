@@ -392,13 +392,31 @@ public class AltiliTest {
     @Test
     public void unpredictableAltiliIsNotPlayed() {
         // 2.37: 600 TL ile bile 6/6 olasılığı %30'un altındaysa oynanmaz, önerilmez; sırada sonda
-        assertEquals(0.15, new Settings().altiliMinHit, 1e-9); // 2.44: %30 → %15
+        assertEquals(0.20, new Settings().altiliMinHit, 1e-9); // 2.44: %30 → %15; 2.49: %20
         Map<String, Object> v15 = new Settings().toMap();
         v15.put("v", 15L);
         v15.put("altiliMinHit", 0.30);
-        assertEquals(0.15, Settings.fromMap(v15).altiliMinHit, 1e-9);
+        assertEquals(0.20, Settings.fromMap(v15).altiliMinHit, 1e-9);
         v15.put("altiliMinHit", 0.25); // kullanıcının kendi seçimi korunur
         assertEquals(0.25, Settings.fromMap(v15).altiliMinHit, 1e-9);
+        // 2.49: kullanıcı istedi: kural 6/6 (kârsız günde de), eşik %20 ya da otomatik en iyi
+        Map<String, Object> v16 = new Settings().toMap();
+        v16.put("v", 16L);
+        v16.put("altiliMinHit", 0.15);
+        v16.put("altiliPlayNoEdge", false);
+        v16.remove("altiliMinHitAuto");
+        Settings m16 = Settings.fromMap(v16);
+        assertEquals(0.20, m16.altiliMinHit, 1e-9);
+        assertTrue(m16.altiliPlayNoEdge);
+        assertTrue(m16.altiliMinHitAuto);
+        Settings mine = new Settings();
+        mine.altiliPlayNoEdge = false; // yeni sürümde bilerek kapatan korunur
+        mine.altiliMinHitAuto = false;
+        mine.altiliMinHit = 0.15;
+        Settings back = Settings.fromMap(mine.toMap());
+        assertFalse(back.altiliPlayNoEdge);
+        assertFalse(back.altiliMinHitAuto);
+        assertEquals(0.15, back.altiliMinHit, 1e-9);
         Altili.Inputs in = rule();
         in.maxCost = 320;
         in.maxHit = true;

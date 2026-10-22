@@ -401,7 +401,47 @@ public class AltiliLogTest {
         assertEquals(hit, (Double) bucket.get("expected"), 1e-12);
         assertEquals("yerli", region.get("region"));
         assertEquals(1L, region.get("n"));
-        assertEquals(false, new Settings().altiliPlayNoEdge); // varsayılan kâr modu
+        assertEquals(true, new Settings().altiliPlayNoEdge); // 2.49: varsayılan 6/6 kuralı (2.48: kâr modu)
+        // 2.49: eşik taraması: 30 kupon, 6/6 olasılığı %10–39; %20 ve üstünde çift sıradakiler tutar, altında hiçbiri
+        Map<String, Object> many = new LinkedHashMap<>();
+        List<Object> rs = AltiliLog.records(many);
+        double cost = (Double) Json.obj(rec.get("plan")).get("cost"), pay = (Double) Json.obj(rec.get("result")).get("payout");
+        for (int i = 0; i < 30; i++) {
+            Map<String, Object> c = Json.parseObject(Json.write(rec));
+            c.put("key", "tjk/2026-10-21/3/" + (i + 1));
+            Map<String, Object> plan = Json.obj(c.get("plan"));
+            plan.put("hit", 0.10 + 0.01 * i);
+            if (!(i >= 10 && i % 2 == 0)) { // kaçan kupon: ilk ayakta kazanan at kuponda yok
+                List<Object> horses = Json.arr(plan.get("horses")), first = new ArrayList<>(Json.arr(horses.get(0)));
+                first.remove("5");
+                if (first.isEmpty()) first.add("9");
+                horses.set(0, first);
+            }
+            rs.add(c);
+        }
+        Map<String, Object> sw = Json.obj(AltiliLog.analyze(many, 1, 2000, TODAY, 0, 0.15, 0.10, true).get("sweep"));
+        List<Object> rows = Json.arr(sw.get("rows"));
+        assertEquals(7, rows.size());
+        Map<String, Object> r10 = Json.obj(rows.get(0)), r20 = Json.obj(rows.get(2)), r25 = Json.obj(rows.get(3));
+        assertEquals(30L, r10.get("n"));
+        assertEquals(10L, r10.get("hits"));
+        assertEquals(20L, r20.get("n"));
+        assertEquals(10L, r20.get("hits"));
+        assertEquals(10 * pay / (20 * cost), (Double) r20.get("roi"), 1e-9);
+        assertEquals(15L, r25.get("n")); // 20 kupondan az: seçilmez (dönüşü daha yüksek olsa da)
+        assertEquals(0.20, (Double) sw.get("best"), 1e-9);
+        Map<String, Object> auto = AltiliLog.analyze(many, 1, 2000, TODAY, 0, 0.15, 0.10, true);
+        assertEquals(0.20, (Double) auto.get("minHitUse"), 1e-9);
+        assertEquals(20L, Json.obj(auto.get("rule")).get("n"));
+        assertEquals(true, Json.obj(auto.get("rule")).get("auto"));
+        Map<String, Object> manual = AltiliLog.analyze(many, 1, 2000, TODAY, 0, 0.15, 0.10, false);
+        assertEquals(0.15, (Double) manual.get("minHitUse"), 1e-9);
+        assertEquals(25L, Json.obj(manual.get("rule")).get("n"));
+        assertEquals(null, Json.obj(manual.get("rule")).get("auto"));
+        // veri azken (tek kupon) en iyi eşik yok: ayardaki eşik
+        Map<String, Object> few = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.20, 0.10, true);
+        assertEquals(null, Json.obj(few.get("sweep")).get("best"));
+        assertEquals(0.20, (Double) few.get("minHitUse"), 1e-9);
     }
 
     @Test

@@ -921,7 +921,10 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
 test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701, expected: 4.3},
-    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, minHit: 0.3},
+    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, minHit: 0.3, auto: true},
+    sweep: {min: 20, best: 0.2, rows: [{minHit: 0.1, n: 41, hits: 9, expected: 8.1, cost: 24600, ret: 18450, roi: 0.75},
+      {minHit: 0.2, n: 22, hits: 7, expected: 6.0, cost: 13200, ret: 14520, roi: 1.1}, {minHit: 0.3, n: 9, hits: 2, expected: 3.6, cost: 5400, ret: 6100, roi: 1.13},
+      {minHit: 0.4, n: 0, hits: 0, expected: 0, cost: 0, ret: 0, roi: 0}]},
     table: [{lo: 0, hi: 0.1, n: 88, hits: 5, expected: 4.2, cost: 52800, ret: 16368, roi: 0.31}, {lo: 0.15, hi: 0.25, n: 27, hits: 7, expected: 5.1, cost: 16200, ret: 14256, roi: 0.88},
       {region: "yerli", n: 47, hits: 9, expected: 7.3, cost: 28200, ret: 22278, roi: 0.79}],
     legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34,
@@ -964,7 +967,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.doesNotMatch(k, /Sayılmayan:/);
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu \(beklenen 4,3\) · getiri %70/);
   assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
-  assert.match(k, /Oynanacak olanlar \(6\/6 ≥ %30\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);
+  assert.match(k, /Eşik taraması \(6\/6 kuralı, AGF'si tutan bölge\)6\/6 ≥ %10: 9\/41 tuttu \(beklenen 8,1\) · 24\.600,00 TL → 18\.450,00 TL \(%75\)6\/6 ≥ %20: 7\/22 tuttu \(beklenen 6,0\) · 13\.200,00 TL → 14\.520,00 TL \(%110\) ← en iyi6\/6 ≥ %30: 2\/9 tuttu .*\(%113\) \(az veri\)6\/6 ≥ %40: kupon yokEn iyi eşik en az 20 kuponla en yüksek dönüş\. Geçmişe göre/); // 2.49
+  assert.match(k, /Oynanacak olanlar \(6\/6 ≥ %30, en iyi eşik\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);
   assert.match(k, /19\.10 · Keeneland ABD 1\. altılı · geriye dönük600,00 TL · tutmadı \(5\/6 ayak\)/);
   const bad = clone(s);
   bad.agf.learn = {settled: 0, pending: 0, inconsistent: 18, unverified: 0, fav: {groups: [{label: "İkramiyeyle tutarsız (sayılmadı)", n: 108, win: 0.13, agf: 0.34}]},
@@ -1059,11 +1063,14 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   Object.assign(s.agf.altilis[1].plan, {legMin: 0.7, minCost: 60, cap: 320, overBudget: true, units: 1296, cost: 1296, budget: 320});
   const f = boot(s, "#firsat");
   assert.equal(f.$("#alt_tavan").value, "600"); // 2.35.1 varsayılanı
-  assert.equal(f.$("#alt_enaztut").value, "15"); // 2.44: en az 6/6 olasılığı
+  assert.equal(f.$("#alt_enaztut").value, "20"); // 2.44: en az 6/6 olasılığı; 2.49: %20
+  assert.equal(f.$("#alt_enaztut_oto").checked, true); // 2.49: eşik otomatik (karnedeki en iyi)
+  f.$("#alt_enaztut_oto").checked = false; f.$("#alt_enaztut_oto").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {minHitAuto: false});
   assert.equal(f.$("#alt_enazkar").value, "10"); // 2.45: kâr kuralı
-  assert.equal(f.$("#alt_6mod").checked, false); // 2.48: kârsız günde 6/6 stratejisi kapalı
-  f.$("#alt_6mod").checked = true; f.$("#alt_6mod").dispatchEvent(new f.w.Event("change"));
-  assert.deepEqual(f.calls.at(-1).payload, {playNoEdge: true});
+  assert.equal(f.$("#alt_6mod").checked, true); // 2.49: kural 6/6 (2.48: kârsız günde 6/6 stratejisi kapalıydı)
+  f.$("#alt_6mod").checked = false; f.$("#alt_6mod").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {playNoEdge: false});
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.match(rows[1], /1\.296 TL · 100 TL'den ort\. 73 TL döner · 320 TL'yi aşıyor, oynama$/);
   f.chip("İzmir 1. altılı · TJK").click();

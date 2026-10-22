@@ -317,6 +317,11 @@ bildirim olarak gelir.
   yok. Karnede "Strateji tablosu": doğrulanmış kuponların 6/6 olasılığı aralığına (<%10, %10–15, %15–25, %25–40, ≥%40) ve
   bölgeye göre tuttu/beklenen/dönüş. Yeni ayar "Kârsız günde de 6/6 stratejisi" (varsayılan kapalı = kâr modu): açıkken
   kâr kuralı öneriyi engellemez, kurallara uyan en iyi altılı (AGF'si tutan bölge, 6/6 ≥ eşik) önerilir.
+- **2.49: kural 6/6, eşik %20 ya da en iyisi.** Kullanıcı istedi: "Kârsız günde de 6/6 stratejisi" varsayılan açık;
+  en az 6/6 olasılığı %20 (önce %15). Karnede "Eşik taraması": 6/6 kuralı (AGF'si tutmayan bölge hariç, 6/6 olasılığı
+  ≥ %10, 15, 20, 25, 30, 35, 40) her eşikte kaç kupon, kaç tuttu, beklenen, bedel → dönüş. "6/6 eşiği otomatik" (varsayılan
+  açık): en az 20 doğrulanmış kuponla en yüksek dönüşü veren eşik kullanılır (eşitlikte düşük olan); öyle eşik yoksa
+  ayardaki %20. "Oynanacak olanlar" satırı artık bölge kuralını da uygular (uygulamanın önereceği kuponlar).
 
 ## Beraberlik fırsatları (2.17)
 
