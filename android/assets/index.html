@@ -698,6 +698,7 @@ function altiliRankNote(a) {
   if (p.overBudget) bits.push(p.cap ? num(p.cap, 0) + " TL'yi aşıyor, oynama" : "bütçeyi aşıyor");
   if (p.noEdge && !p.play) bits.push("kâr kuralı %" + num(100 + p.minEdge * 100, 0) + " değil, oynama"); // 2.45
   if (p.regionWeak && !p.play) bits.push(p.region + " altılılar karnede az dönüyor, oynama"); // 2.42, 2.50
+  if (p.kasaLow && !p.play) bits.push("kasa yetersiz" + (p.kasaMin ? " (en az " + num(p.kasaMin, 0) + " TL)" : "") + ", oynama"); // 2.53
   if (p.lowHit) bits.push("6/6 olasılığı %" + num((p.hitRef != null ? p.hitRef : p.hit) * 100, 0) + (p.hitRef != null ? " (" + num(p.refCost, 0) + " TL ile)" : "")
     + " (en az %" + num(p.minHit * 100, 0) + "), oynama");
   var rs = a.races || [];
@@ -774,6 +775,7 @@ function altiliKarne(L, sl) {
     html += '<p class="small">Karne yalnızca <b>ikramiyesiyle doğrulanmış</b> sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 (birim başına) çıkar. '
       + "Sayılmayan: " + (L.inconsistent ? '<b class="neg">' + L.inconsistent + " altılının ikramiyesi kazananlarla tutarsız (kazananlar yanlış okunmuş)</b>" : "")
       + (L.inconsistent && L.unverified ? " · " : "") + (L.unverified ? L.unverified + " altılıda ikramiye okunamadığından doğrulanamadı (koşu tablosundan okunanlar dahil)" : "") + ".</p>";
+  if (L.duplicates) html += '<p class="small">Aynı altılının ikinci kaydı (aynı gün, aynı kazananlar ve ikramiye; ör. Bilyoner ve TJK) bir kez sayıldı: ' + L.duplicates + ".</p>"; // 2.53
   if (!L.settled) {
     html += '<p class="small muted">Henüz ' + (L.inconsistent || L.unverified ? "doğrulanmış sonuç" : "sonuçlanan altılı") + " yok" + (L.pending ? " (" + L.pending + " altılı sonuç bekliyor)" : "")
       + ". Uygulama her gün önerdiği kuponu ve bütün altılıları kaydeder, sonuçları ertesi sabah TJK'dan okur.</p>";
@@ -824,6 +826,7 @@ function altiliKarne(L, sl) {
       + '<p class="small muted">' + esc(c.why || "") + " Bütçe karşılaştırması (geçmiş altılılar her bütçeyle yeniden kurulup sonuçlarıyla):<br>" + strat
       + "<br>İkramiye sonuç sayfasında yoksa AGF'den tahmin edilir (birim × (1 − kesinti) / kazanan kombinasyonun AGF payı).</p>";
   }
+  if (L.settled) html += altiliRuleList(L.rule, tl0); // 2.53
   var hist = L.history || [];
   if (hist.length) html += '<details class="info"><summary class="small">Son altılılar (' + hist.length + ")</summary>" + hist.map(function (h) {
     var st = h.status === "tuttu" ? '<b class="pos">tuttu</b> · ' + tl0(h.ret) + (h.estimated ? " (tahmini)" : "")
@@ -876,10 +879,10 @@ function altiliStrategy(L, tl0, pc) {
   var where = r.scope === "yerli" ? "Yerli altılı" : r.scope === "yabancı" ? "Yabancı altılı" : "Yerli ve yabancı altılı";
   var parts = [where + " · " + num(cap, 0) + " TL'lik kuponla 6/6 olasılığı en az %" + num(r.minHit * 100, 0) + (r.auto ? " (karnedeki en iyi)" : ""),
     "kupon " + tl0(use) + "'ye kadar" + (use < cap ? " (kasaya göre)" : "") + " · günde en fazla 1: günün en mantıklı kuponu"];
-  if (r.n) parts.push("geçmişte " + r.hits + "/" + r.n + " tuttu (beklenen " + num(r.expected, 1) + ") · dönüş " + '<b class="' + cls(r.ret - r.cost) + '">' + pc(r.roi) + "</b>");
+  if (r.n) parts.push("geçmişte " + r.hits + "/" + r.n + " tuttu (beklenen " + num(r.expected, 1) + ") · dönüş " + '<b class="' + cls(r.ret - r.cost) + '">' + pc(r.roi) + "</b>" + altiliOdd(r));
   var h = L.holdout;
-  if (h && h.n) parts.push("son dönem sınaması: " + h.hits + "/" + h.n + " tuttu · dönüş " + '<b class="' + cls(h.ret - h.cost) + '">' + pc(h.roi) + "</b>");
-  if (L.stakes && L.stakes.neg) parts.push('<b class="neg">bu kasayla hiçbir kupon büyüklüğünde kasa büyümedi:</b> en küçük kupon; kâr beklentisi yok');
+  if (h && h.n) parts.push("son dönem sınaması: " + h.hits + "/" + h.n + " tuttu (beklenen " + num(h.expected, 1) + ") · dönüş " + '<b class="' + cls(h.ret - h.cost) + '">' + pc(h.roi) + "</b>" + altiliOdd(h));
+  if (L.stakes && L.stakes.neg) parts.push('<b class="neg">kasa yetersiz: oynama.</b> Bu kasayla hiçbir kupon büyüklüğünde kasa büyümedi; küçük kupon da geçmişte kârlı değil'); // 2.53
   var rows = (L.stakes && L.stakes.rows) || [], rowOf = function (c) { return rows.filter(function (x) { return Math.abs(x.cap - c) < 1e-9; })[0]; };
   if (rows.length) { // 2.52: kasa ne kadar olmalı
     var need = function (x) {
@@ -895,6 +898,21 @@ function altiliStrategy(L, tl0, pc) {
     + "): oynamayı durdur, karneyi yeniden değerlendir.</b>");
   else parts.push("gerçek sonuç denetimi: " + (sg.n || 0) + " bildirilen kupon" + (sg.n >= 20 ? " · dönüş " + pc(sg.roi) : " (20 kupondan sonra; dönüş %70'in altındaysa dur)"));
   return item("Strateji", parts.join("<br>"));
+}
+/** 2.53: tuttu sayısı beklenenden 3 standart sapmadan fazla üstündeyse uyarı (şans olamayacak kadar iyi: veri hatası olabilir). */
+function altiliOdd(r) {
+  if (!r || !r.var || !(r.hits - r.expected > 3 * Math.sqrt(r.var))) return "";
+  return ' · <b class="neg">beklenenin çok üstünde: şans olamayacak kadar iyi, veri hatası olabilir (kuponları aşağıda kontrol et)</b>';
+}
+/** 2.53: kurala uyan kuponlar tek tek (denetim için). */
+function altiliRuleList(r, tl0) {
+  var list = (r && r.list) || [];
+  if (!list.length) return "";
+  return '<details class="info"><summary class="small">Kurala uyan kuponlar (' + list.length + ")</summary>" + list.map(function (c) {
+    return '<div class="item"><span class="muted">' + esc(dm(c.day + "T12:00:00Z")) + " · " + esc(c.label || "") + " · " + esc(c.source || "") + (c.backtest ? " · geriye dönük" : "")
+      + (c.notified ? " · önerildi" : "") + "</span><span>6/6 %" + num(c.hit * 100, 0) + " · " + tl0(c.cost) + " · "
+      + (c.won ? '<b class="pos">tuttu ' + tl0(c.ret) + "</b>" : '<span class="neg">tutmadı</span>') + "</span></div>";
+  }).join("") + "</details>";
 }
 /** 2.51: son dönem sınaması: kural ilk üçte ikiyle seçilseydi seçimde kullanılmayan son dönemde ne olurdu. */
 function altiliHoldout(h, pc) {
@@ -1019,13 +1037,17 @@ function altiliPlanHtml(a) {
         + (r.regionWeak && !r.play ? '<p class="neg"><b>Bu altılıyı oynama:</b> doğrulanmış kuponlarda ' + esc(r.region) + " altılılar"
           + (r.regionCoupons ? " " + r.regionCoupons.hits + "/" + r.regionCoupons.n + " tuttu (beklenen " + num(r.regionCoupons.expected, 1) + "), dönüş %" + num(r.regionCoupons.roi * 100, 0) : " az döndü")
           + "; en iyi dönen " + esc(r.regionBest || "") + " altılılar. Sonuçlar değişince kural kendiliğinden değişir.</p>" : "") // 2.50
+        + (r.kasaLow && !r.play ? '<p class="neg"><b>Bu altılıyı oynama: kasa yetersiz.</b> Kasa ' + tl0(r.kasa) + (r.kasaMin
+          ? "; bu stratejide " + tl0(r.cap) + "'lik kupon için en az " + tl0(r.kasaMin) + " gerekli (önerilen " + tl0(r.kasaRec) + ")"
+          : "; geçmişte hiçbir kupon büyüklüğünde kâr yok") + ". Altında, geçmiş sonuçlar tekrarlansa bile kasa uzun vadede erir; küçük kupon da çözüm değil "
+          + "(geçmişte kârlı değil). Ayarlar'da \"Kupon büyüklüğü kasaya göre otomatik\" kapatılırsa tavandaki kupon oynanır (risk sende).</p>" : "") // 2.53
         + (r.lowHit ? '<p class="neg"><b>Bu altılıyı oynama:</b> ' + tl0(r.hitRef != null ? r.refCost : r.cost) + " ile 6/6 olasılığı yalnızca %" + num((r.hitRef != null ? r.hitRef : r.hit) * 100, 1)
           + " (en az %" + num(r.minHit * 100, 0) + " isteniyor). Favorileri net, tahmin edilebilir bir altılı seç.</p>" : "")
         + (r.overBudget && r.cap ? '<p class="neg"><b>Bu altılıyı oynama:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost)
           + "; en fazla " + tl0(r.cap) + " kuralına sığmıyor. Her ayağı %" + num(r.legMin * 100, 0) + " tutan ve " + tl0(r.cap) + "'ye sığan bir altılı seç.</p>"
         : r.overBudget ? '<p class="small"><b>Dikkat:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost) + "; bütçe (" + tl0(r.budget)
           + ") aşılıyor. Bu altılı açık koşulardan oluşuyor; bütçeye sığan bir altılı seç ya da ayak sınırını düşür.</p>" : "")
-        + (r.mode === "tutma" && r.maxHit && !r.overBudget && !r.lowHit && !r.regionWeak && !r.noEdge ? '<p class="small">Yine de oynarsan: kupon ' + tl0(r.cap) + "'ye kadar, her adımda tutmayı TL başına en çok artıran atla kurulur; para önce en zayıf ayaklara gider. "
+        + (r.mode === "tutma" && r.maxHit && !r.overBudget && !r.lowHit && !r.regionWeak && !r.noEdge && !r.kasaLow ? '<p class="small">Yine de oynarsan: kupon ' + tl0(r.cap) + "'ye kadar, her adımda tutmayı TL başına en çok artıran atla kurulur; para önce en zayıf ayaklara gider. "
           + "Tutarsa ortalama " + tl0(r.ifHit) + "; uzun vadede her 100 TL'de ortalama " + num(Math.max(0, 1 - r.roi) * 100, 0) + " TL kayıp.</p>" : "")
         + (r.mode === "tutma" && !r.maxHit && !(r.overBudget && r.cap) ? '<p class="small">Yine de oynarsan: kupon her ayağı en az %' + num((r.legMin || 0) * 100, 0) + " tutmaya tamamlar"
           + (r.minCost ? ", " + num(r.minCost, 0) + " TL'ye kadar tutmayı en çok artıran atları ekler, üstüne yalnızca beklenen kazancı artıran (kârlı) atları" : "")
@@ -1047,10 +1069,11 @@ function altiliCard() {
   if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı." + altiliWhy(t.log)) + "</p>";
   var best = altiliByKey(t && t.best);
   var unfit = list.filter(function (x) { var p = x.plan || {}; return !altiliStarted(x) && !p.error && p.legs; });
-  if (!best && unfit.length && unfit.every(function (x) { return (x.plan.overBudget && x.plan.cap) || x.plan.lowHit || x.plan.regionWeak || x.plan.noEdge; })) { // 2.32.10, 2.37, 2.42, 2.45
+  if (!best && unfit.length && unfit.every(function (x) { return (x.plan.overBudget && x.plan.cap) || x.plan.lowHit || x.plan.regionWeak || x.plan.noEdge || x.plan.kasaLow; })) { // 2.32.10, 2.37, 2.42, 2.45, 2.53
     var p0 = unfit[0].plan;
     html += '<p class="neg"><b>Bugün kurallara uyan altılı yok:</b> ' + (p0.noEdge ? "hiçbir altılının beklenen dönüşü %" + num(100 + p0.minEdge * 100, 0) + " değil (kâr kuralı)"
       : p0.regionWeak ? "bugünkü altılılar karnede az dönen bölgede (" + esc(p0.region) + ")"
+      : p0.kasaLow ? "kasa bu strateji için yetersiz" + (p0.kasaMin ? " (en az " + num(p0.kasaMin, 0) + " TL, önerilen " + num(p0.kasaRec, 0) + " TL)" : "")
       : p0.lowHit ? "hiçbir altılıda " + num(p0.cap || p0.budget, 0) + " TL ile 6/6 olasılığı en az %" + num(p0.minHit * 100, 0) + " değil"
       : "her ayağı %" + num(p0.legMin * 100, 0) + " tutan ve " + num(p0.cap, 0) + " TL'ye sığan altılı bulunamadı") + ". Oynama.</p>";
   }

@@ -344,6 +344,12 @@ bildirim olarak gelir.
   yetmez". Strateji özetinde şimdiki kasa, seçilen ve tavandaki kupon için gerekli kasa, yetersizse uyarı. Gerçek sonuç
   denetimi: bildirilen kuponlar 20'yi geçip dönüş %70'in altındaysa "oynamayı durdur". Bildirimde kupon kasaya göre
   küçüldüyse tavandaki kuponla tutma.
+- **2.53: veri denetimi ve kasa kuralı.** Karnede yerli %118'in çoğu 10.10 sonrasından (12 kupondan 7'si tuttu, beklenen 1,9;
+  şans olamayacak kadar iyi). (1) Aynı altılının ikinci kaydı (ör. Bilyoner ve TJK: aynı gün, şehir, kazananlar ve ikramiye)
+  bir kez sayılır (önce bildirilen, sonra TJK). (2) Tuttu sayısı beklenenden 3 standart sapmadan fazla üstündeyse uyarı.
+  (3) Karnede kurala uyan kuponlar tek tek (gün, altılı, kaynak, 6/6, bedel, sonuç). (4) Kupon büyüklüğü taramasında hiçbir
+  büyüklükte kasa büyümüyorsa en küçük kupona inilmez (100 TL'lik kuponlar 35'te hiç tutmamıştı): kupon tavanda kalır, altılı
+  "kasa yetersiz" diye önerilmez, gereken kasa yazılır; "kasaya göre otomatik" kapalıysa tavandaki kupon oynanır.
 
 ## Beraberlik fırsatları (2.17)
 

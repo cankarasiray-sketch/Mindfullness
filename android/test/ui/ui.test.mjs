@@ -921,7 +921,10 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
 test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701, expected: 4.3},
-    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, minHit: 0.3, auto: true, scope: "yerli"},
+    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, var: 2.2, minHit: 0.3, auto: true, scope: "yerli",
+      list: [{day: "2026-10-21", label: "İstanbul 1. altılı", source: "TJK", notified: true, hit: 0.31, cost: 600, won: true, ret: 3050},
+        {day: "2026-10-19", label: "Bursa 1. altılı", source: "TJK", backtest: true, hit: 0.34, cost: 600, won: false, ret: 0}]},
+    duplicates: 3,
     sweep: {min: 20, best: 0.2, bestScope: "yerli", rows: [
       {minHit: 0.1, hepsi: {n: 102, hits: 18, cost: 61200, ret: 36720, roi: 0.6}, yerli: {n: 41, hits: 9, cost: 24600, ret: 18450, roi: 0.75}, "yabancı": {n: 61, hits: 9, cost: 36600, ret: 18270, roi: 0.5}},
       {minHit: 0.2, hepsi: {n: 30, hits: 8, cost: 18000, ret: 16200, roi: 0.9}, yerli: {n: 22, hits: 7, cost: 13200, ret: 14520, roi: 1.1}, "yabancı": {n: 8, hits: 1, cost: 4800, ret: 1680, roi: 0.35}},
@@ -975,13 +978,21 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
   assert.match(k, /Eşik taraması \(6\/6 kuralı: tuttu\/kupon, dönüş\)6\/6 ≥ %10: hepsi 18\/102 %60 · yerli 9\/41 %75 · yabancı 9\/61 %506\/6 ≥ %20: hepsi 8\/30 %90 · yerli 7\/22 %110 ← en iyi · yabancı 1\/8 %35\*6\/6 ≥ %40: hepsi – · yerli – · yabancı –En iyi: en az 20 kuponla en yüksek dönüş; \* az veri\./); // 2.49–2.50
   // 2.51: strateji özeti, son dönem sınaması, kupon büyüklüğü, banko, favori düzeltmesi
-  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113son dönem sınaması: 2\/12 tuttu · dönüş %70kasa: şu an 2\.934,00 TL · 100,00 TL'lik kuponla en az 1\.500,00 TL, önerilen 12\.000,00 TL · 600,00 TL'lik kuponla en az 5\.100,00 TL, önerilen 40\.800,00 TLgerçek sonuç denetimi: 10 bildirilen kupon \(20 kupondan sonra; dönüş %70'in altındaysa dur\)Önerilerim/);
+  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113son dönem sınaması: 2\/12 tuttu \(beklenen 1,7\) · dönüş %70kasa: şu an 2\.934,00 TL · 100,00 TL'lik kuponla en az 1\.500,00 TL, önerilen 12\.000,00 TL · 600,00 TL'lik kuponla en az 5\.100,00 TL, önerilen 40\.800,00 TLgerçek sonuç denetimi: 10 bildirilen kupon \(20 kupondan sonra; dönüş %70'in altındaysa dur\)Önerilerim/);
   assert.match(k, /Son dönem sınamasıilk dönemle seçilen kural: yerli, 6\/6 ≥ %10 \(23 kupon, dönüş %130\)21\.06 sonrası \(seçimde kullanılmadı\): 2\/12 tuttu \(beklenen 1,7\) · dönüş %70/);
   assert.match(k, /Kupon büyüklüğü \(kasa 2\.934,00 TL, Kelly ×0,25\)100,00 TL: 4\/35 tuttu \(beklenen 3,1\) · dönüş %229 · kasa kupon başına \+%1,2 ← en iyi · kasa en az 1\.500,00 TL, önerilen 12\.000,00 TL600,00 TL: 10\/35 tuttu \(beklenen 4,9\) · dönüş %118 · kasaya göre büyük · kasa en az 5\.100,00 TL, önerilen 40\.800,00 TL/);
+  // 2.53: çift kayıt notu ve kurala uyan kuponlar
+  assert.match(k, /Aynı altılının ikinci kaydı \(aynı gün, aynı kazananlar ve ikramiye; ör\. Bilyoner ve TJK\) bir kez sayıldı: 3\./);
+  assert.match(k, /Kurala uyan kuponlar \(2\)21\.10 · İstanbul 1\. altılı · TJK · önerildi6\/6 %31 · 600,00 TL · tuttu 3\.050,00 TL19\.10 · Bursa 1\. altılı · TJK · geriye dönük6\/6 %34 · 600,00 TL · tutmadı/);
+  assert.doesNotMatch(k, /şans olamayacak kadar iyi/);
   const stop = clone(s); // 2.52: gerçek kuponlar 20'yi geçti, dönüş %70'in altında: dur
   stop.agf.learn.suggested = {n: 24, hits: 1, cost: 14400, ret: 7200, roi: 0.5};
   stop.agf.learn.stakes.kasa = 1000;
+  stop.agf.learn.stakes.neg = true; // 2.53: hiçbir büyüklükte kasa büyümüyor: oynama
+  stop.agf.learn.holdout = {scope: "yerli", minHit: 0.1, trainN: 23, trainRoi: 0.55, n: 12, hits: 7, expected: 1.9, var: 1.6, cost: 7200, ret: 17136, roi: 2.38, from: "2026-10-10"};
   const ks = boot(stop, "#firsat").$("#altiliKarne").textContent;
+  assert.match(ks, /kasa yetersiz: oynama\. Bu kasayla hiçbir kupon büyüklüğünde kasa büyümedi; küçük kupon da geçmişte kârlı değil/);
+  assert.match(ks, /son dönem sınaması: 7\/12 tuttu \(beklenen 1,9\) · dönüş %238 · beklenenin çok üstünde: şans olamayacak kadar iyi, veri hatası olabilir/);
   assert.match(ks, /Gerçek kuponlar beklenenin çok altında \(1\/24 tuttu, dönüş %50\): oynamayı durdur, karneyi yeniden değerlendir\./);
   assert.match(ks, /kasa: şu an 1\.000,00 TL · 100,00 TL'lik kuponla en az 1\.500,00 TL, önerilen 12\.000,00 TL · .* · kasa yetersiz/);
   assert.match(k, /Banko \(tek atlı\) ayaklarkazandı %52 · AGF'nin verdiği %61 \(120 ayak\)/);
@@ -1174,6 +1185,21 @@ test("altılı: kupon kasaya göre küçük; tahmin edilebilirlik tavandaki kupo
   assert.match(g.$$("#altiliCard ol.rank li").map((li) => li.textContent)[1], /6\/6 olasılığı %22 \(600 TL ile\) \(en az %25\), oynama/);
   g.chip("İzmir 1. altılı · TJK").click();
   assert.match(g.$("#altiliCard").textContent, /Bu altılıyı oynama: 600,00 TL ile 6\/6 olasılığı yalnızca %22,0 \(en az %25 isteniyor\)/);
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: kasa strateji için yetersizse önerilmez", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {maxHit: true, cap: 600, kasaLow: true, kasa: 2934, kasaMin: 3418, kasaRec: 12128});
+  s.agf.altilis[0].plan = Object.assign({}, s.agf.altilis[1].plan);
+  s.agf.best = null;
+  const f = boot(s, "#firsat");
+  assert.match(f.$$("#altiliCard ol.rank li").map((li) => li.textContent)[1], /kasa yetersiz \(en az 3\.418 TL\), oynama/);
+  assert.match(f.$("#altiliCard").textContent, /Bugün kurallara uyan altılı yok: kasa bu strateji için yetersiz \(en az 3\.418 TL, önerilen 12\.128 TL\)\. Oynama\./);
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Bu altılıyı oynama: kasa yetersiz\. Kasa 2\.934,00 TL; bu stratejide 600,00 TL'lik kupon için en az 3\.418,00 TL gerekli \(önerilen 12\.128,00 TL\)/);
+  assert.doesNotMatch(card, /Yine de oynarsan/);
   assert.deepEqual(f.errors, []);
 });
 

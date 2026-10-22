@@ -450,6 +450,12 @@ public class AltiliTest {
         assertEquals(1, Altili.best(Arrays.asList(weak, clear)));
         assertEquals(-1, Altili.best(Arrays.asList(weak)));
         assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(weak, clear)));
+        // 2.53: kasa bu strateji için yetersiz: önerilmez, sonda
+        Map<String, Object> poor = new LinkedHashMap<>(clear);
+        poor.put("kasaLow", true);
+        assertEquals(1, Altili.best(Arrays.asList(poor, clear)));
+        assertEquals(-1, Altili.best(Arrays.asList(poor)));
+        assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(poor, clear)));
     }
 
     @Test

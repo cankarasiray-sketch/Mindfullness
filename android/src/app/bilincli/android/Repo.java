@@ -673,6 +673,21 @@ final class Repo {
                 plan.put("regionBest", learn.get("scopeUse"));
                 plan.put("region", AltiliLog.domestic(a) ? "yerli" : "yabancı");
             }
+            // 2.53: kupon büyüklüğü taramasında hiçbir büyüklükte kasa büyümüyor: kasa bu strateji için yetersiz, önerilmez
+            // (Ayarlar'da "kasaya göre otomatik" kapalıysa kullanıcı bilerek tavandaki kuponu oynar)
+            Map<String, Object> stk = Json.obj(learn.get("stakes"));
+            if (stk != null && Json.bool(stk, "neg", false) && ls.altiliCapAuto && !"manual".equals(key) && plan.get("error") == null
+                    && !Json.bool(plan, "play", false)) {
+                plan.put("kasaLow", true);
+                plan.put("kasa", stk.get("kasa"));
+                for (Object o2 : Json.arr(stk.get("rows"))) {
+                    Map<String, Object> row = Json.obj(o2);
+                    if (Math.abs(Json.dbl(row, "cap", 0) - ls.altiliCap) < 1e-9 && row.get("kasaMin") != null) {
+                        plan.put("kasaMin", row.get("kasaMin"));
+                        plan.put("kasaRec", row.get("kasaRec"));
+                    }
+                }
+            }
             a.put("plan", plan);
             a.put("devir", in.devir);
             a.put("pool", in.pool);

@@ -253,6 +253,10 @@ public class AltiliLogTest {
         assertEquals(bu, AltiliLog.alphaBeta(learn, true)[1], 1e-12);
     }
 
+    private static Object an30(Map<String, Object> a) {
+        return Json.obj(Json.obj(Json.arr(Json.obj(a.get("sweep")).get("rows")).get(0)).get("hepsi")).get("n");
+    }
+
     @Test
     public void bankrollNeed() {
         // 2.52: 10 kupon × 100 TL, 3'ü 500 TL döndü: tam Kelly payı (4 × 0,3 − 0,7) / 4 = %12,5 → kasa 800 TL
@@ -454,6 +458,7 @@ public class AltiliLogTest {
         for (int i = 0; i < 30; i++) {
             Map<String, Object> c = Json.parseObject(Json.write(rec));
             c.put("key", "tjk/2026-10-21/3/" + (i + 1));
+            c.put("day", LocalDate.parse(DAY).minusDays(29 - i).toString()); // her gün bir altılı (2.53: aynı gün aynı sonuç bir kez sayılır)
             Json.obj(c.get("result")).put("payout", pay * 5); // ikramiye × AGF payı 3,65: hâlâ tutarlı; kupon büyüklüğü için kârlı
             Map<String, Object> plan = Json.obj(c.get("plan"));
             plan.put("hit", 0.10 + 0.01 * i);
@@ -484,6 +489,20 @@ public class AltiliLogTest {
         assertEquals(0.20, (Double) auto.get("minHitUse"), 1e-9);
         assertEquals(20L, Json.obj(auto.get("rule")).get("n"));
         assertEquals(true, Json.obj(auto.get("rule")).get("auto"));
+        // 2.53: kurala uyan kuponlar tek tek; tuttu sayısının varyansı
+        List<Object> list = Json.arr(Json.obj(auto.get("rule")).get("list"));
+        assertEquals(20, list.size());
+        assertEquals(10L, (long) list.stream().filter(o -> Boolean.TRUE.equals(Json.obj(o).get("won"))).count());
+        assertTrue((Double) Json.obj(auto.get("rule")).get("var") > 0);
+        // 2.53: aynı altılının ikinci kaydı (Bilyoner; aynı gün, kazananlar, ikramiye) bir kez sayılır
+        Map<String, Object> dupStore = Json.parseObject(Json.write(many));
+        Map<String, Object> twin = Json.parseObject(Json.write(AltiliLog.records(dupStore).get(10)));
+        twin.put("key", "bilyoner/İstanbul 1–6. koşu");
+        twin.put("source", "Bilyoner");
+        AltiliLog.records(dupStore).add(twin);
+        Map<String, Object> da = AltiliLog.analyze(dupStore, 1, 2000, TODAY, 0, 0.15, 0.10, true);
+        assertEquals(1L, da.get("duplicates"));
+        assertEquals(an30(auto), an30(da));
         Map<String, Object> manual = AltiliLog.analyze(many, 1, 2000, TODAY, 0, 0.15, 0.10, false);
         assertEquals(0.15, (Double) manual.get("minHitUse"), 1e-9);
         assertEquals(25L, Json.obj(manual.get("rule")).get("n"));
@@ -514,7 +533,7 @@ public class AltiliLogTest {
         // kasa küçük: kayıp Kelly payını aşıyor, hiçbir büyüklükte kasa büyümüyor: en küçüğü
         Map<String, Object> poor = AltiliLog.analyze(many, 1, 10, TODAY, 0, 0.15, 0.10, true, 600, 0.25);
         assertEquals(Boolean.TRUE, Json.obj(poor.get("stakes")).get("neg"));
-        assertEquals(100.0, (Double) poor.get("capUse"), 1e-9);
+        assertEquals(600.0, (Double) poor.get("capUse"), 1e-9); // 2.53: küçültmek çözüm değil: tavanda kalır (oynanmaz)
         assertEquals(null, AltiliLog.analyze(many, 1, 100000, TODAY, 0, 0.15, 0.10, true).get("stakes")); // tavan verilmezse yok
         // veri azken (tek kupon) en iyi eşik yok: ayardaki eşik
         Map<String, Object> few = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.20, 0.10, true);
@@ -531,6 +550,7 @@ public class AltiliLogTest {
             list.add(altili("tjk/2026-10-21/3/" + i, "İstanbul", 3, i, LEGS));
             list.add(altili("tjk/2026-10-21/31/" + i, "Belmont Park ABD", 31, i, LEGS));
         }
+        for (int i = 0; i < 40; i++) Json.obj(list.get(i)).put("day", LocalDate.parse(DAY).minusDays(i / 2).toString()); // her gün iki şehir
         AltiliLog.record(store, DAY, list);
         List<Object> favs = Arrays.<Object>asList("5", "7", "5", "1", "5", "2");
         double pw = 1;

@@ -50,7 +50,7 @@ public final class AltiliLog {
     /**
      * 2.51: kupon büyüklüğü taraması: kurala uyan geçmiş altılılar her büyüklükte (en fazla cap) bugünkü düzeltmeyle en yüksek
      * 6/6 için yeniden kurulur; kasanın (km × kasa: Kelly payı) kupon başına ortalama log büyümesi en yüksek olan seçilir.
-     * Hiçbirinde kasa büyümüyorsa en küçüğü ("neg"). {stakes: {rows, best?, neg?, km, kasa}, capUse}.
+     * Hiçbirinde kasa büyümüyorsa "neg" (2.53: kupon tavanda kalır, kasa yetersiz: oynanmaz). {stakes: {rows, best?, neg?, km, kasa}, capUse}.
      */
     private static Map<String, Object> stakes(List<double[]> coupons, List<Map<String, Object>> recs, String scope, double t, double cap,
             double km, double kasa, double unit, double legMin, Map<String, Object> learn) {
@@ -127,7 +127,7 @@ public final class AltiliLog {
         else st.put("neg", true);
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("stakes", st);
-        out.put("capUse", best != null ? best : caps.get(0));
+        out.put("capUse", best != null ? best : cap); // 2.53: hiçbirinde büyümüyorsa küçültmek çözüm değil: tavanda kalır, oynanmaz
         return out;
     }
 
@@ -160,6 +160,11 @@ public final class AltiliLog {
             else hi = x;
         }
         return new double[] {1 / ((lo + hi) / 2), 1 / xk};
+    }
+
+    /** 2.53: çift kayıtta hangisi sayılır: bildirilen (2), TJK (1). */
+    private static int rank(Map<String, Object> r) {
+        return (r.get("notified") != null ? 2 : 0) + ("TJK".equals(Json.str(r, "source")) ? 1 : 0);
     }
 
     /** 2.51: kupon 6/6 kuralına (eşik t, bölge) uyuyor mu. x: {6/6 olasılığı, yerli, …}. */
@@ -195,17 +200,19 @@ public final class AltiliLog {
     /** 2.49–2.50: 6/6 kuralına (eşik; bölge: hepsi, yerli, yabancı) uyan kuponların sonucu: agg + expected, minHit. */
     private static Map<String, Object> rule(List<double[]> coupons, String scope, double t) {
         int n = 0, h = 0;
-        double e = 0, c = 0, ret = 0;
+        double e = 0, c = 0, ret = 0, v = 0;
         for (double[] x : coupons) {
             if (!fits(x, scope, t)) continue;
             n++;
             e += x[0];
+            v += x[0] * (1 - x[0]);
             c += x[2];
             h += (int) x[3];
             ret += x[4];
         }
         Map<String, Object> row = agg(n, h, c, ret);
         row.put("expected", e);
+        row.put("var", v); // 2.53: tuttu sayısının varyansı (Σ p(1 − p)): beklenenden sapma denetimi
         row.put("minHit", t);
         return row;
     }
@@ -858,7 +865,23 @@ public final class AltiliLog {
                 if (f != null) count(groups, (domestic(r) ? "Yerli" : "Yabancı") + " hipodrom (sayılmadı)", f[0] > 0, f[1]); // 2.40
             }
         }
-        settled = counted;
+        // 2.53: aynı altılının ikinci kaydı (ör. Bilyoner ve TJK: aynı gün, aynı şehir, aynı kazananlar ve ikramiye) bir kez
+        // sayılır; önce bildirilen, sonra TJK kaydı
+        Map<String, Map<String, Object>> uniq = new LinkedHashMap<>();
+        int dup = 0;
+        for (Map<String, Object> r : counted) {
+            Map<String, Object> res = Json.obj(r.get("result"));
+            String city = norm(r.get("city") != null ? Json.str(r, "city") : Json.str(r, "label")) + " ";
+            String k = r.get("day") + "|" + city.substring(0, city.indexOf(' ')) + "|" + Json.arr(res.get("winners")) + "|"
+                    + Math.round(Json.dbl(res, "payout", 0) * 100);
+            Map<String, Object> o = uniq.get(k);
+            if (o == null) uniq.put(k, r);
+            else {
+                dup++;
+                if (rank(r) > rank(o)) uniq.put(k, r);
+            }
+        }
+        settled = new ArrayList<>(uniq.values()); // ilk görülme sırası: günlere göre sıralı kalır
         for (int i = 0; i < settled.size(); i++) {
             Map<String, Object> r = settled.get(i), res = Json.obj(r.get("result"));
             boolean sure = true, home = domestic(r); // 2.36: kaynak ve hipodrom
@@ -972,6 +995,7 @@ public final class AltiliLog {
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("settled", (long) settled.size());
+        if (dup > 0) out.put("duplicates", (long) dup); // 2.53
         if (inconsistent + unverified > 0) { // 2.38
             out.put("inconsistent", (long) inconsistent);
             out.put("unverified", (long) unverified);
@@ -1126,6 +1150,23 @@ public final class AltiliLog {
             Map<String, Object> rule = rule(coupons, scope, use); // 2.43: uygulamanın oynatacağı kuponlar
             rule.put("scope", scope);
             if (auto && bestT != null) rule.put("auto", true);
+            List<Object> list = new ArrayList<>(); // 2.53: kurala uyan kuponlar tek tek (yeniden eskiye): denetim için
+            for (int i = coupons.size() - 1; i >= 0; i--) {
+                double[] x = coupons.get(i);
+                if (!fits(x, scope, use)) continue;
+                Map<String, Object> r = couponRecs.get(i), c = new LinkedHashMap<>();
+                c.put("day", r.get("day"));
+                c.put("label", r.get("label"));
+                c.put("source", r.get("source"));
+                if (Json.bool(r, "backtest", false)) c.put("backtest", true);
+                if (r.get("notified") != null) c.put("notified", true);
+                c.put("hit", x[0]);
+                c.put("cost", x[2]);
+                c.put("won", x[3] > 0);
+                c.put("ret", x[4]);
+                list.add(c);
+            }
+            rule.put("list", list);
             out.put("rule", rule);
             // 2.51: son dönem sınaması: kural ilk üçte ikiyle seçilseydi seçimde kullanılmayan son üçte birde ne olurdu
             int cut = coupons.size() * 2 / 3;
