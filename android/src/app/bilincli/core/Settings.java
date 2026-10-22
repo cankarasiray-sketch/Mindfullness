@@ -249,7 +249,7 @@ public final class Settings {
     /** 2.32.9: altılı kuponu en fazla bu kadar TL; 2.32.10: ayak sınırı buna sığmazsa altılı oynanmaz. 0: kasanın payı. */
     public double altiliCap = 600; // 2.35.1: kullanıcı istedi (önce 320)
     /** 2.37: 6/6 olasılığı bunun altındaki altılı oynanmaz ve önerilmez (yalnızca tahmin edilebilir altılılar; 0: sınır yok). */
-    public double altiliMinHit = 0.30;
+    public double altiliMinHit = 0.15; // 2.44: geriye dönük veri: 600 TL ile 6/6 olasılığı ortalama ~%9; %30 hiçbir altılıyı geçirmiyordu
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -410,7 +410,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 15L);
+        m.put("v", 16L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -546,6 +546,10 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 14 && Math.abs(s.altiliLegMin - 0.70) < 1e-9) {
             // 2.33: kullanıcı istedi: %70 kuralı kalktı; kupon tavana kadar tutmayı en çok artıran atlarla
             s.altiliLegMin = 0;
+        }
+        if (Json.lng(m, "v", 1) < 16 && Math.abs(s.altiliMinHit - 0.30) < 1e-9) {
+            // 2.44: geriye dönük veride son bir haftada 6/6 olasılığı %30'u geçen altılı yoktu: eşik %15
+            s.altiliMinHit = 0.15;
         }
         if (Json.lng(m, "v", 1) < 15 && Math.abs(s.altiliCap - 320) < 1e-9) {
             // 2.35.1: kullanıcı istedi: altılı kuponu en fazla 600 TL (önceki varsayılan 320)

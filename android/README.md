@@ -294,6 +294,10 @@ bildirim olarak gelir.
   kurulur, deftere "geriye dönük" yazılır, o günün sonuçlarıyla (ikramiyeyle doğrulanarak) sonuçlanır; defterde olan
   altılılara dokunulmaz. Kupon kaydına tahmin edilen 6/6 olasılığı yazılır: karnede "Bütün altılılar … (beklenen x)" ve
   "Oynanacak olanlar (6/6 ≥ %30)": uygulamanın oynatacağı kuponlar tek başına ne yaptı, beklenenle kıyaslı.
+- **2.44:** Geriye dönük haftayla karne: doğrulanmış 96 ayakta ayak tahmini %73 / gerçekleşen %73, AGF favorisi %32 / AGF %35
+  (tahmin isabetli; önceki sapma okuma hatasıydı), 16 kuponun 4'ü tuttu (beklenen 1,4). 600 TL ile gerçek altılılarda 6/6
+  olasılığı ortalama ~%9; %30 eşiğini son bir haftada hiçbir altılı geçmedi. "En az 6/6 olasılığı" varsayılanı %15
+  (kayıtlı %30 bir kez %15'e taşınır).
 
 ## Beraberlik fırsatları (2.17)
 

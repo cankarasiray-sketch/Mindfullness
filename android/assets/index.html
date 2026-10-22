@@ -992,7 +992,7 @@ function altiliCard() {
     + f("kesinti", "Kesinti (%)", numText(Math.round((st.altiliTakeout || 0.27) * 1000) / 10), "altiliSave({takeout: numTr(this.value) / 100})", "kaynaklar %25–30")
     + f("vergi", "İkramiyeden vergi (%)", numText(Math.round((st.altiliTax || 0) * 1000) / 10), "altiliSave({tax: numTr(this.value) / 100})", "kesiliyorsa")
     + f("enaz", "Kupon en az (TL)", numText(st.altiliMinCost == null ? 60 : st.altiliMinCost), "altiliSave({minCost: numTr(this.value)})", "60")
-    + f("enaztut", "En az 6/6 olasılığı (%)", numText(Math.round((st.altiliMinHit == null ? 0.3 : st.altiliMinHit) * 100)), "altiliSave({minHit: numTr(this.value) / 100})", "0: sınır yok")
+    + f("enaztut", "En az 6/6 olasılığı (%)", numText(Math.round((st.altiliMinHit == null ? 0.15 : st.altiliMinHit) * 100)), "altiliSave({minHit: numTr(this.value) / 100})", "0: sınır yok")
     + f("tavan", "Kupon en fazla (TL)", numText(st.altiliCap == null ? 600 : st.altiliCap), "altiliSave({cap: numTr(this.value)})", "0: kasanın payı")
     + f("pay", "Kupon bütçesi (kasanın %'si)", numText(Math.round(((st.altiliBudgetShare == null ? 0.07 : st.altiliBudgetShare)) * 1000) / 10), "altiliSave({budgetShare: numTr(this.value) / 100})", "7")
     + f("ayak", "Ayak başına en az tutma (%)", numText(Math.round((st.altiliLegMin == null ? 0 : st.altiliLegMin) * 100)), "altiliSave({legMin: numTr(this.value) / 100})", "0: sınır yok")

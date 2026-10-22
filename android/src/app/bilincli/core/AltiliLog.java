@@ -576,7 +576,7 @@ public final class AltiliLog {
 
     /** legMin: kuponlar ayak başına bu tutmayla yeniden kurulur (uygulamadaki kural). */
     public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin) {
-        return analyze(store, unit, kasa, today, legMin, 0.30);
+        return analyze(store, unit, kasa, today, legMin, 0.15);
     }
 
     /** minHit: uygulamanın oynattığı kuponların en az 6/6 olasılığı (2.37 kuralı; karnede ayrı satır). */
