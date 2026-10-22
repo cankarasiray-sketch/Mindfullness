@@ -236,12 +236,13 @@ public class AltiliLogTest {
                 + "<tr><td>1</td><td>5</td><td>KARAYEL</td><td>1.25.36</td></tr><tr><td>2</td><td>3</td><td>RÜZGAR</td><td>1.25.50</td></tr>"
                 + "<tr><td>3</td><td>1</td><td>ŞİMŞEK</td><td>1.26.00</td></tr></table>"
                 + "<table><tr><th>N</th><th>At İsmi</th></tr><tr><td>7</td><td>A</td></tr><tr><td>2</td><td>B</td></tr></table>"
-                + "<p>Bahis sonuçları: İKİLİ 5/3 12,50 TL · 1. 6'LI GANYAN 5/7/5/1/5/2 12.345,67 TL · 2. ALTILI GANYAN : 1-2-3-4-5-6 (6 BİLEN) 98,10 TL</p></body></html>";
+                + "<p>1. 6'LI GANYAN (1-2-3-4-5-6. Koşular) · 2. 6'LI GANYAN 4-5-6-7-8-9</p>" // 2.37: koşu numaraları, kazanan değil
+                + "<p>Bahis sonuçları: İKİLİ 5/3 12,50 TL · 1. 6'LI GANYAN 5/7/5/1/5/2 12.345,67 TL · 2. ALTILI GANYAN : 4-2-3-1-5-6 (6 BİLEN) 98,10 TL</p></body></html>";
         List<Map<String, Object>> combos = Tjk.combos(html);
         assertEquals(2, combos.size());
         assertEquals(Arrays.asList("5", "7", "5", "1", "5", "2"), combos.get(0).get("nos"));
         assertEquals(12345.67, (Double) combos.get(0).get("payout"), 1e-9);
-        assertEquals(Arrays.asList("1", "2", "3", "4", "5", "6"), combos.get(1).get("nos"));
+        assertEquals(Arrays.asList("4", "2", "3", "1", "5", "6"), combos.get(1).get("nos"));
         List<Map<String, Object>> races = Tjk.raceResults(html);
         assertEquals(2, races.size());
         assertEquals("5", races.get(0).get("winner")); // sıra sütununda 1
@@ -258,7 +259,7 @@ public class AltiliLogTest {
         Map<String, Object> c = Json.obj(Json.arr(r.get("cities")).get(0));
         assertEquals("Bursa", c.get("city"));
         assertEquals(2, Json.arr(c.get("combos")).size());
-        assertTrue(String.valueOf(r.get("log")).contains("Bursa: 2 altılı sonucu, 2 koşu"));
+        assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Bursa: 2 altılı sonucu (5/7/5/1/5/2, 4/2/3/1/5/6), 2 koşu"));
     }
 
     /** Sonuç sayfası gibi: "N. Koşu HH.MM" başlığı, sonra bitiriş sırasıyla tablo (at no başlıksız: "5 KARAYEL"). */
@@ -329,8 +330,11 @@ public class AltiliLogTest {
         Map<String, Object> a = altili("tjk/x/40/1", "Belmont Park ABD", 40, 1, Arrays.asList(leg8, leg8, leg8, leg8, leg8, leg8));
         assertEquals(Arrays.<Object>asList(null, null, null, null, null, null), AltiliLog.legWinners(a, city(40, "Belmont Park ABD", new ArrayList<Object>(), races)));
         // kazanan kombinasyon varsa o kesin
-        Map<String, Object> withCombo = city(40, "Belmont Park ABD", Arrays.<Object>asList(combo(900, "1", "2", "3", "4", "5", "6")), races);
-        assertEquals(Arrays.<Object>asList("1", "2", "3", "4", "5", "6"), AltiliLog.legWinners(a, withCombo));
+        Map<String, Object> withCombo = city(40, "Belmont Park ABD", Arrays.<Object>asList(combo(900, "3", "1", "4", "1", "5", "2")), races);
+        assertEquals(Arrays.<Object>asList("3", "1", "4", "1", "5", "2"), AltiliLog.legWinners(a, withCombo));
+        // 2.37: ardışık numaralar (1-2-3-4-5-6) koşu numarasıdır, kazanan değil
+        Map<String, Object> raceNos = city(40, "Belmont Park ABD", Arrays.<Object>asList(combo(900, "1", "2", "3", "4", "5", "6")), races);
+        assertEquals(Arrays.<Object>asList(null, null, null, null, null, null), AltiliLog.legWinners(a, raceNos));
         // başlıksız tabloda at no olabilecek iki sütun (at no ve start): hangisi bilinemez → koşu okunmaz
         String two = "<h3>1. Koşu</h3><table><tr><td>Sıra</td><td>At</td><td>St</td></tr><tr><td>1</td><td>5</td><td>3</td></tr>"
                 + "<tr><td>2</td><td>2</td><td>7</td></tr><tr><td>3</td><td>8</td><td>1</td></tr></table>";
@@ -345,15 +349,22 @@ public class AltiliLogTest {
         Map<String, Object> bad = AltiliLog.analyze(matched, 1, 2000, TODAY);
         assertEquals(Boolean.TRUE, Json.obj(bad.get("fav")).get("suspect"));
         assertEquals(0L, Json.obj(bad.get("calib")).get("n")); // atlarla eşleşen sonuçla öğrenilmez
-        assertTrue(Json.str(Json.obj(bad.get("calib")), "why").startsWith("Sonuçlar şüpheli"));
-        // ...resmî 6'lı sonuçlarından geldiyse gerçek: doğrulandı, öğrenmede kullanılır (yabancı hipodrom ayrı)
+        assertTrue(Json.str(Json.obj(bad.get("calib")), "why").startsWith("Sonuçlar hatalı")); // 2.37: rastgele kadar az: hatalı
+        // ...2.37: resmî sonuçtan gelse de favori rastgele kazanıyorsa (AGF'nin yarısından az) gerçek değil: hatalı, öğrenilmez
         Map<String, Object> real = AltiliLog.analyze(weak, 1, 2000, TODAY);
         Map<String, Object> fv = Json.obj(real.get("fav"));
-        assertEquals(null, fv.get("suspect"));
-        assertEquals(Boolean.TRUE, fv.get("confirmed"));
-        assertEquals(144L, Json.obj(real.get("calib")).get("n"));
+        assertEquals(Boolean.TRUE, fv.get("absurd"));
+        assertEquals(Boolean.TRUE, fv.get("suspect"));
+        assertEquals(null, fv.get("confirmed"));
+        assertEquals(Boolean.FALSE, Json.obj(real.get("calib")).get("use"));
+        assertEquals(Boolean.FALSE, Json.obj(Json.obj(real.get("calibRegion")).get("yabancı")).get("use"));
+        assertTrue(Json.str(Json.obj(real.get("calib")), "why").startsWith("Sonuçlar hatalı görünüyor"));
         assertEquals(144L, Json.obj(Json.obj(real.get("calibRegion")).get("yabancı")).get("n")); // "Şehir0" yabancı
         assertEquals(0L, Json.obj(Json.obj(real.get("calibRegion")).get("yerli")).get("n"));
+        // makul zayıflık (favori AGF'nin ~3/4'ü kadar kazanıyor) resmî sonuçlarla doğrulanır ve öğrenilir
+        Map<String, Object> modest = Json.obj(AltiliLog.analyze(history(0.6, 40, 7), 1, 2000, TODAY).get("fav"));
+        assertEquals(null, modest.get("absurd"));
+        assertEquals(Boolean.TRUE, modest.get("confirmed"));
         List<Object> gs = Json.arr(fv.get("groups"));
         assertEquals("Resmî 6'lı sonucundan", Json.obj(gs.get(0)).get("label"));
         assertEquals("Yabancı hipodrom", Json.obj(gs.get(1)).get("label"));
@@ -367,14 +378,20 @@ public class AltiliLogTest {
         // atlarla eşleşmiş eski sonuçlar silinmez, "atlar" diye etiketlenir; kazanan kombinasyondan gelenler aynen
         Map<String, Object> store = new LinkedHashMap<>();
         AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("k1", "A", 1, 1, LEGS), altili("k2", "B", 2, 1, LEGS)));
-        Map<String, Object> r1 = new LinkedHashMap<>(), r2 = new LinkedHashMap<>();
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("k3", "C", 3, 1, LEGS)));
+        Map<String, Object> r1 = new LinkedHashMap<>(), r2 = new LinkedHashMap<>(), r3 = new LinkedHashMap<>();
         r1.put("from", "koşular");
         r2.put("from", "kombinasyon");
+        r2.put("winners", new ArrayList<Object>(Arrays.asList("5", "7", "5", "1", "5", "2")));
+        r3.put("from", "kombinasyon");
+        r3.put("winners", new ArrayList<Object>(Arrays.asList("3", "4", "5", "6", "7", "8"))); // koşu numaraları okunmuştu
         rec(store, "k1").put("result", r1);
         rec(store, "k2").put("result", r2);
+        rec(store, "k3").put("result", r3);
         assertTrue(AltiliLog.migrate(store));
         assertEquals("atlar", Json.obj(rec(store, "k1").get("result")).get("from"));
         assertEquals(r2, rec(store, "k2").get("result"));
+        assertEquals(null, rec(store, "k3").get("result")); // yeniden sonuçlanır
         assertFalse(AltiliLog.migrate(store)); // bir kez
     }
 }

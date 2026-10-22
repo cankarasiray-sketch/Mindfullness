@@ -898,12 +898,23 @@ public final class Tjk {
             "(?i)(?:6\\s*['’]?\\s*l[ıiİI]|alt[ıi]l[ıi])\\s*ganyan[^0-9]{0,60}?(\\d{1,2}(?:\\s*[/-]\\s*\\d{1,2}){5})(?![\\d/])(?:[^0-9]{0,40}?(\\d{1,3}(?:\\.\\d{3})*,\\d{2}))?");
     private static final Pattern POS_HEADER = Pattern.compile("(?i)^(s|sıra|sira|sn|#|yer|sonuç|sonuc)$");
 
+    /** "(1-2-3-4-5-6. Koşular)": kazanan değil, altılının koşu numaraları. */
+    private static final Pattern RACES_AFTER = Pattern.compile("(?i)^\\s*\\.?\\s*(?:ko[şs]u|ayak)");
+
+    /** 2.37: 6 numara ardışık artıyorsa (3, 4, 5, 6, 7, 8) koşu numarasıdır, kazanan değil. */
+    static boolean raceNumbers(List<Object> nos) {
+        for (int k = 1; k < nos.size(); k++) if (Integer.parseInt(String.valueOf(nos.get(k))) != Integer.parseInt(String.valueOf(nos.get(k - 1))) + 1) return false;
+        return true;
+    }
+
     static List<Map<String, Object>> combos(String html) {
         List<Map<String, Object>> out = new ArrayList<>();
-        Matcher m = ALTILI_COMBO.matcher(text(html));
+        String t = text(html);
+        Matcher m = ALTILI_COMBO.matcher(t);
         while (m.find()) {
             List<Object> nos = new ArrayList<>();
             for (String n : m.group(1).split("\\s*[/-]\\s*")) nos.add(String.valueOf(Integer.parseInt(n.trim())));
+            if (raceNumbers(nos) || RACES_AFTER.matcher(t.substring(m.end(1))).find()) continue; // 2.37: koşu numaraları
             Map<String, Object> c = new LinkedHashMap<>();
             c.put("nos", nos);
             if (m.group(2) != null) c.put("payout", AtYarisi.amount(m.group(2)));
@@ -1081,7 +1092,9 @@ public final class Tjk {
             city.put("combos", new ArrayList<Object>(combos));
             city.put("races", new ArrayList<Object>(races));
             cities.add(city);
-            log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu, " + races.size() + " koşu"
+            StringBuilder cs = new StringBuilder(); // 2.37: okunan 6'lı sonuçları ayrıntıda (doğrulamak için)
+            for (Map<String, Object> co : combos) cs.append(cs.length() == 0 ? "" : ", ").append(String.join("/", (List) co.get("nos")));
+            log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu" + (combos.isEmpty() ? "" : " (" + cs + ")") + ", " + races.size() + " koşu"
                     + (races.isEmpty() ? "" : " (kazananlar " + winnersText(races) + "; sütunlar: " + races.get(0).get("head") + ")")
                     + (combos.isEmpty() && races.isEmpty() ? " (" + excerpt(body) + ")" : ""));
         }

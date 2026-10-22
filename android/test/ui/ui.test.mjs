@@ -944,6 +944,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /kazananlar 5-7-5-1-5-2 \(TJK resmî 6'lı sonucu\)/);
   s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, suspect: true};
   assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar şüpheli: favori %15 kazanmış, AGF %35 veriyor; bu fark tesadüf olamayacak kadar büyük ve güvenilir sonuçlar \(resmî 6'lı, koşu numarası\) bunu doğrulamıyor/);
+  s.agf.learn.fav = {n: 108, win: 0.13, agf: 0.34, suspect: true, absurd: true};
+  assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar hatalı görünüyor: bir grupta favori AGF'nin verdiğinin yarısından az kazanmış/);
   s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, confirmed: true};
   s.agf.learn.calibRegion = {yerli: {use: false}, "yabancı": {use: true, alphaUse: 0.62}};
   const kc = boot(s, "#firsat").$("#altiliKarne").textContent;
@@ -1032,6 +1034,7 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   Object.assign(s.agf.altilis[1].plan, {legMin: 0.7, minCost: 60, cap: 320, overBudget: true, units: 1296, cost: 1296, budget: 320});
   const f = boot(s, "#firsat");
   assert.equal(f.$("#alt_tavan").value, "600"); // 2.35.1 varsayılanı
+  assert.equal(f.$("#alt_enaztut").value, "30"); // 2.37: en az 6/6 olasılığı
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.match(rows[1], /1\.296 TL · 100 TL'den ort\. 73 TL döner · 320 TL'yi aşıyor, oynama$/);
   f.chip("İzmir 1. altılı · TJK").click();
@@ -1081,6 +1084,25 @@ test("altılı: ayak sonuçları (kazanan ✓/✗, özet, başlamış çipte)", 
   const g = boot(s, "#firsat");
   g.chip("İstanbul 3–8. koşu · Bilyoner").click();
   assert.match(g.$("#altiliCard").textContent, /Ayak sonuçları6\/6: altılı tuttu/);
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: 6/6 olasılığı düşük altılı oynanmaz (en az %30)", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {cap: 600, maxHit: true, lowHit: true, minHit: 0.3, hit: 0.139, cost: 576});
+  const f = boot(s, "#firsat");
+  const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
+  assert.match(rows[1], /6\/6 olasılığı %14 \(en az %30\), oynama/);
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Bu altılıyı oynama: 576,00 TL ile 6\/6 olasılığı yalnızca %13,9 \(en az %30 isteniyor\)/);
+  assert.doesNotMatch(card, /Yine de oynarsan/);
+  const none = altiliState();
+  none.agf.altilis = [none.agf.altilis[1]]; none.agf.best = null;
+  Object.assign(none.agf.altilis[0].plan, {cap: 600, maxHit: true, lowHit: true, minHit: 0.3, hit: 0.139});
+  assert.match(boot(none, "#firsat").$("#altiliCard").textContent, /Bugün kurallara uyan altılı yok: hiçbir altılıda 600 TL ile 6\/6 olasılığı en az %30 değil\. Oynama\./);
+  f.$("#alt_enaztut").value = "40"; f.$("#alt_enaztut").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {minHit: 0.4});
   assert.deepEqual(f.errors, []);
 });
 

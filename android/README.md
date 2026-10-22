@@ -258,6 +258,12 @@ bildirim olarak gelir.
   "Son altılılar"da her altılının kazananları ve kaynağı (TJK sonucuyla karşılaştırmak için). Öğrenme yalnızca güvenilir
   sonuçlarla; güvenilir sonuçlar da favoriyi zayıf gösterirse "Doğrulandı" denir ve öğrenilir. AGF düzeltmesi yerli ve
   yabancı hipodromda ayrı öğrenilir (yabancıda AGF Türk bahisçilerin payı, daha az bilgili olabilir).
+- **2.37: hatalı sonuçla öğrenme durdu; 6/6 olasılığı düşük altılı oynanmaz.** Karnede yerli favori %5 kazanmış
+  görünüyordu (AGF %34): gerçek yarışta olmaz, sonuç okuması hatalı. "6'lı ganyan" yanındaki ardışık numaralar (1-2-3-4-5-6,
+  "… Koşular") kazanan sayılmaz; böyle okunmuş eski sonuçlar silinip yeniden sonuçlanır; sonuç kaydında okunan 6'lı
+  sonuçları yazar. Bir grupta favori AGF'nin yarısından az (ve 3 standart sapma) kazanıyorsa karne "Sonuçlar hatalı
+  görünüyor" der ve hiçbir kaynakla öğrenilmez. Yeni ayar "En az 6/6 olasılığı (%)" (varsayılan %30): kupon tavanıyla 6/6
+  olasılığı bunun altındaki altılı "oynama" der, önerilmez, bildirilmez; sırada sona gider.
 
 ## Beraberlik fırsatları (2.17)
 

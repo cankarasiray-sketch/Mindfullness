@@ -358,6 +358,25 @@ public class AltiliTest {
     }
 
     @Test
+    public void unpredictableAltiliIsNotPlayed() {
+        // 2.37: 600 TL ile bile 6/6 olasılığı %30'un altındaysa oynanmaz, önerilmez; sırada sonda
+        assertEquals(0.30, new Settings().altiliMinHit, 1e-9);
+        Altili.Inputs in = rule();
+        in.maxCost = 320;
+        in.maxHit = true;
+        in.minHit = 0.30;
+        Map<String, Object> open = Altili.plan(Arrays.asList("1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:45 2:20 3:15 4:10 5:10",
+                "1:25 2:20 3:15 4:15 5:10 6:10 7:5", "1:50 2:20 3:15 4:15", "1:30 2:25 3:20 4:15 5:10", "1:40 2:30 3:15 4:15"), in);
+        Map<String, Object> clear = Altili.plan(Arrays.asList("1:85 2:10 3:5", "1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:60 2:25 3:15",
+                "1:45 2:20 3:15 4:10 5:10", "1:50 2:30 3:20", "1:40 2:30 3:15 4:15"), in);
+        assertEquals(true, open.get("lowHit")); // %13,9
+        assertEquals(null, clear.get("lowHit")); // %46,8
+        assertEquals(1, Altili.best(Arrays.asList(open, clear)));
+        assertEquals(-1, Altili.best(Arrays.asList(open)));
+        assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(open, clear)));
+    }
+
+    @Test
     public void legMinAndCapTogetherOrNoPlay() {
         // 2.32.10: Belmont kuponunun kuralları: her ayak en az %70 ve kupon en fazla 320 TL; sığmazsa daraltılmaz, oynanmaz
         assertEquals(600.0, new Settings().altiliCap, 1e-9); // 2.35.1

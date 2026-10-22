@@ -81,6 +81,8 @@ public final class Altili {
          * bedele göre en çok artıran atla doldurulur; para önce en zayıf ayaklara gider (6 ayaktan biri yatmasın diye).
          */
         public boolean maxHit = false;
+        /** 2.37: oynanmayacak günde 6/6 olasılığı bunun altındaki kupon oynanmaz, önerilmez (0: sınır yok). */
+        public double minHit = 0;
     }
 
     private static double num(String s) {
@@ -674,6 +676,10 @@ public final class Altili {
             if (in.maxCost > 0) out.put("cap", in.maxCost); // 2.32.10: kupon en fazla (her ayak sınırıyla birlikte; sığmazsa oynanmaz)
             if (in.maxHit) out.put("maxHit", true); // 2.33: tavana kadar en yüksek tutma
             if (e.cost > budget + 1e-9) out.put("overBudget", true); // ayak başına en az tutma için bütçe aşıldı
+            if (in.minHit > 0 && e.hit < in.minHit - 1e-12) { // 2.37: tahmin edilemez altılı
+                out.put("lowHit", true);
+                out.put("minHit", in.minHit);
+            }
         }
         if (in.legMin > 0) out.put("legMin", in.legMin);
         boolean low = !play && e.roi < in.minRoi;
@@ -732,6 +738,7 @@ public final class Altili {
             Map<String, Object> p = plans.get(i);
             if (p == null || p.get("error") != null || p.get("legs") == null) continue;
             if (p.get("cap") != null && Json.bool(p, "overBudget", false)) continue; // 2.32.10: kurala sığmayan önerilmez
+            if (Json.bool(p, "lowHit", false)) continue; // 2.37: 6/6 olasılığı düşük olan önerilmez
             if (best < 0 || better(p, plans.get(best))) best = i;
         }
         return best;
@@ -751,6 +758,8 @@ public final class Altili {
         if (pa) return Json.dbl(a, "ev", 0) > Json.dbl(b, "ev", 0);
         boolean la = Json.bool(a, "lowReturn", false), lb = Json.bool(b, "lowReturn", false);
         if (la != lb) return !la; // beklenen getirisi %50'nin altındakiler sonda
+        boolean ha = Json.bool(a, "lowHit", false), hb = Json.bool(b, "lowHit", false);
+        if (ha != hb) return !ha; // 2.37: 6/6 olasılığı düşük olanlar sonda
         boolean oa = Json.bool(a, "overBudget", false), ob = Json.bool(b, "overBudget", false);
         if (oa != ob) return !oa; // bütçeye sığan önce
         double ra = Json.dbl(a, "roi", 0), rb = Json.dbl(b, "roi", 0);

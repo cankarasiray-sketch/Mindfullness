@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -95,6 +96,11 @@ public final class AltiliLog {
         g[2] += favP;
     }
 
+    /** 2.37: gerçek yarışta olmayacak kadar az: AGF'nin verdiğinin yarısından az ve 3 standart sapmadan fazla (en az 40 ayak). */
+    private static boolean absurd(double n, double win, double agfSum) {
+        return n >= 40 && win < 0.5 * agfSum && low(n, win, agfSum);
+    }
+
     /** Favori beklenenden 3 standart sapmadan fazla az kazanıyor mu (en az 40 ayak). */
     private static boolean low(double n, double win, double agfSum) {
         if (n < 40) return false;
@@ -108,12 +114,15 @@ public final class AltiliLog {
      * kullanılmaz. Değiştiyse true.
      */
     public static boolean migrate(Map<String, Object> store) {
-        if (store == null || Json.lng(store, "v", 1) >= 2) return false;
+        if (store == null || Json.lng(store, "v", 1) >= 3) return false;
         for (Object o : records(store)) {
             Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
-            if (res != null && "koşular".equals(Json.str(res, "from"))) res.put("from", "atlar");
+            if (res == null) continue;
+            if ("koşular".equals(Json.str(res, "from"))) res.put("from", "atlar");
+            List<Object> w = Json.arr(res.get("winners"));
+            if (w.size() == 6 && Tjk.raceNumbers(w)) r.remove("result"); // 2.37: koşu numaraları kazanan sanılmıştı: yeniden
         }
-        store.put("v", 2L);
+        store.put("v", 3L);
         return true;
     }
 
@@ -279,7 +288,7 @@ public final class AltiliLog {
         order.addAll(combos);
         for (Object o : order) {
             List<Object> nos = Json.arr(Json.obj(o).get("nos"));
-            if (nos.size() != 6) continue;
+            if (nos.size() != 6 || Tjk.raceNumbers(nos)) continue; // 2.37: koşu numaraları kazanan değil
             boolean ok = true;
             for (int k = 0; k < 6 && ok; k++) ok = legs.get(k).containsKey(String.valueOf(nos.get(k)));
             if (ok) return new Object[] {nos, Json.num(Json.obj(o), "payout"), "kombinasyon"};
@@ -523,10 +532,16 @@ public final class AltiliLog {
         fv.put("agf", favN > 0 ? favAgf / favN : 0.0);
         // 2.35–2.36: öz denetim: favori beklenenden çok az kazanıyorsa ve bunu güvenilir sonuçlar (resmî 6'lı, koşu
         // numarası; en az 40 ayak) doğrulamıyorsa sonuçlar yanlış okunuyordur. Güvenilir sonuçlar da aynısını diyorsa gerçek.
+        // 2.37: makul olmayan sonuç: bir grupta (en az 40 ayak) favori AGF'nin verdiğinin yarısından az ve 3 standart
+        // sapmadan fazla az kazanıyorsa (gerçek yarışta olmaz: AGF favorisi kabaca her üç koşudan birini kazanır) sonuçlar
+        // yanlış okunuyordur; kaynak "resmî" görünse de hiçbir sonuçla öğrenilmez.
+        boolean absurd = absurd(favN, favWin, favAgf);
+        for (double[] g : groups.values()) absurd |= absurd(g[0], g[1], g[2]);
         double[] rel = groups.containsKey("güvenilir") ? groups.get("güvenilir") : new double[3];
-        boolean confirmed = rel[0] >= 40 && low(rel[0], rel[1], rel[2]);
-        boolean suspect = low(favN, favWin, favAgf) && !confirmed;
+        boolean confirmed = !absurd && rel[0] >= 40 && low(rel[0], rel[1], rel[2]);
+        boolean suspect = absurd || (low(favN, favWin, favAgf) && !confirmed);
         if (suspect) fv.put("suspect", true);
+        if (absurd) fv.put("absurd", true);
         if (confirmed) fv.put("confirmed", true);
         List<Object> gs = new ArrayList<>();
         for (Map.Entry<String, double[]> e : groups.entrySet()) {
@@ -541,13 +556,19 @@ public final class AltiliLog {
         fv.put("groups", gs);
         out.put("fav", fv);
         Map<String, Object> calib = calibrate(data); // yalnızca güvenilir sonuçlar
-        if (suspect && Json.bool(calib, "use", false) == false) {
-            calib.put("why", "Sonuçlar şüpheli (AGF favorisi beklenenden çok az kazanmış, güvenilir sonuçlarla doğrulanmadı): öğrenmede kullanılmıyor.");
-        }
-        out.put("calib", calib);
         Map<String, Object> region = new LinkedHashMap<>(); // 2.36: yerli ve yabancı hipodromda ayrı düzeltme
         region.put("yerli", calibrate(dataHome));
         region.put("yabancı", calibrate(dataAway));
+        if (absurd) { // 2.37: yanlış okunmuş sonuçla öğrenmek kuponları bozar
+            for (Map<String, Object> c : Arrays.asList(calib, Json.obj(region.get("yerli")), Json.obj(region.get("yabancı")))) {
+                c.put("use", false);
+                c.put("alphaUse", 1.0);
+            }
+            calib.put("why", "Sonuçlar hatalı görünüyor (favori gerçek yarışta olmayacak kadar az kazanmış): öğrenilmiyor, AGF olduğu gibi.");
+        } else if (suspect && Json.bool(calib, "use", false) == false) {
+            calib.put("why", "Sonuçlar şüpheli (AGF favorisi beklenenden çok az kazanmış, güvenilir sonuçlarla doğrulanmadı): öğrenmede kullanılmıyor.");
+        }
+        out.put("calib", calib);
         out.put("calibRegion", region);
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
