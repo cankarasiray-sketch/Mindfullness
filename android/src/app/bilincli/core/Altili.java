@@ -739,6 +739,7 @@ public final class Altili {
             if (p == null || p.get("error") != null || p.get("legs") == null) continue;
             if (p.get("cap") != null && Json.bool(p, "overBudget", false)) continue; // 2.32.10: kurala sığmayan önerilmez
             if (Json.bool(p, "lowHit", false)) continue; // 2.37: 6/6 olasılığı düşük olan önerilmez
+            if (Json.bool(p, "regionWeak", false) && !Json.bool(p, "play", false)) continue; // 2.42: AGF'si tutmayan bölge
             if (best < 0 || better(p, plans.get(best))) best = i;
         }
         return best;
@@ -758,6 +759,8 @@ public final class Altili {
         if (pa) return Json.dbl(a, "ev", 0) > Json.dbl(b, "ev", 0);
         boolean la = Json.bool(a, "lowReturn", false), lb = Json.bool(b, "lowReturn", false);
         if (la != lb) return !la; // beklenen getirisi %50'nin altındakiler sonda
+        boolean wa = Json.bool(a, "regionWeak", false), wb = Json.bool(b, "regionWeak", false);
+        if (wa != wb) return !wa; // 2.42: AGF'si tutmayan bölgenin altılıları sonda
         boolean ha = Json.bool(a, "lowHit", false), hb = Json.bool(b, "lowHit", false);
         if (ha != hb) return !ha; // 2.37: 6/6 olasılığı düşük olanlar sonda
         boolean oa = Json.bool(a, "overBudget", false), ob = Json.bool(b, "overBudget", false);

@@ -1116,6 +1116,22 @@ test("altılı: 6/6 olasılığı düşük altılı oynanmaz (en az %30)", async
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı: doğrulanmış sonuçlarda AGF'si tutmayan bölgenin altılısı önerilmez", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {cap: 600, maxHit: true, regionWeak: true, region: "yerli", regionWin: 0.06, regionAgf: 0.34, regionN: 18});
+  s.agf.learn = {settled: 6, pending: 0, suggested: {}, all: {n: 6, hits: 0, cost: 3600, ret: 0, roi: 0}, legs: {n: 36, expected: 0.72, actual: 0.61}, fav: {n: 36, win: 0.19, agf: 0.36},
+    calib: {use: false}, regionTrust: {yerli: {n: 18, win: 0.06, agf: 0.34, weak: true}, "yabancı": {n: 18, win: 0.33, agf: 0.37, weak: false}}, history: []};
+  const f = boot(s, "#firsat");
+  const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
+  assert.match(rows[1], /yerli hipodromda AGF tutmuyor, oynama/);
+  assert.match(f.$("#altiliKarne").textContent, /Bölge kuralıYerli: favori %6 · AGF %34 \(18 ayak\) → AGF tutmuyor, altılıları önerilmiyorYabancı: favori %33 · AGF %37 \(18 ayak\) → AGF tutuyor/);
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Bu altılıyı oynama: doğrulanmış sonuçlarda yerli hipodromlarda AGF favorisi %6 kazanmış, AGF %34 veriyordu \(18 ayak\)/);
+  assert.doesNotMatch(card, /Yine de oynarsan/);
+  assert.deepEqual(f.errors, []);
+});
+
 test("altılı: 1. ayağı başlamış altılı işaretlenir, sona gider", async () => {
   const s = altiliState();
   s.agf.day = "2026-10-21";

@@ -635,7 +635,18 @@ final class Repo {
             List<String> legs = new ArrayList<>();
             for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
             Altili.Inputs in = altiliInputsFor(key, inp, a);
-            a.put("plan", Altili.plan(legs, in));
+            Map<String, Object> plan = Altili.plan(legs, in);
+            // 2.42: doğrulanmış sonuçlarda bu bölgede (yerli/yabancı) AGF favorisi belirgin tutmuyorsa altılı önerilmez
+            Map<String, Object> rt = Json.obj(Json.obj(learn.get("regionTrust")) == null ? null
+                    : Json.obj(learn.get("regionTrust")).get(AltiliLog.domestic(a) ? "yerli" : "yabancı"));
+            if (rt != null && Json.bool(rt, "weak", false) && !"manual".equals(key) && plan.get("error") == null) {
+                plan.put("regionWeak", true);
+                plan.put("regionWin", rt.get("win"));
+                plan.put("regionAgf", rt.get("agf"));
+                plan.put("regionN", rt.get("n"));
+                plan.put("region", AltiliLog.domestic(a) ? "yerli" : "yabancı");
+            }
+            a.put("plan", plan);
             a.put("devir", in.devir);
             a.put("pool", in.pool);
             a.put("unit", in.unit);

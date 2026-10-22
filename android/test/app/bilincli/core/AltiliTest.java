@@ -7,6 +7,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
@@ -374,6 +375,12 @@ public class AltiliTest {
         assertEquals(1, Altili.best(Arrays.asList(open, clear)));
         assertEquals(-1, Altili.best(Arrays.asList(open)));
         assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(open, clear)));
+        // 2.42: AGF'si doğrulanmış sonuçlarda tutmayan bölgenin altılısı önerilmez, sonda
+        Map<String, Object> weak = new LinkedHashMap<>(clear);
+        weak.put("regionWeak", true);
+        assertEquals(1, Altili.best(Arrays.asList(weak, clear)));
+        assertEquals(-1, Altili.best(Arrays.asList(weak)));
+        assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(weak, clear)));
     }
 
     @Test

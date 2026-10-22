@@ -285,6 +285,10 @@ bildirim olarak gelir.
   araya giren rakam okuyucuyu durduruyordu. Artık "6 BİLEN … tutar" alınır, "5 BİLEN" tutarları alınmaz, 6 bilen
   çıkmadıysa ikramiye yok sayılır. Sonuç kaydında her 6'lı sonucunun ikramiyesi yazar, "Son altılılar"da ikramiye
   görünür; yeniden doğrulama hakları sıfırlanır (yeni okuyucuyla tekrar denenir).
+- **2.42: bölge kuralı.** Doğrulanmış 6 altılıda yabancı favori %33 (AGF %37: tutuyor), yerli favori %6 (AGF %34; z ≈ −2,5).
+  Doğrulanmış sonuçlarda bir bölgede (yerli/yabancı; en az 18 ayak) favori AGF'nin verdiğinden belirgin az kazanıyorsa
+  (z < −2) o bölgenin altılıları "AGF tutmuyor, oynama" der, günün kuponu olarak önerilmez, bildirilmez, sırada sona gider
+  (kârlı "OYNA" kuponu hariç). Karnede "Bölge kuralı" satırı; doğrulanmış sonuçlar değişince kendiliğinden kalkar.
 
 ## Beraberlik fırsatları (2.17)
 

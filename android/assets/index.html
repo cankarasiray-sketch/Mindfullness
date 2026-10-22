@@ -696,6 +696,7 @@ function altiliRankNote(a) {
   if (p.cost) bits.push(num(p.play ? p.stake : p.cost, 0) + " TL" + (p.play && p.kat > 1 ? " (" + p.kat + " misli)" : ""));
   if (p.roi) bits.push("100 TL'den ort. " + num(p.roi * 100, 0) + " TL döner");
   if (p.overBudget) bits.push(p.cap ? num(p.cap, 0) + " TL'yi aşıyor, oynama" : "bütçeyi aşıyor");
+  if (p.regionWeak && !p.play) bits.push(p.region + " hipodromda AGF tutmuyor, oynama"); // 2.42
   if (p.lowHit) bits.push("6/6 olasılığı %" + num(p.hit * 100, 0) + " (en az %" + num(p.minHit * 100, 0) + "), oynama");
   var rs = a.races || [];
   if (rs.length === 6 && rs[0].no && rs[5].no && rs[0].time) // 2.33: koşu numaraları ve saatleri
@@ -798,6 +799,7 @@ function altiliKarne(L, sl) {
         + "Kazananlar büyük ihtimalle yanlış okunuyor: öğrenme yalnızca güvenilir sonuçlarla.</p>" : "")
       + (fv.confirmed ? '<p class="small"><b>Doğrulandı:</b> güvenilir sonuçlarda da favori AGF\'nin verdiğinden belirgin az kazanıyor; '
         + "uygulama bunu öğreniyor (yeterli veri olunca AGF düzeltmesi kendiliğinden devreye girer).</p>" : "")
+      + altiliRegionTrust(L.regionTrust)
       + item("AGF düzeltmesi", c.use ? "kullanılıyor (α " + num(c.alphaUse, 2) + ")" : "kullanılmıyor")
       + altiliRegionCalib(L.calibRegion)
       + item("Bütçe", "kasanın " + pctOf((S.settings && S.settings.altiliBudgetShare) || 0.07) + " (ayar)" + (f ? " · geçmişte en iyi getiri " + pctOf(f) : " · karşılaştırma için en az 20 sonuç gerekli, şu an " + L.settled))
@@ -821,6 +823,16 @@ function altiliKarne(L, sl) {
   html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları kontrol et, geçmişi yeniden doğrula</button></div>';
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
   return html + "</div>";
+}
+/** 2.42: bölge güveni (doğrulanmış sonuçlarla): AGF favorisi tutuyor mu; tutmuyorsa o bölgenin altılıları önerilmez. */
+function altiliRegionTrust(r) {
+  if (!r) return "";
+  var parts = ["yerli", "yabancı"].filter(function (k) { return r[k]; }).map(function (k) {
+    var t = r[k];
+    return (k === "yerli" ? "Yerli" : "Yabancı") + ": favori %" + num(t.win * 100, 0) + " · AGF %" + num(t.agf * 100, 0) + " (" + t.n + " ayak) → "
+      + (t.weak ? '<b class="neg">AGF tutmuyor, altılıları önerilmiyor</b>' : t.n < 18 ? "veri az" : '<b class="pos">AGF tutuyor</b>');
+  });
+  return parts.length ? item("Bölge kuralı", parts.join("<br>")) : "";
 }
 /** 2.36: yerli ve yabancı hipodromda ayrı öğrenilen AGF düzeltmesi (kullanılıyorsa). */
 function altiliRegionCalib(r) {
@@ -903,13 +915,16 @@ function altiliPlanHtml(a) {
         + ", tutarın " + tl0(Math.max(1, kat) * r.cost) + " olduğunu kontrol et" + (a.start ? ", 1. ayak " + esc(a.start) + " öncesi" : "") + ".</p>"
       : '<p><b class="neg">OYNAMA:</b> ' + esc(r.reason) + (r.needDevir ? " Bu kuponla kâr için devir en az " + tl0(r.needDevir) + " olmalı." : "") + "</p>"
 
+        + (r.regionWeak && !r.play ? '<p class="neg"><b>Bu altılıyı oynama:</b> doğrulanmış sonuçlarda ' + esc(r.region) + " hipodromlarda AGF favorisi %" + num(r.regionWin * 100, 0)
+          + " kazanmış, AGF %" + num(r.regionAgf * 100, 0) + " veriyordu (" + r.regionN + " ayak). Bu bölgede AGF'ye dayalı kupon şu an 6/6 getirmiyor; "
+          + "doğrulanmış sonuçlar değişince kural kendiliğinden kalkar.</p>" : "")
         + (r.lowHit ? '<p class="neg"><b>Bu altılıyı oynama:</b> ' + tl0(r.cost) + " ile 6/6 olasılığı yalnızca %" + num(r.hit * 100, 1)
           + " (en az %" + num(r.minHit * 100, 0) + " isteniyor). Favorileri net, tahmin edilebilir bir altılı seç.</p>" : "")
         + (r.overBudget && r.cap ? '<p class="neg"><b>Bu altılıyı oynama:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost)
           + "; en fazla " + tl0(r.cap) + " kuralına sığmıyor. Her ayağı %" + num(r.legMin * 100, 0) + " tutan ve " + tl0(r.cap) + "'ye sığan bir altılı seç.</p>"
         : r.overBudget ? '<p class="small"><b>Dikkat:</b> her ayakta en az %' + num(r.legMin * 100, 0) + " tutma için kupon " + tl0(r.cost) + "; bütçe (" + tl0(r.budget)
           + ") aşılıyor. Bu altılı açık koşulardan oluşuyor; bütçeye sığan bir altılı seç ya da ayak sınırını düşür.</p>" : "")
-        + (r.mode === "tutma" && r.maxHit && !r.overBudget && !r.lowHit ? '<p class="small">Yine de oynarsan: kupon ' + tl0(r.cap) + "'ye kadar, her adımda tutmayı TL başına en çok artıran atla kurulur; para önce en zayıf ayaklara gider. "
+        + (r.mode === "tutma" && r.maxHit && !r.overBudget && !r.lowHit && !r.regionWeak ? '<p class="small">Yine de oynarsan: kupon ' + tl0(r.cap) + "'ye kadar, her adımda tutmayı TL başına en çok artıran atla kurulur; para önce en zayıf ayaklara gider. "
           + "Tutarsa ortalama " + tl0(r.ifHit) + "; uzun vadede her 100 TL'de ortalama " + num(Math.max(0, 1 - r.roi) * 100, 0) + " TL kayıp.</p>" : "")
         + (r.mode === "tutma" && !r.maxHit && !(r.overBudget && r.cap) ? '<p class="small">Yine de oynarsan: kupon her ayağı en az %' + num((r.legMin || 0) * 100, 0) + " tutmaya tamamlar"
           + (r.minCost ? ", " + num(r.minCost, 0) + " TL'ye kadar tutmayı en çok artıran atları ekler, üstüne yalnızca beklenen kazancı artıran (kârlı) atları" : "")
@@ -931,9 +946,10 @@ function altiliCard() {
   if (t && t.at) html += '<p class="small muted">Son okuma ' + esc(dm(t.at)) + " " + esc(hm(t.at)) + (list.length ? "" : ": altılı bulunamadı." + altiliWhy(t.log)) + "</p>";
   var best = altiliByKey(t && t.best);
   var unfit = list.filter(function (x) { var p = x.plan || {}; return !altiliStarted(x) && !p.error && p.legs; });
-  if (!best && unfit.length && unfit.every(function (x) { return (x.plan.overBudget && x.plan.cap) || x.plan.lowHit; })) { // 2.32.10, 2.37
+  if (!best && unfit.length && unfit.every(function (x) { return (x.plan.overBudget && x.plan.cap) || x.plan.lowHit || x.plan.regionWeak; })) { // 2.32.10, 2.37, 2.42
     var p0 = unfit[0].plan;
-    html += '<p class="neg"><b>Bugün kurallara uyan altılı yok:</b> ' + (p0.lowHit ? "hiçbir altılıda " + num(p0.cap || p0.budget, 0) + " TL ile 6/6 olasılığı en az %" + num(p0.minHit * 100, 0) + " değil"
+    html += '<p class="neg"><b>Bugün kurallara uyan altılı yok:</b> ' + (p0.regionWeak ? "bugünkü altılılar AGF'si doğrulanmış sonuçlarda tutmayan bölgede (" + esc(p0.region) + ")"
+      : p0.lowHit ? "hiçbir altılıda " + num(p0.cap || p0.budget, 0) + " TL ile 6/6 olasılığı en az %" + num(p0.minHit * 100, 0) + " değil"
       : "her ayağı %" + num(p0.legMin * 100, 0) + " tutan ve " + num(p0.cap, 0) + " TL'ye sığan altılı bulunamadı") + ". Oynama.</p>";
   }
   if (best) html += '<p><b>Günün en mantıklı kuponu:</b> ' + esc(best.label) + " · " + esc(best.source || "TJK")

@@ -364,6 +364,36 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void regionWhereAgfFailsIsFlagged() {
+        // 2.42: doğrulanmış sonuçlarda yerli favori hiç kazanmıyor (3 altılı, 18 ayak), yabancıda kazanıyor
+        Map<String, Object> store = new LinkedHashMap<>();
+        String[] days = {"2026-10-18", "2026-10-19", "2026-10-20"};
+        for (int d = 0; d < 3; d++) {
+            Map<String, Object> home = altili("tjk/" + days[d] + "/3/1", "İstanbul", 3, 1, LEGS), away = altili("tjk/" + days[d] + "/31/1", "Belmont Park ABD", 31, 1, LEGS);
+            home.put("day", days[d]);
+            away.put("day", days[d]);
+            AltiliLog.record(store, days[d], Arrays.<Object>asList(home, away));
+            List<Object> outsiders = Arrays.<Object>asList("2", "4", "6", "2", "7", "3"), favs = Arrays.<Object>asList("5", "7", "5", "1", "5", "2");
+            for (Object[] x : new Object[][] {{home, outsiders}, {away, favs}}) {
+                @SuppressWarnings("unchecked")
+                List<Object> w = (List<Object>) x[1];
+                double pw = 1;
+                for (int k = 0; k < 6; k++) pw *= AltiliLog.agf(LEGS.get(k)).get(String.valueOf(w.get(k)));
+                Map<String, Object> res = new LinkedHashMap<>();
+                res.put("winners", new ArrayList<Object>(w));
+                res.put("payout", 0.73 / pw); // ikramiyeyle doğrulanmış
+                res.put("from", "kombinasyon");
+                rec(store, Json.str((Map<String, Object>) x[0], "key")).put("result", res);
+            }
+        }
+        Map<String, Object> rt = Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY).get("regionTrust"));
+        assertEquals(Boolean.TRUE, Json.obj(rt.get("yerli")).get("weak"));
+        assertEquals(0.0, (Double) Json.obj(rt.get("yerli")).get("win"), 1e-9);
+        assertEquals(Boolean.FALSE, Json.obj(rt.get("yabancı")).get("weak"));
+        assertEquals(1.0, (Double) Json.obj(rt.get("yabancı")).get("win"), 1e-9);
+    }
+
+    @Test
     public void pastResultsAreRechecked() {
         // 2.39: eski, yanlış okunmuş (ikramiyesi tutarsız) ve bulunamamış sonuçlar o günün sayfası yeniden okunarak doğrulanır
         Map<String, Object> store = new LinkedHashMap<>();

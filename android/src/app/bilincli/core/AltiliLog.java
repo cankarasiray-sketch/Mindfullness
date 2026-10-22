@@ -31,7 +31,9 @@ public final class AltiliLog {
     private AltiliLog() {}
 
     static final int KEEP_DAYS = 150, SETTLE_DAYS = 5, ANALYZE_DAYS = 120;
-    static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
+    static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12;
+    /** 2.42: bölge kuralı için en az doğrulanmış ayak (3 altılı). */
+    static final int REGION_MIN_LEGS = 18; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
     static final double PRIOR_LEGS = 200;
     /** Karşılaştırılan bütçeler (2.29: kullanıcının %7'si dahil; bilgi için, bütçe ayardan). */
@@ -724,6 +726,22 @@ public final class AltiliLog {
         }
         out.put("calib", calib);
         out.put("calibRegion", region);
+        // 2.42: bölge güveni: ikramiyeyle doğrulanmış sonuçlarda favori AGF'nin verdiğinden belirgin az kazanıyorsa (en az 18
+        // ayak, z < −2) o bölgede AGF'ye dayalı kupon 6/6 getirmiyor: altılıları önerilmez. Veri değişince kendiliğinden kalkar.
+        Map<String, Object> trustRegion = new LinkedHashMap<>();
+        for (String[] k : new String[][] {{"yerli", "Yerli hipodrom"}, {"yabancı", "Yabancı hipodrom"}}) {
+            double[] g = groups.get(k[1]);
+            if (g == null) continue;
+            Map<String, Object> t = new LinkedHashMap<>();
+            double p = g[2] / g[0], z = (g[1] - g[0] * p) / Math.sqrt(Math.max(1e-9, g[0] * p * (1 - p)));
+            t.put("n", (long) g[0]);
+            t.put("win", g[1] / g[0]);
+            t.put("agf", p);
+            t.put("z", z);
+            t.put("weak", g[0] >= REGION_MIN_LEGS && z < -2);
+            trustRegion.put(k[0], t);
+        }
+        out.put("regionTrust", trustRegion);
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
         double bestRoi = -1, bestFraction = 0;
