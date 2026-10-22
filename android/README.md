@@ -328,6 +328,16 @@ bildirim olarak gelir.
   taraması her eşikte hepsi / yerli / yabancı için ayrı; en iyisi (en az 20 kupon, en yüksek dönüş; eşitlikte düşük eşik ve
   geniş bölge) eşiği ve bölgeyi birlikte seçer. Elle eşikte bölge o eşikte en iyi dönen. Seçilen bölge dışındaki altılılar
   önerilmez; 20 kuponluk bölge yoksa kural yok. Favori istatistiği karnede bilgi olarak kalır.
+- **2.51: favori düzeltmesi, kasaya göre kupon büyüklüğü, son dönem sınaması.** (1) AGF favoriyi abartıyor (favori %28
+  kazanıyor, AGF %34 veriyor; tek ayakla kaçan kuponların çoğunda yatan ayak banko): model q ∝ p^α · β^[favori]; β en çok
+  olabilirlikle, olabilirlik oranı testi (%5), son üçte birde doğrulama ve büzülmeyle, bölgeye göre öğrenilir ve kuponda
+  kullanılır (β < 1: banko ayağa gerekirse ikinci at). Karnede banko ayakların AGF'si ve gerçekleşeni. (2) Kupon büyüklüğü
+  taraması: kurala uyan geçmiş altılılar 100/200/300/600 TL ile (en fazla ayardaki tavan) bugünkü düzeltmeyle yeniden kurulur;
+  kasanın Kelly payıyla (Kelly çarpanı × kasa) kupon başına ortalama log büyümesi en yüksek olan büyüklük kullanılır
+  ("Kupon büyüklüğü kasaya göre otomatik", varsayılan açık); hiçbirinde büyümüyorsa en küçüğü ve uyarı. Tahmin
+  edilebilirlik (6/6 eşiği) ayardaki tavandaki kuponla ölçülür; defter de o kuponla tutulur (eşik ve taramalar aynı ölçüde),
+  "Önerilerim" bildirilen gerçek kuponla. (3) Son dönem sınaması: kural ilk üçte ikiyle seçilseydi seçimde kullanılmayan son
+  üçte birde ne olurdu. Karnenin başında "Strateji": bölge, eşik, kupon büyüklüğü, geçmiş ve sınama sonucu.
 
 ## Beraberlik fırsatları (2.17)
 

@@ -62,6 +62,8 @@ public final class Altili {
     public static final class Inputs {
         /** 2.26: geçmiş sonuçlardan öğrenilen AGF düzeltmesi (ganyan yokken q ∝ p^alpha; 1: düzeltme yok). */
         public double alpha = 1;
+        /** 2.51: öğrenilen favori düzeltmesi: AGF favorisinin payı beta ile çarpılır (beta < 1: favori AGF'de abartılı). */
+        public double beta = 1;
         public double takeout = 0.27, tax = 0, unit = 1, devir = 0, pool = 0, maxCost = 0;
         /** Kasa (TL), Kelly çarpanı ve kupon başına kasanın en fazla payı (futboldaki sınırla aynı). */
         public double kasa = 0, km = 0.25, maxFraction = 0.05;
@@ -83,6 +85,11 @@ public final class Altili {
         public boolean maxHit = false;
         /** 2.37: oynanmayacak günde 6/6 olasılığı bunun altındaki kupon oynanmaz, önerilmez (0: sınır yok). */
         public double minHit = 0;
+        /**
+         * 2.51: kupon kasaya göre küçültüldüyse (maxCost) altılının tahmin edilebilirliği (minHit) bu büyüklükteki (ayardaki
+         * tavan) kuponla ölçülür; 0: kuponun kendisiyle.
+         */
+        public double refCost = 0;
         /** 2.45: kâr kuralı: kupon yalnızca beklenen dönüşü en az 1 + minEdge olunca oynanır. */
         public double minEdge = 0;
         /** 2.45: kârsız (tutma) kupon önerilmez; yalnızca bilgi olarak gösterilir. */
@@ -103,6 +110,11 @@ public final class Altili {
      * (alpha > 1: kalabalık favorileri az oynuyor, sürprizleri çok).
      */
     static Leg leg(String text, double alpha) {
+        return leg(text, alpha, 1);
+    }
+
+    /** beta (2.51, öğrenilen): ganyan yoksa ayağın AGF favorisi beta ile ağırlıklanır, q ∝ p^alpha · beta^[favori]. */
+    static Leg leg(String text, double alpha, double beta) {
         List<Horse> out = new ArrayList<>();
         for (String tok : String.valueOf(text == null ? "" : text).trim().split("[\\s;]+")) {
             String[] f = tok.split("[:=]");
@@ -122,9 +134,11 @@ public final class Altili {
             else all = false;
         }
         boolean fromOdds = all && book >= MIN_BOOK && book <= MAX_BOOK;
+        Horse fav = null;
+        for (Horse h : out) if (fav == null || h.p > fav.p) fav = h; // ilk en yüksek AGF
         double pow = 0;
-        for (Horse h : out) pow += Math.pow(h.p, alpha);
-        for (Horse h : out) h.q = fromOdds ? 1 / h.odds / book : alpha == 1 ? h.p : Math.pow(h.p, alpha) / pow;
+        for (Horse h : out) pow += Math.pow(h.p, alpha) * (h == fav ? beta : 1);
+        for (Horse h : out) h.q = fromOdds ? 1 / h.odds / book : alpha == 1 && beta == 1 ? h.p : Math.pow(h.p, alpha) * (h == fav ? beta : 1) / pow;
         out.sort(new Comparator<Horse>() {
             @Override
             public int compare(Horse a, Horse b) {
@@ -576,7 +590,7 @@ public final class Altili {
         }
         List<Leg> legs = new ArrayList<>();
         for (int k = 0; k < 6; k++) {
-            Leg l = leg(legTexts.get(k), in.alpha);
+            Leg l = leg(legTexts.get(k), in.alpha, in.beta);
             if (l.horses.isEmpty()) {
                 out.put("error", (k + 1) + ". ayağın AGF'si okunamadı.");
                 return out;
@@ -684,7 +698,19 @@ public final class Altili {
                 out.put("noEdge", true);
                 out.put("minEdge", in.minEdge);
             }
-            if (in.minHit > 0 && e.hit < in.minHit - 1e-12) { // 2.37: tahmin edilemez altılı
+            double ph = e.hit;
+            if (in.maxHit && in.refCost > budget + 1e-9) { // 2.51: kupon kasaya göre küçük: tahmin edilebilirlik tavandaki kuponla
+                int[] nr = bestHit(legs, (long) Math.floor(in.refCost / in.unit + 1e-9), in.legMin);
+                ph = 1;
+                for (int k = 0; k < 6; k++) {
+                    double sq = 0;
+                    for (Horse h : byQ(legs.get(k)).subList(0, nr[k])) sq += h.q;
+                    ph *= sq;
+                }
+                out.put("hitRef", ph);
+                out.put("refCost", in.refCost);
+            }
+            if (in.minHit > 0 && ph < in.minHit - 1e-12) { // 2.37: tahmin edilemez altılı
                 out.put("lowHit", true);
                 out.put("minHit", in.minHit);
             }

@@ -430,6 +430,20 @@ public class AltiliTest {
         assertEquals(1, Altili.best(Arrays.asList(open, clear)));
         assertEquals(-1, Altili.best(Arrays.asList(open)));
         assertEquals(Arrays.asList(1, 0), Altili.order(Arrays.asList(open, clear)));
+        // 2.51: kupon kasaya göre küçükse tahmin edilebilirlik tavandaki kuponla ölçülür
+        in.maxCost = 60;
+        Map<String, Object> small = Altili.plan(Arrays.asList("1:85 2:10 3:5", "1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:60 2:25 3:15",
+                "1:45 2:20 3:15 4:10 5:10", "1:50 2:30 3:20", "1:40 2:30 3:15 4:15"), in);
+        assertEquals(true, small.get("lowHit")); // 60 TL ile 6/6 olasılığı %30'un altında
+        in.refCost = 320;
+        Map<String, Object> ref = Altili.plan(Arrays.asList("1:85 2:10 3:5", "1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:60 2:25 3:15",
+                "1:45 2:20 3:15 4:10 5:10", "1:50 2:30 3:20", "1:40 2:30 3:15 4:15"), in);
+        assertEquals(null, ref.get("lowHit"));
+        assertEquals((Double) clear.get("hit"), (Double) ref.get("hitRef"), 1e-12);
+        assertTrue((Double) ref.get("hit") < 0.30 && (Double) ref.get("cost") <= 60);
+        assertEquals(320.0, (Double) ref.get("refCost"), 1e-9);
+        in.maxCost = 320;
+        in.refCost = 0;
         // 2.42: AGF'si doğrulanmış sonuçlarda tutmayan bölgenin altılısı önerilmez, sonda
         Map<String, Object> weak = new LinkedHashMap<>(clear);
         weak.put("regionWeak", true);

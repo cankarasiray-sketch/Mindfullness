@@ -38,6 +38,8 @@ public final class AltiliLog {
     static final double[] SWEEP = {0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40};
     /** 2.50: taramanın bölgeleri; eşitlikte geniş olan (önce "hepsi"). */
     static final String[] SCOPES = {"hepsi", "yerli", "yabancı"};
+    /** 2.51: kupon büyüklüğü taraması (TL; ayardaki tavanla birlikte, onu aşmadan). */
+    static final double[] STAKES = {100, 200, 300, 600};
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
     static final double PRIOR_LEGS = 200;
     /** Karşılaştırılan bütçeler (2.29: kullanıcının %7'si dahil; bilgi için, bütçe ayardan). */
@@ -45,12 +47,118 @@ public final class AltiliLog {
     /** Kazanan at AGF listesinde yoksa payı (tahmini ikramiye için). */
     static final double MISSING_P = 0.005;
 
+    /**
+     * 2.51: kupon büyüklüğü taraması: kurala uyan geçmiş altılılar her büyüklükte (en fazla cap) bugünkü düzeltmeyle en yüksek
+     * 6/6 için yeniden kurulur; kasanın (km × kasa: Kelly payı) kupon başına ortalama log büyümesi en yüksek olan seçilir.
+     * Hiçbirinde kasa büyümüyorsa en küçüğü ("neg"). {stakes: {rows, best?, neg?, km, kasa}, capUse}.
+     */
+    private static Map<String, Object> stakes(List<double[]> coupons, List<Map<String, Object>> recs, String scope, double t, double cap,
+            double km, double kasa, double unit, double legMin, Map<String, Object> learn) {
+        List<Double> caps = new ArrayList<>();
+        for (double c : STAKES) if (c < cap - 1e-9) caps.add(c);
+        caps.add(cap);
+        double kk = Math.max(1e-9, km) * kasa;
+        List<Object> rows = new ArrayList<>();
+        Double best = null;
+        double bestG = 0;
+        for (double c : caps) {
+            int n = 0, h = 0;
+            double cost = 0, ret = 0, e = 0, g = 0;
+            boolean ok = true;
+            for (int i = 0; i < coupons.size(); i++) {
+                if (!fits(coupons.get(i), scope, t)) continue;
+                Map<String, Object> r = recs.get(i), pc = Json.obj(r.get("plan"));
+                List<Object> win = Json.arr(Json.obj(r.get("result")).get("winners")), legs = Json.arr(r.get("legs"));
+                double u = Json.dbl(pc, "unit", unit), payout = Json.dbl(Json.obj(r.get("result")), "payout", 0);
+                double[] ab = alphaBeta(learn, coupons.get(i)[1] > 0);
+                List<Altili.Leg> ls = new ArrayList<>();
+                for (Object l : legs) ls.add(Altili.leg(String.valueOf(l), ab[0], ab[1]));
+                boolean parsed = ls.size() == 6;
+                for (Altili.Leg l : ls) parsed &= !l.horses.isEmpty();
+                if (!parsed || !(u > 0)) continue;
+                int[] cnt = Altili.bestHit(ls, (long) Math.floor(c / u + 1e-9), legMin);
+                long units = 1;
+                double hit = 1;
+                boolean all = true;
+                for (int k = 0; k < 6; k++) {
+                    List<Altili.Horse> hs = Altili.byQ(ls.get(k)).subList(0, Math.min(cnt[k], ls.get(k).horses.size()));
+                    double sq = 0;
+                    boolean in = false;
+                    for (Altili.Horse x : hs) {
+                        sq += x.q;
+                        in |= x.no.equals(String.valueOf(win.get(k)));
+                    }
+                    units *= hs.size();
+                    hit *= sq;
+                    all &= in;
+                }
+                double cst = units * u, rt = all ? payout : 0;
+                n++;
+                if (all) h++;
+                cost += cst;
+                ret += rt;
+                e += hit;
+                if (cst >= kk) ok = false; // kaybı Kelly payını aşıyor
+                else g += Math.log(1 + (rt - cst) / kk);
+            }
+            Map<String, Object> row = agg(n, h, cost, ret);
+            row.put("expected", e);
+            row.put("cap", c);
+            if (ok && n > 0) row.put("growth", g / n);
+            rows.add(row);
+            if (ok && n > 0 && g / n > bestG + 1e-12) {
+                bestG = g / n;
+                best = c;
+            }
+        }
+        Map<String, Object> st = new LinkedHashMap<>();
+        st.put("rows", rows);
+        st.put("km", km);
+        st.put("kasa", kasa);
+        if (best != null) st.put("best", best);
+        else st.put("neg", true);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("stakes", st);
+        out.put("capUse", best != null ? best : caps.get(0));
+        return out;
+    }
+
+    /** 2.51: kupon 6/6 kuralına (eşik t, bölge) uyuyor mu. x: {6/6 olasılığı, yerli, …}. */
+    private static boolean fits(double[] x, String scope, double t) {
+        return x[0] >= t - 1e-12 && ("hepsi".equals(scope) || scope.equals(x[1] > 0 ? "yerli" : "yabancı"));
+    }
+
+    /** 2.49–2.50: en iyi 6/6 kuralı {eşik, bölge}: en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik, geniş bölge). */
+    private static Object[] pick(List<double[]> coupons) {
+        Object[] best = null;
+        double br = -1;
+        for (double t : SWEEP) {
+            for (String sco : SCOPES) {
+                Map<String, Object> cell = rule(coupons, sco, t);
+                if (Json.lng(cell, "n", 0) >= MIN_SETTLED && Json.dbl(cell, "roi", 0) > br + 1e-12) {
+                    br = Json.dbl(cell, "roi", 0);
+                    best = new Object[] {t, sco};
+                }
+            }
+        }
+        return best;
+    }
+
+    /** 2.51: altılının bölgesine göre kullanılan AGF düzeltmesi {alpha, beta} (analizden: önce bölgeninki, yoksa genel). */
+    public static double[] alphaBeta(Map<String, Object> learn, boolean home) {
+        Map<String, Object> calib = Json.obj(learn.get("calib")), regions = Json.obj(learn.get("calibRegion"));
+        Map<String, Object> region = regions == null ? null : Json.obj(regions.get(home ? "yerli" : "yabancı"));
+        double a = Json.dbl(region != null && Json.bool(region, "use", false) ? region : calib, "alphaUse", 1);
+        Map<String, Object> cb = region != null && Json.bool(region, "betaOn", false) ? region : calib;
+        return new double[] {a, Json.bool(cb, "betaOn", false) ? Json.dbl(cb, "betaUse", 1) : 1};
+    }
+
     /** 2.49–2.50: 6/6 kuralına (eşik; bölge: hepsi, yerli, yabancı) uyan kuponların sonucu: agg + expected, minHit. */
     private static Map<String, Object> rule(List<double[]> coupons, String scope, double t) {
         int n = 0, h = 0;
         double e = 0, c = 0, ret = 0;
         for (double[] x : coupons) {
-            if (x[0] < t - 1e-12 || !"hepsi".equals(scope) && !scope.equals(x[1] > 0 ? "yerli" : "yabancı")) continue;
+            if (!fits(x, scope, t)) continue;
             n++;
             e += x[0];
             c += x[2];
@@ -223,7 +331,8 @@ public final class AltiliLog {
     public static void record(Map<String, Object> store, String today, List<Object> altilis) {
         List<Object> recs = records(store);
         for (Object o : altilis) {
-            Map<String, Object> a = Json.obj(o), plan = Json.obj(a == null ? null : a.get("plan"));
+            // 2.51: kupon kasaya göre küçültüldüyse defter tavandaki kuponla (planRef): eşik ve taramalar aynı ölçüde
+            Map<String, Object> a = Json.obj(o), plan = Json.obj(a == null ? null : a.get("planRef") != null ? a.get("planRef") : a.get("plan"));
             String key = Json.str(a, "key");
             List<Object> legs = Json.arr(a == null ? null : a.get("legs"));
             if (key == null || "manual".equals(key) || legs.size() < 6 || plan == null || plan.get("error") != null) continue;
@@ -556,23 +665,50 @@ public final class AltiliLog {
     /** Ayaklar: her biri {AGF payları, kazananın sırası}. */
     static final class LegData {
         final double[] p;
-        final int w;
+        final int w, fav; // 2.51: AGF favorisi (ilk en yüksek)
 
         LegData(double[] p, int w) {
             this.p = p;
             this.w = w;
+            int f = 0;
+            for (int j = 1; j < p.length; j++) if (p[j] > p[f]) f = j;
+            this.fav = f;
         }
     }
 
     /** q ∝ p^alpha modelinin log-olabilirliği. */
     static double ll(List<LegData> legs, double alpha) {
+        return ll(legs, alpha, 1);
+    }
+
+    /** 2.51: q ∝ p^alpha · beta^[favori] modelinin log-olabilirliği. */
+    static double ll(List<LegData> legs, double alpha, double beta) {
         double s = 0;
         for (LegData l : legs) {
             double z = 0;
             for (double p : l.p) z += Math.pow(p, alpha);
-            s += alpha * Math.log(l.p[l.w]) - Math.log(z);
+            z += (beta - 1) * Math.pow(l.p[l.fav], alpha);
+            s += alpha * Math.log(l.p[l.w]) + (l.w == l.fav ? Math.log(beta) : 0) - Math.log(z);
         }
         return s;
+    }
+
+    /** 2.51: alpha verilince en çok olabilirlikli beta (0,3–3; log beta'ya göre türev azalan, ikiye bölme). */
+    static double fitBeta(List<LegData> legs, double alpha) {
+        if (legs.isEmpty()) return 1;
+        double lo = Math.log(0.3), hi = Math.log(3);
+        for (int it = 0; it < 40; it++) {
+            double b = (lo + hi) / 2, beta = Math.exp(b), d = 0;
+            for (LegData l : legs) {
+                double z = 0, f = Math.pow(l.p[l.fav], alpha);
+                for (double p : l.p) z += Math.pow(p, alpha);
+                z += (beta - 1) * f;
+                d += (l.w == l.fav ? 1 : 0) - beta * f / z;
+            }
+            if (d > 0) lo = b;
+            else hi = b;
+        }
+        return Math.exp((lo + hi) / 2);
     }
 
     /** En çok olabilirlikli alpha (0,3–3 aralığında; türev azalan, ikiye bölme). */
@@ -626,6 +762,15 @@ public final class AltiliLog {
      */
     public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit,
             double minEdge, boolean auto) {
+        return analyze(store, unit, kasa, today, legMin, minHit, minEdge, auto, 0, 0.25);
+    }
+
+    /**
+     * cap, km (2.51): kupon büyüklüğü taraması: seçilen kuralın kuponları STAKES büyüklüklerinde (en fazla cap) yeniden
+     * kurulur; kasanın (km × kasa ile, Kelly payı) kupon başına ortalama log büyümesi en yüksek olan "capUse".
+     */
+    public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit,
+            double minEdge, boolean auto, double cap, double km) {
         String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
         List<Map<String, Object>> settled = new ArrayList<>();
         int pending = 0;
@@ -644,8 +789,10 @@ public final class AltiliLog {
         });
         int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0, en = 0;
         double ae = 0; // 2.43: beklenen 6/6 (tahmin edilen olasılıkların toplamı)
-        int pn = 0, ph6 = 0, rwn = 0;
+        int pn = 0, ph6 = 0, rwn = 0, bankoN = 0, bankoHit = 0;
+        double bankoAgf = 0;
         List<double[]> coupons = new ArrayList<>(); // 2.49: {6/6 olasılığı, yerli, bedel, tuttu, ikramiye}
+        List<Map<String, Object>> couponRecs = new ArrayList<>(); // 2.51: kuponların kayıtları (aynı sırada, günlere göre)
         Map<String, double[]> table = new LinkedHashMap<>(); // 2.48: {kupon, tuttu, beklenen, bedel, dönüş}
         double pc6 = 0, pr6 = 0, pe = 0, rwSum = 0, rwCost = 0; // 2.45: kâr kuralına uyanlar; bütün kuponların tahmini dönüşü
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
@@ -731,6 +878,7 @@ public final class AltiliLog {
                     en++;
                     ae += ph;
                     coupons.add(new double[] {ph, domestic(r) ? 1 : 0, Json.dbl(pc, "cost", 0), h[6] ? 1 : 0, h[6] ? payout : 0});
+                    couponRecs.add(r);
                 }
                 List<Object> horses = Json.arr(pc.get("horses"));
                 int miss = -1, misses = 0; // 2.33: tek ayakla kaçan kupon ve yatan ayak tek atlı (banko) mıydı
@@ -744,12 +892,19 @@ public final class AltiliLog {
                 }
                 for (int k = 0; k < 6; k++) {
                     Map<String, Double> agf = agf(String.valueOf(legs.get(k)));
-                    for (Object x : Json.arr(horses.get(k))) {
+                    List<Object> hk = Json.arr(horses.get(k));
+                    for (Object x : hk) {
                         Double p = agf.get(String.valueOf(x));
                         if (p != null) legExp += p;
                     }
                     legN++;
                     if (h[k]) legHit++;
+                    if (hk.size() == 1) { // 2.51: banko (tek atlı) ayak: AGF'nin verdiği ve gerçekleşen
+                        bankoN++;
+                        if (h[k]) bankoHit++;
+                        Double p = agf.get(String.valueOf(hk.get(0)));
+                        if (p != null) bankoAgf += p;
+                    }
                 }
             }
             for (int k = 0; k < 6; k++) {
@@ -822,6 +977,13 @@ public final class AltiliLog {
         lg.put("actual", legN > 0 ? (double) legHit / legN : 0.0);
         lg.put("five", (long) five);
         lg.put("fiveBanko", (long) fiveBanko);
+        if (bankoN > 0) { // 2.51
+            Map<String, Object> bk = new LinkedHashMap<>();
+            bk.put("n", (long) bankoN);
+            bk.put("win", (double) bankoHit / bankoN);
+            bk.put("agf", bankoAgf / bankoN);
+            lg.put("banko", bk);
+        }
         out.put("legs", lg);
         Map<String, Object> fv = new LinkedHashMap<>();
         fv.put("n", (long) favN);
@@ -869,23 +1031,15 @@ public final class AltiliLog {
         // 2.49–2.50: eşik ve bölge taraması: 6/6 kuralı (6/6 olasılığı ≥ eşik; hepsi, yerli ya da yabancı altılılar) her
         // eşikte nasıl dönerdi; en iyisi en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik, geniş bölge)
         List<Object> sweep = new ArrayList<>();
-        Double bestT = null;
-        String bestS = null;
-        double bestRoi6 = -1;
         for (double t : SWEEP) {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("minHit", t);
-            for (String sco : SCOPES) {
-                Map<String, Object> cell = rule(coupons, sco, t);
-                row.put(sco, cell);
-                if (Json.lng(cell, "n", 0) >= MIN_SETTLED && Json.dbl(cell, "roi", 0) > bestRoi6 + 1e-12) {
-                    bestRoi6 = Json.dbl(cell, "roi", 0);
-                    bestT = t;
-                    bestS = sco;
-                }
-            }
+            for (String sco : SCOPES) row.put(sco, rule(coupons, sco, t));
             sweep.add(row);
         }
+        Object[] bp = pick(coupons);
+        Double bestT = bp == null ? null : (Double) bp[0];
+        String bestS = bp == null ? null : (String) bp[1];
         double use = auto && bestT != null ? bestT : minHit;
         String scope = auto && bestT != null ? bestS : "hepsi";
         if (!(auto && bestT != null)) { // elle eşik: o eşikte en iyi dönen bölge (en az MIN_SETTLED kupon)
@@ -934,6 +1088,19 @@ public final class AltiliLog {
             rule.put("scope", scope);
             if (auto && bestT != null) rule.put("auto", true);
             out.put("rule", rule);
+            // 2.51: son dönem sınaması: kural ilk üçte ikiyle seçilseydi seçimde kullanılmayan son üçte birde ne olurdu
+            int cut = coupons.size() * 2 / 3;
+            Object[] tp = pick(coupons.subList(0, cut));
+            if (tp != null && cut < coupons.size()) {
+                Map<String, Object> ho = rule(coupons.subList(cut, coupons.size()), (String) tp[1], (Double) tp[0]);
+                Map<String, Object> tr = rule(coupons.subList(0, cut), (String) tp[1], (Double) tp[0]);
+                ho.put("scope", tp[1]);
+                ho.put("trainN", tr.get("n"));
+                ho.put("trainRoi", tr.get("roi"));
+                ho.put("from", couponRecs.get(cut).get("day"));
+                out.put("holdout", ho);
+            }
+            if (cap > 0 && kasa > 0) out.putAll(stakes(coupons, couponRecs, scope, use, cap, km, kasa, unit, legMin, out));
         }
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
@@ -1010,6 +1177,22 @@ public final class AltiliLog {
         else why = a > 1 ? "Kalabalık favorileri az, sürprizleri çok oynuyor: düzeltme kullanılıyor."
                 : "Kalabalık favorileri fazla oynuyor: düzeltme kullanılıyor.";
         c.put("why", why);
+        // 2.51: favori düzeltmesi: kullanılan alpha'nın üstüne AGF favorisinin payı (favori AGF'de abartılı mı); ayrı olabilirlik
+        // oranı testi (%5), son dönem doğrulaması ve büzülme. Banko ayakların yatmasının başlıca nedeni.
+        double au = Json.dbl(c, "alphaUse", 1), b = fitBeta(data, au), blr = 2 * (ll(data, au, b) - ll(data, au, 1));
+        c.put("beta", b);
+        c.put("betaLr", blr);
+        boolean bh = false;
+        if (n >= 30) {
+            int cut = n * 2 / 3;
+            List<LegData> train = data.subList(0, cut), test = data.subList(cut, n);
+            bh = ll(test, au, fitBeta(train, au)) > ll(test, au, 1);
+        }
+        boolean bOn = n >= MIN_LEGS && blr > 3.84 && bh;
+        c.put("betaOn", bOn);
+        c.put("betaUse", bOn ? Math.exp(Math.log(b) * n / (n + PRIOR_LEGS)) : 1.0);
+        c.put("betaWhy", n < MIN_LEGS ? "veri az" : blr <= 3.84 ? "favoride anlamlı sapma yok" : !bh ? "sapma son dönemde doğrulanmadı"
+                : b < 1 ? "AGF favoriyi abartıyor: favorinin payı düşürülüyor" : "AGF favoriyi az veriyor: favorinin payı artırılıyor");
         return c;
     }
 

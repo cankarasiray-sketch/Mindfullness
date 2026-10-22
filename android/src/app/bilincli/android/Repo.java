@@ -506,6 +506,7 @@ final class Repo {
         if (p.get("minEdge") instanceof Number) s.altiliMinEdge = Json.dbl(p, "minEdge", s.altiliMinEdge);
         if (p.get("playNoEdge") instanceof Boolean) s.altiliPlayNoEdge = (Boolean) p.get("playNoEdge");
         if (p.get("minHitAuto") instanceof Boolean) s.altiliMinHitAuto = (Boolean) p.get("minHitAuto");
+        if (p.get("capAuto") instanceof Boolean) s.altiliCapAuto = (Boolean) p.get("capAuto");
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -546,16 +547,22 @@ final class Repo {
         in.legMin = s.altiliLegMin; // her ayakta en az legMin tutma (2.33: varsayılan yok)
         in.minHit = s.altiliMinHit; // 2.37: 6/6 olasılığı düşük altılı oynanmaz
         if (s.altiliMinHitAuto && altiliLearn != null) in.minHit = Json.dbl(altiliLearn, "minHitUse", s.altiliMinHit); // 2.49: karnedeki en iyi eşik
+        if (s.altiliCapAuto && s.altiliCap > 0 && altiliLearn != null && altiliLearn.get("capUse") instanceof Number) {
+            double cu = Json.dbl(altiliLearn, "capUse", s.altiliCap); // 2.51: kupon büyüklüğü kasaya göre
+            if (cu < s.altiliCap - 1e-9) {
+                in.maxCost = cu;
+                in.refCost = s.altiliCap; // tahmin edilebilirlik ayardaki tavanla
+            }
+        }
         in.minEdge = s.altiliMinEdge; // 2.45: kâr kuralı (beklenen dönüş en az %110)
         in.profitRule = !s.altiliPlayNoEdge; // 2.48: 6/6 modu açıksa kârsız günde de kurallara uyan altılı önerilir
         in.maxHit = s.altiliCap > 0; // 2.33: tavan varsa kupon tavana kadar en yüksek tutmayla (para önce zayıf ayaklara)
         in.minCost = s.altiliMinCost; // 2.31: kupon en az minCost TL (varsayılan 60); üstüne yalnızca kârlı atlar (2.32)
         Map<String, Object> learn = altiliLearn;
         if (learn != null) { // 2.26: öğrenilen AGF düzeltmesi; 2.36: önce altılının bölgesine (yerli/yabancı) ait olan
-            Map<String, Object> region = Json.obj(Json.obj(learn.get("calibRegion")) == null ? null
-                    : Json.obj(learn.get("calibRegion")).get(AltiliLog.domestic(a) ? "yerli" : "yabancı"));
-            Map<String, Object> c = region != null && Json.bool(region, "use", false) ? region : Json.obj(learn.get("calib"));
-            in.alpha = Json.dbl(c, "alphaUse", 1);
+            double[] ab = AltiliLog.alphaBeta(learn, AltiliLog.domestic(a)); // 2.51: favori düzeltmesi de
+            in.alpha = ab[0];
+            in.beta = ab[1];
         }
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
@@ -571,6 +578,17 @@ final class Repo {
     }
 
     /**
+     * 2.51: kupon kasaya göre küçültüldüyse ayardaki tavanla kurulan kupon (defter ve karne bununla: eşik ve tarama aynı
+     * ölçüde kalsın); küçültülmediyse null. in değişir (son kullanım).
+     */
+    private static Map<String, Object> refPlan(List<String> legs, Altili.Inputs in) {
+        if (!(in.refCost > 0)) return null;
+        in.maxCost = in.refCost;
+        in.refCost = 0;
+        return Altili.plan(legs, in);
+    }
+
+    /**
      * Arayüz için son altılı okuması ({at, day, altilis: [.. + plan, devir, pool], log, inputs}); elle girilen ayaklar
      * "Elle girilen" altılısı olarak eklenir. Hiç veri yoksa ya da demodaysa null. Planlar her seferinde güncel kasa ve
      * girdilerle hesaplanır.
@@ -580,7 +598,7 @@ final class Repo {
         Settings st = ledger.settings();
         String cacheKey = (agfRaw == null ? 0 : agfRaw.hashCode()) + "|" + (altiliLogRaw == null ? 0 : altiliLogRaw.hashCode()) + "|" // 2.46: büyük defter
                 + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinHitAuto + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinHitAuto + "|" + st.altiliCapAuto + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();
@@ -621,7 +639,7 @@ final class Repo {
         Map<String, Object> stored = agfStored(), inp = altiliInputs();
         Settings ls = ledger.settings();
         Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()), ls.altiliLegMin, ls.altiliMinHit, ls.altiliMinEdge,
-                ls.altiliMinHitAuto);
+                ls.altiliMinHitAuto, ls.altiliCap, ls.kellyMultiplier);
         altiliLearn = learn; // planlar öğrenilenlerle kurulur
         List<Object> manual = Json.arr(inp.get("manual"));
         if (stored == null && manual.size() < 6) return null;
@@ -644,6 +662,8 @@ final class Repo {
             for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
             Altili.Inputs in = altiliInputsFor(key, inp, a);
             Map<String, Object> plan = Altili.plan(legs, in);
+            Map<String, Object> ref = refPlan(legs, in); // 2.51: defter (karne) tavandaki kuponla tutulur
+            if (ref != null) a.put("planRef", ref);
             // 2.42 → 2.50: karnede kuponları en iyi dönen bölge dışındaki (yerli/yabancı) altılı önerilmez
             Map<String, Object> rt = Json.obj(Json.obj(learn.get("regionTrust")) == null ? null
                     : Json.obj(learn.get("regionTrust")).get(AltiliLog.domestic(a) ? "yerli" : "yabancı"));
@@ -843,7 +863,9 @@ final class Repo {
             if (key == null || have.contains(key)) continue;
             List<String> legs = new ArrayList<>();
             for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
-            a.put("plan", Altili.plan(legs, altiliInputsFor(key, inp, a))); // bugünkü kurallarla
+            Altili.Inputs bin = altiliInputsFor(key, inp, a);
+            Map<String, Object> ref = refPlan(legs, bin); // 2.51: geriye dönük kayıt tavandaki kuponla (karne ölçüsü)
+            a.put("plan", ref != null ? ref : Altili.plan(legs, bin)); // bugünkü kurallarla
             a.put("backtest", true);
             fresh.add(a);
             keys.add(key);

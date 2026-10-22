@@ -928,9 +928,14 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
       {minHit: 0.4, hepsi: {n: 0, hits: 0, cost: 0, ret: 0, roi: 0}, yerli: {n: 0, hits: 0, cost: 0, ret: 0, roi: 0}, "yabancı": {n: 0, hits: 0, cost: 0, ret: 0, roi: 0}}]},
     table: [{lo: 0, hi: 0.1, n: 88, hits: 5, expected: 4.2, cost: 52800, ret: 16368, roi: 0.31}, {lo: 0.15, hi: 0.25, n: 27, hits: 7, expected: 5.1, cost: 16200, ret: 14256, roi: 0.88},
       {region: "yerli", n: 47, hits: 9, expected: 7.3, cost: 28200, ret: 22278, roi: 0.79}],
-    legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34,
+    legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4, banko: {n: 120, win: 0.52, agf: 0.61}}, fav: {n: 144, win: 0.38, agf: 0.34,
       groups: [{label: "Resmî 6'lı sonucundan", n: 90, win: 0.36, agf: 0.34}, {label: "Yabancı hipodrom", n: 54, win: 0.15, agf: 0.35}]},
-    calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor."},
+    calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor.",
+      beta: 0.78, betaOn: true, betaUse: 0.83, betaWhy: "AGF favoriyi abartıyor: favorinin payı düşürülüyor"},
+    holdout: {scope: "yerli", minHit: 0.1, trainN: 23, trainRoi: 1.3, n: 12, hits: 2, expected: 1.7, cost: 7200, ret: 5040, roi: 0.7, from: "2026-06-21"},
+    stakes: {km: 0.25, kasa: 2934, best: 100, rows: [{cap: 100, n: 35, hits: 4, expected: 3.1, cost: 3500, ret: 8000, roi: 2.29, growth: 0.012},
+      {cap: 600, n: 35, hits: 10, expected: 4.9, cost: 20706, ret: 24448, roi: 1.18}]},
+    capUse: 100,
     strategies: [{fraction: 0.01, budget: 20, n: 24, hits: 0, cost: 480, ret: 0, roi: 0}, {fraction: 0.03, budget: 60, n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
       {fraction: 0.06, budget: 120, n: 24, hits: 4, cost: 2880, ret: 2300, roi: 0.799}], fraction: 0.06,
     history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", notified: true, cost: 60, status: "tuttu", legs: 6, ret: 410, estimated: true,
@@ -969,6 +974,12 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu \(beklenen 4,3\) · getiri %70/);
   assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
   assert.match(k, /Eşik taraması \(6\/6 kuralı: tuttu\/kupon, dönüş\)6\/6 ≥ %10: hepsi 18\/102 %60 · yerli 9\/41 %75 · yabancı 9\/61 %506\/6 ≥ %20: hepsi 8\/30 %90 · yerli 7\/22 %110 ← en iyi · yabancı 1\/8 %35\*6\/6 ≥ %40: hepsi – · yerli – · yabancı –En iyi: en az 20 kuponla en yüksek dönüş; \* az veri\./); // 2.49–2.50
+  // 2.51: strateji özeti, son dönem sınaması, kupon büyüklüğü, banko, favori düzeltmesi
+  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113son dönem sınaması: 2\/12 tuttu · dönüş %70Önerilerim/);
+  assert.match(k, /Son dönem sınamasıilk dönemle seçilen kural: yerli, 6\/6 ≥ %10 \(23 kupon, dönüş %130\)21\.06 sonrası \(seçimde kullanılmadı\): 2\/12 tuttu \(beklenen 1,7\) · dönüş %70/);
+  assert.match(k, /Kupon büyüklüğü \(kasa 2\.934,00 TL, Kelly ×0,25\)100,00 TL: 4\/35 tuttu \(beklenen 3,1\) · dönüş %229 · kasa kupon başına \+%1,2 ← en iyi600,00 TL: 10\/35 tuttu \(beklenen 4,9\) · dönüş %118 · kasaya göre büyük/);
+  assert.match(k, /Banko \(tek atlı\) ayaklarkazandı %52 · AGF'nin verdiği %61 \(120 ayak\)/);
+  assert.match(k, /Favori düzeltmesi: favorinin payı ×0,83 \(AGF favoriyi abartıyor: favorinin payı düşürülüyor\)/);
   assert.match(k, /Oynanacak olanlar \(yerli, 6\/6 ≥ %30, en iyi\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);
   assert.match(k, /19\.10 · Keeneland ABD 1\. altılı · geriye dönük600,00 TL · tutmadı \(5\/6 ayak\)/);
   const bad = clone(s);
@@ -1066,6 +1077,9 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   assert.equal(f.$("#alt_tavan").value, "600"); // 2.35.1 varsayılanı
   assert.equal(f.$("#alt_enaztut").value, "20"); // 2.44: en az 6/6 olasılığı; 2.49: %20
   assert.equal(f.$("#alt_enaztut_oto").checked, true); // 2.49: eşik otomatik (karnedeki en iyi)
+  assert.equal(f.$("#alt_tavan_oto").checked, true); // 2.51: kupon büyüklüğü kasaya göre
+  f.$("#alt_tavan_oto").checked = false; f.$("#alt_tavan_oto").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {capAuto: false});
   f.$("#alt_enaztut_oto").checked = false; f.$("#alt_enaztut_oto").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {minHitAuto: false});
   assert.equal(f.$("#alt_enazkar").value, "10"); // 2.45: kâr kuralı
@@ -1140,6 +1154,20 @@ test("altılı: 6/6 olasılığı düşük altılı oynanmaz (en az %30)", async
   assert.match(boot(none, "#firsat").$("#altiliCard").textContent, /Bugün kurallara uyan altılı yok: hiçbir altılıda 600 TL ile 6\/6 olasılığı en az %30 değil\. Oynama\./);
   f.$("#alt_enaztut").value = "40"; f.$("#alt_enaztut").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {minHit: 0.4});
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: kupon kasaya göre küçük; tahmin edilebilirlik tavandaki kuponla", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {maxHit: true, cap: 100, budget: 100, hit: 0.05, hitRef: 0.22, refCost: 600});
+  const f = boot(s, "#firsat");
+  f.chip("İzmir 1. altılı · TJK").click();
+  assert.match(f.$("#altiliCard").textContent, /Tutma olasılığı%5,00 \(kupon kasaya göre 100,00 TL; 600,00 TL'lik kuponla %22,0\)/);
+  Object.assign(s.agf.altilis[1].plan, {lowHit: true, minHit: 0.25});
+  const g = boot(s, "#firsat");
+  assert.match(g.$$("#altiliCard ol.rank li").map((li) => li.textContent)[1], /6\/6 olasılığı %22 \(600 TL ile\) \(en az %25\), oynama/);
+  g.chip("İzmir 1. altılı · TJK").click();
+  assert.match(g.$("#altiliCard").textContent, /Bu altılıyı oynama: 600,00 TL ile 6\/6 olasılığı yalnızca %22,0 \(en az %25 isteniyor\)/);
   assert.deepEqual(f.errors, []);
 });
 

@@ -259,6 +259,8 @@ public final class Settings {
     public double altiliMinHit = 0.20; // 2.49: kullanıcı istedi: %20 (2.44: %15); otomatikte veri azken bu
     /** 2.49: 6/6 eşiği karnedeki eşik taramasının en iyisi (en az 20 doğrulanmış kuponla en yüksek dönüş); yoksa altiliMinHit. */
     public boolean altiliMinHitAuto = true;
+    /** 2.51: kupon büyüklüğü kasaya göre: karnedeki büyüklük taramasında kasanın log büyümesi en yüksek olan (en fazla altiliCap). */
+    public boolean altiliCapAuto = true;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -436,6 +438,7 @@ public final class Settings {
         m.put("altiliMinEdge", altiliMinEdge);
         m.put("altiliPlayNoEdge", altiliPlayNoEdge);
         m.put("altiliMinHitAuto", altiliMinHitAuto);
+        m.put("altiliCapAuto", altiliCapAuto);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -505,6 +508,7 @@ public final class Settings {
         s.altiliMinEdge = Json.dbl(m, "altiliMinEdge", s.altiliMinEdge);
         s.altiliPlayNoEdge = Json.bool(m, "altiliPlayNoEdge", s.altiliPlayNoEdge);
         s.altiliMinHitAuto = Json.bool(m, "altiliMinHitAuto", s.altiliMinHitAuto);
+        s.altiliCapAuto = Json.bool(m, "altiliCapAuto", s.altiliCapAuto);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
