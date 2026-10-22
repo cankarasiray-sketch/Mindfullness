@@ -3,6 +3,7 @@ package app.bilincli.core;
 import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -39,7 +40,7 @@ public final class AltiliLog {
     /** 2.50: taramanın bölgeleri; eşitlikte geniş olan (önce "hepsi"). */
     static final String[] SCOPES = {"hepsi", "yerli", "yabancı"};
     /** 2.51: kupon büyüklüğü taraması (TL; ayardaki tavanla birlikte, onu aşmadan). */
-    static final double[] STAKES = {100, 200, 300, 600};
+    static final double[] STAKES = {100, 200, 300, 400, 500, 600}; // 2.54: 400, 500 (300 ile 600 arası boştu)
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
     static final double PRIOR_LEGS = 200;
     /** Karşılaştırılan bütçeler (2.29: kullanıcının %7'si dahil; bilgi için, bütçe ayardan). */
@@ -110,6 +111,7 @@ public final class AltiliLog {
             double[] need = kasaNeed(outs); // 2.52: kasa ne kadar olmalı
             if (need != null) {
                 row.put("kasaMin", need[0]);
+                row.put("kasaNeed", need[0] / Math.max(1e-9, km)); // 2.54: Kelly payıyla oynama kararıyla aynı: kasa bunun üstündeyse büyür
                 row.put("kasaKelly", need[1]);
                 row.put("kasaRec", need[1] / Math.max(1e-9, km));
             }
@@ -375,6 +377,14 @@ public final class AltiliLog {
 
     /** Okunan altılıları (planlarıyla) deftere yazar; sonuçlanmışlara dokunmaz. Gün: altılının günü, yoksa bugün. */
     public static void record(Map<String, Object> store, String today, List<Object> altilis) {
+        record(store, today, altilis, null);
+    }
+
+    /**
+     * now (2.54): 1. ayağı başlamış altılının kaydı donar (başladıktan sonraki okuma deftere girmez: sonuç bilgisi
+     * sızmasın); başladıktan sonra ilk kez okunan "late" işaretlenir, karnede sayılmaz. Geriye dönük kayıtlar ve null: donma yok.
+     */
+    public static void record(Map<String, Object> store, String today, List<Object> altilis, Instant now) {
         List<Object> recs = records(store);
         for (Object o : altilis) {
             // 2.51: kupon kasaya göre küçültüldüyse defter tavandaki kuponla (planRef): eşik ve taramalar aynı ölçüde
@@ -391,12 +401,30 @@ public final class AltiliLog {
                 recs.add(r);
             }
             if (r.get("result") != null) continue;
+            Instant st = now == null || Json.bool(a, "backtest", false) ? null : startOf(a, day);
+            if (st != null && !now.isBefore(st)) {
+                if (r.get("plan") != null) continue; // 2.54: başlamış: kayıt donar
+                r.put("late", true);
+            }
             for (String f : new String[] {"label", "city", "cityId", "no", "source", "races", "backtest"}) if (a.get(f) != null) r.put(f, a.get(f));
             r.put("legs", new ArrayList<>(legs.subList(0, 6)));
             r.put("plan", coupon(plan));
         }
         String oldest = LocalDate.parse(today).minusDays(KEEP_DAYS).toString();
         for (int i = recs.size() - 1; i >= 0; i--) if (String.valueOf(Json.obj(recs.get(i)).get("day")).compareTo(oldest) < 0) recs.remove(i);
+    }
+
+    /** 2.54: altılının 1. ayak saati (Türkiye; "start" ya da ilk koşunun saati); bilinmiyorsa null. */
+    static Instant startOf(Map<String, Object> a, String day) {
+        String t = Json.str(a, "start");
+        List<Object> rs = Json.arr(a.get("races"));
+        if ((t == null || !t.matches("\\d{2}:\\d{2}")) && !rs.isEmpty()) t = Json.str(Json.obj(rs.get(0)), "time");
+        if (t == null || !t.matches("\\d{2}:\\d{2}")) return null;
+        try {
+            return LocalDate.parse(day).atTime(LocalTime.parse(t)).atOffset(Fmt.TR).toInstant();
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** Bildirilen kupon dondurulur (bir kez): "önerilerim ne yaptı" bunun üzerinden. */
@@ -819,10 +847,14 @@ public final class AltiliLog {
             double minEdge, boolean auto, double cap, double km) {
         String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
         List<Map<String, Object>> settled = new ArrayList<>();
-        int pending = 0;
+        int pending = 0, late = 0;
         for (Object o : records(store)) {
             Map<String, Object> r = Json.obj(o);
             if (String.valueOf(r.get("day")).compareTo(from) < 0) continue;
+            if (Json.bool(r, "late", false)) { // 2.54: 1. ayak başladıktan sonra kaydedilmiş: sayılmaz
+                late++;
+                continue;
+            }
             Map<String, Object> res = Json.obj(r.get("result"));
             if (res == null) pending++;
             else if (Json.arr(res.get("winners")).size() == 6) settled.add(r);
@@ -996,6 +1028,7 @@ public final class AltiliLog {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("settled", (long) settled.size());
         if (dup > 0) out.put("duplicates", (long) dup); // 2.53
+        if (late > 0) out.put("late", (long) late); // 2.54
         if (inconsistent + unverified > 0) { // 2.38
             out.put("inconsistent", (long) inconsistent);
             out.put("unverified", (long) unverified);
@@ -1164,6 +1197,11 @@ public final class AltiliLog {
                 c.put("cost", x[2]);
                 c.put("won", x[3] > 0);
                 c.put("ret", x[4]);
+                Map<String, Object> res = Json.obj(r.get("result")); // 2.54: denetim için kazananlar, ikramiye ve AGF tutarlılığı
+                c.put("winners", res.get("winners"));
+                c.put("payout", Json.dbl(res, "payout", 0));
+                Double ratio = payoutRatio(r, res, unit);
+                if (ratio != null) c.put("ratio", ratio);
                 list.add(c);
             }
             rule.put("list", list);

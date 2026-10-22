@@ -350,6 +350,12 @@ bildirim olarak gelir.
   (3) Karnede kurala uyan kuponlar tek tek (gün, altılı, kaynak, 6/6, bedel, sonuç). (4) Kupon büyüklüğü taramasında hiçbir
   büyüklükte kasa büyümüyorsa en küçük kupona inilmez (100 TL'lik kuponlar 35'te hiç tutmamıştı): kupon tavanda kalır, altılı
   "kasa yetersiz" diye önerilmez, gereken kasa yazılır; "kasaya göre otomatik" kapalıysa tavandaki kupon oynanır.
+- **2.54: defter 1. ayakta donar, tutarlı kasa kuralı.** (1) Günün altılıları her AGF okumasında deftere yeniden yazılıyordu,
+  yarış başladıktan sonra da: başlamış altılının kaydı artık değişmez; başladıktan sonra ilk kez okunan "geç" işaretlenir ve
+  karnede sayılmaz (sonuç bilgisi sızmasın). (2) Gerekli kasa = kasanın büyüdüğü en az kasa / Kelly çarpanı: oynama kararıyla
+  aynı ölçü (önce gösterilen "en az" ile karar farklıydı); önerilen kasa aynı. (3) Kupon büyüklüğü basamakları 100–600 TL
+  (400 ve 500 eklendi). (4) Yazı hataları ("en küçüğü kullanılıyor"; çift "kasa yetersiz"). (5) Kurala uyan kuponlarda
+  kazananlar ve ikramiye–AGF oranı; liste paylaşılabilir (denetim için).
 
 ## Beraberlik fırsatları (2.17)
 

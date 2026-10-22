@@ -682,8 +682,8 @@ final class Repo {
                 plan.put("kasa", stk.get("kasa"));
                 for (Object o2 : Json.arr(stk.get("rows"))) {
                     Map<String, Object> row = Json.obj(o2);
-                    if (Math.abs(Json.dbl(row, "cap", 0) - ls.altiliCap) < 1e-9 && row.get("kasaMin") != null) {
-                        plan.put("kasaMin", row.get("kasaMin"));
+                    if (Math.abs(Json.dbl(row, "cap", 0) - ls.altiliCap) < 1e-9 && row.get("kasaNeed") != null) {
+                        plan.put("kasaNeed", row.get("kasaNeed"));
                         plan.put("kasaRec", row.get("kasaRec"));
                     }
                 }
@@ -790,7 +790,7 @@ final class Repo {
         if (v == null) return;
         synchronized (altiliLogLock) {
             Map<String, Object> log = altiliLog();
-            AltiliLog.record(log, Fmt.dayKey(Instant.now()), Json.arr(v.get("altilis")));
+            AltiliLog.record(log, Fmt.dayKey(Instant.now()), Json.arr(v.get("altilis")), Instant.now()); // 2.54: başlamış altılı donar
             saveAltiliLog(log);
         }
     }

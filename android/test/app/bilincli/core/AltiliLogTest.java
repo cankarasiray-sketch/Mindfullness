@@ -258,6 +258,40 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void recordFreezesWhenFirstLegStarts() {
+        // 2.54: 1. ayak başladıktan sonraki okuma deftere girmez; başladıktan sonra ilk kez okunan "geç" sayılmaz
+        Map<String, Object> store = new LinkedHashMap<>();
+        Map<String, Object> a = altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS);
+        a.put("start", "14:30");
+        Instant before = Instant.parse("2026-10-21T11:00:00Z"), after = Instant.parse("2026-10-21T11:45:00Z"); // 14:00 ve 14:45 TR
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(a), before);
+        Object legs = rec(store, "tjk/2026-10-21/3/1").get("legs");
+        Map<String, Object> changed = altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, Arrays.asList("5:90 1:10", "7:90 2:10", "5:90 3:10", "1:90 4:10", "5:90 6:10", "2:90 7:10"));
+        changed.put("start", "14:30");
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(changed), after);
+        assertEquals(legs, rec(store, "tjk/2026-10-21/3/1").get("legs")); // donmuş
+        assertNull(rec(store, "tjk/2026-10-21/3/1").get("late"));
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(changed), before); // başlamadan: güncellenir
+        assertEquals(changed.get("legs"), rec(store, "tjk/2026-10-21/3/1").get("legs"));
+        Map<String, Object> b = altili("tjk/2026-10-21/4/1", "Bursa", 4, 1, LEGS);
+        b.put("races", Arrays.<Object>asList(new LinkedHashMap<String, Object>(java.util.Collections.singletonMap("time", "13:00"))));
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(b), after);
+        assertEquals(Boolean.TRUE, rec(store, "tjk/2026-10-21/4/1").get("late")); // başladıktan sonra ilk kez okundu
+        double real = 0.4 * 0.5 * 0.34 * 0.6 * 0.45 * 0.79;
+        for (String k : new String[] {"tjk/2026-10-21/3/1", "tjk/2026-10-21/4/1"}) {
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("winners", new ArrayList<Object>(Arrays.asList("5", "7", "5", "1", "5", "2")));
+            res.put("payout", 0.73 / real);
+            res.put("from", "kombinasyon");
+            rec(store, k).put("result", res);
+        }
+        Map<String, Object> an = AltiliLog.analyze(store, 1, 2000, TODAY);
+        assertEquals(1L, an.get("late"));
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(a)); // zamansız (geriye dönük): donma yok, sonuçlanan değişmez
+        assertEquals(changed.get("legs"), rec(store, "tjk/2026-10-21/3/1").get("legs"));
+    }
+
+    @Test
     public void bankrollNeed() {
         // 2.52: 10 kupon × 100 TL, 3'ü 500 TL döndü: tam Kelly payı (4 × 0,3 − 0,7) / 4 = %12,5 → kasa 800 TL
         List<double[]> outs = new ArrayList<>();
@@ -519,15 +553,16 @@ public class AltiliLogTest {
         Map<String, Object> sz = AltiliLog.analyze(many, 1, 100000, TODAY, 0, 0.15, 0.10, true, 600, 0.25);
         Map<String, Object> stk = Json.obj(sz.get("stakes"));
         List<Object> srows = Json.arr(stk.get("rows"));
-        assertEquals(4, srows.size());
+        assertEquals(6, srows.size()); // 2.54: 100–600 TL (400, 500 dahil)
         for (Object o : srows) assertEquals(Json.obj(o).get("n"), Json.obj(o).get("hits"));
         assertEquals(20L, Json.obj(srows.get(0)).get("n"));
-        assertTrue((Double) Json.obj(srows.get(3)).get("cost") > (Double) Json.obj(srows.get(0)).get("cost"));
+        assertTrue((Double) Json.obj(srows.get(5)).get("cost") > (Double) Json.obj(srows.get(0)).get("cost"));
         assertEquals(100.0, (Double) stk.get("best"), 1e-9);
         Map<String, Object> s100 = Json.obj(srows.get(0)); // 2.52: kasa ihtiyacı (hepsi tuttu: en büyük bedel kadar)
         assertTrue((Double) s100.get("kasaMin") <= (Double) s100.get("kasaKelly") + 1e-6);
         assertEquals((Double) s100.get("kasaKelly") / 0.25, (Double) s100.get("kasaRec"), 1e-6);
-        assertEquals(null, Json.obj(srows.get(3)).get("kasaMin")); // 600 TL'lik kupon ikramiyeden pahalı: kârlı değil
+        assertEquals((Double) s100.get("kasaMin") / 0.25, (Double) s100.get("kasaNeed"), 1e-6); // 2.54: Kelly payıyla gerekli
+        assertEquals(null, Json.obj(srows.get(5)).get("kasaMin")); // 600 TL'lik kupon ikramiyeden pahalı: kârlı değil
         assertEquals(100.0, (Double) sz.get("capUse"), 1e-9);
         assertEquals(null, stk.get("neg"));
         // kasa küçük: kayıp Kelly payını aşıyor, hiçbir büyüklükte kasa büyümüyor: en küçüğü
