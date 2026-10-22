@@ -565,7 +565,7 @@ final class Repo {
     Map<String, Object> agfView() {
         if (isDemo()) return null;
         Settings st = ledger.settings();
-        String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
+        String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
                 + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
@@ -632,6 +632,17 @@ final class Repo {
             a.put("unit", in.unit);
         }
         v.put("altilis", list);
+        Map<String, Object> live = altiliLiveStored(); // 2.34: ayak sonuçları
+        if (live != null && Fmt.dayKey(Instant.now()).equals(Json.str(live, "day"))) {
+            Map<String, Object> byKeyLive = Json.obj(live.get("byKey"));
+            for (Object o : list) {
+                Map<String, Object> a = Json.obj(o);
+                Object w = byKeyLive == null ? null : byKeyLive.get(Json.str(a, "key"));
+                if (w != null) a.put("legWinners", w);
+            }
+            v.put("liveAt", live.get("at"));
+            v.put("liveLog", live.get("log"));
+        }
         // 2.24: günün en mantıklı kuponu (başlamış altılılar hariç)
         String clock = Instant.now().atOffset(Fmt.TR).toLocalTime().toString().substring(0, 5);
         List<Map<String, Object>> plans = new ArrayList<>();
@@ -980,6 +991,119 @@ final class Repo {
                 + Texts.altiliCoupon(plan, Json.arr(a.get("races"))) + "\n" + Texts.altiliSummary(plan)
                 + (play ? "\n1. ayak başlamadan oyna. Garanti değil." : "\nOrtalamada kâr beklenmiyor; oynayacaksan günün en mantıklı kuponu bu, 1. ayak başlamadan.");
         return new String[] {title, body};
+    }
+
+    /** 2.34: bugünün ayak sonuçları: {day, at, byKey: {anahtar: [6 kazanan ya da null]}, log}. */
+    private Map<String, Object> altiliLiveStored() {
+        try {
+            String raw = prefs.getString("altiliLive", "");
+            return raw.isEmpty() ? null : Json.parseObject(raw);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Ayak sonucu, koşu saatinden bu kadar sonra okunur (koşu ~2 dk, sonuç yayını birkaç dk). */
+    static final long ALTILI_LIVE_AFTER_S = 12 * 60;
+    /** Sonuç gelmeyen ayak bu kadar sonra bırakılır; okumalar arası en az bu kadar. */
+    static final long ALTILI_LIVE_GIVEUP_S = 3 * 3600, ALTILI_LIVE_GAP_S = 10 * 60;
+
+    /** k. ayağın koşu saati (Türkiye; gece yarısını geçen koşu ertesi gün). */
+    private static Instant raceTime(Map<String, Object> a, int k, String day) {
+        List<Object> rs = Json.arr(a.get("races"));
+        Instant start = startOf(a, day);
+        if (start == null || k >= rs.size()) return null;
+        String t = Json.str(Json.obj(rs.get(k)), "time");
+        if (t == null || !t.matches("\\d{2}:\\d{2}")) return null;
+        Instant at = java.time.LocalDate.parse(day).atTime(java.time.LocalTime.parse(t)).atOffset(Fmt.TR).toInstant();
+        return at.isBefore(start) ? at.plusSeconds(86400) : at;
+    }
+
+    /** 2.34: sonraki ayak sonucu okuması: bugün koşan altılılarda sonucu bilinmeyen ayakların koşusundan 12 dk sonra. */
+    Instant altiliLiveTime() {
+        if (isDemo() || !ledger.settings().altiliAuto) return null;
+        Instant now = Instant.now();
+        String today = Fmt.dayKey(now);
+        Map<String, Object> v = agfView(), live = altiliLiveStored();
+        Map<String, Object> byKey = live != null && today.equals(Json.str(live, "day")) ? Json.obj(live.get("byKey")) : null;
+        Instant next = null;
+        for (Object o : Json.arr(v == null ? null : v.get("altilis"))) {
+            Map<String, Object> a = Json.obj(o);
+            String day = Json.str(a, "day") != null ? Json.str(a, "day") : today;
+            if (!today.equals(day)) continue;
+            List<Object> known = Json.arr(byKey == null ? null : byKey.get(Json.str(a, "key")));
+            for (int k = 0; k < 6; k++) {
+                if (k < known.size() && known.get(k) != null) continue;
+                Instant t = raceTime(a, k, day);
+                if (t == null) continue;
+                t = t.plusSeconds(ALTILI_LIVE_AFTER_S);
+                if (t.plusSeconds(ALTILI_LIVE_GIVEUP_S).isBefore(now)) continue;
+                if (next == null || t.isBefore(next)) next = t;
+            }
+        }
+        if (next == null || next.isAfter(now)) return next;
+        long last = prefs.getLong("altiliLiveAt", 0);
+        Instant again = Instant.ofEpochMilli(last).plusSeconds(ALTILI_LIVE_GAP_S);
+        return again.isAfter(now) ? again : now;
+    }
+
+    /**
+     * 2.34: koşan altılıların ayak sonuçları TJK sonuç sayfasından (yalnızca o şehirler); tamamlanan altılı deftere
+     * işlenir. force: elle ("Altılıyı şimdi oku"), zamanı beklenmez. Yeni öğrenilen ayak sayısı.
+     */
+    int altiliLive(boolean force, Daily.Progress progress) {
+        if (isDemo()) return 0;
+        Instant now = Instant.now();
+        if (!force) {
+            Instant due = altiliLiveTime();
+            if (due == null || due.isAfter(now.plusSeconds(60))) return 0;
+        }
+        String today = Fmt.dayKey(now);
+        Map<String, Object> v = agfView(), live = altiliLiveStored();
+        if (live == null || !today.equals(Json.str(live, "day"))) {
+            live = new LinkedHashMap<>();
+            live.put("day", today);
+        }
+        Map<String, Object> byKey = Json.obj(live.get("byKey")) != null ? Json.obj(live.get("byKey")) : new LinkedHashMap<String, Object>();
+        List<Map<String, Object>> running = new ArrayList<>();
+        java.util.Set<Integer> cities = new java.util.HashSet<>();
+        boolean all = false;
+        for (Object o : Json.arr(v == null ? null : v.get("altilis"))) {
+            Map<String, Object> a = Json.obj(o);
+            String day = Json.str(a, "day") != null ? Json.str(a, "day") : today;
+            Instant start = startOf(a, day);
+            if (!today.equals(day) || "manual".equals(Json.str(a, "key")) || (start == null ? !force : start.isAfter(now))) continue;
+            List<Object> known = Json.arr(byKey.get(Json.str(a, "key")));
+            if (known.size() == 6 && !known.contains(null)) continue;
+            running.add(a);
+            if ("TJK".equals(Json.str(a, "source")) && a.get("cityId") != null) cities.add((int) Json.lng(a, "cityId", 0));
+            else all = true;
+        }
+        prefs.edit().putLong("altiliLiveAt", now.toEpochMilli()).apply();
+        if (running.isEmpty()) return 0;
+        Map<String, Object> res = Tjk.results(new AndroidHttp(app), java.time.LocalDate.parse(today), progress, all ? null : cities);
+        int learned = 0;
+        for (Map<String, Object> a : running) {
+            String key = Json.str(a, "key");
+            List<Object> fresh = AltiliLog.legWinners(a, AltiliLog.cityOf(a, Json.arr(res.get("cities"))));
+            List<Object> old = Json.arr(byKey.get(key)), merged = new ArrayList<>();
+            for (int k = 0; k < 6; k++) {
+                Object w = fresh.get(k) != null ? fresh.get(k) : k < old.size() ? old.get(k) : null;
+                if (w != null && (k >= old.size() || old.get(k) == null)) learned++;
+                merged.add(w);
+            }
+            byKey.put(key, merged);
+        }
+        live.put("byKey", byKey);
+        live.put("at", now.toString());
+        live.put("log", res.get("log"));
+        prefs.edit().putString("altiliLive", Json.write(live)).apply();
+        Settings s = ledger.settings();
+        synchronized (altiliLogLock) { // tamamlanan altılılar karneye hemen
+            Map<String, Object> log = altiliLog();
+            if (AltiliLog.settle(log, today, res, s.altiliUnit, s.altiliTakeout, s.altiliTax, today, now) > 0) saveAltiliLog(log);
+        }
+        return learned;
     }
 
     /** Kurulu sürümün numarası (güncellemeden sonra Zirve kaydını yenilemek için). */
@@ -1628,6 +1752,8 @@ final class Repo {
         if (c != null && (next == null || c.isBefore(next))) next = c;
         Instant d = altiliPreRaceTime(); // 2.28: altılı kuponu yarıştan 30 dk önce
         if (d != null && (next == null || d.isBefore(next))) next = d.isAfter(now) ? d : now.plusSeconds(30);
+        Instant e = altiliLiveTime(); // 2.34: ayak sonuçları koşudan 12 dk sonra
+        if (e != null && (next == null || e.isBefore(next))) next = e.isAfter(now) ? e : now.plusSeconds(30);
         if (next != null && !next.isAfter(now)) {
             // vadesi gelmiş iş: hemen. Son 10 dk içinde zaten denendiyse (ağ hatası, kapanış oranı
             // yayında yok) 10 dk sonra; böylece döngüye girip kredi harcamaz.

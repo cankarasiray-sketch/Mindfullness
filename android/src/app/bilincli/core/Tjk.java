@@ -912,38 +912,108 @@ public final class Tjk {
         return out;
     }
 
-    /** Koşu tabloları: başlıkta at no sütunu olanlar; kazanan, sıra sütununda 1 olan (sıra sütunu yoksa ilk satır). */
+    /**
+     * Koşu tabloları: {no?, runners, winner}. 2.34: koşu numarası tablodan önceki metindeki son "N. Koşu"; at no başlıktaki
+     * "N"/"No"/"At No" sütunu, başlık yoksa 1–30 arası farklı numaralar taşıyan, sıra gibi artmayan (1, 2, 3…) en soldaki
+     * sütun ("5A" eküri, "5 KARAYEL" de olur). Kazanan: sıra sütununda 1 olan; sıra sütunu yoksa ilk satır (sonuç tabloları
+     * bitiriş sırasıyla).
+     */
     static List<Map<String, Object>> raceResults(String html) {
+        String clean = stripScripts(html);
         List<Map<String, Object>> out = new ArrayList<>();
-        for (String table : innerTables(stripScripts(html))) {
-            String[] rows = table.split("(?i)<tr\\b");
-            int horseCol = -1, posCol = -1;
-            List<Object> runners = new ArrayList<>();
-            String winner = null, first = null;
-            for (int r = 1; r < rows.length; r++) {
-                String[] cells = rows[r].split("(?i)<t[dh]\\b");
-                List<String> ts = new ArrayList<>();
-                for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
-                if (horseCol < 0) {
-                    for (int c = 0; c < ts.size(); c++) {
-                        if (HORSE_HEADER.matcher(ts.get(c)).matches()) horseCol = c;
-                        else if (posCol < 0 && POS_HEADER.matcher(ts.get(c)).matches()) posCol = c;
-                    }
-                    continue;
-                }
-                if (horseCol >= ts.size() || !NUMBER_CELL.matcher(ts.get(horseCol)).matches()) continue;
-                String no = String.valueOf(Integer.parseInt(ts.get(horseCol)));
-                runners.add(no);
-                if (first == null) first = no;
-                if (posCol >= 0 && posCol < ts.size() && ts.get(posCol).matches("0*1\\.?")) winner = no;
-            }
-            if (runners.size() < 2) continue;
-            Map<String, Object> race = new LinkedHashMap<>();
-            race.put("runners", runners);
-            race.put("winner", winner != null ? winner : posCol < 0 ? first : null);
+        int prev = 0, no = 0;
+        for (int[] span : innerTableSpans(clean)) {
+            Matcher m = RACE_NO.matcher(text(clean.substring(prev, span[0])));
+            while (m.find()) no = Integer.parseInt(m.group(1));
+            prev = span[1];
+            Map<String, Object> race = raceTable(clean.substring(span[0], span[1]));
+            if (race == null) continue;
+            if (no > 0) race.put("no", (long) no);
             out.add(race);
         }
         return out;
+    }
+
+    private static String leadNum(String cell) {
+        Matcher m = LEAD_NUM.matcher(cell);
+        if (!m.matches()) return null;
+        int n = Integer.parseInt(m.group(1));
+        return n >= 1 && n <= 30 ? String.valueOf(n) : null;
+    }
+
+    private static Map<String, Object> raceTable(String table) {
+        String[] rows = table.split("(?i)<tr\\b");
+        int horseCol = -1, posCol = -1, width = 0;
+        boolean header = false;
+        List<List<String>> data = new ArrayList<>();
+        for (int r = 1; r < rows.length; r++) {
+            String[] cells = rows[r].split("(?i)<t[dh]\\b");
+            List<String> ts = new ArrayList<>();
+            for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
+            if (!header) {
+                int h = -1, p = -1;
+                for (int c = 0; c < ts.size(); c++) {
+                    if (h < 0 && HORSE_HEADER.matcher(ts.get(c)).matches()) h = c;
+                    else if (p < 0 && POS_HEADER.matcher(ts.get(c)).matches()) p = c;
+                }
+                if (h >= 0 || p >= 0) { // başlık satırı (önceki satırlar başlık üstü yazı)
+                    header = true;
+                    horseCol = h;
+                    posCol = p;
+                    data.clear();
+                    continue;
+                }
+            }
+            data.add(ts);
+            width = Math.max(width, ts.size());
+        }
+        if (horseCol < 0) {
+            for (int c = 0; c < width && horseCol < 0; c++) {
+                if (c == posCol) continue;
+                List<String> col = new ArrayList<>();
+                int rowsWith = 0;
+                for (List<String> ts : data) {
+                    if (c >= ts.size()) continue;
+                    rowsWith++;
+                    String n = leadNum(ts.get(c));
+                    if (n != null) col.add(n);
+                }
+                if (col.size() < 2 || col.size() < rowsWith * 0.7 || new HashSet<>(col).size() != col.size()) continue;
+                boolean rising = true;
+                for (int i = 0; i < col.size() && rising; i++) rising = col.get(i).equals(String.valueOf(i + 1));
+                if (rising) { // 1, 2, 3…: bitiriş sırası
+                    if (posCol < 0) posCol = c;
+                    continue;
+                }
+                horseCol = c;
+            }
+        }
+        if (horseCol < 0) return null;
+        List<Object> runners = new ArrayList<>();
+        String winner = null, first = null;
+        for (List<String> ts : data) {
+            if (horseCol >= ts.size()) continue;
+            String no = leadNum(ts.get(horseCol));
+            if (no == null) continue;
+            runners.add(no);
+            if (first == null) first = no;
+            if (posCol >= 0 && posCol < ts.size() && ts.get(posCol).matches("0*1\\.?")) winner = no;
+        }
+        if (runners.size() < 2) return null;
+        Map<String, Object> race = new LinkedHashMap<>();
+        race.put("runners", runners);
+        race.put("winner", winner != null ? winner : first);
+        return race;
+    }
+
+    /** Okuma ayrıntısı için: "1→5, 2→7" (koşu → kazanan). */
+    private static String winnersText(List<Map<String, Object>> races) {
+        StringBuilder b = new StringBuilder();
+        for (Map<String, Object> r : races) {
+            if (r.get("winner") == null) continue;
+            b.append(b.length() == 0 ? "" : ", ").append(r.get("no") != null ? r.get("no") + "→" : "").append(r.get("winner"));
+        }
+        return b.toString();
     }
 
     /**
@@ -951,6 +1021,11 @@ public final class Tjk {
      * sayfasından şehirler, sonra her şehrin sonuç sayfası okunur. İstisna fırlatmaz.
      */
     public static Map<String, Object> results(Http http, LocalDate day, Daily.Progress progress) {
+        return results(http, day, progress, null);
+    }
+
+    /** 2.34: only boş değilse yalnızca bu şehirler (canlı ayak sonuçları için az sayfa). */
+    public static Map<String, Object> results(Http http, LocalDate day, Daily.Progress progress, Set<Integer> only) {
         List<Object> log = new ArrayList<>(), cities = new ArrayList<>();
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("day", day.toString());
@@ -971,16 +1046,26 @@ public final class Tjk {
         }
         int requests = 0;
         for (Map.Entry<Integer, String[]> c : links.entrySet()) {
+            if (only != null && !only.isEmpty() && !only.contains(c.getKey())) continue;
             if (++requests > MAX_REQUESTS) break;
             step(progress, c.getValue()[0] + " sonuçları okunuyor…");
-            String body;
-            try {
-                body = http.get(c.getValue()[1], headers()).body;
-            } catch (Http.ProviderException e) {
-                log.add(c.getValue()[0] + ": " + shortMessage(e.getMessage()));
-                continue;
+            String body = null;
+            List<Map<String, Object>> combos = new ArrayList<>(), races = new ArrayList<>();
+            // 2.34: şehir bağlantısı sayfa iskeleti olabilir (10 KB, tablosuz): şehir sekmesinin adresi de denenir
+            String[] urls = {c.getValue()[1], programAlternative(c.getValue()[1])};
+            for (int i = 0; i < urls.length; i++) {
+                if (urls[i] == null || !combos.isEmpty() || !races.isEmpty()) continue;
+                try {
+                    String b = http.get(urls[i], headers()).body;
+                    if (i > 0) requests++;
+                    body = b;
+                    combos = combos(b);
+                    races = raceResults(b);
+                } catch (Http.ProviderException e) {
+                    if (body == null) log.add(c.getValue()[0] + ": " + shortMessage(e.getMessage()));
+                }
             }
-            List<Map<String, Object>> combos = combos(body), races = raceResults(body);
+            if (body == null) continue;
             Map<String, Object> city = new LinkedHashMap<>();
             city.put("cityId", c.getKey());
             city.put("city", c.getValue()[0]);
@@ -988,6 +1073,7 @@ public final class Tjk {
             city.put("races", new ArrayList<Object>(races));
             cities.add(city);
             log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu, " + races.size() + " koşu"
+                    + (races.isEmpty() ? "" : " (kazananlar " + winnersText(races) + ")")
                     + (combos.isEmpty() && races.isEmpty() ? " (" + excerpt(body) + ")" : ""));
         }
         return out;

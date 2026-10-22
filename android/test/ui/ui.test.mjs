@@ -1051,6 +1051,27 @@ test("altılı: bütçeyle en yüksek tutma (320 TL'ye kadar, para önce zayıf 
   assert.deepEqual(f.errors, []);
 });
 
+test("altılı: ayak sonuçları (kazanan ✓/✗, özet, başlamış çipte)", async () => {
+  const s = altiliState();
+  s.agf.day = "2026-10-21"; s.now = "2026-10-21T18:30:00Z"; s.agf.liveAt = "2026-10-21T18:25:00Z"; s.agf.liveLog = ["İstanbul: 0 altılı sonucu, 3 koşu (kazananlar 3→2, 4→2, 5→6)"];
+  Object.assign(s.agf.altilis[0], {day: "2026-10-21", start: "14:30", legWinners: ["2", "2", "6", null, null, null]});
+  const f = boot(s, "#firsat");
+  const chip = f.$$("button").map((b) => b.textContent.trim()).find((x) => x.startsWith("İstanbul 3–8. koşu"));
+  assert.match(chip, /· başladı · 2\/3 ayak/);
+  f.chip("İstanbul 3–8. koşu · Bilyoner").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /1\. ayak \(3\. koşu · 14:30\): 2, 1 \(%100\) · kazanan 2 ✓/);
+  assert.match(card, /3\. ayak \(5\. koşu · 15:30\): 5, 3 \(%60\) · kazanan 6 ✗/);
+  assert.doesNotMatch(card, /4\. ayak \(6\. koşu · 16:00\): 4 \(%55\) · kazanan/);
+  assert.match(card, /Ayak sonuçları2\/3 ayak tuttu: altılı yattı · kalan 3 ayak \(sonuçlar 21:25\)/);
+  assert.match(card, /Ayak sonuçları \(21:25\)\s+İstanbul: 0 altılı sonucu, 3 koşu \(kazananlar 3→2, 4→2, 5→6\)/);
+  s.agf.altilis[0].legWinners = ["2", "2", "5", "4", "1", "2"];
+  const g = boot(s, "#firsat");
+  g.chip("İstanbul 3–8. koşu · Bilyoner").click();
+  assert.match(g.$("#altiliCard").textContent, /Ayak sonuçları6\/6: altılı tuttu/);
+  assert.deepEqual(f.errors, []);
+});
+
 test("altılı: 1. ayağı başlamış altılı işaretlenir, sona gider", async () => {
   const s = altiliState();
   s.agf.day = "2026-10-21";

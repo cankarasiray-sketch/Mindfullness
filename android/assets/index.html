@@ -796,7 +796,10 @@ function altiliKarne(L, sl) {
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
   return html + "</div>";
 }
-function altiliShare() { act("shareText", {text: "At yarışı okuma ayrıntısı (" + S.agf.at + ")\n" + (S.agf.log || []).join("\n")}, true); }
+function altiliShare() {
+  act("shareText", {text: "At yarışı okuma ayrıntısı (" + S.agf.at + ")\n" + (S.agf.log || []).join("\n")
+    + (S.agf.liveLog && S.agf.liveLog.length ? "\nAyak sonuçları (" + S.agf.liveAt + ")\n  " + S.agf.liveLog.join("\n  ") : "")}, true);
+}
 /** 2.27: yanlış koşuya oynanmasın: altılının hangi koşulardan oluştuğu ya da bilinmediği uyarısı. */
 function altiliRaceNote(a) {
   var rs = a.races || [], first = rs[0] || {}, last = rs[5] || {};
@@ -807,6 +810,25 @@ function altiliRaceNote(a) {
   if (rs.length === 6 && first.time) return '<p class="small"><b>Koşular:</b> 1. ayak ' + esc(first.time) + ". Bilyoner'de saatleri kontrol et.</p>";
   return '<p class="small muted">Koşu numaraları ve saatleri okunamadı: Bilyoner\'de altılının 1. ayağının hangi koşu olduğunu kontrol et.'
     + (a.racesWhy ? "<br>Neden: " + esc(a.racesWhy) : "") + "</p>";
+}
+/** 2.34: ayak sonuçları özeti: kaç ayak koştu, kaçı tuttu, altılı tuttu mu. */
+function altiliLegsStatus(a) {
+  var ws = a.legWinners || [], legs = (a.plan || {}).legs || [], run = 0, ok = 0;
+  ws.forEach(function (w, k) {
+    if (w == null || !legs[k]) return;
+    run++;
+    if (legs[k].horses.map(String).indexOf(String(w)) >= 0) ok++;
+  });
+  return {run: run, ok: ok};
+}
+function altiliLegsDone(a) {
+  var s = altiliLegsStatus(a);
+  if (!s.run) return "";
+  var at = S.agf && S.agf.liveAt ? " (sonuçlar " + esc(hm(S.agf.liveAt)) + ")" : "";
+  var text = s.run === 6 ? (s.ok === 6 ? '<b class="pos">6/6: altılı tuttu</b>' : '<b class="neg">' + s.ok + "/6 ayak tuttu: altılı tutmadı</b>")
+    : s.ok < s.run ? '<b class="neg">' + s.ok + "/" + s.run + " ayak tuttu: altılı yattı</b> · kalan " + (6 - s.run) + " ayak"
+    : '<b class="pos">' + s.ok + "/" + s.run + " ayak tuttu</b> · kalan " + (6 - s.run) + " ayak";
+  return item("Ayak sonuçları", text + at);
 }
 /** 2.33: 6 ayağın hepsi ve tam 5 ayak (biri yatar) olasılığı, en zayıf ayak. */
 function altiliRisk(r) {
@@ -831,8 +853,11 @@ function altiliPlanHtml(a) {
       : r.legMin ? " (her ayak en az %" + num(r.legMin * 100, 0) + ")" : ""),
       r.legs.map(function (l, k) {
         var rc = (a.races || [])[k] || {}, race = (rc.no ? rc.no + ". koşu" : "") + (rc.time ? (rc.no ? " · " : "") + rc.time : "");
-        return (k + 1) + ". ayak" + (race ? ' <span class="muted">(' + esc(race) + ")</span>" : "") + ": <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")";
+        var w = (a.legWinners || [])[k], hit = w != null && l.horses.map(String).indexOf(String(w)) >= 0; // 2.34: ayak sonucu
+        return (k + 1) + ". ayak" + (race ? ' <span class="muted">(' + esc(race) + ")</span>" : "") + ": <b>" + esc(l.horses.join(", ")) + "</b> (%" + num(l.share * 100, 0) + ")"
+          + (w != null ? ' · <b class="' + (hit ? "pos" : "neg") + '">kazanan ' + esc(w) + (hit ? " ✓" : " ✗") + "</b>" : "");
       }).join("<br>"))
+    + altiliLegsDone(a)
     + item("Kombinasyon · misli · tutar", r.units + " · " + Math.max(1, kat) + " · " + tl0(Math.max(1, kat) * r.cost))
     + item("Tutma olasılığı", "%" + num(r.hit * 100, 2))
     + altiliRisk(r)
@@ -883,7 +908,8 @@ function altiliCard() {
   var chipOf = function (i) {
     var a = list[i], p = a.plan || {}, play = p.play;
     return '<button class="chip' + (cur && a.key === cur.key ? " main" : "") + '" onclick="altiliPick(altiliList()[' + i + '].key)">'
-      + esc(a.label) + " · " + esc(a.source || "TJK") + (altiliStarted(a) ? " · başladı" : play ? " · OYNA" : best && a.key === best.key ? " · en mantıklı" : "")
+      + esc(a.label) + " · " + esc(a.source || "TJK") + (altiliStarted(a) ? " · başladı" + (altiliLegsStatus(a).run ? " · " + altiliLegsStatus(a).ok + "/" + altiliLegsStatus(a).run + " ayak" : "")
+        : play ? " · OYNA" : best && a.key === best.key ? " · en mantıklı" : "")
       + (p.hit ? '<span class="muted"> · %' + num(p.hit * 100, p.hit < 0.1 ? 1 : 0) + (p.ifHit ? " · ~" + num(p.ifHit, 0) + " TL" : "") + "</span>" : "") + "</button>";
   };
   if (list.length > 1) { // 2.32.5: oynamaya en değer olan en üstte, numaralı liste
@@ -919,6 +945,7 @@ function altiliCard() {
       return '<label>' + (k + 1) + '. ayak (at no:AGF yüzdesi, varsa :ganyan)</label><input id="alt_leg' + k + '" value="' + esc(v) + '" placeholder="1:32:2.5 4:20:4.1 7:15">';
     }).join("") + '<div class="btns"><button class="b ghost" onclick="altiliManual()">Hesapla</button></div></details>';
   if (t && t.log && t.log.length) html += '<details class="info"><summary class="small">Okuma ayrıntısı</summary><pre class="out">' + esc(t.log.join("\n"))
+    + (t.liveLog && t.liveLog.length ? esc("\nAyak sonuçları (" + hm(t.liveAt) + ")\n  " + t.liveLog.join("\n  ")) : "")
     + '</pre><div class="btns"><button class="b ghost" onclick="altiliShare()">Paylaş</button></div></details>';
   return html + "</div>";
 }

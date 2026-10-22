@@ -56,6 +56,11 @@ public final class DailyJob extends JobService {
                         } catch (RuntimeException ignored) {
                             // bir sonraki olayda
                         }
+                        try {
+                            repo.altiliLive(false, null); // 2.34: koşan altılıların ayak sonuçları
+                        } catch (RuntimeException ignored) {
+                            // 10 dk sonra yeniden
+                        }
                     }
                     if (event) return;
                     Repo.BackgroundResult r = repo.background(daily);

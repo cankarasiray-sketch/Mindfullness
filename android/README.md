@@ -239,6 +239,12 @@ bildirim olarak gelir.
   "6 ayaktan biri yatıyor" için: kartta 6 ayak ve tam 5 ayak (biri yatar) olasılığı, en zayıf ayak ve o ayağa bir at
   daha eklemenin bedeli ile tutmaya etkisi; karnede bir ayakla kaçan kuponlar ve yatan ayağın tek atlı (banko) olup
   olmadığı. Sıra listesinde altı koşunun numarası ve saati.
+- **2.34: ayak sonuçları.** Kullanıcı istedi: her altılı önerisinde ayak sonuçları hemen. Başlamış altılıların sonuçları
+  TJK sonuç sayfasından (yalnızca o hipodromlar) her koşudan ~12 dk sonra kendiliğinden okunur (sonuç gelmezse 10 dk'da
+  bir, en çok 3 saat); "Altılıyı şimdi oku" da okur. Kartta her ayağın yanında "kazanan 6 ✓/✗", "Ayak sonuçları: 2/3
+  ayak tuttu" özeti, başlamış çipte "2/3 ayak"; okuma ayrıntısında "Ayak sonuçları" bölümü. Ayak koşu numarasıyla
+  (programdan) eşleşir; sonuç sayfası iskelet çıkarsa şehir sekmesinin adresi denenir; at no başlıksız sütundan da okunur.
+  Tamamlanan altılı aynı gün karneye işlenir.
 
 ## Beraberlik fırsatları (2.17)
 

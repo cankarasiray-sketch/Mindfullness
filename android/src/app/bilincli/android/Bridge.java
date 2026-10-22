@@ -385,6 +385,16 @@ public final class Bridge {
                         progress(text);
                     }
                 });
+                try {
+                    repo.altiliLive(true, new Daily.Progress() { // 2.34: başlamış altılıların ayak sonuçları
+                        @Override
+                        public void step(String text) {
+                            progress(text);
+                        }
+                    });
+                } catch (RuntimeException ignored) {
+                    // sonuçlar sonraki okumada
+                }
                 Scheduler.scheduleNextEvent(activity); // 2.28: yarış öncesi son kupon bildirimi için
                 if (Json.arr(r.get("altilis")).isEmpty()) {
                     long waiting = Json.lng(r, "waiting", 0);

@@ -85,7 +85,7 @@ public final class AltiliLog {
                 recs.add(r);
             }
             if (r.get("result") != null) continue;
-            for (String f : new String[] {"label", "city", "cityId", "no", "source"}) if (a.get(f) != null) r.put(f, a.get(f));
+            for (String f : new String[] {"label", "city", "cityId", "no", "source", "races"}) if (a.get(f) != null) r.put(f, a.get(f));
             r.put("legs", new ArrayList<>(legs.subList(0, 6)));
             r.put("plan", coupon(plan));
         }
@@ -133,7 +133,7 @@ public final class AltiliLog {
         return t.replace('ı', 'i').replaceAll("[^a-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
     }
 
-    private static Map<String, Object> cityOf(Map<String, Object> rec, List<Object> cities) {
+    public static Map<String, Object> cityOf(Map<String, Object> rec, List<Object> cities) {
         Long id = rec.get("cityId") == null ? null : Json.lng(rec, "cityId", -1);
         String name = norm(rec.get("city") != null ? Json.str(rec, "city") : Json.str(rec, "label"));
         for (Object o : cities) if (id != null && id == Json.lng(Json.obj(o), "cityId", -2)) return Json.obj(o);
@@ -151,8 +151,56 @@ public final class AltiliLog {
         return u.isEmpty() ? 0 : (double) i.size() / u.size();
     }
 
-    /** Altılının kazananları: önce sayfadaki kazanan kombinasyon (ayaklarla tutarlıysa), yoksa koşu tablolarından. */
-    static Object[] winners(Map<String, Object> rec, Map<String, Object> city) {
+    /**
+     * 2.34: ayak ayak kazananlar (koşmamış ya da bulunamayan ayak null): önce kazanan kombinasyon, sonra altılının koşu
+     * numarası (programdan; koşunun atları ayağın atlarıyla örtüşmeli), olmazsa atları en benzer koşu tablosu.
+     */
+    public static List<Object> legWinners(Map<String, Object> rec, Map<String, Object> city) {
+        List<Object> out = new ArrayList<>(java.util.Collections.nCopies(6, (Object) null));
+        if (city == null || Json.arr(rec.get("legs")).size() < 6) return out;
+        Object[] combo = combo(rec, city);
+        if (combo != null) return new ArrayList<>(Json.arr(combo[0]));
+        List<Object> races = Json.arr(city.get("races")), rs = Json.arr(rec.get("races"));
+        Set<Integer> used = new HashSet<>();
+        for (int k = 0; k < 6; k++) {
+            Set<String> leg = agf(String.valueOf(Json.arr(rec.get("legs")).get(k))).keySet();
+            long no = k < rs.size() ? Json.lng(Json.obj(rs.get(k)), "no", 0) : 0;
+            int pick = -1;
+            for (int i = 0; i < races.size() && no > 0 && pick < 0; i++) {
+                Map<String, Object> race = Json.obj(races.get(i));
+                if (Json.lng(race, "no", -1) == no && !used.contains(i) && contained(leg, race) >= 0.6) pick = i;
+            }
+            double score = 0.6;
+            for (int i = 0; i < races.size() && pick < 0; i++) {
+                if (used.contains(i) || Json.obj(races.get(i)).get("winner") == null) continue;
+                double j = jaccard(runners(Json.obj(races.get(i))), leg);
+                if (j >= score) score = j;
+            }
+            for (int i = 0; i < races.size() && pick < 0; i++) {
+                if (!used.contains(i) && Json.obj(races.get(i)).get("winner") != null && jaccard(runners(Json.obj(races.get(i))), leg) >= score - 1e-12) pick = i;
+            }
+            if (pick < 0 || Json.obj(races.get(pick)).get("winner") == null) continue;
+            used.add(pick);
+            out.set(k, String.valueOf(Json.obj(races.get(pick)).get("winner")));
+        }
+        return out;
+    }
+
+    private static Set<String> runners(Map<String, Object> race) {
+        Set<String> out = new LinkedHashSet<>();
+        for (Object x : Json.arr(race.get("runners"))) out.add(String.valueOf(x));
+        return out;
+    }
+
+    /** Ayağın atlarının koşuda olan payı (AGF %0'lık atları yazmayabilir; koşunun bütün atları ayakta olmayabilir). */
+    private static double contained(Set<String> leg, Map<String, Object> race) {
+        Set<String> in = new HashSet<>(leg);
+        in.retainAll(runners(race));
+        return leg.isEmpty() ? 0 : (double) in.size() / leg.size();
+    }
+
+    /** Sayfadaki kazanan kombinasyon (ayaklarla tutarlıysa): {nos, payout, "kombinasyon"} ya da null. */
+    private static Object[] combo(Map<String, Object> rec, Map<String, Object> city) {
         List<Map<String, Double>> legs = new ArrayList<>();
         for (Object l : Json.arr(rec.get("legs"))) legs.add(agf(String.valueOf(l)));
         List<Object> combos = Json.arr(city.get("combos"));
@@ -167,28 +215,15 @@ public final class AltiliLog {
             for (int k = 0; k < 6 && ok; k++) ok = legs.get(k).containsKey(String.valueOf(nos.get(k)));
             if (ok) return new Object[] {nos, Json.num(Json.obj(o), "payout"), "kombinasyon"};
         }
-        List<Object> races = Json.arr(city.get("races"));
-        List<Object> nos = new ArrayList<>();
-        Set<Integer> used = new HashSet<>();
-        for (Map<String, Double> leg : legs) {
-            int best = -1;
-            double score = 0.6;
-            for (int i = 0; i < races.size(); i++) {
-                Map<String, Object> race = Json.obj(races.get(i));
-                if (used.contains(i) || race.get("winner") == null) continue;
-                Set<String> runners = new LinkedHashSet<>();
-                for (Object x : Json.arr(race.get("runners"))) runners.add(String.valueOf(x));
-                double j = jaccard(runners, leg.keySet());
-                if (j >= score) {
-                    score = j;
-                    best = i;
-                }
-            }
-            if (best < 0) return null;
-            used.add(best);
-            nos.add(String.valueOf(Json.obj(races.get(best)).get("winner")));
-        }
-        return new Object[] {nos, null, "koşular"};
+        return null;
+    }
+
+    /** Altılının kazananları: önce sayfadaki kazanan kombinasyon (ayaklarla tutarlıysa), yoksa koşu tablolarından. */
+    static Object[] winners(Map<String, Object> rec, Map<String, Object> city) {
+        Object[] c = combo(rec, city);
+        if (c != null) return c;
+        List<Object> lw = legWinners(rec, city);
+        return lw.contains(null) ? null : new Object[] {lw, null, "koşular"};
     }
 
     /**

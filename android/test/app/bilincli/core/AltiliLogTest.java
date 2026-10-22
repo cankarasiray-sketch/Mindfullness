@@ -260,4 +260,59 @@ public class AltiliLogTest {
         assertEquals(2, Json.arr(c.get("combos")).size());
         assertTrue(String.valueOf(r.get("log")).contains("Bursa: 2 altılı sonucu, 2 koşu"));
     }
+
+    /** Sonuç sayfası gibi: "N. Koşu HH.MM" başlığı, sonra bitiriş sırasıyla tablo (at no başlıksız: "5 KARAYEL"). */
+    static String resultPage(String[][] races) {
+        StringBuilder b = new StringBuilder("<div>Özet PDF Sonuçlar | CSV Sonuçlar</div>");
+        for (String[] r : races) {
+            b.append("<h3>").append(r[0]).append(". Koşu 20.").append(r[0]).append("0</h3><table><tr><td>Sıra</td><td>At</td><td>Derece</td><td>Gny</td></tr>");
+            for (int i = 1; i < r.length; i++)
+                b.append("<tr><td>").append(i).append("</td><td>").append(r[i]).append(" AT").append(r[i]).append(" (USA)</td><td>1.2").append(i).append(".10</td><td>4,").append(i).append("0</td></tr>");
+            b.append("</table>");
+        }
+        return b.toString();
+    }
+
+    @Test
+    public void liveLegWinnersByRaceNumber() {
+        // 2.34: koşu numarası ve bitiriş sırasıyla; at no sütunu başlıksız ("5 AT5 (USA)"); sıra sütunu 1, 2, 3…
+        String html = resultPage(new String[][] {{"1", "6", "1", "4", "7", "5"}, {"2", "9", "5", "8", "2"}, {"3", "3", "5", "1", "7"}});
+        List<Map<String, Object>> races = Tjk.raceResults(html);
+        assertEquals(3, races.size());
+        assertEquals(1L, races.get(0).get("no"));
+        assertEquals("6", races.get(0).get("winner"));
+        assertEquals("9", races.get(1).get("winner"));
+        assertEquals(Arrays.asList("3", "5", "1", "7"), races.get(2).get("runners"));
+        // altılı 1–6. koşular: ilk üç koştu, kalanlar null
+        Map<String, Object> a = altili("tjk/2026-10-21/31/1", "Keeneland ABD", 31, 1, Arrays.asList("1:40 6:20 4:15 7:15 5:10", "5:64 8:14 9:12 2:10",
+                "5:30 1:25 3:15 7:11 2:10 4:9", "9:66 1:20 2:14", "6:40 5:20 10:12 4:8 1:20", "3:35 4:20 7:14 5:10 1:21"));
+        List<Object> rs = new ArrayList<>();
+        for (int k = 1; k <= 6; k++) {
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("no", (long) k);
+            r.put("time", "20:" + k + "0");
+            rs.add(r);
+        }
+        a.put("races", rs);
+        Map<String, Object> city = city(31, "Keeneland ABD", new ArrayList<Object>(), new ArrayList<Object>(races));
+        assertEquals(Arrays.asList("6", "9", "3", null, null, null), AltiliLog.legWinners(a, city));
+        // koşu numarası yanlış koşuyu gösterirse (atlar örtüşmüyor) atlara göre eşleşir
+        rs.set(0, new LinkedHashMap<String, Object>(Json.obj(rs.get(1))));
+        assertEquals("6", AltiliLog.legWinners(a, city).get(0));
+        assertEquals(Arrays.<Object>asList(null, null, null, null, null, null), AltiliLog.legWinners(a, null));
+        // şehir bağlantısı sayfa iskeleti (tablosuz): şehir sekmesinin adresi denenir
+        String main = "<a href=\"?SehirId=31&amp;QueryParameter_Tarih=21%2F10%2F2026&amp;SehirAdi=Keeneland+ABD\">K</a>"
+                + "<a href=\"?SehirId=3&amp;QueryParameter_Tarih=21%2F10%2F2026&amp;SehirAdi=%C4%B0stanbul\">I</a>";
+        Map<Integer, String[]> links = Tjk.cityLinks(main, Tjk.resultsUrl(LocalDate.parse(DAY)));
+        Map<String, String> pages = new LinkedHashMap<>();
+        pages.put(Tjk.resultsUrl(LocalDate.parse(DAY)), main);
+        pages.put(links.get(31)[1], "<div>| Özet PDF Sonuçlar | CSV Sonuçlar | 1. AGF Tablosu | 2. AGF Tablosu Tüm Koşular</div>");
+        pages.put(Tjk.programAlternative(links.get(31)[1]), html);
+        List<String> asked = new ArrayList<>();
+        Map<String, Object> r = Tjk.results(TjkTest.fake(pages, asked), LocalDate.parse(DAY), null, new java.util.HashSet<>(Arrays.asList(31)));
+        assertEquals(1, Json.arr(r.get("cities")).size()); // yalnızca istenen şehir
+        assertEquals(3, Json.arr(Json.obj(Json.arr(r.get("cities")).get(0)).get("races")).size());
+        assertEquals(3, asked.size());
+        assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Keeneland ABD: 0 altılı sonucu, 3 koşu (kazananlar 1→6, 2→9, 3→3)"));
+    }
 }
