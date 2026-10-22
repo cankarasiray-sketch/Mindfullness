@@ -922,6 +922,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701, expected: 4.3},
     rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, minHit: 0.3},
+    table: [{lo: 0, hi: 0.1, n: 88, hits: 5, expected: 4.2, cost: 52800, ret: 16368, roi: 0.31}, {lo: 0.15, hi: 0.25, n: 27, hits: 7, expected: 5.1, cost: 16200, ret: 14256, roi: 0.88},
+      {region: "yerli", n: 47, hits: 9, expected: 7.3, cost: 28200, ret: 22278, roi: 0.79}],
     legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34,
       groups: [{label: "Resmî 6'lı sonucundan", n: 90, win: 0.36, agf: 0.34}, {label: "Yabancı hipodrom", n: 54, win: 0.15, agf: 0.35}]},
     calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor."},
@@ -961,6 +963,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /21\.10 · Bursa 1\. altılı · önerildikazananlar 5-7-5-1-5-2 \(TJK resmî 6'lı sonucu\) · ikramiye AGF ile tutarlı ✓ \(×0,74\) · yeniden doğrulandı \(eski okuma 2-4-6-2-7-3\)60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
   assert.doesNotMatch(k, /Sayılmayan:/);
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu \(beklenen 4,3\) · getiri %70/);
+  assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
   assert.match(k, /Oynanacak olanlar \(6\/6 ≥ %30\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);
   assert.match(k, /19\.10 · Keeneland ABD 1\. altılı · geriye dönük600,00 TL · tutmadı \(5\/6 ayak\)/);
   const bad = clone(s);
@@ -1058,6 +1061,9 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   assert.equal(f.$("#alt_tavan").value, "600"); // 2.35.1 varsayılanı
   assert.equal(f.$("#alt_enaztut").value, "15"); // 2.44: en az 6/6 olasılığı
   assert.equal(f.$("#alt_enazkar").value, "10"); // 2.45: kâr kuralı
+  assert.equal(f.$("#alt_6mod").checked, false); // 2.48: kârsız günde 6/6 stratejisi kapalı
+  f.$("#alt_6mod").checked = true; f.$("#alt_6mod").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {playNoEdge: true});
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.match(rows[1], /1\.296 TL · 100 TL'den ort\. 73 TL döner · 320 TL'yi aşıyor, oynama$/);
   f.chip("İzmir 1. altılı · TJK").click();

@@ -392,6 +392,16 @@ public class AltiliLogTest {
         assertEquals(roi >= 1.10 ? 1L : 0L, pr.get("n"));
         assertEquals(roi, (Double) Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0, 0.10).get("all")).get("expectedRoi"), 1e-12);
         assertEquals(1L, Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0, -1).get("profitRule")).get("n")); // eşiksiz: hepsi
+        // 2.48: strateji tablosu: 6/6 olasılığı aralığı ve bölge (İstanbul yerli)
+        List<Object> table = Json.arr(an.get("table"));
+        assertEquals(2, table.size());
+        Map<String, Object> bucket = Json.obj(table.get(0)), region = Json.obj(table.get(1));
+        assertTrue((Double) bucket.get("lo") <= hit && (bucket.get("hi") == null || hit < (Double) bucket.get("hi")));
+        assertEquals(1L, bucket.get("hits"));
+        assertEquals(hit, (Double) bucket.get("expected"), 1e-12);
+        assertEquals("yerli", region.get("region"));
+        assertEquals(1L, region.get("n"));
+        assertEquals(false, new Settings().altiliPlayNoEdge); // varsayılan kâr modu
     }
 
     @Test

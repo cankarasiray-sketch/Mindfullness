@@ -32,6 +32,8 @@ public final class AltiliLog {
 
     static final int KEEP_DAYS = 380, SETTLE_DAYS = 5, ANALYZE_DAYS = 370; // 2.46–2.47: 1 yıllık geriye dönük karne
     static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12;
+    /** 2.48: strateji tablosunun 6/6 olasılığı aralıkları: <%10, %10–15, %15–25, %25–40, ≥%40. */
+    static final double[] HIT_EDGES = {0.10, 0.15, 0.25, 0.40};
     /** 2.42: bölge kuralı için en az doğrulanmış ayak (3 altılı). */
     static final int REGION_MIN_LEGS = 18; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
@@ -614,6 +616,7 @@ public final class AltiliLog {
         int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0, rn = 0, rh = 0, en = 0;
         double ae = 0, re = 0, rc = 0, rr = 0; // 2.43: beklenen 6/6 (tahmin edilen olasılıkların toplamı); kurala uyanlar
         int pn = 0, ph6 = 0, rwn = 0;
+        Map<String, double[]> table = new LinkedHashMap<>(); // 2.48: {kupon, tuttu, beklenen, bedel, dönüş}
         double pc6 = 0, pr6 = 0, pe = 0, rwSum = 0, rwCost = 0; // 2.45: kâr kuralına uyanlar; bütün kuponların tahmini dönüşü
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
         List<LegData> data = new ArrayList<>(), dataHome = new ArrayList<>(), dataAway = new ArrayList<>();
@@ -681,6 +684,19 @@ public final class AltiliLog {
                     }
                 }
                 Double ph = Json.num(pc, "hit");
+                if (ph != null) { // 2.48: strateji tablosu: 6/6 olasılığı aralığına ve bölgeye göre gerçekleşen dönüş
+                    int b = 0;
+                    while (b < HIT_EDGES.length && ph >= HIT_EDGES[b] - 1e-12) b++;
+                    for (String key : new String[] {"p" + b, domestic(r) ? "yerli" : "yabancı"}) {
+                        double[] t = table.get(key);
+                        if (t == null) table.put(key, t = new double[5]);
+                        t[0]++;
+                        t[1] += h[6] ? 1 : 0;
+                        t[2] += ph;
+                        t[3] += Json.dbl(pc, "cost", 0);
+                        t[4] += h[6] ? payout : 0;
+                    }
+                }
                 if (ph != null) {
                     en++;
                     ae += ph;
@@ -747,6 +763,26 @@ public final class AltiliLog {
         out.put("pending", (long) pending);
         out.put("suggested", agg(sn, sh, sc, sr));
         out.put("all", agg(an, ah, ac, ar));
+        if (!table.isEmpty()) { // 2.48
+            List<Object> rows = new ArrayList<>();
+            List<String> order = new ArrayList<>();
+            for (int b = 0; b <= HIT_EDGES.length; b++) order.add("p" + b);
+            order.add("yerli");
+            order.add("yabancı");
+            for (String key : order) {
+                double[] t = table.get(key);
+                if (t == null) continue;
+                Map<String, Object> row = agg((int) t[0], (int) t[1], t[3], t[4]);
+                row.put("expected", t[2]);
+                if (key.startsWith("p")) {
+                    int b = Integer.parseInt(key.substring(1));
+                    row.put("lo", b == 0 ? 0.0 : HIT_EDGES[b - 1]);
+                    if (b < HIT_EDGES.length) row.put("hi", HIT_EDGES[b]);
+                } else row.put("region", key);
+                rows.add(row);
+            }
+            out.put("table", rows);
+        }
         if (rwn > 0) { // 2.45: kâr kuralı
             Map<String, Object> profit = agg(pn, ph6, pc6, pr6);
             profit.put("expectedRoi", pc6 > 0 ? pe / pc6 : 0.0);

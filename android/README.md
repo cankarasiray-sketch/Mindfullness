@@ -311,6 +311,12 @@ bildirim olarak gelir.
   sürdür". Defter 200 gün, analiz 190 gün tutar; görünüm önbelleği büyük defterde içerik yerine özetle karşılaştırılır.
 - **2.47:** Kullanıcı istedi: tarama 1 yıl (365 gün). Başlamış 6 aylık tarama kaldığı yerden 1 yıla uzar. Defter 380,
   analiz 370 gün; taramada büyük defter her bölümde bir kez okunur (kaydı olan günler bir seferde bulunur).
+- **2.48: 1 yıllık veriye dayalı strateji.** 129 doğrulanmış altılı (774 ayak): 6/6 tahmini 16,7 → 17 (isabetli), ayak
+  %73 → %71; AGF favorisi %34 verip %28 kazanıyor (yabancıda %35 → %27: bölge kuralı yabancıyı durdurur); tek ayakla kaçan
+  34 kuponun 22'si bankodan; 6/6 ≥ %15 olanlar 12/41 tuttu, dönüş %85 (hepsi %45); kâr kuralına (≥ %110) bir yılda uyan
+  yok. Karnede "Strateji tablosu": doğrulanmış kuponların 6/6 olasılığı aralığına (<%10, %10–15, %15–25, %25–40, ≥%40) ve
+  bölgeye göre tuttu/beklenen/dönüş. Yeni ayar "Kârsız günde de 6/6 stratejisi" (varsayılan kapalı = kâr modu): açıkken
+  kâr kuralı öneriyi engellemez, kurallara uyan en iyi altılı (AGF'si tutan bölge, 6/6 ≥ eşik) önerilir.
 
 ## Beraberlik fırsatları (2.17)
 

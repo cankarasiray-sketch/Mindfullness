@@ -251,6 +251,11 @@ public final class Settings {
     /** 2.37: 6/6 olasılığı bunun altındaki altılı oynanmaz ve önerilmez (yalnızca tahmin edilebilir altılılar; 0: sınır yok). */
     /** 2.45: kâr kuralı: kupon yalnızca beklenen dönüşü en az 1 + bu kadar olunca oynanır (anlamlı kâr; 0: ortalamada kârlı yeter). */
     public double altiliMinEdge = 0.10;
+    /**
+     * 2.48: kârsız günde de 6/6 stratejisi: kâr kuralına uymayan (devirsiz) günde de kurallara uyan en iyi altılı (yerli,
+     * 6/6 olasılığı en az altiliMinHit, düzeltilmiş AGF) önerilir; beklenen dönüş %100'ün altında olduğu açıkça yazar.
+     */
+    public boolean altiliPlayNoEdge = false;
     public double altiliMinHit = 0.15; // 2.44: geriye dönük veri: 600 TL ile 6/6 olasılığı ortalama ~%9; %30 hiçbir altılıyı geçirmiyordu
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
@@ -427,6 +432,7 @@ public final class Settings {
         m.put("altiliCap", altiliCap);
         m.put("altiliMinHit", altiliMinHit);
         m.put("altiliMinEdge", altiliMinEdge);
+        m.put("altiliPlayNoEdge", altiliPlayNoEdge);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -494,6 +500,7 @@ public final class Settings {
         s.altiliCap = Json.dbl(m, "altiliCap", s.altiliCap);
         s.altiliMinHit = Json.dbl(m, "altiliMinHit", s.altiliMinHit);
         s.altiliMinEdge = Json.dbl(m, "altiliMinEdge", s.altiliMinEdge);
+        s.altiliPlayNoEdge = Json.bool(m, "altiliPlayNoEdge", s.altiliPlayNoEdge);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);

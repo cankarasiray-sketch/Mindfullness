@@ -788,6 +788,7 @@ function altiliKarne(L, sl) {
         : "bildirilen kupon henüz sonuçlanmadı")
       + item("Bütün altılılar (en mantıklı kupon)", a.hits + "/" + a.n + " tuttu" + (a.expected != null ? " (beklenen " + num(a.expected, 1) + ")" : "")
         + " · getiri " + '<span class="' + cls(a.ret - a.cost) + '">' + pc(a.roi) + "</span>")
+      + altiliTable(L.table, tl0, pc) // 2.48
       + (L.profitRule ? item("Kâr kuralına uyanlar (dönüş ≥ %" + num(100 + L.profitRule.minEdge * 100, 0) + ")", L.profitRule.n // 2.45
           ? L.profitRule.hits + "/" + L.profitRule.n + " tuttu · " + tl0(L.profitRule.cost) + " → " + tl0(L.profitRule.ret) + ' <span class="' + cls(L.profitRule.ret - L.profitRule.cost) + '">(%'
             + num(L.profitRule.roi * 100, 0) + ")</span> · beklenen %" + num(L.profitRule.expectedRoi * 100, 0)
@@ -837,6 +838,15 @@ function altiliKarne(L, sl) {
     + " · " + (bf.added || 0) + " altılı tahmin edildi, " + (bf.verified || 0) + " ikramiyeyle doğrulandı.</p>";
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
   return html + "</div>";
+}
+/** 2.48: strateji tablosu: doğrulanmış kuponların 6/6 olasılığı aralığına ve bölgeye göre gerçekleşen dönüşü. */
+function altiliTable(rows, tl0, pc) {
+  if (!rows || !rows.length) return "";
+  return item("Strateji tablosu (doğrulanmış kuponlar)", rows.map(function (r) {
+    var label = r.region ? (r.region === "yerli" ? "Yerli" : "Yabancı")
+      : "6/6 " + (r.hi == null ? "≥ %" + num(r.lo * 100, 0) : r.lo ? "%" + num(r.lo * 100, 0) + "–" + num(r.hi * 100, 0) : "< %" + num(r.hi * 100, 0));
+    return esc(label) + ": " + r.hits + "/" + r.n + " tuttu (beklenen " + num(r.expected, 1) + ") · dönüş " + '<b class="' + cls(r.ret - r.cost) + '">' + pc(r.roi) + "</b>";
+  }).join("<br>"));
 }
 /** 2.42: bölge güveni (doğrulanmış sonuçlarla): AGF favorisi tutuyor mu; tutmuyorsa o bölgenin altılıları önerilmez. */
 function altiliRegionTrust(r) {
@@ -1006,6 +1016,8 @@ function altiliCard() {
     + f("kesinti", "Kesinti (%)", numText(Math.round((st.altiliTakeout || 0.27) * 1000) / 10), "altiliSave({takeout: numTr(this.value) / 100})", "kaynaklar %25–30")
     + f("vergi", "İkramiyeden vergi (%)", numText(Math.round((st.altiliTax || 0) * 1000) / 10), "altiliSave({tax: numTr(this.value) / 100})", "kesiliyorsa")
     + f("enaz", "Kupon en az (TL)", numText(st.altiliMinCost == null ? 60 : st.altiliMinCost), "altiliSave({minCost: numTr(this.value)})", "60")
+    + '<label class="check"><input type="checkbox" id="alt_6mod"' + (st.altiliPlayNoEdge ? " checked" : "") + ' onchange="altiliSave({playNoEdge: this.checked})">'
+      + "Kârsız günde de 6/6 stratejisi (6/6 olasılığı yüksek, AGF'si tutan bölgedeki altılı; ortalamada kayıp)</label>" // 2.48
     + f("enazkar", "En az beklenen kâr (%)", numText(Math.round((st.altiliMinEdge == null ? 0.1 : st.altiliMinEdge) * 100)), "altiliSave({minEdge: numTr(this.value) / 100})", "10: dönüş en az %110")
     + f("enaztut", "En az 6/6 olasılığı (%)", numText(Math.round((st.altiliMinHit == null ? 0.15 : st.altiliMinHit) * 100)), "altiliSave({minHit: numTr(this.value) / 100})", "0: sınır yok")
     + f("tavan", "Kupon en fazla (TL)", numText(st.altiliCap == null ? 600 : st.altiliCap), "altiliSave({cap: numTr(this.value)})", "0: kasanın payı")
