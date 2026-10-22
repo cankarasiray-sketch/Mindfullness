@@ -358,6 +358,51 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void pastResultsAreRechecked() {
+        // 2.39: eski, yanlış okunmuş (ikramiyesi tutarsız) ve bulunamamış sonuçlar o günün sayfası yeniden okunarak doğrulanır
+        Map<String, Object> store = new LinkedHashMap<>();
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS),
+                altili("tjk/2026-10-21/4/1", "Bursa", 4, 1, LEGS)));
+        double real = 0.4 * 0.5 * 0.34 * 0.6 * 0.45 * 0.79;
+        Map<String, Object> wrong = new LinkedHashMap<>(), missing = new LinkedHashMap<>();
+        wrong.put("winners", new ArrayList<Object>(Arrays.asList("2", "4", "6", "2", "7", "3")));
+        wrong.put("payout", 0.73 / real);
+        wrong.put("from", "kombinasyon");
+        missing.put("missing", true);
+        rec(store, "tjk/2026-10-21/3/1").put("result", wrong);
+        rec(store, "tjk/2026-10-21/4/1").put("result", missing);
+        assertEquals(Arrays.asList(DAY), AltiliLog.recheckDays(store, TODAY, 1));
+        assertEquals(new java.util.HashSet<>(Arrays.asList(3, 4)), AltiliLog.recheckCities(store, DAY, 1));
+        Map<String, Object> page = results(city(3, "İstanbul", Arrays.<Object>asList(combo(0.73 / real, "5", "7", "5", "1", "5", "2")), new ArrayList<Object>()),
+                city(4, "Bursa", Arrays.<Object>asList(combo(0.73 / real, "5", "7", "5", "1", "5", "2")), new ArrayList<Object>()));
+        assertEquals(2, AltiliLog.recheck(store, DAY, page, 1, 0.27, 0, NOW));
+        Map<String, Object> r = Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result"));
+        assertEquals(Arrays.asList("5", "7", "5", "1", "5", "2"), r.get("winners"));
+        assertEquals(Arrays.asList("2", "4", "6", "2", "7", "3"), r.get("previous")); // eski okuma saklanır
+        assertEquals(Boolean.TRUE, r.get("rechecked"));
+        assertEquals("ikramiye", AltiliLog.trust(rec(store, "tjk/2026-10-21/3/1"), r, 1));
+        assertEquals(Arrays.asList("5", "7", "5", "1", "5", "2"), Json.obj(rec(store, "tjk/2026-10-21/4/1").get("result")).get("winners"));
+        assertEquals(0, AltiliLog.recheckDays(store, TODAY, 1).size()); // hepsi doğrulandı
+        assertEquals(2L, AltiliLog.analyze(store, 1, 2000, TODAY).get("settled"));
+        // sayfa yine okunamazsa en çok 2 deneme, eski sonuca dokunulmaz
+        Map<String, Object> s2 = new LinkedHashMap<>();
+        AltiliLog.record(s2, DAY, Arrays.<Object>asList(altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS)));
+        rec(s2, "tjk/2026-10-21/3/1").put("result", new LinkedHashMap<String, Object>(wrong));
+        assertEquals(0, AltiliLog.recheck(s2, DAY, results(), 1, 0.27, 0, NOW));
+        assertEquals(0, AltiliLog.recheck(s2, DAY, results(), 1, 0.27, 0, NOW));
+        assertEquals(0, AltiliLog.recheckDays(s2, TODAY, 1).size());
+        assertEquals(Arrays.asList("2", "4", "6", "2", "7", "3"), Json.obj(rec(s2, "tjk/2026-10-21/3/1").get("result")).get("winners"));
+        // önceki sürümün sildiği (sonucu hiç olmayan) eski altılı da yeniden doğrulanır
+        Map<String, Object> s3 = new LinkedHashMap<>();
+        Map<String, Object> old = altili("tjk/2026-10-10/3/1", "İstanbul", 3, 1, LEGS);
+        old.put("day", "2026-10-10");
+        AltiliLog.record(s3, "2026-10-10", Arrays.<Object>asList(old));
+        assertEquals(Arrays.asList("2026-10-10"), AltiliLog.recheckDays(s3, TODAY, 1));
+        assertEquals(1, AltiliLog.recheck(s3, "2026-10-10", page, 1, 0.27, 0, NOW));
+        assertEquals(null, Json.obj(rec(s3, "tjk/2026-10-10/3/1").get("result")).get("previous"));
+    }
+
+    @Test
     public void ambiguousRacesGiveNoWinner() {
         // 2.35: ABD'de atlar her koşuda 1, 2, 3…: koşu numarası yoksa atlarla ayırt edilemez → yanlış kazanan yerine boş
         List<Object> races = Arrays.<Object>asList(race("3", "1", "2", "3", "4", "5", "6", "7", "8"), race("6", "1", "2", "3", "4", "5", "6", "7", "8"),

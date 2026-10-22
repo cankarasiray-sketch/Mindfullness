@@ -270,6 +270,11 @@ bildirim olarak gelir.
   ikramiyesi okunamayanlar sayılmaz, yalnızca karşılaştırma için gösterilir; "Son altılılar"da her sonucun oranı ve ✓/✗.
   Sayfada birden çok 6'lı sonucu varsa ikramiyesi o altılının AGF'siyle tutarlı olan seçilir (1. ve 2. altılı karışmaz).
   Doğrulanmış sonuçlarda favori zayıfsa bu gerçektir: "Doğrulandı" denir ve öğrenilir.
+- **2.39: geçmiş yeniden doğrulanır.** Kullanıcı istedi: eski veriler çöpe gitmesin. Sonucu doğrulanmamış (ikramiyesi
+  tutarsız ya da okunamamış), bulunamamış ya da önceki sürümlerin sildiği altılıların günleri (son 120 gün) için TJK sonuç
+  sayfası yeni okuyucuyla yeniden okunur (yalnızca o hipodromlar): doğrulanan sonuç eskisinin yerine geçer, eski okuma
+  saklanır ("yeniden doğrulandı (eski okuma …)"). Arka planda her seferinde 3 gün, "Sonuçları kontrol et, geçmişi yeniden
+  doğrula" ile 10 gün; kayıt başına en çok 2 deneme.
 
 ## Beraberlik fırsatları (2.17)
 

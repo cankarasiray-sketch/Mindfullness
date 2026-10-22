@@ -753,13 +753,14 @@ final class Repo {
         long last = prefs.getLong("altiliSettleAt", 0);
         if (!force && now.toEpochMilli() - last < ALTILI_SETTLE_GAP_S * 1000) return 0;
         String today = Fmt.dayKey(now);
-        List<String> days;
+        Settings s = ledger.settings();
+        List<String> days, again;
         synchronized (altiliLogLock) {
             days = AltiliLog.pendingDays(altiliLog(), force ? java.time.LocalDate.parse(today).plusDays(1).toString() : today);
+            again = AltiliLog.recheckDays(altiliLog(), today, s.altiliUnit); // 2.39: geçmiş yeniden doğrulama
         }
-        if (days.isEmpty()) return 0;
+        if (days.isEmpty() && again.isEmpty()) return 0;
         prefs.edit().putLong("altiliSettleAt", now.toEpochMilli()).apply();
-        Settings s = ledger.settings();
         AndroidHttp http = new AndroidHttp(app);
         int n = 0;
         List<Object> lines = new ArrayList<>();
@@ -779,8 +780,32 @@ final class Repo {
                 saveAltiliLog(log);
             }
         }
+        // 2.39: doğrulanmamış geçmiş sonuçlar yeni okuyucuyla yeniden (arka planda 3, elle 10 gün; eskiden yeniye)
+        for (String day : again.subList(0, Math.min(again.size(), force ? ALTILI_RECHECK_MANUAL : ALTILI_RECHECK_BACKGROUND))) {
+            java.util.Set<Integer> cities;
+            synchronized (altiliLogLock) {
+                cities = AltiliLog.recheckCities(altiliLog(), day, s.altiliUnit);
+            }
+            Map<String, Object> res = Tjk.results(http, java.time.LocalDate.parse(day), progress, cities);
+            lines.add("Yeniden doğrulama " + day);
+            for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
+            synchronized (altiliLogLock) {
+                Map<String, Object> log = altiliLog();
+                int k = AltiliLog.recheck(log, day, res, s.altiliUnit, s.altiliTakeout, s.altiliTax, now);
+                n += k;
+                lines.add("  " + k + " altılı doğrulandı");
+                Map<String, Object> sl = new LinkedHashMap<>();
+                sl.put("at", now.toString());
+                sl.put("log", lines);
+                log.put("settleLog", sl);
+                saveAltiliLog(log);
+            }
+        }
         return n;
     }
+
+    /** 2.39: bir seferde yeniden doğrulanacak en çok gün (arka planda az; elle "Sonuçları şimdi kontrol et"). */
+    static final int ALTILI_RECHECK_BACKGROUND = 3, ALTILI_RECHECK_MANUAL = 10;
 
     /** Arka planda altılı okuması en fazla bu sıklıkta ve bu saatlerde (Türkiye). */
     static final long ALTILI_GAP_S = 2 * 3600;

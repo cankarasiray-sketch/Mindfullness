@@ -927,7 +927,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
     strategies: [{fraction: 0.01, budget: 20, n: 24, hits: 0, cost: 480, ret: 0, roi: 0}, {fraction: 0.03, budget: 60, n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
       {fraction: 0.06, budget: 120, n: 24, hits: 4, cost: 2880, ret: 2300, roi: 0.799}], fraction: 0.06,
     history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", notified: true, cost: 60, status: "tuttu", legs: 6, ret: 410, estimated: true,
-        winners: ["5", "7", "5", "1", "5", "2"], from: "kombinasyon", trust: "ikramiye", ratio: 0.74},
+        winners: ["5", "7", "5", "1", "5", "2"], from: "kombinasyon", trust: "ikramiye", ratio: 0.74, rechecked: true, previous: ["2", "4", "6", "2", "7", "3"]},
       {day: "2026-10-21", label: "Karma 1. altılı", source: "TJK", notified: false, cost: 60, status: "tutmadı", legs: 4, ret: 0},
       {day: "2026-10-22", label: "Ankara 1. altılı", source: "TJK", notified: false, cost: 60, status: "bekliyor"}]};
   s.agf.settleLog = {at: "2026-10-22T07:00:00Z", log: ["Sonuçlar 2026-10-21", "  Bursa: 1 altılı sonucu, 9 koşu", "  1 altılı sonuçlandı"]};
@@ -956,7 +956,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Bütçekasanın %7'si \(ayar\) · geçmişte en iyi getiri %6'sı/);
   assert.match(k, /Veri az \(144\/150 ayak\)/);
   assert.match(k, /kasanın %6'sı: 4\/24 tuttu, getiri %80/);
-  assert.match(k, /21\.10 · Bursa 1\. altılı · önerildikazananlar 5-7-5-1-5-2 \(TJK resmî 6'lı sonucu\) · ikramiye AGF ile tutarlı ✓ \(×0,74\)60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
+  assert.match(k, /21\.10 · Bursa 1\. altılı · önerildikazananlar 5-7-5-1-5-2 \(TJK resmî 6'lı sonucu\) · ikramiye AGF ile tutarlı ✓ \(×0,74\) · yeniden doğrulandı \(eski okuma 2-4-6-2-7-3\)60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
   assert.doesNotMatch(k, /Sayılmayan:/);
   const bad = clone(s);
   bad.agf.learn = {settled: 0, pending: 0, inconsistent: 18, unverified: 0, fav: {groups: [{label: "İkramiyeyle tutarsız (sayılmadı)", n: 108, win: 0.13, agf: 0.34}]},
@@ -970,7 +970,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Karma 1\. altılı60,00 TL · tutmadı \(4\/6 ayak\)/);
   assert.match(k, /Ankara 1\. altılı60,00 TL · bekliyor/);
   assert.match(k, /Bursa: 1 altılı sonucu, 9 koşu/);
-  f.button("Sonuçları şimdi kontrol et").click();
+  f.button("Sonuçları kontrol et, geçmişi yeniden doğrula").click();
   assert.equal(f.calls.at(-1).action, "altiliSettle");
   s.agf.learn = {settled: 0, pending: 3, history: []};
   f.w.refresh();

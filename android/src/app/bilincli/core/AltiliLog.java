@@ -372,29 +372,106 @@ public final class AltiliLog {
             if (!day.equals(Json.str(rec, "day")) || rec.get("result") != null) continue;
             Map<String, Object> city = cityOf(rec, cities);
             Object[] w = city == null ? null : winners(rec, city);
-            Map<String, Object> res = new LinkedHashMap<>();
+            Map<String, Object> res;
             if (w == null) {
                 if (!old) continue;
+                res = new LinkedHashMap<>();
                 res.put("missing", true);
-            } else {
-                @SuppressWarnings("unchecked")
-                List<Object> nos = (List<Object>) w[0];
-                double pw = 1;
-                List<Object> legs = Json.arr(rec.get("legs"));
-                for (int k = 0; k < 6; k++) {
-                    Double p = agf(String.valueOf(legs.get(k))).get(String.valueOf(nos.get(k)));
-                    pw *= p == null ? MISSING_P : p;
-                }
-                Double payout = (Double) w[1];
-                res.put("winners", nos);
-                res.put("agf", pw);
-                res.put("payout", payout != null ? payout : unit * (1 - takeout) * (1 - tax) / pw);
-                res.put("estimated", payout == null);
-                res.put("from", w[2]);
-            }
-            res.put("at", now.toString());
+                res.put("at", now.toString());
+            } else res = result(rec, w, unit, takeout, tax, now);
             rec.put("result", res);
             n++;
+        }
+        return n;
+    }
+
+    /** Kazananlardan sonuç kaydı: {winners, agf, payout (yoksa AGF'den tahmini), estimated, from, at}. */
+    private static Map<String, Object> result(Map<String, Object> rec, Object[] w, double unit, double takeout, double tax, Instant now) {
+        @SuppressWarnings("unchecked")
+        List<Object> nos = (List<Object>) w[0];
+        double pw = 1;
+        List<Object> legs = Json.arr(rec.get("legs"));
+        for (int k = 0; k < 6; k++) {
+            Double p = agf(String.valueOf(legs.get(k))).get(String.valueOf(nos.get(k)));
+            pw *= p == null ? MISSING_P : p;
+        }
+        Double payout = (Double) w[1];
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("winners", nos);
+        res.put("agf", pw);
+        res.put("payout", payout != null ? payout : unit * (1 - takeout) * (1 - tax) / pw);
+        res.put("estimated", payout == null);
+        res.put("from", w[2]);
+        res.put("at", now.toString());
+        return res;
+    }
+
+    // ---- 2.39: geçmişi yeniden doğrulama --------------------------------------------------------------------
+
+    /** Bir kayıt en çok bu kadar kez yeniden doğrulanır (sonuç sayfası yine okunamazsa boşuna istek yapılmasın). */
+    static final int RECHECK_MAX = 2;
+
+    /**
+     * Yeniden doğrulanacak mı: sonucu doğrulanmamış (tutarsız, ikramiyesiz), bulunamamış ya da hiç sonuçlanmamış (önceki
+     * sürümlerin sildiği eski sonuçlar dahil); deneme hakkı var.
+     */
+    private static boolean needsRecheck(Map<String, Object> rec, double unit) {
+        if (Json.lng(rec, "rechecks", 0) >= RECHECK_MAX) return false;
+        Map<String, Object> res = Json.obj(rec.get("result"));
+        if (res == null) return true;
+        if (Json.arr(res.get("winners")).size() != 6) return true; // bulunamamış
+        String t = trust(rec, res, unit);
+        return !"ikramiye".equals(t) && !"koşu no".equals(t);
+    }
+
+    /** 2.39: yeniden doğrulanacak günler (analiz penceresinde), eskiden yeniye. */
+    public static List<String> recheckDays(Map<String, Object> store, String today, double unit) {
+        Set<String> out = new java.util.TreeSet<>();
+        String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
+        for (Object o : records(store)) {
+            Map<String, Object> r = Json.obj(o);
+            String d = Json.str(r, "day");
+            if (d != null && d.compareTo(today) < 0 && d.compareTo(from) >= 0 && needsRecheck(r, unit)) out.add(d);
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** O günün yeniden doğrulanacak altılılarının TJK şehir numaraları; TJK dışı (şehir adıyla eşleşen) varsa null: hepsi okunur. */
+    public static Set<Integer> recheckCities(Map<String, Object> store, String day, double unit) {
+        Set<Integer> out = new HashSet<>();
+        for (Object o : records(store)) {
+            Map<String, Object> r = Json.obj(o);
+            if (!day.equals(Json.str(r, "day")) || !needsRecheck(r, unit)) continue;
+            if (!"TJK".equals(Json.str(r, "source")) || r.get("cityId") == null) return null;
+            out.add((int) Json.lng(r, "cityId", 0));
+        }
+        return out;
+    }
+
+    /**
+     * 2.39: geçmiş sonucu yeniden doğrular (o günün sonuç sayfası yeni okuyucuyla): yeni sonuç doğrulanıyorsa (ikramiyeyle
+     * tutarlı ya da koşu numaralı) eskisinin yerine geçer, eskisinin kazananları "previous" olarak saklanır; bulunamamış
+     * olana bulunan yazılır. Doğrulanan sayısı.
+     */
+    public static int recheck(Map<String, Object> store, String day, Map<String, Object> results, double unit, double takeout, double tax,
+            Instant now) {
+        List<Object> cities = Json.arr(results == null ? null : results.get("cities"));
+        int n = 0;
+        for (Object o : records(store)) {
+            Map<String, Object> rec = Json.obj(o);
+            if (!day.equals(Json.str(rec, "day")) || !needsRecheck(rec, unit)) continue;
+            rec.put("rechecks", Json.lng(rec, "rechecks", 0) + 1);
+            Map<String, Object> city = cityOf(rec, cities);
+            Object[] w = city == null ? null : winners(rec, city);
+            if (w == null) continue;
+            Map<String, Object> old = Json.obj(rec.get("result")), res = result(rec, w, unit, takeout, tax, now);
+            String t = trust(rec, res, unit);
+            boolean verified = "ikramiye".equals(t) || "koşu no".equals(t), hadWinners = old != null && Json.arr(old.get("winners")).size() == 6;
+            if (!verified && hadWinners) continue; // eskisinden iyi değil
+            if (hadWinners) res.put("previous", old.get("winners"));
+            res.put("rechecked", true);
+            rec.put("result", res);
+            if (verified) n++;
         }
         return n;
     }
@@ -760,6 +837,8 @@ public final class AltiliLog {
                 h.put("winners", res.get("winners"));
                 h.put("from", res.get("from"));
                 h.put("trust", trust(r, res, 1)); // 2.38: doğrulama
+                if (Json.bool(res, "rechecked", false)) h.put("rechecked", true); // 2.39: geçmiş yeniden doğrulandı
+                if (res.get("previous") != null) h.put("previous", res.get("previous"));
                 Double ratio = payoutRatio(r, res, 1);
                 if (ratio != null) h.put("ratio", ratio);
                 h.put("ret", hit[6] ? Json.dbl(res, "payout", 0) * Json.lng(c, "kat", 1) : 0.0);

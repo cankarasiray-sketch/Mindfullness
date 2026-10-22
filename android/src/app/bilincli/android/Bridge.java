@@ -420,7 +420,7 @@ public final class Bridge {
                         progress(text);
                     }
                 });
-                return n > 0 ? n + " altılının sonucu işlendi." : "Yeni sonuçlanan altılı yok (sonuçlar henüz yayınlanmadıysa ya da okunamadıysa karne aynı kalır).";
+                return n > 0 ? n + " altılının sonucu işlendi ya da yeniden doğrulandı." : "Yeni sonuçlanan ya da doğrulanan altılı yok (sonuçlar henüz yayınlanmadıysa ya da okunamadıysa karne aynı kalır; ayrıntı karnede).";
             }
             case "altiliInputs": {
                 requireReal(repo);
