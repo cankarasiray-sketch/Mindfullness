@@ -217,9 +217,9 @@ public class AltiliLogTest {
         Map<String, Object> fair = Json.obj(AltiliLog.analyze(history(1.0, 40, 7), 1, 2000, TODAY).get("calib"));
         assertEquals(Boolean.FALSE, fair.get("use"));
         assertEquals(1.0, Json.dbl(fair, "alphaUse", 0), 1e-12);
-        Map<String, Object> few = Json.obj(AltiliLog.analyze(history(1.6, 5, 7), 1, 2000, TODAY).get("calib"));
-        assertEquals(Boolean.FALSE, few.get("use")); // 60 ayak: veri az
-        assertTrue((String) few.get("why"), ((String) few.get("why")).startsWith("Veri az"));
+        Map<String, Object> few = Json.obj(AltiliLog.analyze(history(1.6, 4, 7), 1, 2000, TODAY).get("calib"));
+        assertEquals(Boolean.FALSE, few.get("use")); // 48 ayak: veri az (2.40: en az 60 doğrulanmış ayak)
+        assertTrue((String) few.get("why"), ((String) few.get("why")).startsWith("Doğrulanmış veri az"));
         assertNull(AltiliLog.analyze(history(1.6, 5, 7), 1, 2000, TODAY).get("fraction"));
     }
 
@@ -424,7 +424,7 @@ public class AltiliLogTest {
 
     @Test
     public void suspiciousResultsAreFlaggedAndOldRaceMatchesReset() {
-        // 2.38: favori neredeyse rastgele kazanıyor. İkramiyesiz, koşu numarasıyla gelen sonuçlarda bu gerçek olamaz: hatalı
+        // 2.38–2.40: favori neredeyse rastgele kazanıyor. İkramiyesiz (koşu tablosundan) sonuçlar sayılmaz; gerçek dışıysa uyarılır
         Map<String, Object> weak = history(0.01, 12, 7), byNo = history(0.01, 12, 7);
         for (Object o : AltiliLog.records(byNo)) {
             Map<String, Object> res = Json.obj(Json.obj(o).get("result"));
@@ -433,9 +433,10 @@ public class AltiliLogTest {
         }
         Map<String, Object> bad = AltiliLog.analyze(byNo, 1, 2000, TODAY);
         assertEquals(Boolean.TRUE, Json.obj(bad.get("fav")).get("absurd"));
+        assertEquals(0L, bad.get("settled")); // sayılmadı
+        assertEquals(24L, bad.get("unverified"));
+        assertEquals(0L, Json.obj(bad.get("calib")).get("n")); // öğrenmeye girmez
         assertEquals(Boolean.FALSE, Json.obj(bad.get("calib")).get("use"));
-        assertEquals(Boolean.FALSE, Json.obj(Json.obj(bad.get("calibRegion")).get("yabancı")).get("use"));
-        assertTrue(Json.str(Json.obj(bad.get("calib")), "why").startsWith("Sonuçlar hatalı"));
         // ikramiyesi AGF ile tutarlı (doğrulanmış) sonuçlarda favori zayıfsa bu gerçektir: doğrulandı, öğrenilir
         Map<String, Object> real = AltiliLog.analyze(weak, 1, 2000, TODAY);
         Map<String, Object> fv = Json.obj(real.get("fav"));

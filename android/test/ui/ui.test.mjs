@@ -945,7 +945,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, suspect: true};
   assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar şüpheli: favori %15 kazanmış, AGF %35 veriyor; bu fark tesadüf olamayacak kadar büyük ve güvenilir sonuçlar \(resmî 6'lı, koşu numarası\) bunu doğrulamıyor/);
   s.agf.learn.fav = {n: 108, win: 0.13, agf: 0.34, suspect: true, absurd: true};
-  assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar hatalı görünüyor: bir grupta favori AGF'nin verdiğinin yarısından az kazanmış/);
+  assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /İkramiyesiz okunan sonuçlar gerçek dışı: bu sonuçlarda favori AGF'nin verdiğinin yarısından az kazanmış \(yukarıda\); gerçek yarışta olmaz, kazananlar yanlış sütundan okunuyor\. Karnede sayılmıyor/);
   s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, confirmed: true};
   s.agf.learn.calibRegion = {yerli: {use: false}, "yabancı": {use: true, alphaUse: 0.62}};
   const kc = boot(s, "#firsat").$("#altiliKarne").textContent;
@@ -963,7 +963,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
     history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", cost: 600, status: "tutmadı", legs: 3, winners: ["2", "4", "6", "2", "7", "3"],
       from: "kombinasyon", trust: "tutarsız", ratio: 0.0021}]};
   const kb = boot(bad, "#firsat").$("#altiliKarne").textContent;
-  assert.match(kb, /Karne yalnızca doğrulanmış sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 \(birim başına\) çıkar\. Sayılmayan: 18 altılının ikramiyesi kazananlarla tutarsız \(kazananlar yanlış okunmuş\)/);
+  assert.match(kb, /Karne yalnızca ikramiyesiyle doğrulanmış sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 \(birim başına\) çıkar\. Sayılmayan: 18 altılının ikramiyesi kazananlarla tutarsız \(kazananlar yanlış okunmuş\)/);
   assert.match(kb, /Henüz doğrulanmış sonuç yok/);
   assert.match(kb, /Favori \(sayılmayan sonuçlarda\)İkramiyeyle tutarsız \(sayılmadı\): kazandı %13 · AGF %34 \(108 ayak\)/);
   assert.match(kb, /kazananlar 2-4-6-2-7-3 \(TJK resmî 6'lı sonucu\) · ikramiye AGF ile tutarsız ✗ \(×0,0021; sayılmadı\)/);

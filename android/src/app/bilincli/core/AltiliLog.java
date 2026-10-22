@@ -31,7 +31,7 @@ public final class AltiliLog {
     private AltiliLog() {}
 
     static final int KEEP_DAYS = 150, SETTLE_DAYS = 5, ANALYZE_DAYS = 120;
-    static final int MIN_LEGS = 150, MIN_SETTLED = 20, HISTORY = 12;
+    static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
     static final double PRIOR_LEGS = 200;
     /** Karşılaştırılan bütçeler (2.29: kullanıcının %7'si dahil; bilgi için, bütçe ayardan). */
@@ -87,9 +87,9 @@ public final class AltiliLog {
         return Json.dbl(res, "payout", 0) * pw / (unit > 0 ? unit : 1);
     }
 
-    /** Oran makul aralıkta mı (gerçek sonuçta ~0,73; geniş pay: 0,1–10). */
+    /** Oran makul aralıkta mı (gerçek sonuçta ~0,73; favori kombinasyonda biraz az, devirle fazla). 2.40: 0,1–10 → 0,2–6. */
     static boolean consistent(Double ratio) {
-        return ratio != null && ratio >= 0.1 && ratio <= 10;
+        return ratio != null && ratio >= 0.2 && ratio <= 6;
     }
 
     /** Sonucun doğrulaması: "ikramiye" (tutarlı), "tutarsız", "koşu no" (koşu numarasıyla eşleşme) ya da "doğrulanamadı". */
@@ -420,8 +420,7 @@ public final class AltiliLog {
         Map<String, Object> res = Json.obj(rec.get("result"));
         if (res == null) return true;
         if (Json.arr(res.get("winners")).size() != 6) return true; // bulunamamış
-        String t = trust(rec, res, unit);
-        return !"ikramiye".equals(t) && !"koşu no".equals(t);
+        return !"ikramiye".equals(trust(rec, res, unit)); // 2.40: yalnızca ikramiyeyle doğrulanan tamam
     }
 
     /** 2.39: yeniden doğrulanacak günler (analiz penceresinde), eskiden yeniye. */
@@ -466,7 +465,7 @@ public final class AltiliLog {
             if (w == null) continue;
             Map<String, Object> old = Json.obj(rec.get("result")), res = result(rec, w, unit, takeout, tax, now);
             String t = trust(rec, res, unit);
-            boolean verified = "ikramiye".equals(t) || "koşu no".equals(t), hadWinners = old != null && Json.arr(old.get("winners")).size() == 6;
+            boolean verified = "ikramiye".equals(t), hadWinners = old != null && Json.arr(old.get("winners")).size() == 6;
             if (!verified && hadWinners) continue; // eskisinden iyi değil
             if (hadWinners) res.put("previous", old.get("winners"));
             res.put("rechecked", true);
@@ -581,23 +580,25 @@ public final class AltiliLog {
         for (Map<String, Object> r : settled) {
             Map<String, Object> res = Json.obj(r.get("result"));
             String trust = trust(r, res, unit);
-            if ("ikramiye".equals(trust) || "koşu no".equals(trust)) {
+            if ("ikramiye".equals(trust)) { // 2.40: karne yalnızca ikramiyeyle doğrulanmış sonuçlarla
                 counted.add(r);
                 continue;
             }
             if ("tutarsız".equals(trust)) inconsistent++;
-            else unverified++;
+            else unverified++; // ikramiyesiz (koşu tablosundan okunanlar dahil)
             List<Object> win = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
             for (int k = 0; k < 6; k++) {
                 double[] f = favorite(String.valueOf(legs.get(k)), String.valueOf(win.get(k)));
-                if (f != null) count(groups, "tutarsız".equals(trust) ? "İkramiyeyle tutarsız (sayılmadı)" : "Doğrulanamayan (sayılmadı)", f[0] > 0, f[1]);
+                if (f != null) count(groups, "tutarsız".equals(trust) ? "İkramiyeyle tutarsız (sayılmadı)" : "koşu no".equals(trust)
+                        ? "Koşu tablosundan, ikramiyesiz (sayılmadı)" : "Doğrulanamayan (sayılmadı)", f[0] > 0, f[1]);
+                if (f != null) count(groups, (domestic(r) ? "Yerli" : "Yabancı") + " hipodrom (sayılmadı)", f[0] > 0, f[1]); // 2.40
             }
         }
         settled = counted;
         for (int i = 0; i < settled.size(); i++) {
             Map<String, Object> r = settled.get(i), res = Json.obj(r.get("result"));
             boolean sure = true, home = domestic(r); // 2.36: kaynak ve hipodrom
-            String source = "koşu no".equals(Json.str(res, "from")) ? "Koşu numarasıyla" : "İkramiyeyle doğrulanan";
+            String source = "İkramiyeyle doğrulanan";
             List<Object> win = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
             double payout = Json.dbl(res, "payout", 0);
             Map<String, Object> nc = Json.obj(r.get("notified")), pc = Json.obj(r.get("plan"));
@@ -689,8 +690,12 @@ public final class AltiliLog {
         // sapmadan fazla az kazanıyorsa (gerçek yarışta olmaz: AGF favorisi kabaca her üç koşudan birini kazanır) sonuçlar
         // yanlış okunuyordur; kaynak "resmî" görünse de hiçbir sonuçla öğrenilmez.
         // 2.38: ikramiyeyle doğrulanan sonuç gerçektir; makul olmama denetimi yalnızca ikramiyesiz (koşu numarasıyla) olanlara
-        double[] byNo = groups.containsKey("Koşu numarasıyla") ? groups.get("Koşu numarasıyla") : new double[3];
-        boolean absurd = absurd(byNo[0], byNo[1], byNo[2]);
+        // 2.40: yalnızca bilgi: ikramiyesiz (koşu tablosundan) okunan sonuçlar gerçek dışıysa uyarılır; sayılmadıkları için
+        // öğrenmeyi etkilemez (öğrenme ikramiyeyle doğrulanmış gerçek sonuçlarla)
+        boolean absurd = false;
+        for (Map.Entry<String, double[]> g : groups.entrySet()) {
+            if (g.getKey().endsWith("(sayılmadı)") && !g.getKey().startsWith("İkramiyeyle")) absurd |= absurd(g.getValue()[0], g.getValue()[1], g.getValue()[2]);
+        }
         double[] rel = groups.containsKey("güvenilir") ? groups.get("güvenilir") : new double[3];
         boolean confirmed = !absurd && rel[0] >= 40 && low(rel[0], rel[1], rel[2]);
         boolean suspect = absurd || (low(favN, favWin, favAgf) && !confirmed);
@@ -713,13 +718,7 @@ public final class AltiliLog {
         Map<String, Object> region = new LinkedHashMap<>(); // 2.36: yerli ve yabancı hipodromda ayrı düzeltme
         region.put("yerli", calibrate(dataHome));
         region.put("yabancı", calibrate(dataAway));
-        if (absurd) { // 2.37: yanlış okunmuş sonuçla öğrenmek kuponları bozar
-            for (Map<String, Object> c : Arrays.asList(calib, Json.obj(region.get("yerli")), Json.obj(region.get("yabancı")))) {
-                c.put("use", false);
-                c.put("alphaUse", 1.0);
-            }
-            calib.put("why", "Sonuçlar hatalı görünüyor (favori gerçek yarışta olmayacak kadar az kazanmış): öğrenilmiyor, AGF olduğu gibi.");
-        } else if (suspect && Json.bool(calib, "use", false) == false) {
+        if (suspect && !absurd && Json.bool(calib, "use", false) == false) {
             calib.put("why", "Sonuçlar şüpheli (AGF favorisi beklenenden çok az kazanmış, güvenilir sonuçlarla doğrulanmadı): öğrenmede kullanılmıyor.");
         }
         out.put("calib", calib);
@@ -793,7 +792,7 @@ public final class AltiliLog {
         c.put("use", use);
         c.put("alphaUse", use ? 1 + (a - 1) * n / (n + PRIOR_LEGS) : 1.0);
         String why;
-        if (n < MIN_LEGS) why = "Veri az (" + n + "/" + MIN_LEGS + " ayak): AGF olduğu gibi kullanılıyor.";
+        if (n < MIN_LEGS) why = "Doğrulanmış veri az (" + n + "/" + MIN_LEGS + " ayak): AGF olduğu gibi kullanılıyor.";
         else if (lr <= 3.84) why = "AGF'de anlamlı bir sapma yok: olduğu gibi kullanılıyor.";
         else if (!holdout) why = "Sapma görüldü ama son dönemde doğrulanmadı: kullanılmıyor.";
         else why = a > 1 ? "Kalabalık favorileri az, sürprizleri çok oynuyor: düzeltme kullanılıyor."

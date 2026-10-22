@@ -275,6 +275,11 @@ bildirim olarak gelir.
   sayfası yeni okuyucuyla yeniden okunur (yalnızca o hipodromlar): doğrulanan sonuç eskisinin yerine geçer, eski okuma
   saklanır ("yeniden doğrulandı (eski okuma …)"). Arka planda her seferinde 3 gün, "Sonuçları kontrol et, geçmişi yeniden
   doğrula" ile 10 gün; kayıt başına en çok 2 deneme.
+- **2.40: karne yalnızca ikramiyeyle doğrulanmış sonuçlarla.** Yeniden doğrulamadan sonra ikramiyesiyle doğrulanan yabancı
+  altılılarda favori %33 kazanmış (AGF %40: normal), koşu tablosundan (ikramiyesiz) okunan yerli sonuçlarda %0 (gerçek
+  dışı). Koşu tablosundan okunanlar artık sayılmaz (yeniden doğrulamaya girer), sayılmayanlar yerli/yabancı ayrı
+  gösterilir; tutarlılık penceresi 0,2–6. Öğrenme yalnızca doğrulanmış sonuçlarla ve 60 doğrulanmış ayaktan başlar
+  (önce 150; büzülme payı küçük veriyle aşırı düzeltmeyi önler).
 
 ## Beraberlik fırsatları (2.17)
 

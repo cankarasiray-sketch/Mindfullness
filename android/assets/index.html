@@ -768,9 +768,9 @@ function altiliKarne(L, sl) {
   var s = L.suggested || {}, a = L.all || {}, c = L.calib || {}, lg = L.legs || {}, fv = L.fav || {};
   var html = '<div id="altiliKarne"><h3 style="margin:14px 0 4px">Altılı karnesi</h3>';
   if (L.inconsistent || L.unverified) // 2.38: karne yalnızca doğrulanmış sonuçlarla
-    html += '<p class="small">Karne yalnızca <b>doğrulanmış</b> sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 (birim başına) çıkar. '
+    html += '<p class="small">Karne yalnızca <b>ikramiyesiyle doğrulanmış</b> sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 (birim başına) çıkar. '
       + "Sayılmayan: " + (L.inconsistent ? '<b class="neg">' + L.inconsistent + " altılının ikramiyesi kazananlarla tutarsız (kazananlar yanlış okunmuş)</b>" : "")
-      + (L.inconsistent && L.unverified ? " · " : "") + (L.unverified ? L.unverified + " altılıda ikramiye okunamadığından doğrulanamadı" : "") + ".</p>";
+      + (L.inconsistent && L.unverified ? " · " : "") + (L.unverified ? L.unverified + " altılıda ikramiye okunamadığından doğrulanamadı (koşu tablosundan okunanlar dahil)" : "") + ".</p>";
   if (!L.settled) {
     html += '<p class="small muted">Henüz ' + (L.inconsistent || L.unverified ? "doğrulanmış sonuç" : "sonuçlanan altılı") + " yok" + (L.pending ? " (" + L.pending + " altılı sonuç bekliyor)" : "")
       + ". Uygulama her gün önerdiği kuponu ve bütün altılıları kaydeder, sonuçları ertesi sabah TJK'dan okur.</p>";
@@ -791,9 +791,8 @@ function altiliKarne(L, sl) {
       + (fv.groups && fv.groups.length ? item("Favori: kaynağa ve hipodroma göre", fv.groups.map(function (g) { // 2.36
           return esc(g.label) + ": kazandı " + pc(g.win) + " · AGF " + pc(g.agf) + " (" + g.n + " ayak)";
         }).join("<br>")) : "")
-      + (fv.absurd ? '<p class="neg small"><b>Sonuçlar hatalı görünüyor:</b> bir grupta favori AGF\'nin verdiğinin yarısından az kazanmış (yukarıda). '
-        + "Gerçek yarışta AGF favorisi kabaca her üç koşudan birini kazanır; bu kadar az kazanması olmaz. Kazananlar yanlış okunuyor: öğrenme kapalı, karne güvenilir değil. "
-        + "\"Son altılılar\"daki kazananları TJK sonuçlarıyla karşılaştır.</p>"
+      + (fv.absurd ? '<p class="neg small"><b>İkramiyesiz okunan sonuçlar gerçek dışı:</b> bu sonuçlarda favori AGF\'nin verdiğinin yarısından az kazanmış (yukarıda); '
+        + "gerçek yarışta olmaz, kazananlar yanlış sütundan okunuyor. Karnede sayılmıyor, öğrenmeyi etkilemiyor.</p>"
       : fv.suspect ? '<p class="neg small"><b>Sonuçlar şüpheli:</b> favori ' + pc(fv.win) + " kazanmış, AGF " + pc(fv.agf)
         + " veriyor; bu fark tesadüf olamayacak kadar büyük ve güvenilir sonuçlar (resmî 6'lı, koşu numarası) bunu doğrulamıyor. "
         + "Kazananlar büyük ihtimalle yanlış okunuyor: öğrenme yalnızca güvenilir sonuçlarla.</p>" : "")
