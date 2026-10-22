@@ -245,6 +245,12 @@ public class AltiliLogTest {
         assertEquals(Arrays.asList("5", "7", "5", "1", "5", "2"), combos.get(0).get("nos"));
         assertEquals(12345.67, (Double) combos.get(0).get("payout"), 1e-9);
         assertEquals(Arrays.asList("4", "2", "3", "1", "5", "6"), combos.get(1).get("nos"));
+        assertEquals(98.10, (Double) combos.get(1).get("payout"), 1e-9); // 2.41: "(6 BİLEN)" araya girse de
+        // 2.41: TJK biçimi "6 BİLEN … 5 BİLEN …": 6/6 ikramiyesi alınır; 6 bilen çıkmadıysa ikramiye yok
+        List<Map<String, Object>> bilen = Tjk.combos("<p>6'LI GANYAN 5/7/5/1/5/2 6 BİLEN: 734.512,50 TL 5 BİLEN: 2.345,10 TL</p>"
+                + "<p>2. 6'LI GANYAN 3/1/4/1/5/2 5 BİLEN: 1.234,50 TL (6 bilen çıkmadı, devretti)</p>");
+        assertEquals(734512.50, (Double) bilen.get(0).get("payout"), 1e-9);
+        assertEquals(null, bilen.get(1).get("payout"));
         List<Map<String, Object>> races = Tjk.raceResults(html);
         assertEquals(2, races.size());
         assertEquals("5", races.get(0).get("winner")); // sıra sütununda 1
@@ -261,7 +267,7 @@ public class AltiliLogTest {
         Map<String, Object> c = Json.obj(Json.arr(r.get("cities")).get(0));
         assertEquals("Bursa", c.get("city"));
         assertEquals(2, Json.arr(c.get("combos")).size());
-        assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Bursa: 2 altılı sonucu (5/7/5/1/5/2, 4/2/3/1/5/6), 2 koşu"));
+        assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Bursa: 2 altılı sonucu (5/7/5/1/5/2 → 12.345,67 TL, 4/2/3/1/5/6 → 98,10 TL), 2 koşu"));
     }
 
     /** Sonuç sayfası gibi: "N. Koşu HH.MM" başlığı, sonra bitiriş sırasıyla tablo (at no başlıksız: "5 KARAYEL"). */

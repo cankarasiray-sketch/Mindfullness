@@ -154,15 +154,16 @@ public final class AltiliLog {
      * kullanılmaz. Değiştiyse true.
      */
     public static boolean migrate(Map<String, Object> store) {
-        if (store == null || Json.lng(store, "v", 1) >= 3) return false;
+        if (store == null || Json.lng(store, "v", 1) >= 4) return false;
         for (Object o : records(store)) {
             Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
+            r.remove("rechecks"); // 2.41: ikramiye okuyucusu düzeldi: doğrulanamayanlara yeniden deneme hakkı
             if (res == null) continue;
             if ("koşular".equals(Json.str(res, "from"))) res.put("from", "atlar");
             List<Object> w = Json.arr(res.get("winners"));
             if (w.size() == 6 && Tjk.raceNumbers(w)) r.remove("result"); // 2.37: koşu numaraları kazanan sanılmıştı: yeniden
         }
-        store.put("v", 3L);
+        store.put("v", 4L);
         return true;
     }
 
@@ -840,6 +841,7 @@ public final class AltiliLog {
                 if (res.get("previous") != null) h.put("previous", res.get("previous"));
                 Double ratio = payoutRatio(r, res, 1);
                 if (ratio != null) h.put("ratio", ratio);
+                if (!Json.bool(res, "estimated", false) && res.get("payout") != null) h.put("payout", res.get("payout")); // 2.41
                 h.put("ret", hit[6] ? Json.dbl(res, "payout", 0) * Json.lng(c, "kat", 1) : 0.0);
                 h.put("estimated", Json.bool(res, "estimated", false));
             }

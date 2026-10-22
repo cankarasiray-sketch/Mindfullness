@@ -810,9 +810,10 @@ function altiliKarne(L, sl) {
     var st = h.status === "tuttu" ? '<b class="pos">tuttu</b> · ' + tl0(h.ret) + (h.estimated ? " (tahmini)" : "")
       : h.status === "tutmadı" ? '<span class="neg">tutmadı</span> (' + h.legs + "/6 ayak)" : esc(h.status);
     var src = {kombinasyon: "TJK resmî 6'lı sonucu", "koşu no": "koşu numarasıyla", atlar: "atlarla eşleşme", "koşular": "atlarla eşleşme"}[h.from] || "TJK sonucu";
-    var chk = h.trust === "ikramiye" ? ' · <b class="pos">ikramiye AGF ile tutarlı ✓</b> (×' + num(h.ratio, 2) + ")"
+    var chk = (h.payout ? " · ikramiye " + tl0(h.payout) : "") // 2.41
+      + (h.trust === "ikramiye" ? ' · <b class="pos">ikramiye AGF ile tutarlı ✓</b> (×' + num(h.ratio, 2) + ")"
       : h.trust === "tutarsız" ? ' · <b class="neg">ikramiye AGF ile tutarsız ✗</b> (×' + num(h.ratio, h.ratio < 0.01 ? 4 : 2) + "; sayılmadı)"
-      : h.trust === "doğrulanamadı" ? " · doğrulanamadı (sayılmadı)" : "";
+      : h.trust === "doğrulanamadı" ? " · doğrulanamadı (sayılmadı)" : "");
     if (h.rechecked) chk += " · yeniden doğrulandı" + (h.previous ? " (eski okuma " + esc(h.previous.join("-")) + ")" : ""); // 2.39
     return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "")
       + (h.winners ? '<br>kazananlar ' + esc(h.winners.join("-")) + " (" + esc(src) + ")" + chk : "") + "</span><span>" + tl0(h.cost) + " · " + st + "</span></div>";

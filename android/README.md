@@ -280,6 +280,11 @@ bildirim olarak gelir.
   dışı). Koşu tablosundan okunanlar artık sayılmaz (yeniden doğrulamaya girer), sayılmayanlar yerli/yabancı ayrı
   gösterilir; tutarlılık penceresi 0,2–6. Öğrenme yalnızca doğrulanmış sonuçlarla ve 60 doğrulanmış ayaktan başlar
   (önce 150; büzülme payı küçük veriyle aşırı düzeltmeyi önler).
+- **2.41: ikramiye okuması.** Doğrulanmış 4 altılıda yabancı favori %42 (AGF %40: tahmin isabetli), yerli 2 altılı
+  ikramiyesiyle tutarlı sürpriz günü; 14 altılının 6'sında ikramiye hiç okunamamıştı: TJK satırındaki "6 BİLEN" gibi
+  araya giren rakam okuyucuyu durduruyordu. Artık "6 BİLEN … tutar" alınır, "5 BİLEN" tutarları alınmaz, 6 bilen
+  çıkmadıysa ikramiye yok sayılır. Sonuç kaydında her 6'lı sonucunun ikramiyesi yazar, "Son altılılar"da ikramiye
+  görünür; yeniden doğrulama hakları sıfırlanır (yeni okuyucuyla tekrar denenir).
 
 ## Beraberlik fırsatları (2.17)
 

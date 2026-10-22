@@ -961,12 +961,12 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   const bad = clone(s);
   bad.agf.learn = {settled: 0, pending: 0, inconsistent: 18, unverified: 0, fav: {groups: [{label: "İkramiyeyle tutarsız (sayılmadı)", n: 108, win: 0.13, agf: 0.34}]},
     history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", cost: 600, status: "tutmadı", legs: 3, winners: ["2", "4", "6", "2", "7", "3"],
-      from: "kombinasyon", trust: "tutarsız", ratio: 0.0021}]};
+      from: "kombinasyon", trust: "tutarsız", ratio: 0.0021, payout: 734512.5}]};
   const kb = boot(bad, "#firsat").$("#altiliKarne").textContent;
   assert.match(kb, /Karne yalnızca ikramiyesiyle doğrulanmış sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 \(birim başına\) çıkar\. Sayılmayan: 18 altılının ikramiyesi kazananlarla tutarsız \(kazananlar yanlış okunmuş\)/);
   assert.match(kb, /Henüz doğrulanmış sonuç yok/);
   assert.match(kb, /Favori \(sayılmayan sonuçlarda\)İkramiyeyle tutarsız \(sayılmadı\): kazandı %13 · AGF %34 \(108 ayak\)/);
-  assert.match(kb, /kazananlar 2-4-6-2-7-3 \(TJK resmî 6'lı sonucu\) · ikramiye AGF ile tutarsız ✗ \(×0,0021; sayılmadı\)/);
+  assert.match(kb, /kazananlar 2-4-6-2-7-3 \(TJK resmî 6'lı sonucu\) · ikramiye 734\.512,50 TL · ikramiye AGF ile tutarsız ✗ \(×0,0021; sayılmadı\)/);
   assert.match(k, /Karma 1\. altılı60,00 TL · tutmadı \(4\/6 ayak\)/);
   assert.match(k, /Ankara 1\. altılı60,00 TL · bekliyor/);
   assert.match(k, /Bursa: 1 altılı sonucu, 9 koşu/);

@@ -907,6 +907,36 @@ public final class Tjk {
         return true;
     }
 
+    private static final Pattern AMOUNT = Pattern.compile("(?<![\\d.,])(\\d{1,3}(?:\\.\\d{3})*,\\d{2})(?!\\d)");
+    private static final Pattern BILEN = Pattern.compile("(?i)(?<!\\d)([1-6])\\s*B[İIiı]LEN");
+    private static final Pattern GANYAN = Pattern.compile("(?i)ganyan");
+
+    /**
+     * 2.41: kombinasyondan sonraki metinde 6/6 ikramiyesi (sonraki "ganyan"a ya da 160 karaktere kadar). "6 BİLEN …
+     * 12.345,67" varsa o (önceden aradaki "6" rakamı yüzünden ikramiye hiç okunamıyordu); başka "N BİLEN" varsa ama 6 yoksa
+     * (6 bilen çıkmadı, devir) null; hiç yoksa ilk tutar.
+     */
+    static Double payoutAfter(String after) {
+        int end = Math.min(after.length(), 160);
+        Matcher g = GANYAN.matcher(after);
+        if (g.find() && g.start() < end) end = g.start();
+        String w = after.substring(0, end);
+        Matcher b = BILEN.matcher(w);
+        List<int[]> marks = new ArrayList<>();
+        while (b.find()) marks.add(new int[] {Integer.parseInt(b.group(1)), b.end()});
+        if (marks.isEmpty()) {
+            Matcher a = AMOUNT.matcher(w);
+            return a.find() ? AtYarisi.amount(a.group(1)) : null;
+        }
+        for (int i = 0; i < marks.size(); i++) {
+            if (marks.get(i)[0] != 6) continue;
+            int stop = i + 1 < marks.size() ? marks.get(i + 1)[1] : w.length();
+            Matcher a = AMOUNT.matcher(w.substring(marks.get(i)[1], Math.max(marks.get(i)[1], stop)));
+            if (a.find()) return AtYarisi.amount(a.group(1));
+        }
+        return null;
+    }
+
     static List<Map<String, Object>> combos(String html) {
         List<Map<String, Object>> out = new ArrayList<>();
         String t = text(html);
@@ -917,7 +947,8 @@ public final class Tjk {
             if (raceNumbers(nos) || RACES_AFTER.matcher(t.substring(m.end(1))).find()) continue; // 2.37: koşu numaraları
             Map<String, Object> c = new LinkedHashMap<>();
             c.put("nos", nos);
-            if (m.group(2) != null) c.put("payout", AtYarisi.amount(m.group(2)));
+            Double payout = payoutAfter(t.substring(m.end(1)));
+            if (payout != null) c.put("payout", payout);
             out.add(c);
         }
         return out;
@@ -1093,7 +1124,10 @@ public final class Tjk {
             city.put("races", new ArrayList<Object>(races));
             cities.add(city);
             StringBuilder cs = new StringBuilder(); // 2.37: okunan 6'lı sonuçları ayrıntıda (doğrulamak için)
-            for (Map<String, Object> co : combos) cs.append(cs.length() == 0 ? "" : ", ").append(String.join("/", (List) co.get("nos")));
+            for (Map<String, Object> co : combos) {
+                cs.append(cs.length() == 0 ? "" : ", ").append(String.join("/", (List) co.get("nos")));
+                cs.append(co.get("payout") != null ? " → " + Fmt.num((Double) co.get("payout"), 2) + " TL" : " → ikramiye yok"); // 2.41
+            }
             log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu" + (combos.isEmpty() ? "" : " (" + cs + ")") + ", " + races.size() + " koşu"
                     + (races.isEmpty() ? "" : " (kazananlar " + winnersText(races) + "; sütunlar: " + races.get(0).get("head") + ")")
                     + (combos.isEmpty() && races.isEmpty() ? " (" + excerpt(body) + ")" : ""));
