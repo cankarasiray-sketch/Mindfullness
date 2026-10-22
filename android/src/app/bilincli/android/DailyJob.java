@@ -28,6 +28,11 @@ public final class DailyJob extends JobService {
                             profit(repo);
                         }
                         altili(repo); // 2 saatte bir, 09–21
+                        try {
+                            repo.altiliBackfillStep(); // 2.46: geriye dönük 6 aylık tarama (Wi-Fi'de, kaldığı yerden)
+                        } catch (RuntimeException ignored) {
+                            // bir sonraki saatte
+                        }
                         return;
                     }
                     if (radar) {

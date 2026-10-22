@@ -976,7 +976,13 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Ankara 1\. altılı60,00 TL · bekliyor/);
   assert.match(k, /Bursa: 1 altılı sonucu, 9 koşu/);
   f.button("Sonuçları kontrol et, geçmişi yeniden doğrula").click();
-  assert.ok(f.$$("button").some((b) => b.textContent.trim() === "Geçmiş 7 günü tahmin et, karneye ekle")); // 2.43
+  assert.ok(f.$$("button").some((b) => b.textContent.trim() === "Geçmiş 6 ayı tahmin et, karneye ekle")); // 2.43–2.46
+  const bfs = clone(s);
+  bfs.agf.backfill = {from: "2026-10-21", to: "2026-04-25", next: "2026-09-21", days: 180, added: 412, settled: 380, verified: 301, at: "2026-10-22T19:00:00Z"};
+  const fb = boot(bfs, "#firsat");
+  assert.match(fb.$("#altiliKarne").textContent, /Geriye dönük tarama: 30\/180 gün \(kalanı arka planda, Wi-Fi'deyken\) · 412 altılı tahmin edildi, 301 ikramiyeyle doğrulandı\./);
+  fb.button("Geçmiş taramayı şimdi sürdür").click();
+  assert.deepEqual(fb.calls.at(-1), {action: "altiliBacktest", payload: {resume: true}});
   assert.equal(f.calls.at(-1).action, "altiliSettle");
   s.agf.learn = {settled: 0, pending: 3, history: []};
   f.w.refresh();

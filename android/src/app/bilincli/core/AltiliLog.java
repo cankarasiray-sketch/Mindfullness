@@ -30,7 +30,7 @@ import java.util.Set;
 public final class AltiliLog {
     private AltiliLog() {}
 
-    static final int KEEP_DAYS = 150, SETTLE_DAYS = 5, ANALYZE_DAYS = 120;
+    static final int KEEP_DAYS = 200, SETTLE_DAYS = 5, ANALYZE_DAYS = 190; // 2.46: 6 aylık geriye dönük karne
     static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12;
     /** 2.42: bölge kuralı için en az doğrulanmış ayak (3 altılı). */
     static final int REGION_MIN_LEGS = 18; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)

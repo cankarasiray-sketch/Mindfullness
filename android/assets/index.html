@@ -828,8 +828,13 @@ function altiliKarne(L, sl) {
     return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "") + (h.backtest ? " · geriye dönük" : "")
       + (h.winners ? '<br>kazananlar ' + esc(h.winners.join("-")) + " (" + esc(src) + ")" + chk : "") + "</span><span>" + tl0(h.cost) + " · " + st + "</span></div>";
   }).join("") + "</details>";
+  var bf = S.agf && S.agf.backfill, bfDays = bf ? (bf.days || 180) : 0, bfLeft = 0; // 2.46: geriye dönük tarama
+  if (bf && bf.next && bf.to && bf.next >= bf.to) bfLeft = Math.max(0, Math.round((Date.parse(bf.next) - Date.parse(bf.to)) / 86400000) + 1);
   html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları kontrol et, geçmişi yeniden doğrula</button>'
-    + '<button class="b ghost" onclick="act(\'altiliBacktest\')">Geçmiş 7 günü tahmin et, karneye ekle</button></div>'; // 2.43
+    + (bfLeft > 0 && bf && bf.at ? '<button class="b ghost" onclick="act(\'altiliBacktest\', {resume: true})">Geçmiş taramayı şimdi sürdür</button>'
+      : '<button class="b ghost" onclick="act(\'altiliBacktest\')">Geçmiş 6 ayı tahmin et, karneye ekle</button>') + "</div>"; // 2.43–2.46
+  if (bf) html += '<p class="small muted">Geriye dönük tarama: ' + (bfDays - bfLeft) + "/" + bfDays + " gün" + (bfLeft > 0 ? " (kalanı arka planda, Wi-Fi'deyken)" : " · tamamlandı")
+    + " · " + (bf.added || 0) + " altılı tahmin edildi, " + (bf.verified || 0) + " ikramiyeyle doğrulandı.</p>";
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
   return html + "</div>";
 }

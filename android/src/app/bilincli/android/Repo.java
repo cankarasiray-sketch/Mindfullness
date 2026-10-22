@@ -575,7 +575,8 @@ final class Repo {
     Map<String, Object> agfView() {
         if (isDemo()) return null;
         Settings st = ledger.settings();
-        String cacheKey = agfRaw + "|" + altiliLogRaw + "|" + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
+        String cacheKey = (agfRaw == null ? 0 : agfRaw.hashCode()) + "|" + (altiliLogRaw == null ? 0 : altiliLogRaw.hashCode()) + "|" // 2.46: büyük defter
+                + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
                 + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
@@ -655,6 +656,8 @@ final class Repo {
             a.put("unit", in.unit);
         }
         v.put("altilis", list);
+        Map<String, Object> bf = altiliBackfillState(); // 2.46: geriye dönük taramanın durumu
+        if (bf != null) v.put("backfill", bf);
         Map<String, Object> live = altiliLiveStored(); // 2.34: ayak sonuçları
         if (live != null && Fmt.dayKey(Instant.now()).equals(Json.str(live, "day"))) {
             Map<String, Object> byKeyLive = Json.obj(live.get("byKey"));
@@ -819,66 +822,131 @@ final class Repo {
     }
 
     /**
-     * 2.43: geriye dönük tahmin: son `days` günün TJK AGF'si okunur, her altılıya bugünkü kurallarla kupon kurulur ve
-     * deftere "geriye dönük" yazılır; o günün sonuçlarıyla (ikramiyeyle doğrulanarak) sonuçlanır ve karneyi besler.
-     * Defterde zaten olan altılılara dokunulmaz. Özet metni.
+     * 2.43: geriye dönük tahmin: bir günün TJK AGF'si okunur, her altılıya bugünkü kurallarla kupon kurulur ve deftere
+     * "geriye dönük" yazılır; o günün sonuçlarıyla (ikramiyeyle doğrulanarak) sonuçlanır ve karneyi besler. Defterde zaten
+     * olan altılılara dokunulmaz. {yeni, sonuçlanan, doğrulanan}.
      */
-    String altiliBacktest(int days, Daily.Progress progress) {
+    private int[] backtestDay(java.time.LocalDate d, AndroidHttp http, Map<String, Object> inp, Settings s, Instant now, List<Object> lines,
+            Daily.Progress progress) {
+        String day = d.toString(), today = now.atOffset(Fmt.TR).toLocalDate().toString();
+        java.util.Set<String> have;
+        synchronized (altiliLogLock) {
+            have = AltiliLog.keys(altiliLog(), day);
+        }
+        Map<String, Object> r = Tjk.read(http, d, now, progress, false); // 2.46: koşu saatleri gerekmez
+        List<Object> fresh = new ArrayList<>();
+        java.util.Set<Integer> cities = new java.util.HashSet<>();
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        for (Object o : Json.arr(r.get("altilis"))) {
+            Map<String, Object> a = Json.obj(o);
+            String key = Json.str(a, "key");
+            if (key == null || have.contains(key)) continue;
+            List<String> legs = new ArrayList<>();
+            for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
+            a.put("plan", Altili.plan(legs, altiliInputsFor(key, inp, a))); // bugünkü kurallarla
+            a.put("backtest", true);
+            fresh.add(a);
+            keys.add(key);
+            if (a.get("cityId") != null) cities.add((int) Json.lng(a, "cityId", 0));
+        }
+        lines.add("Geriye dönük " + day + ": " + Json.arr(r.get("altilis")).size() + " altılı okundu, " + fresh.size() + " yeni");
+        if (fresh.isEmpty()) return new int[3];
+        Map<String, Object> res = Tjk.results(http, d, progress, cities);
+        for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
+        synchronized (altiliLogLock) {
+            Map<String, Object> log = altiliLog();
+            AltiliLog.record(log, day, fresh);
+            AltiliLog.settle(log, day, res, s.altiliUnit, s.altiliTakeout, s.altiliTax, today, now);
+            int[] o = AltiliLog.outcome(log, day, keys, s.altiliUnit);
+            lines.add("  " + o[0] + " sonuçlandı, " + o[1] + " ikramiyeyle doğrulandı");
+            if (lines.size() > 400) lines.subList(0, lines.size() - 400).clear(); // kayıt kısa kalsın
+            Map<String, Object> sl = new LinkedHashMap<>();
+            sl.put("at", now.toString());
+            sl.put("log", lines);
+            log.put("settleLog", sl);
+            saveAltiliLog(log);
+            return new int[] {fresh.size(), o[0], o[1]};
+        }
+    }
+
+    /** 2.46: geriye dönük tarama ne kadar geriye (6 ay); bir seferde en çok bu kadar süre (iş sınırı). */
+    static final int ALTILI_BACKFILL_DAYS = 180;
+    static final long ALTILI_BACKFILL_STEP_MS = 4 * 60 * 1000;
+
+    /** Geriye dönük taramanın durumu: {from (en yeni gün), to (en eski gün), next (sıradaki gün), days, added, settled, verified, at}. */
+    Map<String, Object> altiliBackfillState() {
+        try {
+            String raw = prefs.getString("altiliBackfill", "");
+            return raw.isEmpty() ? null : Json.parseObject(raw);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 2.46: geriye dönük tarama: dünden geriye `days` gün, günleri yeniden eskiye işler; kaldığı yerden devam eder. Önceki
+     * günlerin kaydı olan gün atlanır. En çok budgetMs süre çalışır. Özet metni.
+     */
+    String altiliBackfill(boolean start, int days, long budgetMs, Daily.Progress progress) {
         if (isDemo()) return "Demoda geriye dönük tahmin yok.";
         Instant now = Instant.now();
         java.time.LocalDate today = now.atOffset(Fmt.TR).toLocalDate();
+        Map<String, Object> st = altiliBackfillState();
+        if (start || st == null) {
+            st = new LinkedHashMap<>();
+            st.put("from", today.minusDays(1).toString());
+            st.put("to", today.minusDays(days).toString());
+            st.put("next", today.minusDays(1).toString());
+            st.put("days", (long) days);
+            st.put("added", 0L);
+            st.put("settled", 0L);
+            st.put("verified", 0L);
+        }
+        String next = Json.str(st, "next"), to = Json.str(st, "to");
+        if (next == null || to == null || next.compareTo(to) < 0) return "Geriye dönük tarama tamamlandı.";
         Settings s = ledger.settings();
         AndroidHttp http = new AndroidHttp(app);
         Map<String, Object> inp = altiliInputs();
         agfView(); // öğrenilen düzeltme güncel olsun
-        List<Object> lines = new ArrayList<>();
-        int added = 0, settled = 0, verified = 0;
-        for (int i = days; i >= 1; i--) {
-            java.time.LocalDate d = today.minusDays(i);
-            String day = d.toString();
-            if (progress != null) progress.step(day + ": AGF okunuyor (geriye dönük)…");
-            java.util.Set<String> have;
-            synchronized (altiliLogLock) {
-                have = AltiliLog.keys(altiliLog(), day);
-            }
-            Map<String, Object> r = Tjk.read(http, d, now, progress);
-            List<Object> fresh = new ArrayList<>();
-            java.util.Set<Integer> cities = new java.util.HashSet<>();
-            java.util.Set<String> keys = new java.util.HashSet<>();
-            for (Object o : Json.arr(r.get("altilis"))) {
-                Map<String, Object> a = Json.obj(o);
-                String key = Json.str(a, "key");
-                if (key == null || have.contains(key)) continue;
-                List<String> legs = new ArrayList<>();
-                for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
-                a.put("plan", Altili.plan(legs, altiliInputsFor(key, inp, a))); // bugünkü kurallarla
-                a.put("backtest", true);
-                fresh.add(a);
-                keys.add(key);
-                if (a.get("cityId") != null) cities.add((int) Json.lng(a, "cityId", 0));
-            }
-            lines.add("Geriye dönük " + day + ": " + Json.arr(r.get("altilis")).size() + " altılı okundu, " + fresh.size() + " yeni");
-            if (fresh.isEmpty()) continue;
-            Map<String, Object> res = Tjk.results(http, d, progress, cities);
-            for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
-            synchronized (altiliLogLock) {
-                Map<String, Object> log = altiliLog();
-                AltiliLog.record(log, day, fresh);
-                AltiliLog.settle(log, day, res, s.altiliUnit, s.altiliTakeout, s.altiliTax, today.toString(), now);
-                int[] o = AltiliLog.outcome(log, day, keys, s.altiliUnit);
-                lines.add("  " + o[0] + " sonuçlandı, " + o[1] + " ikramiyeyle doğrulandı");
-                settled += o[0];
-                verified += o[1];
-                Map<String, Object> sl = new LinkedHashMap<>();
-                sl.put("at", now.toString());
-                sl.put("log", lines);
-                log.put("settleLog", sl);
-                saveAltiliLog(log);
-            }
-            added += fresh.size();
+        List<Object> lines;
+        synchronized (altiliLogLock) {
+            Map<String, Object> sl = Json.obj(altiliLog().get("settleLog"));
+            lines = sl == null ? new ArrayList<Object>() : new ArrayList<>(Json.arr(sl.get("log")));
         }
-        return "Geçmiş " + days + " gün: " + added + " altılı tahmin edildi, " + settled + " sonuçlandı, " + verified
-                + " ikramiyeyle doğrulandı (karnede yalnızca doğrulananlar sayılır).";
+        long t0 = System.currentTimeMillis();
+        int doneDays = 0;
+        java.time.LocalDate d = java.time.LocalDate.parse(next);
+        while (d.toString().compareTo(to) >= 0 && System.currentTimeMillis() - t0 < budgetMs) {
+            boolean covered;
+            synchronized (altiliLogLock) {
+                covered = !AltiliLog.keys(altiliLog(), d.toString()).isEmpty(); // o günün kaydı var: atla
+            }
+            if (!covered) {
+                if (progress != null) progress.step("Geriye dönük " + d + " (" + (Json.lng(st, "days", days) - java.time.temporal.ChronoUnit.DAYS.between(d, today) + 1) + " gün kaldı)…");
+                int[] o = backtestDay(d, http, inp, s, now, lines, progress);
+                st.put("added", Json.lng(st, "added", 0) + o[0]);
+                st.put("settled", Json.lng(st, "settled", 0) + o[1]);
+                st.put("verified", Json.lng(st, "verified", 0) + o[2]);
+            }
+            d = d.minusDays(1);
+            doneDays++;
+            st.put("next", d.toString());
+            st.put("at", now.toString());
+            prefs.edit().putString("altiliBackfill", Json.write(st)).apply();
+        }
+        long left = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(to), d) + 1);
+        return "Geriye dönük: " + doneDays + " gün işlendi (toplam " + Json.lng(st, "added", 0) + " altılı tahmin, " + Json.lng(st, "verified", 0)
+                + " ikramiyeyle doğrulandı)" + (left > 0 ? "; kalan " + left + " gün arka planda Wi-Fi'deyken işlenir." : "; tarama tamamlandı.");
+    }
+
+    /** 2.46: arka planda sürdür: yalnızca Wi-Fi gibi ücretsiz ağda (AGF sayfaları büyük). Yaptıysa true. */
+    boolean altiliBackfillStep() {
+        Map<String, Object> st = altiliBackfillState();
+        if (st == null || isDemo() || Json.str(st, "next") == null || Json.str(st, "next").compareTo(Json.str(st, "to")) < 0) return false;
+        android.net.ConnectivityManager cm = app.getSystemService(android.net.ConnectivityManager.class);
+        if (cm == null || cm.isActiveNetworkMetered()) return false;
+        altiliBackfill(false, ALTILI_BACKFILL_DAYS, ALTILI_BACKFILL_STEP_MS, null);
+        return true;
     }
 
     /** 2.39: bir seferde yeniden doğrulanacak en çok gün (arka planda az; elle "Sonuçları şimdi kontrol et"). */

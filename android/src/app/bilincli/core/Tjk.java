@@ -395,6 +395,11 @@ public final class Tjk {
      * Önce program sayfasından o gün koşan hipodromlar, sonra her biri için 1. ve 2. altılının AGF sayfası okunur.
      */
     public static Map<String, Object> read(Http http, LocalDate day, Instant now, Daily.Progress progress) {
+        return read(http, day, now, progress, true);
+    }
+
+    /** times: koşu saatleri için şehir programı da okunur (2.46: geriye dönük taramada gerekmez; daha az sayfa). */
+    public static Map<String, Object> read(Http http, LocalDate day, Instant now, Daily.Progress progress, boolean times) {
         List<Object> log = new ArrayList<>(), altilis = new ArrayList<>();
         int requests = 0, failures = 0, waiting = 0;
         boolean reachable = true;
@@ -475,7 +480,7 @@ public final class Tjk {
                 // sonra şehrin programı (bağlantıdaki sayfa, olmazsa şehir sekmesinin adresi); bulunamazsa nedeni kartta.
                 List<Object> races = agfLegRaces(html);
                 String raceWhy = null;
-                if (races == null && links.containsKey(c.getKey())) {
+                if (races == null && times && links.containsKey(c.getKey())) {
                     Object[] prog = programs.get(c.getKey());
                     if (prog == null) {
                         step(progress, c.getValue() + " programı okunuyor (koşu saatleri)…");

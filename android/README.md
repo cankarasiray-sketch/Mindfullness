@@ -304,6 +304,11 @@ bildirim olarak gelir.
   değeri olunca mümkün. Kârsız kupon bilgi olarak görünür ama "kâr kuralı: oynama" der; günün kuponu olarak önerilmez ve
   bildirilmez. Kupon kaydına tahmini dönüş yazılır; karnede "Kâr kuralına uyanlar (dönüş ≥ %110)" gerçekleşen ve beklenen
   dönüşle; kurala uyan yoksa bütün kuponların beklenen ve gerçekleşen dönüşü.
+- **2.46: 6 aylık geriye dönük karne.** Kullanıcı istedi. "Geçmiş 6 ayı tahmin et, karneye ekle": dünden geriye 180 gün,
+  günleri yeniden eskiye işler (koşu saatleri okunmaz: daha az sayfa); ilk bölüm hemen (en çok 4 dk), kalanı her saatlik
+  işte 4 dk'lık parçalarla yalnızca Wi-Fi gibi ücretsiz ağda (AGF sayfaları büyük: 6 ay birkaç yüz MB); kaldığı yerden
+  sürer, kaydı olan gün atlanır. Karnede ilerleme ("30/180 gün · N altılı tahmin, M doğrulandı") ve "Geçmiş taramayı şimdi
+  sürdür". Defter 200 gün, analiz 190 gün tutar; görünüm önbelleği büyük defterde içerik yerine özetle karşılaştırılır.
 
 ## Beraberlik fırsatları (2.17)
 

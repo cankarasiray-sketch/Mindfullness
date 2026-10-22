@@ -422,10 +422,10 @@ public final class Bridge {
                 });
                 return n > 0 ? n + " altılının sonucu işlendi ya da yeniden doğrulandı." : "Yeni sonuçlanan ya da doğrulanan altılı yok (sonuçlar henüz yayınlanmadıysa ya da okunamadıysa karne aynı kalır; ayrıntı karnede).";
             }
-            case "altiliBacktest": { // 2.43: geçmiş 7 gün için tahmin, sonuçlarla karşılaştırma
+            case "altiliBacktest": { // 2.43–2.46: geçmiş 6 ay için tahmin, sonuçlarla karşılaştırma (kaldığı yerden)
                 requireReal(repo);
-                progress("Geçmiş günlerin AGF'si ve sonuçları okunuyor (kredi harcamaz; birkaç dakika sürebilir)…");
-                return repo.altiliBacktest(7, new Daily.Progress() {
+                progress("Geçmiş günlerin AGF'si ve sonuçları okunuyor (kredi harcamaz; ilk bölüm birkaç dakika sürer)…");
+                return repo.altiliBackfill(!Boolean.TRUE.equals(p.get("resume")), Repo.ALTILI_BACKFILL_DAYS, Repo.ALTILI_BACKFILL_STEP_MS, new Daily.Progress() {
                     @Override
                     public void step(String text) {
                         progress(text);
