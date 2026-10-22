@@ -767,9 +767,16 @@ function altiliKarne(L, sl) {
   var tl0 = function (x) { return tl(Math.round(x * 100)); }, pc = function (x) { return "%" + num(x * 100, 0); };
   var s = L.suggested || {}, a = L.all || {}, c = L.calib || {}, lg = L.legs || {}, fv = L.fav || {};
   var html = '<div id="altiliKarne"><h3 style="margin:14px 0 4px">Altılı karnesi</h3>';
+  if (L.inconsistent || L.unverified) // 2.38: karne yalnızca doğrulanmış sonuçlarla
+    html += '<p class="small">Karne yalnızca <b>doğrulanmış</b> sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 (birim başına) çıkar. '
+      + "Sayılmayan: " + (L.inconsistent ? '<b class="neg">' + L.inconsistent + " altılının ikramiyesi kazananlarla tutarsız (kazananlar yanlış okunmuş)</b>" : "")
+      + (L.inconsistent && L.unverified ? " · " : "") + (L.unverified ? L.unverified + " altılıda ikramiye okunamadığından doğrulanamadı" : "") + ".</p>";
   if (!L.settled) {
-    html += '<p class="small muted">Henüz sonuçlanan altılı yok' + (L.pending ? " (" + L.pending + " altılı sonuç bekliyor)" : "")
+    html += '<p class="small muted">Henüz ' + (L.inconsistent || L.unverified ? "doğrulanmış sonuç" : "sonuçlanan altılı") + " yok" + (L.pending ? " (" + L.pending + " altılı sonuç bekliyor)" : "")
       + ". Uygulama her gün önerdiği kuponu ve bütün altılıları kaydeder, sonuçları ertesi sabah TJK'dan okur.</p>";
+    if (fv.groups && fv.groups.length) html += '<div class="list">' + item("Favori (sayılmayan sonuçlarda)", fv.groups.map(function (g) {
+      return esc(g.label) + ": kazandı " + pc(g.win) + " · AGF " + pc(g.agf) + " (" + g.n + " ayak)";
+    }).join("<br>")) + "</div>";
   } else {
     var f = L.fraction, strat = (L.strategies || []).map(function (x) {
       return "kasanın " + pctOf(x.fraction) + ": " + x.hits + "/" + x.n + " tuttu, getiri " + pc(x.roi);
@@ -804,8 +811,11 @@ function altiliKarne(L, sl) {
     var st = h.status === "tuttu" ? '<b class="pos">tuttu</b> · ' + tl0(h.ret) + (h.estimated ? " (tahmini)" : "")
       : h.status === "tutmadı" ? '<span class="neg">tutmadı</span> (' + h.legs + "/6 ayak)" : esc(h.status);
     var src = {kombinasyon: "TJK resmî 6'lı sonucu", "koşu no": "koşu numarasıyla", atlar: "atlarla eşleşme", "koşular": "atlarla eşleşme"}[h.from] || "TJK sonucu";
+    var chk = h.trust === "ikramiye" ? ' · <b class="pos">ikramiye AGF ile tutarlı ✓</b> (×' + num(h.ratio, 2) + ")"
+      : h.trust === "tutarsız" ? ' · <b class="neg">ikramiye AGF ile tutarsız ✗</b> (×' + num(h.ratio, h.ratio < 0.01 ? 4 : 2) + "; sayılmadı)"
+      : h.trust === "doğrulanamadı" ? " · doğrulanamadı (sayılmadı)" : "";
     return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "")
-      + (h.winners ? '<br>kazananlar ' + esc(h.winners.join("-")) + " (" + esc(src) + ")" : "") + "</span><span>" + tl0(h.cost) + " · " + st + "</span></div>";
+      + (h.winners ? '<br>kazananlar ' + esc(h.winners.join("-")) + " (" + esc(src) + ")" + chk : "") + "</span><span>" + tl0(h.cost) + " · " + st + "</span></div>";
   }).join("") + "</details>";
   html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları şimdi kontrol et</button></div>';
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";

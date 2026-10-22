@@ -264,6 +264,12 @@ bildirim olarak gelir.
   sonuçları yazar. Bir grupta favori AGF'nin yarısından az (ve 3 standart sapma) kazanıyorsa karne "Sonuçlar hatalı
   görünüyor" der ve hiçbir kaynakla öğrenilmez. Yeni ayar "En az 6/6 olasılığı (%)" (varsayılan %30): kupon tavanıyla 6/6
   olasılığı bunun altındaki altılı "oynama" der, önerilmez, bildirilmez; sırada sona gider.
+- **2.38: sonuçlar ikramiyeyle doğrulanır.** AGF altılı bahislerinin atlara dağılımı olduğundan gerçek sonuçta
+  ikramiye × kazanan atların AGF paylarının çarpımı ≈ birim × (1 − kesinti) ≈ 0,73 çıkar. Her sonuç böyle denetlenir
+  (0,1–10 arası tutarlı): karne yalnızca doğrulanmış (ya da koşu numarasıyla eşleşmiş) sonuçlarla hesaplanır; tutarsız ve
+  ikramiyesi okunamayanlar sayılmaz, yalnızca karşılaştırma için gösterilir; "Son altılılar"da her sonucun oranı ve ✓/✗.
+  Sayfada birden çok 6'lı sonucu varsa ikramiyesi o altılının AGF'siyle tutarlı olan seçilir (1. ve 2. altılı karışmaz).
+  Doğrulanmış sonuçlarda favori zayıfsa bu gerçektir: "Doğrulandı" denir ve öğrenilir.
 
 ## Beraberlik fırsatları (2.17)
 

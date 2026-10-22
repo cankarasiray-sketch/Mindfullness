@@ -69,6 +69,46 @@ public final class AltiliLog {
         return c;
     }
 
+    /**
+     * 2.38: ikramiye–AGF tutarlılığı: ikramiye × kazanan kombinasyonun AGF payı (ayak paylarının çarpımı) / birim. AGF
+     * altılı bahislerinin atlara dağılımıdır; gerçek sonuçta bu oran ≈ 1 − kesinti (~0,73; devirle büyür, favori
+     * kombinasyonlarda biraz küçülür). Yanlış okunmuş kazananlarda çoğunlukla çok küçük ya da çok büyük çıkar. Gerçek
+     * ikramiye yoksa null.
+     */
+    static Double payoutRatio(Map<String, Object> rec, Map<String, Object> res, double unit) {
+        if (res == null || Json.bool(res, "estimated", false) || !(Json.dbl(res, "payout", 0) > 0)) return null;
+        List<Object> w = Json.arr(res.get("winners")), legs = Json.arr(rec.get("legs"));
+        if (w.size() != 6 || legs.size() < 6) return null;
+        double pw = 1;
+        for (int k = 0; k < 6; k++) {
+            Double p = agf(String.valueOf(legs.get(k))).get(String.valueOf(w.get(k)));
+            pw *= p == null ? MISSING_P : p;
+        }
+        return Json.dbl(res, "payout", 0) * pw / (unit > 0 ? unit : 1);
+    }
+
+    /** Oran makul aralıkta mı (gerçek sonuçta ~0,73; geniş pay: 0,1–10). */
+    static boolean consistent(Double ratio) {
+        return ratio != null && ratio >= 0.1 && ratio <= 10;
+    }
+
+    /** Sonucun doğrulaması: "ikramiye" (tutarlı), "tutarsız", "koşu no" (koşu numarasıyla eşleşme) ya da "doğrulanamadı". */
+    static String trust(Map<String, Object> rec, Map<String, Object> res, double unit) {
+        if ("koşu no".equals(Json.str(res, "from"))) return "koşu no";
+        Double ratio = payoutRatio(rec, res, unit);
+        if (ratio == null) return "doğrulanamadı";
+        return consistent(ratio) ? "ikramiye" : "tutarsız";
+    }
+
+    /** Ayakta favori kazandı mı ve favorinin AGF payı: {1/0, pay}; kazanan AGF listesinde yoksa null. */
+    private static double[] favorite(String leg, String winner) {
+        Map<String, Double> agf = agf(leg);
+        if (!agf.containsKey(winner) || agf.size() < 2) return null;
+        String fav = null;
+        for (Map.Entry<String, Double> e : agf.entrySet()) if (fav == null || e.getValue() > agf.get(fav)) fav = e.getKey();
+        return new double[] {fav.equals(winner) ? 1 : 0, agf.get(fav)};
+    }
+
     /** 2.36: yerli hipodrom mu (TJK şehir numarası 1–10 ya da yerli şehir adı); yabancıda AGF Türk bahisçilerin payı. */
     public static boolean domestic(Map<String, Object> r) {
         long id = Json.lng(r, "cityId", -1);
@@ -286,14 +326,27 @@ public final class AltiliLog {
         int no = (int) Json.lng(rec, "no", 0);
         if (no >= 1 && no <= combos.size()) order.add(combos.get(no - 1));
         order.addAll(combos);
+        Object[] first = null, best = null;
+        double bestDev = Double.MAX_VALUE;
         for (Object o : order) {
             List<Object> nos = Json.arr(Json.obj(o).get("nos"));
             if (nos.size() != 6 || Tjk.raceNumbers(nos)) continue; // 2.37: koşu numaraları kazanan değil
             boolean ok = true;
             for (int k = 0; k < 6 && ok; k++) ok = legs.get(k).containsKey(String.valueOf(nos.get(k)));
-            if (ok) return new Object[] {nos, Json.num(Json.obj(o), "payout"), "kombinasyon"};
+            if (!ok) continue;
+            Object[] c = {nos, Json.num(Json.obj(o), "payout"), "kombinasyon"};
+            if (first == null) first = c;
+            // 2.38: sayfada birden çok 6'lı sonucu varsa ikramiyesi bu altılının AGF'siyle tutarlı olan (1. ile 2. altılı karışmasın)
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("winners", nos);
+            res.put("payout", c[1]);
+            Double ratio = payoutRatio(rec, res, 1);
+            if (consistent(ratio) && Math.abs(Math.log(ratio / 0.73)) < bestDev) {
+                bestDev = Math.abs(Math.log(ratio / 0.73));
+                best = c;
+            }
         }
-        return null;
+        return best != null ? best : first;
     }
 
     /** Altılının kazananları: önce sayfadaki kazanan kombinasyon (ayaklarla tutarlıysa), yoksa koşu tablolarından. */
@@ -444,11 +497,30 @@ public final class AltiliLog {
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
         List<LegData> data = new ArrayList<>(), dataHome = new ArrayList<>(), dataAway = new ArrayList<>();
         Map<String, double[]> groups = new LinkedHashMap<>();
+        // 2.38: karne yalnızca doğrulanmış sonuçlarla: ikramiyesi kazanan kombinasyonun AGF payıyla tutarlı olan ya da
+        // koşu numarasıyla eşleşen. Ötekiler sayılmaz; yalnızca karşılaştırma için favori istatistikleri gösterilir.
+        List<Map<String, Object>> counted = new ArrayList<>();
+        int inconsistent = 0, unverified = 0;
+        for (Map<String, Object> r : settled) {
+            Map<String, Object> res = Json.obj(r.get("result"));
+            String trust = trust(r, res, unit);
+            if ("ikramiye".equals(trust) || "koşu no".equals(trust)) {
+                counted.add(r);
+                continue;
+            }
+            if ("tutarsız".equals(trust)) inconsistent++;
+            else unverified++;
+            List<Object> win = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
+            for (int k = 0; k < 6; k++) {
+                double[] f = favorite(String.valueOf(legs.get(k)), String.valueOf(win.get(k)));
+                if (f != null) count(groups, "tutarsız".equals(trust) ? "İkramiyeyle tutarsız (sayılmadı)" : "Doğrulanamayan (sayılmadı)", f[0] > 0, f[1]);
+            }
+        }
+        settled = counted;
         for (int i = 0; i < settled.size(); i++) {
             Map<String, Object> r = settled.get(i), res = Json.obj(r.get("result"));
-            boolean sure = reliable(res), home = domestic(r); // 2.36: kaynak ve hipodrom
-            String via = Json.str(res, "from");
-            String source = via == null || "kombinasyon".equals(via) ? "Resmî 6'lı sonucundan" : "koşu no".equals(via) ? "Koşu numarasıyla" : "Atlarla eşleşmeden";
+            boolean sure = true, home = domestic(r); // 2.36: kaynak ve hipodrom
+            String source = "koşu no".equals(Json.str(res, "from")) ? "Koşu numarasıyla" : "İkramiyeyle doğrulanan";
             List<Object> win = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
             double payout = Json.dbl(res, "payout", 0);
             Map<String, Object> nc = Json.obj(r.get("notified")), pc = Json.obj(r.get("plan"));
@@ -516,6 +588,10 @@ public final class AltiliLog {
         }
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("settled", (long) settled.size());
+        if (inconsistent + unverified > 0) { // 2.38
+            out.put("inconsistent", (long) inconsistent);
+            out.put("unverified", (long) unverified);
+        }
         out.put("pending", (long) pending);
         out.put("suggested", agg(sn, sh, sc, sr));
         out.put("all", agg(an, ah, ac, ar));
@@ -535,8 +611,9 @@ public final class AltiliLog {
         // 2.37: makul olmayan sonuç: bir grupta (en az 40 ayak) favori AGF'nin verdiğinin yarısından az ve 3 standart
         // sapmadan fazla az kazanıyorsa (gerçek yarışta olmaz: AGF favorisi kabaca her üç koşudan birini kazanır) sonuçlar
         // yanlış okunuyordur; kaynak "resmî" görünse de hiçbir sonuçla öğrenilmez.
-        boolean absurd = absurd(favN, favWin, favAgf);
-        for (double[] g : groups.values()) absurd |= absurd(g[0], g[1], g[2]);
+        // 2.38: ikramiyeyle doğrulanan sonuç gerçektir; makul olmama denetimi yalnızca ikramiyesiz (koşu numarasıyla) olanlara
+        double[] byNo = groups.containsKey("Koşu numarasıyla") ? groups.get("Koşu numarasıyla") : new double[3];
+        boolean absurd = absurd(byNo[0], byNo[1], byNo[2]);
         double[] rel = groups.containsKey("güvenilir") ? groups.get("güvenilir") : new double[3];
         boolean confirmed = !absurd && rel[0] >= 40 && low(rel[0], rel[1], rel[2]);
         boolean suspect = absurd || (low(favN, favWin, favAgf) && !confirmed);
@@ -682,6 +759,9 @@ public final class AltiliLog {
                 h.put("legs", (long) legs);
                 h.put("winners", res.get("winners"));
                 h.put("from", res.get("from"));
+                h.put("trust", trust(r, res, 1)); // 2.38: doğrulama
+                Double ratio = payoutRatio(r, res, 1);
+                if (ratio != null) h.put("ratio", ratio);
                 h.put("ret", hit[6] ? Json.dbl(res, "payout", 0) * Json.lng(c, "kat", 1) : 0.0);
                 h.put("estimated", Json.bool(res, "estimated", false));
             }
