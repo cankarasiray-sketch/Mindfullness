@@ -83,6 +83,10 @@ public final class Altili {
         public boolean maxHit = false;
         /** 2.37: oynanmayacak günde 6/6 olasılığı bunun altındaki kupon oynanmaz, önerilmez (0: sınır yok). */
         public double minHit = 0;
+        /** 2.45: kâr kuralı: kupon yalnızca beklenen dönüşü en az 1 + minEdge olunca oynanır. */
+        public double minEdge = 0;
+        /** 2.45: kârsız (tutma) kupon önerilmez; yalnızca bilgi olarak gösterilir. */
+        public boolean profitRule = false;
     }
 
     private static double num(String s) {
@@ -609,7 +613,7 @@ public final class Altili {
             }
             e = exactEval(cands, legs, best, in);
         }
-        boolean play = e.kat >= 1 && e.roi > 1;
+        boolean play = e.kat >= 1 && e.roi > 1 + in.minEdge; // 2.45: anlamlı kâr (en az %minEdge)
         double kellyRoi = e.roi, kellyStake = e.stake, budget = in.maxCost > 0 ? in.maxCost : in.budget;
         boolean tutma = !play && budget >= in.unit;
         if (tutma) { // 2.30: oynanmayacak günde ayak sınırını sağlayan en kârlı (en az zararlı) seçim; bütçe üst sınır
@@ -676,6 +680,10 @@ public final class Altili {
             if (in.maxCost > 0) out.put("cap", in.maxCost); // 2.32.10: kupon en fazla (her ayak sınırıyla birlikte; sığmazsa oynanmaz)
             if (in.maxHit) out.put("maxHit", true); // 2.33: tavana kadar en yüksek tutma
             if (e.cost > budget + 1e-9) out.put("overBudget", true); // ayak başına en az tutma için bütçe aşıldı
+            if (in.profitRule) { // 2.45: kâr kuralına uymuyor: oynanmaz, önerilmez
+                out.put("noEdge", true);
+                out.put("minEdge", in.minEdge);
+            }
             if (in.minHit > 0 && e.hit < in.minHit - 1e-12) { // 2.37: tahmin edilemez altılı
                 out.put("lowHit", true);
                 out.put("minHit", in.minHit);
@@ -714,6 +722,8 @@ public final class Altili {
             why = oddsLegs > 0 && (in.pool <= 0 || factor(in) <= 1)
                     ? "Ganyan oranlarına göre seçilen atlar altılıda az oynanmış; ortalamada kâr."
                     : "Devir havuzu kesintiyi aşıyor; ortalamada kâr.";
+        } else if (kellyRoi > 1 && kellyRoi <= 1 + in.minEdge) {
+            why = "Beklenen kâr %" + Fmt.num((kellyRoi - 1) * 100, 0) + ": anlamlı değil (kâr kuralı en az %" + Fmt.num(in.minEdge * 100, 0) + ").";
         } else if (kellyRoi > 1) {
             why = "Ortalamada kârlı ama kupon kasana göre büyük (Kelly payı " + Fmt.tl(Math.round(kellyStake * 100)) + ").";
         } else {
@@ -739,6 +749,7 @@ public final class Altili {
             if (p == null || p.get("error") != null || p.get("legs") == null) continue;
             if (p.get("cap") != null && Json.bool(p, "overBudget", false)) continue; // 2.32.10: kurala sığmayan önerilmez
             if (Json.bool(p, "lowHit", false)) continue; // 2.37: 6/6 olasılığı düşük olan önerilmez
+            if (Json.bool(p, "noEdge", false)) continue; // 2.45: kâr kuralına uymayan önerilmez
             if (Json.bool(p, "regionWeak", false) && !Json.bool(p, "play", false)) continue; // 2.42: AGF'si tutmayan bölge
             if (best < 0 || better(p, plans.get(best))) best = i;
         }

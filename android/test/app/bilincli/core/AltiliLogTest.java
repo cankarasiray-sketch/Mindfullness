@@ -386,6 +386,12 @@ public class AltiliLogTest {
         assertEquals(1L, rule.get("hits")); // favoriler kazandı, kupon tuttu
         assertEquals(0L, Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.99).get("rule")).get("n")); // eşik üstü yok
         assertEquals(Boolean.TRUE, Json.obj(Json.arr(an.get("history")).get(0)).get("backtest"));
+        // 2.45: tahmin edilen dönüş kaydedilir; kâr kuralına (dönüş ≥ %110) uyanlar karnede ayrı
+        double roi = (Double) Json.obj(rec.get("plan")).get("roi");
+        Map<String, Object> pr = Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0, 0.10).get("profitRule"));
+        assertEquals(roi >= 1.10 ? 1L : 0L, pr.get("n"));
+        assertEquals(roi, (Double) Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0, 0.10).get("all")).get("expectedRoi"), 1e-12);
+        assertEquals(1L, Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0, -1).get("profitRule")).get("n")); // eşiksiz: hepsi
     }
 
     @Test

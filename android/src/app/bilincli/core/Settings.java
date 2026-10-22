@@ -249,6 +249,8 @@ public final class Settings {
     /** 2.32.9: altılı kuponu en fazla bu kadar TL; 2.32.10: ayak sınırı buna sığmazsa altılı oynanmaz. 0: kasanın payı. */
     public double altiliCap = 600; // 2.35.1: kullanıcı istedi (önce 320)
     /** 2.37: 6/6 olasılığı bunun altındaki altılı oynanmaz ve önerilmez (yalnızca tahmin edilebilir altılılar; 0: sınır yok). */
+    /** 2.45: kâr kuralı: kupon yalnızca beklenen dönüşü en az 1 + bu kadar olunca oynanır (anlamlı kâr; 0: ortalamada kârlı yeter). */
+    public double altiliMinEdge = 0.10;
     public double altiliMinHit = 0.15; // 2.44: geriye dönük veri: 600 TL ile 6/6 olasılığı ortalama ~%9; %30 hiçbir altılıyı geçirmiyordu
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
@@ -424,6 +426,7 @@ public final class Settings {
         m.put("altiliMinCost", altiliMinCost);
         m.put("altiliCap", altiliCap);
         m.put("altiliMinHit", altiliMinHit);
+        m.put("altiliMinEdge", altiliMinEdge);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -490,6 +493,7 @@ public final class Settings {
         s.altiliMinCost = Json.dbl(m, "altiliMinCost", s.altiliMinCost);
         s.altiliCap = Json.dbl(m, "altiliCap", s.altiliCap);
         s.altiliMinHit = Json.dbl(m, "altiliMinHit", s.altiliMinHit);
+        s.altiliMinEdge = Json.dbl(m, "altiliMinEdge", s.altiliMinEdge);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
@@ -595,6 +599,7 @@ public final class Settings {
         if (!(altiliMinCost >= 0 && altiliMinCost <= 100000)) return "Altılı kupon en az tutarı geçersiz";
         if (!(altiliCap >= 0 && altiliCap <= 100000)) return "Altılı kupon en fazla tutarı geçersiz";
         if (!(altiliMinHit >= 0 && altiliMinHit <= 0.95)) return "Altılıda en az 6/6 olasılığı %0–95 olmalı";
+        if (!(altiliMinEdge >= 0 && altiliMinEdge <= 2)) return "Altılıda en az beklenen kâr %0–200 olmalı";
         if (pickHighProb < pickMinProb || pickHighProb > 0.97) return "Yüksek olasılık katmanı, en az tutma olasılığından küçük olamaz (en fazla %97)";
         return null;
     }

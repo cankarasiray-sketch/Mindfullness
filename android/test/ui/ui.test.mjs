@@ -1051,6 +1051,7 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   const f = boot(s, "#firsat");
   assert.equal(f.$("#alt_tavan").value, "600"); // 2.35.1 varsayılanı
   assert.equal(f.$("#alt_enaztut").value, "15"); // 2.44: en az 6/6 olasılığı
+  assert.equal(f.$("#alt_enazkar").value, "10"); // 2.45: kâr kuralı
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.match(rows[1], /1\.296 TL · 100 TL'den ort\. 73 TL döner · 320 TL'yi aşıyor, oynama$/);
   f.chip("İzmir 1. altılı · TJK").click();
@@ -1135,6 +1136,28 @@ test("altılı: doğrulanmış sonuçlarda AGF'si tutmayan bölgenin altılısı
   const card = f.$("#altiliCard").textContent;
   assert.match(card, /Bu altılıyı oynama: doğrulanmış sonuçlarda yerli hipodromlarda AGF favorisi %6 kazanmış, AGF %34 veriyordu \(18 ayak\)/);
   assert.doesNotMatch(card, /Yine de oynarsan/);
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: kâr kuralı (beklenen dönüş en az %110) — kârsız kupon oynanmaz", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {cap: 600, maxHit: true, noEdge: true, minEdge: 0.1, roi: 0.73});
+  s.agf.learn = {settled: 16, pending: 0, suggested: {}, all: {n: 16, hits: 4, cost: 9600, ret: 5470, roi: 0.57, expectedRoi: 0.73}, legs: {n: 96, expected: 0.73, actual: 0.73},
+    fav: {n: 96, win: 0.32, agf: 0.35}, calib: {use: false}, profitRule: {n: 0, hits: 0, cost: 0, ret: 0, roi: 0, expectedRoi: 0, minEdge: 0.1}, history: []};
+  const f = boot(s, "#firsat");
+  const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
+  assert.match(rows[1], /kâr kuralı %110 değil, oynama/);
+  assert.match(f.$("#altiliKarne").textContent, /Kâr kuralına uyanlar \(dönüş ≥ %110\)kurala uyan kupon olmadı \(kuponların beklenen dönüşü ortalama %73, gerçekleşen %57\)/);
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Kâr kuralı: oynama\. Beklenen dönüş %73; kural en az %110 \(anlamlı kâr\) istiyor/);
+  assert.doesNotMatch(card, /Yine de oynarsan/);
+  const none = altiliState();
+  none.agf.altilis = [none.agf.altilis[1]]; none.agf.best = null;
+  Object.assign(none.agf.altilis[0].plan, {cap: 600, maxHit: true, noEdge: true, minEdge: 0.1, roi: 0.73});
+  assert.match(boot(none, "#firsat").$("#altiliCard").textContent, /Bugün kurallara uyan altılı yok: hiçbir altılının beklenen dönüşü %110 değil \(kâr kuralı\)\. Oynama\./);
+  f.$("#alt_enazkar").value = "20"; f.$("#alt_enazkar").dispatchEvent(new f.w.Event("change"));
+  assert.deepEqual(f.calls.at(-1).payload, {minEdge: 0.2});
   assert.deepEqual(f.errors, []);
 });
 

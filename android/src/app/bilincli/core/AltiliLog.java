@@ -69,6 +69,7 @@ public final class AltiliLog {
         c.put("play", Json.bool(plan, "play", false));
         if (plan.get("mode") != null) c.put("mode", plan.get("mode"));
         if (plan.get("hit") != null) c.put("hit", plan.get("hit")); // 2.43: tahmin edilen 6/6 olasılığı (beklenen ile gerçekleşen)
+        if (plan.get("roi") != null) c.put("roi", plan.get("roi")); // 2.45: tahmin edilen dönüş (kâr kuralı)
         return c;
     }
 
@@ -581,6 +582,12 @@ public final class AltiliLog {
 
     /** minHit: uygulamanın oynattığı kuponların en az 6/6 olasılığı (2.37 kuralı; karnede ayrı satır). */
     public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit) {
+        return analyze(store, unit, kasa, today, legMin, minHit, 0.10);
+    }
+
+    /** minEdge: kâr kuralı (beklenen dönüş en az 1 + minEdge); karnede bu kurala uyanlar ayrı (2.45). */
+    public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit,
+            double minEdge) {
         String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
         List<Map<String, Object>> settled = new ArrayList<>();
         int pending = 0;
@@ -599,6 +606,8 @@ public final class AltiliLog {
         });
         int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0, rn = 0, rh = 0, en = 0;
         double ae = 0, re = 0, rc = 0, rr = 0; // 2.43: beklenen 6/6 (tahmin edilen olasılıkların toplamı); kurala uyanlar
+        int pn = 0, ph6 = 0, rwn = 0;
+        double pc6 = 0, pr6 = 0, pe = 0, rwSum = 0, rwCost = 0; // 2.45: kâr kuralına uyanlar; bütün kuponların tahmini dönüşü
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
         List<LegData> data = new ArrayList<>(), dataHome = new ArrayList<>(), dataAway = new ArrayList<>();
         Map<String, double[]> groups = new LinkedHashMap<>();
@@ -648,6 +657,21 @@ public final class AltiliLog {
                 if (h[6]) {
                     ah++;
                     ar += payout;
+                }
+                Double proi = Json.num(pc, "roi");
+                if (proi != null) {
+                    rwn++;
+                    rwSum += proi * Json.dbl(pc, "cost", 0);
+                    rwCost += Json.dbl(pc, "cost", 0);
+                    if (proi >= 1 + minEdge - 1e-12) { // 2.45: kâr kuralına uyan kupon
+                        pn++;
+                        pc6 += Json.dbl(pc, "cost", 0);
+                        pe += proi * Json.dbl(pc, "cost", 0);
+                        if (h[6]) {
+                            ph6++;
+                            pr6 += payout;
+                        }
+                    }
                 }
                 Double ph = Json.num(pc, "hit");
                 if (ph != null) {
@@ -716,6 +740,13 @@ public final class AltiliLog {
         out.put("pending", (long) pending);
         out.put("suggested", agg(sn, sh, sc, sr));
         out.put("all", agg(an, ah, ac, ar));
+        if (rwn > 0) { // 2.45: kâr kuralı
+            Map<String, Object> profit = agg(pn, ph6, pc6, pr6);
+            profit.put("expectedRoi", pc6 > 0 ? pe / pc6 : 0.0);
+            profit.put("minEdge", minEdge);
+            out.put("profitRule", profit);
+            Json.obj(out.get("all")).put("expectedRoi", rwCost > 0 ? rwSum / rwCost : 0.0);
+        }
         if (en > 0) { // 2.43
             Json.obj(out.get("all")).put("expected", ae);
             Json.obj(out.get("all")).put("withHit", (long) en);

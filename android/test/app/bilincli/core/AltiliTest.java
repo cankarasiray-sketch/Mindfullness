@@ -359,6 +359,37 @@ public class AltiliTest {
     }
 
     @Test
+    public void profitRuleNeedsMeaningfulEdge() {
+        // 2.45: kâr kuralı: beklenen dönüş en az %110; AGF'ye dayalı kupon (%73) ve küçük devir (%103) oynanmaz, büyük devir oynanır
+        assertEquals(0.10, new Settings().altiliMinEdge, 1e-9);
+        List<String> legs = Arrays.asList("1:85 2:10 3:5", "1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:60 2:25 3:15", "1:45 2:20 3:15 4:10 5:10",
+                "1:50 2:30 3:20", "1:40 2:30 3:15 4:15");
+        Map<String, Map<String, Object>> by = new LinkedHashMap<>();
+        for (double devir : new double[] {0, 300000, 600000}) {
+            Altili.Inputs in = rule();
+            in.maxCost = 600;
+            in.maxHit = true;
+            in.minHit = 0.15;
+            in.minEdge = 0.10;
+            in.profitRule = true;
+            in.devir = devir;
+            in.pool = 1000000;
+            by.put(String.valueOf((long) devir), Altili.plan(legs, in));
+        }
+        assertEquals(false, by.get("0").get("play"));
+        assertEquals(true, by.get("0").get("noEdge"));
+        assertEquals(false, by.get("300000").get("play")); // %3 kâr: anlamlı değil
+        assertEquals(true, by.get("300000").get("noEdge"));
+        assertTrue(String.valueOf(by.get("300000").get("reason")).startsWith("Beklenen kâr %3: anlamlı değil (kâr kuralı en az %10)"));
+        assertEquals(true, by.get("600000").get("play"));
+        assertEquals(null, by.get("600000").get("noEdge"));
+        assertTrue((Double) by.get("600000").get("roi") >= 1.10);
+        // kâr kuralına uymayan günün kuponu olarak önerilmez
+        assertEquals(1, Altili.best(Arrays.asList(by.get("0"), by.get("600000"))));
+        assertEquals(-1, Altili.best(Arrays.asList(by.get("0"), by.get("300000"))));
+    }
+
+    @Test
     public void unpredictableAltiliIsNotPlayed() {
         // 2.37: 600 TL ile bile 6/6 olasılığı %30'un altındaysa oynanmaz, önerilmez; sırada sonda
         assertEquals(0.15, new Settings().altiliMinHit, 1e-9); // 2.44: %30 → %15

@@ -298,6 +298,12 @@ bildirim olarak gelir.
   (tahmin isabetli; önceki sapma okuma hatasıydı), 16 kuponun 4'ü tuttu (beklenen 1,4). 600 TL ile gerçek altılılarda 6/6
   olasılığı ortalama ~%9; %30 eşiğini son bir haftada hiçbir altılı geçmedi. "En az 6/6 olasılığı" varsayılanı %15
   (kayıtlı %30 bir kez %15'e taşınır).
+- **2.45: kâr kuralı.** Kullanıcı istedi: kural anlamlı kâr oranına göre. Doğrulanmış veride AGF isabetli (kalabalığa karşı
+  avantaj yok); geçen hafta 16 kupon yatırılanın %57'sini geri getirdi. Kupon artık yalnızca beklenen dönüşü en az %110
+  olunca oynanır ("En az beklenen kâr (%)", varsayılan 10): bu ancak devirli günde (devir ve havuz bilinince) ya da ganyan
+  değeri olunca mümkün. Kârsız kupon bilgi olarak görünür ama "kâr kuralı: oynama" der; günün kuponu olarak önerilmez ve
+  bildirilmez. Kupon kaydına tahmini dönüş yazılır; karnede "Kâr kuralına uyanlar (dönüş ≥ %110)" gerçekleşen ve beklenen
+  dönüşle; kurala uyan yoksa bütün kuponların beklenen ve gerçekleşen dönüşü.
 
 ## Beraberlik fırsatları (2.17)
 
