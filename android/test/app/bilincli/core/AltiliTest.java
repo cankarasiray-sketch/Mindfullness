@@ -360,7 +360,16 @@ public class AltiliTest {
     @Test
     public void legMinAndCapTogetherOrNoPlay() {
         // 2.32.10: Belmont kuponunun kuralları: her ayak en az %70 ve kupon en fazla 320 TL; sığmazsa daraltılmaz, oynanmaz
-        assertEquals(320.0, new Settings().altiliCap, 1e-9);
+        assertEquals(600.0, new Settings().altiliCap, 1e-9); // 2.35.1
+        Map<String, Object> v14 = new Settings().toMap();
+        v14.put("v", 14L);
+        v14.put("altiliCap", 320.0);
+        assertEquals(600.0, Settings.fromMap(v14).altiliCap, 1e-9); // eski varsayılan 600'e
+        v14.put("altiliCap", 250.0);
+        assertEquals(250.0, Settings.fromMap(v14).altiliCap, 1e-9); // kullanıcının kendi seçimi korunur
+        Settings mine = new Settings();
+        mine.altiliCap = 320; // yeni sürümde bilerek 320'ye çeken korunur
+        assertEquals(320.0, Settings.fromMap(mine.toMap()).altiliCap, 1e-9);
         Altili.Inputs in = rule();
         in.legMin = 0.70;
         in.maxCost = 320;

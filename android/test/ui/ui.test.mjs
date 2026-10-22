@@ -1022,7 +1022,7 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   const s = altiliState();
   Object.assign(s.agf.altilis[1].plan, {legMin: 0.7, minCost: 60, cap: 320, overBudget: true, units: 1296, cost: 1296, budget: 320});
   const f = boot(s, "#firsat");
-  assert.equal(f.$("#alt_tavan").value, "320");
+  assert.equal(f.$("#alt_tavan").value, "600"); // 2.35.1 varsayılanı
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.match(rows[1], /1\.296 TL · 100 TL'den ort\. 73 TL döner · 320 TL'yi aşıyor, oynama$/);
   f.chip("İzmir 1. altılı · TJK").click();

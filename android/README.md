@@ -251,6 +251,7 @@ bildirim olarak gelir.
   numarasıyla eşleşir (altılıda ve sonuç sayfasında); atlarla eşleştirme yalnızca tek ve açık aday varsa, yoksa boş.
   Başlıksız tabloda at no sütunu yalnızca tek aday varsa okunur. Atlarla eşleşmiş eski sonuçlar silinip yeniden
   sonuçlanır. Öz denetim: favori beklenenden 3 standart sapma az kazanıyorsa karne "Sonuçlar şüpheli" der ve öğrenmez.
+- **2.35.1:** Kullanıcı istedi: "Kupon en fazla" varsayılanı 600 TL (kayıtlı 320 bir kez 600'e taşınır).
 
 ## Beraberlik fırsatları (2.17)
 

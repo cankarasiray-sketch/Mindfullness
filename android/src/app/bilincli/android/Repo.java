@@ -536,7 +536,7 @@ final class Repo {
         in.kasa = ledger.balance() / 100.0;
         in.km = s.kellyMultiplier;
         in.maxFraction = s.altiliBudgetShare; // 2.29: kârlı kuponda da üst sınır kasanın %7'si
-        in.maxCost = s.altiliCap; // 2.32.10: kupon en fazla (varsayılan 320 TL; her ayak sınırı sığmazsa oynanmaz; 0: kasanın payı)
+        in.maxCost = s.altiliCap; // 2.32.10: kupon en fazla (2.35.1: varsayılan 600 TL; her ayak sınırı sığmazsa oynanmaz; 0: kasanın payı)
         // 2.29: kupon bütçesi kasanın %7'si (kullanıcı ayarı; öğrenilen bütçe yalnızca karnede karşılaştırılır)
         in.budget = Math.max(10, Math.floor(s.altiliBudgetShare * in.kasa / 10) * 10);
         in.legMin = s.altiliLegMin; // her ayakta en az legMin tutma (2.33: varsayılan yok)
