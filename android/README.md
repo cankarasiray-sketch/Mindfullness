@@ -361,6 +361,13 @@ bildirim olarak gelir.
   değilse en yüksek dönüş. Taramada ve kupon büyüklüğü tablosunda net kâr; strateji özetinde net kâr, 100 TL'lik kuponda
   ortalama kâr ve yıllık kârın gerekli kasaya oranı (dönüş %118, yılda %18 değil: her 100 TL'de 18 TL). Kurala uyan
   kuponlar şehirlere göre.
+- **2.56: devirli günler kaçmış sayılır; veri süresi dürüst.** Kurala uyan 35 kuponun hepsi TJK geriye dönük, 22.09–20.10
+  (yerli için veri ~1 ay; "1 yıl" değil), çift kayıt yok, tutanların ikramiye–AGF oranı normal (×0,33–0,71). Ama kimsenin 6/6
+  yapamadığı günlerde (6 bilen çıkmadı, devir) 6/6 ikramiyesi olmadığından sonuç doğrulanamıyor ve karneden düşüyordu: o
+  günlerde her kupon kesin kaçmıştır; düşünce karne olduğundan iyi görünüyordu. Sonuç sayfasında "N BİLEN" var ama 6 yoksa
+  (ya da "6 bilen çıkmadı/devretti") sonuç "devir": kupon kazananları kapsamıyorsa kesin kaçmış sayılır (kupon düzeyinde;
+  ayak, favori ve öğrenmeye girmez). Defter v5: tahmini ikramiyeli eski sonuçlara yeniden okuma hakkı. Strateji özetinde
+  verinin tarihleri; 180 günden azsa yıllık kâr tahmini yapılmaz.
 
 ## Beraberlik fırsatları (2.17)
 

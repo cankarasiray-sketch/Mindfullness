@@ -775,6 +775,7 @@ function altiliKarne(L, sl) {
     html += '<p class="small">Karne yalnızca <b>ikramiyesiyle doğrulanmış</b> sonuçlarla: gerçek sonuçta ikramiye × kazanan atların AGF payları ≈ 0,73 (birim başına) çıkar. '
       + "Sayılmayan: " + (L.inconsistent ? '<b class="neg">' + L.inconsistent + " altılının ikramiyesi kazananlarla tutarsız (kazananlar yanlış okunmuş)</b>" : "")
       + (L.inconsistent && L.unverified ? " · " : "") + (L.unverified ? L.unverified + " altılıda ikramiye okunamadığından doğrulanamadı (koşu tablosundan okunanlar dahil)" : "") + ".</p>";
+  if (L.devir) html += '<p class="small">Kimsenin 6/6 yapamadığı (6 bilen çıkmadı, devir) ' + L.devir + " altılı kaçmış sayıldı: ikramiye olmadığından doğrulanamıyorlardı, sayılmayınca karne olduğundan iyi görünüyordu.</p>"; // 2.56
   if (L.late) html += '<p class="small">1. ayak başladıktan sonra kaydedilen ' + L.late + " altılı sayılmadı (sonuç bilgisi sızmasın).</p>"; // 2.54
   if (L.duplicates) html += '<p class="small">Aynı altılının ikinci kaydı (aynı gün, aynı kazananlar ve ikramiye; ör. Bilyoner ve TJK) bir kez sayıldı: ' + L.duplicates + ".</p>"; // 2.53
   if (!L.settled) {
@@ -837,6 +838,7 @@ function altiliKarne(L, sl) {
     var chk = (h.payout ? " · ikramiye " + tl0(h.payout) : "") // 2.41
       + (h.trust === "ikramiye" ? ' · <b class="pos">ikramiye AGF ile tutarlı ✓</b> (×' + num(h.ratio, 2) + ")"
       : h.trust === "tutarsız" ? ' · <b class="neg">ikramiye AGF ile tutarsız ✗</b> (×' + num(h.ratio, h.ratio < 0.01 ? 4 : 2) + "; sayılmadı)"
+      : h.trust === "devir" ? " · 6 bilen çıkmadı (devir): kupon kaçmış sayıldı" // 2.56
       : h.trust === "doğrulanamadı" ? " · doğrulanamadı (sayılmadı)" : "");
     if (h.rechecked) chk += " · yeniden doğrulandı" + (h.previous ? " (eski okuma " + esc(h.previous.join("-")) + ")" : ""); // 2.39
     return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "") + (h.backtest ? " · geriye dönük" : "")
@@ -883,9 +885,14 @@ function altiliStrategy(L, tl0, pc) {
     "kupon " + tl0(use) + "'ye kadar" + (use < cap ? " (kasaya göre)" : "") + " · günde en fazla 1: günün en mantıklı kuponu"];
   if (r.n) parts.push("geçmişte " + r.hits + "/" + r.n + " tuttu (beklenen " + num(r.expected, 1) + ") · dönüş " + '<b class="' + cls(r.ret - r.cost) + '">' + pc(r.roi) + "</b>" + altiliOdd(r));
   if (r.n) { // 2.55: kâr TL olarak: dönüş %118 = 100 TL'lik kuponda ort. 18 TL; yıllık kâr kasaya göre
-    var net = r.ret - r.cost, perYear = r.days ? net * 365 / r.days : null, rows0 = (L.stakes && L.stakes.rows) || [];
+    // 2.56: süre kurala uyan kuponların ilk ve son günü arası; 180 günden azsa yıla çevrilmez (kısa dönem şansı yıla yayılmasın)
+    var ls = r.list || [], d0 = ls.length ? ls[ls.length - 1].day : null, d1 = ls.length ? ls[0].day : null;
+    var days = d0 ? Math.round((Date.parse(d1) - Date.parse(d0)) / 86400000) + 1 : r.days;
+    var net = r.ret - r.cost, perYear = days >= 180 ? net * 365 / days : null, rows0 = (L.stakes && L.stakes.rows) || [];
     var rcap = rows0.filter(function (x) { return Math.abs(x.cap - cap) < 1e-9; })[0];
-    parts.push("kâr: " + '<b class="' + cls(net) + '">' + altiliNet(net) + "</b>" + (r.days ? " (" + r.days + " günde" + (r.days < 330 || r.days > 400 ? "; yılda ~" + altiliNet(perYear) : "") + ")" : "")
+    parts.push("kâr: " + '<b class="' + cls(net) + '">' + altiliNet(net) + "</b>"
+      + (days ? " (" + (d0 ? esc(dm(d0 + "T12:00:00Z")) + "–" + esc(dm(d1 + "T12:00:00Z")) + ", " : "") + days + " gün"
+        + (perYear == null ? '; <b class="neg">yalnızca ' + days + " günlük veri: yıllık kâr için az</b>" : days < 330 || days > 400 ? "; yılda ~" + altiliNet(perYear) : "") + ")" : "")
       + (net > 0 ? " · 100 TL'lik kuponda ort. " + num((r.roi - 1) * 100, 0) + " TL" : "")
       + (net > 0 && perYear && rcap && rcap.kasaNeed ? " · yıllık kâr gerekli kasanın (" + tl0(rcap.kasaNeed) + ") ~%" + num(perYear / rcap.kasaNeed * 100, 0) + "'i" : ""));
   }

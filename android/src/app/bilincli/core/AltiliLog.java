@@ -94,6 +94,7 @@ public final class AltiliLog {
                     hit *= sq;
                     all &= in;
                 }
+                if (coupons.get(i).length > 5 && coupons.get(i)[5] > 0) all = false; // 2.56: devir: kimse tutturamadı
                 double cst = units * u, rt = all ? payout : 0;
                 outs.add(new double[] {cst, rt});
                 n++;
@@ -162,6 +163,16 @@ public final class AltiliLog {
             else hi = x;
         }
         return new double[] {1 / ((lo + hi) / 2), 1 / xk};
+    }
+
+    /** 2.56: kaydın kuponu (önerilen ya da kurulan) okunan kazananları kapsıyor mu (devirde kapsıyorsa doğrulanamaz). */
+    private static boolean covers(Map<String, Object> r, List<Object> win) {
+        if (win.size() != 6) return true;
+        for (String f : new String[] {"plan", "notified"}) {
+            Map<String, Object> c = Json.obj(r.get(f));
+            if (c != null && hits(c, win)[6]) return true;
+        }
+        return false;
     }
 
     /** 2.53: çift kayıtta hangisi sayılır: bildirilen (2), TJK (1). */
@@ -284,8 +295,12 @@ public final class AltiliLog {
         return ratio != null && ratio >= 0.2 && ratio <= 6;
     }
 
-    /** Sonucun doğrulaması: "ikramiye" (tutarlı), "tutarsız", "koşu no" (koşu numarasıyla eşleşme) ya da "doğrulanamadı". */
+    /**
+     * Sonucun doğrulaması: "ikramiye" (tutarlı), "devir" (2.56: 6 bilen çıkmadı), "tutarsız", "koşu no" (koşu numarasıyla
+     * eşleşme) ya da "doğrulanamadı".
+     */
     static String trust(Map<String, Object> rec, Map<String, Object> res, double unit) {
+        if (Json.bool(res, "noSix", false)) return "devir"; // 2.56: kimse 6/6 yapamadı: her kupon kesin kaçtı
         if ("koşu no".equals(Json.str(res, "from"))) return "koşu no";
         Double ratio = payoutRatio(rec, res, unit);
         if (ratio == null) return "doğrulanamadı";
@@ -372,7 +387,15 @@ public final class AltiliLog {
     }
 
     public static boolean migrate(Map<String, Object> store) {
-        if (store == null || Json.lng(store, "v", 1) >= 4) return false;
+        if (store == null || Json.lng(store, "v", 1) >= 5) return false;
+        if (Json.lng(store, "v", 1) >= 4) { // 2.56: devirli günler (6 bilen çıkmadı) okunabiliyor: ikramiyesiz sonuçlara yeniden deneme
+            for (Object o : records(store)) {
+                Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
+                if (res != null && (Json.bool(res, "estimated", false) || Json.bool(res, "missing", false))) r.remove("rechecks");
+            }
+            store.put("v", 5L);
+            return true;
+        }
         for (Object o : records(store)) {
             Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
             r.remove("rechecks"); // 2.41: ikramiye okuyucusu düzeldi: doğrulanamayanlara yeniden deneme hakkı
@@ -381,7 +404,7 @@ public final class AltiliLog {
             List<Object> w = Json.arr(res.get("winners"));
             if (w.size() == 6 && Tjk.raceNumbers(w)) r.remove("result"); // 2.37: koşu numaraları kazanan sanılmıştı: yeniden
         }
-        store.put("v", 4L);
+        store.put("v", 5L);
         return true;
     }
 
@@ -580,7 +603,7 @@ public final class AltiliLog {
             boolean ok = true;
             for (int k = 0; k < 6 && ok; k++) ok = legs.get(k).containsKey(String.valueOf(nos.get(k)));
             if (!ok) continue;
-            Object[] c = {nos, Json.num(Json.obj(o), "payout"), "kombinasyon"};
+            Object[] c = {nos, Json.num(Json.obj(o), "payout"), "kombinasyon", Json.bool(Json.obj(o), "noSix", false)}; // 2.56: devir
             if (first == null) first = c;
             // 2.38: sayfada birden çok 6'lı sonucu varsa ikramiyesi bu altılının AGF'siyle tutarlı olan (1. ile 2. altılı karışmasın)
             Map<String, Object> res = new LinkedHashMap<>();
@@ -642,11 +665,13 @@ public final class AltiliLog {
             pw *= p == null ? MISSING_P : p;
         }
         Double payout = (Double) w[1];
+        boolean noSix = w.length > 3 && Boolean.TRUE.equals(w[3]); // 2.56: devir: ikramiye yok, tahmin de edilmez
         Map<String, Object> res = new LinkedHashMap<>();
         res.put("winners", nos);
         res.put("agf", pw);
-        res.put("payout", payout != null ? payout : unit * (1 - takeout) * (1 - tax) / pw);
-        res.put("estimated", payout == null);
+        res.put("payout", payout != null ? payout : noSix ? 0.0 : unit * (1 - takeout) * (1 - tax) / pw);
+        res.put("estimated", payout == null && !noSix);
+        if (noSix) res.put("noSix", true);
         res.put("from", w[2]);
         res.put("at", now.toString());
         return res;
@@ -666,7 +691,8 @@ public final class AltiliLog {
         Map<String, Object> res = Json.obj(rec.get("result"));
         if (res == null) return true;
         if (Json.arr(res.get("winners")).size() != 6) return true; // bulunamamış
-        return !"ikramiye".equals(trust(rec, res, unit)); // 2.40: yalnızca ikramiyeyle doğrulanan tamam
+        String t = trust(rec, res, unit);
+        return !"ikramiye".equals(t) && !"devir".equals(t); // 2.40: yalnızca ikramiyeyle doğrulanan tamam (2.56: ve devir)
     }
 
     /** 2.39: yeniden doğrulanacak günler (analiz penceresinde), eskiden yeniye. */
@@ -711,7 +737,7 @@ public final class AltiliLog {
             if (w == null) continue;
             Map<String, Object> old = Json.obj(rec.get("result")), res = result(rec, w, unit, takeout, tax, now);
             String t = trust(rec, res, unit);
-            boolean verified = "ikramiye".equals(t), hadWinners = old != null && Json.arr(old.get("winners")).size() == 6;
+            boolean verified = "ikramiye".equals(t) || "devir".equals(t), hadWinners = old != null && Json.arr(old.get("winners")).size() == 6;
             if (!verified && hadWinners) continue; // eskisinden iyi değil
             if (hadWinners) res.put("previous", old.get("winners"));
             res.put("rechecked", true);
@@ -889,12 +915,18 @@ public final class AltiliLog {
         // 2.38: karne yalnızca doğrulanmış sonuçlarla: ikramiyesi kazanan kombinasyonun AGF payıyla tutarlı olan ya da
         // koşu numarasıyla eşleşen. Ötekiler sayılmaz; yalnızca karşılaştırma için favori istatistikleri gösterilir.
         List<Map<String, Object>> counted = new ArrayList<>();
+        Set<Map<String, Object>> devir = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Map<String, Object>, Boolean>()); // 2.56
         int inconsistent = 0, unverified = 0;
         for (Map<String, Object> r : settled) {
             Map<String, Object> res = Json.obj(r.get("result"));
             String trust = trust(r, res, unit);
             if ("ikramiye".equals(trust)) { // 2.40: karne yalnızca ikramiyeyle doğrulanmış sonuçlarla
                 counted.add(r);
+                continue;
+            }
+            if ("devir".equals(trust) && !covers(r, Json.arr(res.get("winners")))) { // 2.56: kimse 6/6 yapamadı: kupon kesin kaçtı
+                counted.add(r);
+                devir.add(r);
                 continue;
             }
             if ("tutarsız".equals(trust)) inconsistent++;
@@ -927,6 +959,7 @@ public final class AltiliLog {
         for (int i = 0; i < settled.size(); i++) {
             Map<String, Object> r = settled.get(i), res = Json.obj(r.get("result"));
             boolean sure = true, home = domestic(r); // 2.36: kaynak ve hipodrom
+            boolean dv = devir.contains(r); // 2.56: kupon düzeyinde kaçmış; kazananlar doğrulanmadı: ayak, favori ve öğrenmede yok
             String source = "İkramiyeyle doğrulanan";
             List<Object> win = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
             double payout = Json.dbl(res, "payout", 0);
@@ -981,9 +1014,10 @@ public final class AltiliLog {
                 if (ph != null) {
                     en++;
                     ae += ph;
-                    coupons.add(new double[] {ph, domestic(r) ? 1 : 0, Json.dbl(pc, "cost", 0), h[6] ? 1 : 0, h[6] ? payout : 0});
+                    coupons.add(new double[] {ph, domestic(r) ? 1 : 0, Json.dbl(pc, "cost", 0), h[6] ? 1 : 0, h[6] ? payout : 0, dv ? 1 : 0});
                     couponRecs.add(r);
                 }
+                if (dv) continue; // 2.56
                 List<Object> horses = Json.arr(pc.get("horses"));
                 int miss = -1, misses = 0; // 2.33: tek ayakla kaçan kupon ve yatan ayak tek atlı (banko) mıydı
                 for (int k = 0; k < 6; k++) if (!h[k]) {
@@ -1011,7 +1045,7 @@ public final class AltiliLog {
                     }
                 }
             }
-            for (int k = 0; k < 6; k++) {
+            for (int k = 0; k < 6 && !dv; k++) {
                 Map<String, Double> agf = agf(String.valueOf(legs.get(k)));
                 String w = String.valueOf(win.get(k));
                 if (!agf.containsKey(w) || agf.size() < 2) continue;
@@ -1039,6 +1073,7 @@ public final class AltiliLog {
         out.put("settled", (long) settled.size());
         if (dup > 0) out.put("duplicates", (long) dup); // 2.53
         if (late > 0) out.put("late", (long) late); // 2.54
+        if (!devir.isEmpty()) out.put("devir", (long) devir.size()); // 2.56
         if (inconsistent + unverified > 0) { // 2.38
             out.put("inconsistent", (long) inconsistent);
             out.put("unverified", (long) unverified);

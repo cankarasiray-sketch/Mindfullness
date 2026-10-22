@@ -292,6 +292,48 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void noSixWinnerIsCountedAsMiss() {
+        // 2.56: kimse 6/6 yapamadı (devir): ikramiye yok, doğrulanamıyordu ve karneden düşüyordu (karne olduğundan iyi
+        // görünüyordu). Kupon kazananları kapsamıyorsa kesin kaçmış sayılır; ayak, favori ve öğrenmeye girmez.
+        Map<String, Object> store = new LinkedHashMap<>();
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS),
+                altili("tjk/2026-10-21/4/1", "Bursa", 4, 1, LEGS)));
+        Map<String, Object> outsiders = combo(0, "2", "4", "6", "2", "7", "3"), favs = combo(0, "5", "7", "5", "1", "5", "2");
+        for (Map<String, Object> c : Arrays.asList(outsiders, favs)) {
+            c.remove("payout");
+            c.put("noSix", true);
+        }
+        AltiliLog.settle(store, DAY, results(city(3, "İstanbul", Arrays.<Object>asList(outsiders), new ArrayList<Object>()),
+                city(4, "Bursa", Arrays.<Object>asList(favs), new ArrayList<Object>())), 1, 0.27, 0, TODAY, NOW);
+        Map<String, Object> res = Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result"));
+        assertEquals(Boolean.TRUE, res.get("noSix"));
+        assertEquals(Boolean.FALSE, res.get("estimated"));
+        assertEquals("devir", AltiliLog.trust(rec(store, "tjk/2026-10-21/3/1"), res, 1));
+        Map<String, Object> an = AltiliLog.analyze(store, 1, 2000, TODAY);
+        assertEquals(1L, an.get("devir")); // Bursa: kupon favorileri kapsıyor (okuma şüpheli): sayılmaz
+        assertEquals(1L, an.get("settled"));
+        assertEquals(1L, Json.obj(an.get("all")).get("n"));
+        assertEquals(0L, Json.obj(an.get("all")).get("hits"));
+        assertEquals(0L, Json.obj(an.get("legs")).get("n")); // ayak tahmininde yok
+        assertEquals(1L, an.get("unverified"));
+        assertEquals(0, AltiliLog.recheckDays(store, TODAY, 1).size()); // devir okundu: yeniden denenmez
+        // 2.56: eski (tahmini ikramiyeli) sonuçlara yeniden deneme hakkı
+        Map<String, Object> old = new LinkedHashMap<>();
+        old.put("v", 4L);
+        Map<String, Object> r = new LinkedHashMap<>();
+        Map<String, Object> est = new LinkedHashMap<>();
+        est.put("winners", new ArrayList<Object>(Arrays.asList("2", "4", "6", "2", "7", "3")));
+        est.put("estimated", true);
+        r.put("result", est);
+        r.put("rechecks", 2L);
+        AltiliLog.records(old).add(r);
+        assertTrue(AltiliLog.migrate(old));
+        assertEquals(5L, old.get("v"));
+        assertNull(r.get("rechecks"));
+        assertFalse(AltiliLog.migrate(old));
+    }
+
+    @Test
     public void bankrollNeed() {
         // 2.52: 10 kupon × 100 TL, 3'ü 500 TL döndü: tam Kelly payı (4 × 0,3 − 0,7) / 4 = %12,5 → kasa 800 TL
         List<double[]> outs = new ArrayList<>();
@@ -334,6 +376,10 @@ public class AltiliLogTest {
                 + "<p>2. 6'LI GANYAN 3/1/4/1/5/2 5 BİLEN: 1.234,50 TL (6 bilen çıkmadı, devretti)</p>");
         assertEquals(734512.50, (Double) bilen.get(0).get("payout"), 1e-9);
         assertEquals(null, bilen.get(1).get("payout"));
+        assertEquals(null, bilen.get(0).get("noSix")); // 2.56: devir yalnızca 6 bilen çıkmadıysa
+        assertEquals(Boolean.TRUE, bilen.get(1).get("noSix"));
+        assertEquals(Boolean.TRUE, Tjk.combos("<p>6'LI GANYAN 3/1/4/1/5/2 5 BİLEN: 1.234,50 TL 4 BİLEN: 45,10 TL</p>").get(0).get("noSix"));
+        assertEquals(null, Tjk.combos("<p>6'LI GANYAN 3/1/4/1/5/2</p>").get(0).get("noSix")); // ikramiye yazmıyor: bilinmiyor
         List<Map<String, Object>> races = Tjk.raceResults(html);
         assertEquals(2, races.size());
         assertEquals("5", races.get(0).get("winner")); // sıra sütununda 1

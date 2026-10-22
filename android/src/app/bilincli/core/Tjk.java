@@ -942,6 +942,31 @@ public final class Tjk {
         return null;
     }
 
+    private static final Pattern NO_SIX = Pattern.compile("(?i)(çıkmad|cikmad|devr|yok)");
+
+    /**
+     * 2.56: kimse 6/6 yapamadı (devir): "N BİLEN" var ama 6 yok, ya da "6 BİLEN"den sonra tutar yerine "çıkmadı/devretti".
+     * O gün her kupon kaçmıştır (kesin), ikramiye olmadığı için tutarlılıkla doğrulanamaz.
+     */
+    static boolean noSixAfter(String after) {
+        int end = Math.min(after.length(), 160);
+        Matcher g = GANYAN.matcher(after);
+        if (g.find() && g.start() < end) end = g.start();
+        String w = after.substring(0, end);
+        Matcher b = BILEN.matcher(w);
+        List<int[]> marks = new ArrayList<>();
+        while (b.find()) marks.add(new int[] {Integer.parseInt(b.group(1)), b.end()});
+        if (marks.isEmpty()) return false;
+        for (int i = 0; i < marks.size(); i++) {
+            if (marks.get(i)[0] != 6) continue;
+            int stop = i + 1 < marks.size() ? marks.get(i + 1)[1] : w.length();
+            String seg = w.substring(marks.get(i)[1], Math.max(marks.get(i)[1], stop));
+            if (AMOUNT.matcher(seg).find() && !NO_SIX.matcher(seg).find()) return false; // 6 bilen ikramiyesi var
+            return NO_SIX.matcher(seg).find();
+        }
+        return true; // 6 bilen hiç yazılmamış, ötekiler var
+    }
+
     static List<Map<String, Object>> combos(String html) {
         List<Map<String, Object>> out = new ArrayList<>();
         String t = text(html);
@@ -954,6 +979,7 @@ public final class Tjk {
             c.put("nos", nos);
             Double payout = payoutAfter(t.substring(m.end(1)));
             if (payout != null) c.put("payout", payout);
+            else if (noSixAfter(t.substring(m.end(1)))) c.put("noSix", true); // 2.56: devir
             out.add(c);
         }
         return out;
