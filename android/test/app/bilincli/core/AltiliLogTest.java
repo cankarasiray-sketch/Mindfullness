@@ -364,6 +364,31 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void backtestRecordsFeedTheKarne() {
+        // 2.43: geriye dönük tahmin: bugünkü kurallarla kurulan kupon "geriye dönük" kaydedilir, sonuçla karşılaştırılır
+        Map<String, Object> store = new LinkedHashMap<>();
+        Map<String, Object> a = altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS);
+        a.put("backtest", true);
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(a));
+        assertEquals(new java.util.HashSet<>(Arrays.asList("tjk/2026-10-21/3/1")), AltiliLog.keys(store, DAY));
+        Map<String, Object> rec = rec(store, "tjk/2026-10-21/3/1");
+        assertEquals(Boolean.TRUE, rec.get("backtest"));
+        double hit = (Double) Json.obj(rec.get("plan")).get("hit"); // tahmin edilen 6/6 kaydedilir
+        assertEquals((Double) Json.obj(a.get("plan")).get("hit"), hit, 1e-12);
+        double real = 0.4 * 0.5 * 0.34 * 0.6 * 0.45 * 0.79;
+        AltiliLog.settle(store, DAY, results(city(3, "İstanbul", Arrays.<Object>asList(combo(0.73 / real, "5", "7", "5", "1", "5", "2")), new ArrayList<Object>())),
+                1, 0.27, 0, TODAY, NOW);
+        assertEquals(1, AltiliLog.outcome(store, DAY, AltiliLog.keys(store, DAY), 1)[1]); // ikramiyeyle doğrulandı
+        Map<String, Object> an = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0);
+        assertEquals(hit, (Double) Json.obj(an.get("all")).get("expected"), 1e-12);
+        Map<String, Object> rule = Json.obj(an.get("rule"));
+        assertEquals(1L, rule.get("n"));
+        assertEquals(1L, rule.get("hits")); // favoriler kazandı, kupon tuttu
+        assertEquals(0L, Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.99).get("rule")).get("n")); // eşik üstü yok
+        assertEquals(Boolean.TRUE, Json.obj(Json.arr(an.get("history")).get(0)).get("backtest"));
+    }
+
+    @Test
     public void regionWhereAgfFailsIsFlagged() {
         // 2.42: doğrulanmış sonuçlarda yerli favori hiç kazanmıyor (3 altılı, 18 ayak), yabancıda kazanıyor
         Map<String, Object> store = new LinkedHashMap<>();

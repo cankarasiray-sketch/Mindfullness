@@ -68,6 +68,7 @@ public final class AltiliLog {
         c.put("cost", Json.dbl(plan, "cost", 0));
         c.put("play", Json.bool(plan, "play", false));
         if (plan.get("mode") != null) c.put("mode", plan.get("mode"));
+        if (plan.get("hit") != null) c.put("hit", plan.get("hit")); // 2.43: tahmin edilen 6/6 olasılığı (beklenen ile gerçekleşen)
         return c;
     }
 
@@ -155,6 +156,25 @@ public final class AltiliLog {
      * edilemediğinden kazananlar yanlış olabilir. Silinmez; karnede güvenilir sonuçlarla ayrı gösterilir, öğrenmede
      * kullanılmaz. Değiştiyse true.
      */
+    /** 2.43: o günün defterdeki altılı anahtarları (geriye dönük tahmin olanlara dokunmasın). */
+    public static Set<String> keys(Map<String, Object> store, String day) {
+        Set<String> out = new HashSet<>();
+        for (Object o : records(store)) if (day.equals(Json.str(Json.obj(o), "day"))) out.add(Json.str(Json.obj(o), "key"));
+        return out;
+    }
+
+    /** 2.43: o günün verilen anahtarlı kayıtlarından sonuçlanan ve ikramiyeyle doğrulanan sayısı: {sonuçlanan, doğrulanan}. */
+    public static int[] outcome(Map<String, Object> store, String day, Set<String> keys, double unit) {
+        int settled = 0, verified = 0;
+        for (Object o : records(store)) {
+            Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
+            if (!day.equals(Json.str(r, "day")) || !keys.contains(Json.str(r, "key")) || res == null || Json.arr(res.get("winners")).size() != 6) continue;
+            settled++;
+            if ("ikramiye".equals(trust(r, res, unit))) verified++;
+        }
+        return new int[] {settled, verified};
+    }
+
     public static boolean migrate(Map<String, Object> store) {
         if (store == null || Json.lng(store, "v", 1) >= 4) return false;
         for (Object o : records(store)) {
@@ -186,7 +206,7 @@ public final class AltiliLog {
                 recs.add(r);
             }
             if (r.get("result") != null) continue;
-            for (String f : new String[] {"label", "city", "cityId", "no", "source", "races"}) if (a.get(f) != null) r.put(f, a.get(f));
+            for (String f : new String[] {"label", "city", "cityId", "no", "source", "races", "backtest"}) if (a.get(f) != null) r.put(f, a.get(f));
             r.put("legs", new ArrayList<>(legs.subList(0, 6)));
             r.put("plan", coupon(plan));
         }
@@ -556,6 +576,11 @@ public final class AltiliLog {
 
     /** legMin: kuponlar ayak başına bu tutmayla yeniden kurulur (uygulamadaki kural). */
     public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin) {
+        return analyze(store, unit, kasa, today, legMin, 0.30);
+    }
+
+    /** minHit: uygulamanın oynattığı kuponların en az 6/6 olasılığı (2.37 kuralı; karnede ayrı satır). */
+    public static Map<String, Object> analyze(Map<String, Object> store, double unit, double kasa, String today, double legMin, double minHit) {
         String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
         List<Map<String, Object>> settled = new ArrayList<>();
         int pending = 0;
@@ -572,7 +597,8 @@ public final class AltiliLog {
                 return String.valueOf(a.get("day")).compareTo(String.valueOf(b.get("day")));
             }
         });
-        int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0;
+        int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0, rn = 0, rh = 0, en = 0;
+        double ae = 0, re = 0, rc = 0, rr = 0; // 2.43: beklenen 6/6 (tahmin edilen olasılıkların toplamı); kurala uyanlar
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
         List<LegData> data = new ArrayList<>(), dataHome = new ArrayList<>(), dataAway = new ArrayList<>();
         Map<String, double[]> groups = new LinkedHashMap<>();
@@ -622,6 +648,20 @@ public final class AltiliLog {
                 if (h[6]) {
                     ah++;
                     ar += payout;
+                }
+                Double ph = Json.num(pc, "hit");
+                if (ph != null) {
+                    en++;
+                    ae += ph;
+                    if (ph >= minHit - 1e-12) { // uygulamanın oynatacağı kupon
+                        rn++;
+                        re += ph;
+                        rc += Json.dbl(pc, "cost", 0);
+                        if (h[6]) {
+                            rh++;
+                            rr += payout;
+                        }
+                    }
                 }
                 List<Object> horses = Json.arr(pc.get("horses"));
                 int miss = -1, misses = 0; // 2.33: tek ayakla kaçan kupon ve yatan ayak tek atlı (banko) mıydı
@@ -676,6 +716,14 @@ public final class AltiliLog {
         out.put("pending", (long) pending);
         out.put("suggested", agg(sn, sh, sc, sr));
         out.put("all", agg(an, ah, ac, ar));
+        if (en > 0) { // 2.43
+            Json.obj(out.get("all")).put("expected", ae);
+            Json.obj(out.get("all")).put("withHit", (long) en);
+            Map<String, Object> rule = agg(rn, rh, rc, rr);
+            rule.put("expected", re);
+            rule.put("minHit", minHit);
+            out.put("rule", rule);
+        }
         Map<String, Object> lg = new LinkedHashMap<>();
         lg.put("n", (long) legN);
         lg.put("expected", legN > 0 ? legExp / legN : 0.0);
@@ -842,6 +890,7 @@ public final class AltiliLog {
             h.put("label", r.get("label"));
             h.put("source", r.get("source"));
             h.put("notified", r.get("notified") != null);
+            if (Json.bool(r, "backtest", false)) h.put("backtest", true); // 2.43: geriye dönük tahmin
             h.put("cost", Json.dbl(c, "cost", 0) * Json.lng(c, "kat", 1));
             Map<String, Object> res = Json.obj(r.get("result"));
             if (res == null) h.put("status", "bekliyor");

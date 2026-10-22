@@ -422,6 +422,16 @@ public final class Bridge {
                 });
                 return n > 0 ? n + " altılının sonucu işlendi ya da yeniden doğrulandı." : "Yeni sonuçlanan ya da doğrulanan altılı yok (sonuçlar henüz yayınlanmadıysa ya da okunamadıysa karne aynı kalır; ayrıntı karnede).";
             }
+            case "altiliBacktest": { // 2.43: geçmiş 7 gün için tahmin, sonuçlarla karşılaştırma
+                requireReal(repo);
+                progress("Geçmiş günlerin AGF'si ve sonuçları okunuyor (kredi harcamaz; birkaç dakika sürebilir)…");
+                return repo.altiliBacktest(7, new Daily.Progress() {
+                    @Override
+                    public void step(String text) {
+                        progress(text);
+                    }
+                });
+            }
             case "altiliInputs": {
                 requireReal(repo);
                 synchronized (Repo.LOCK) {

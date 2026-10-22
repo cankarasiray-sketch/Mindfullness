@@ -613,7 +613,7 @@ final class Repo {
     private Map<String, Object> agfViewFresh() {
         Map<String, Object> stored = agfStored(), inp = altiliInputs();
         Settings ls = ledger.settings();
-        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()), ls.altiliLegMin);
+        Map<String, Object> learn = AltiliLog.analyze(altiliLog(), ls.altiliUnit, ledger.balance() / 100.0, Fmt.dayKey(Instant.now()), ls.altiliLegMin, ls.altiliMinHit);
         altiliLearn = learn; // planlar öğrenilenlerle kurulur
         List<Object> manual = Json.arr(inp.get("manual"));
         if (stored == null && manual.size() < 6) return null;
@@ -813,6 +813,69 @@ final class Repo {
             }
         }
         return n;
+    }
+
+    /**
+     * 2.43: geriye dönük tahmin: son `days` günün TJK AGF'si okunur, her altılıya bugünkü kurallarla kupon kurulur ve
+     * deftere "geriye dönük" yazılır; o günün sonuçlarıyla (ikramiyeyle doğrulanarak) sonuçlanır ve karneyi besler.
+     * Defterde zaten olan altılılara dokunulmaz. Özet metni.
+     */
+    String altiliBacktest(int days, Daily.Progress progress) {
+        if (isDemo()) return "Demoda geriye dönük tahmin yok.";
+        Instant now = Instant.now();
+        java.time.LocalDate today = now.atOffset(Fmt.TR).toLocalDate();
+        Settings s = ledger.settings();
+        AndroidHttp http = new AndroidHttp(app);
+        Map<String, Object> inp = altiliInputs();
+        agfView(); // öğrenilen düzeltme güncel olsun
+        List<Object> lines = new ArrayList<>();
+        int added = 0, settled = 0, verified = 0;
+        for (int i = days; i >= 1; i--) {
+            java.time.LocalDate d = today.minusDays(i);
+            String day = d.toString();
+            if (progress != null) progress.step(day + ": AGF okunuyor (geriye dönük)…");
+            java.util.Set<String> have;
+            synchronized (altiliLogLock) {
+                have = AltiliLog.keys(altiliLog(), day);
+            }
+            Map<String, Object> r = Tjk.read(http, d, now, progress);
+            List<Object> fresh = new ArrayList<>();
+            java.util.Set<Integer> cities = new java.util.HashSet<>();
+            java.util.Set<String> keys = new java.util.HashSet<>();
+            for (Object o : Json.arr(r.get("altilis"))) {
+                Map<String, Object> a = Json.obj(o);
+                String key = Json.str(a, "key");
+                if (key == null || have.contains(key)) continue;
+                List<String> legs = new ArrayList<>();
+                for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
+                a.put("plan", Altili.plan(legs, altiliInputsFor(key, inp, a))); // bugünkü kurallarla
+                a.put("backtest", true);
+                fresh.add(a);
+                keys.add(key);
+                if (a.get("cityId") != null) cities.add((int) Json.lng(a, "cityId", 0));
+            }
+            lines.add("Geriye dönük " + day + ": " + Json.arr(r.get("altilis")).size() + " altılı okundu, " + fresh.size() + " yeni");
+            if (fresh.isEmpty()) continue;
+            Map<String, Object> res = Tjk.results(http, d, progress, cities);
+            for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
+            synchronized (altiliLogLock) {
+                Map<String, Object> log = altiliLog();
+                AltiliLog.record(log, day, fresh);
+                AltiliLog.settle(log, day, res, s.altiliUnit, s.altiliTakeout, s.altiliTax, today.toString(), now);
+                int[] o = AltiliLog.outcome(log, day, keys, s.altiliUnit);
+                lines.add("  " + o[0] + " sonuçlandı, " + o[1] + " ikramiyeyle doğrulandı");
+                settled += o[0];
+                verified += o[1];
+                Map<String, Object> sl = new LinkedHashMap<>();
+                sl.put("at", now.toString());
+                sl.put("log", lines);
+                log.put("settleLog", sl);
+                saveAltiliLog(log);
+            }
+            added += fresh.size();
+        }
+        return "Geçmiş " + days + " gün: " + added + " altılı tahmin edildi, " + settled + " sonuçlandı, " + verified
+                + " ikramiyeyle doğrulandı (karnede yalnızca doğrulananlar sayılır).";
     }
 
     /** 2.39: bir seferde yeniden doğrulanacak en çok gün (arka planda az; elle "Sonuçları şimdi kontrol et"). */

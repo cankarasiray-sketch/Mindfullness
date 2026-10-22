@@ -785,7 +785,10 @@ function altiliKarne(L, sl) {
     html += '<div class="list">'
       + item("Önerilerim", s.n ? s.hits + "/" + s.n + " tuttu · " + tl0(s.cost) + " → " + tl0(s.ret) + ' <span class="' + cls(s.ret - s.cost) + '">(' + pc(s.roi) + ")</span>"
         : "bildirilen kupon henüz sonuçlanmadı")
-      + item("Bütün altılılar (en mantıklı kupon)", a.hits + "/" + a.n + " tuttu · getiri " + '<span class="' + cls(a.ret - a.cost) + '">' + pc(a.roi) + "</span>")
+      + item("Bütün altılılar (en mantıklı kupon)", a.hits + "/" + a.n + " tuttu" + (a.expected != null ? " (beklenen " + num(a.expected, 1) + ")" : "")
+        + " · getiri " + '<span class="' + cls(a.ret - a.cost) + '">' + pc(a.roi) + "</span>")
+      + (L.rule ? item("Oynanacak olanlar (6/6 ≥ %" + num(L.rule.minHit * 100, 0) + ")", L.rule.n ? L.rule.hits + "/" + L.rule.n + " tuttu (beklenen " + num(L.rule.expected, 1) + ") · "
+          + tl0(L.rule.cost) + " → " + tl0(L.rule.ret) + ' <span class="' + cls(L.rule.ret - L.rule.cost) + '">(' + pc(L.rule.roi) + ")</span>" : "kurala uyan kupon henüz sonuçlanmadı") : "") // 2.43
       + item("Ayak tahmini", "beklenen " + pc(lg.expected) + ", gerçekleşen " + pc(lg.actual) + " (" + lg.n + " ayak)")
       + (lg.five != null ? item("Bir ayakla kaçan", lg.five + "/" + a.n + " kupon" + (lg.five ? " · yatan ayak tek atlı (banko): " + lg.fiveBanko : "")) : "")
       + item("AGF favorisi", "kazandı " + pc(fv.win) + " · AGF'nin verdiği " + pc(fv.agf) + " (" + fv.n + " ayak)")
@@ -817,10 +820,11 @@ function altiliKarne(L, sl) {
       : h.trust === "tutarsız" ? ' · <b class="neg">ikramiye AGF ile tutarsız ✗</b> (×' + num(h.ratio, h.ratio < 0.01 ? 4 : 2) + "; sayılmadı)"
       : h.trust === "doğrulanamadı" ? " · doğrulanamadı (sayılmadı)" : "");
     if (h.rechecked) chk += " · yeniden doğrulandı" + (h.previous ? " (eski okuma " + esc(h.previous.join("-")) + ")" : ""); // 2.39
-    return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "")
+    return '<div class="item"><span class="muted">' + esc(dm(h.day + "T12:00:00Z")) + " · " + esc(h.label || "") + (h.notified ? " · önerildi" : "") + (h.backtest ? " · geriye dönük" : "")
       + (h.winners ? '<br>kazananlar ' + esc(h.winners.join("-")) + " (" + esc(src) + ")" + chk : "") + "</span><span>" + tl0(h.cost) + " · " + st + "</span></div>";
   }).join("") + "</details>";
-  html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları kontrol et, geçmişi yeniden doğrula</button></div>';
+  html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları kontrol et, geçmişi yeniden doğrula</button>'
+    + '<button class="b ghost" onclick="act(\'altiliBacktest\')">Geçmiş 7 günü tahmin et, karneye ekle</button></div>'; // 2.43
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
   return html + "</div>";
 }

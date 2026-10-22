@@ -289,6 +289,11 @@ bildirim olarak gelir.
   Doğrulanmış sonuçlarda bir bölgede (yerli/yabancı; en az 18 ayak) favori AGF'nin verdiğinden belirgin az kazanıyorsa
   (z < −2) o bölgenin altılıları "AGF tutmuyor, oynama" der, günün kuponu olarak önerilmez, bildirilmez, sırada sona gider
   (kârlı "OYNA" kuponu hariç). Karnede "Bölge kuralı" satırı; doğrulanmış sonuçlar değişince kendiliğinden kalkar.
+- **2.43: geriye dönük tahmin.** Kullanıcı istedi: geçen bir hafta için de tahmin, sonuçlarla kıyas, karneye ekle.
+  Karnede "Geçmiş 7 günü tahmin et, karneye ekle": son 7 günün TJK AGF'si okunur, her altılıya bugünkü kurallarla kupon
+  kurulur, deftere "geriye dönük" yazılır, o günün sonuçlarıyla (ikramiyeyle doğrulanarak) sonuçlanır; defterde olan
+  altılılara dokunulmaz. Kupon kaydına tahmin edilen 6/6 olasılığı yazılır: karnede "Bütün altılılar … (beklenen x)" ve
+  "Oynanacak olanlar (6/6 ≥ %30)": uygulamanın oynatacağı kuponlar tek başına ne yaptı, beklenenle kıyaslı.
 
 ## Beraberlik fırsatları (2.17)
 
