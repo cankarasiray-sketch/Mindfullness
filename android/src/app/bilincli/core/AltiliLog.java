@@ -68,15 +68,50 @@ public final class AltiliLog {
         return c;
     }
 
+    /** 2.36: yerli hipodrom mu (TJK şehir numarası 1–10 ya da yerli şehir adı); yabancıda AGF Türk bahisçilerin payı. */
+    public static boolean domestic(Map<String, Object> r) {
+        long id = Json.lng(r, "cityId", -1);
+        if ("TJK".equals(Json.str(r, "source")) && id >= 1 && id < Tjk.KNOWN.length) return true;
+        String c = norm(r.get("city") != null ? Json.str(r, "city") : Json.str(r, "label"));
+        for (int i = 1; i < Tjk.KNOWN.length; i++) {
+            String k = norm(Tjk.KNOWN[i]);
+            if (c.equals(k) || c.startsWith(k + " ")) return true;
+        }
+        return false;
+    }
+
+    /** Sonucun kaynağı güvenilir mi: resmî 6'lı sonucu ya da koşu numarasıyla eşleşme (eski kayıtta kaynak yoksa evet). */
+    static boolean reliable(Map<String, Object> res) {
+        String from = Json.str(res, "from");
+        return from == null || "kombinasyon".equals(from) || "koşu no".equals(from);
+    }
+
+    /** Grup istatistiği: {ayak, favori kazandı, favorinin AGF toplamı}. */
+    private static void count(Map<String, double[]> groups, String key, boolean favWon, double favP) {
+        double[] g = groups.get(key);
+        if (g == null) groups.put(key, g = new double[3]);
+        g[0]++;
+        if (favWon) g[1]++;
+        g[2] += favP;
+    }
+
+    /** Favori beklenenden 3 standart sapmadan fazla az kazanıyor mu (en az 40 ayak). */
+    private static boolean low(double n, double win, double agfSum) {
+        if (n < 40) return false;
+        double p = agfSum / n;
+        return win < n * p - 3 * Math.sqrt(n * p * (1 - p));
+    }
+
     /**
-     * 2.35: atlarla eşleştirilmiş eski sonuçlar ("koşular") silinir: koşular atlarla ayırt edilemediğinden kazananlar
-     * yanlış olabilir. Son günlerinkiler yeni (koşu numaralı) okuyucuyla yeniden sonuçlanır. Değiştiyse true.
+     * 2.35–2.36: atlarla eşleştirilmiş eski sonuçlar ("koşular") "atlar" diye etiketlenir: koşular atlarla ayırt
+     * edilemediğinden kazananlar yanlış olabilir. Silinmez; karnede güvenilir sonuçlarla ayrı gösterilir, öğrenmede
+     * kullanılmaz. Değiştiyse true.
      */
     public static boolean migrate(Map<String, Object> store) {
         if (store == null || Json.lng(store, "v", 1) >= 2) return false;
         for (Object o : records(store)) {
             Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
-            if (res != null && "koşular".equals(Json.str(res, "from"))) r.remove("result");
+            if (res != null && "koşular".equals(Json.str(res, "from"))) res.put("from", "atlar");
         }
         store.put("v", 2L);
         return true;
@@ -170,10 +205,18 @@ public final class AltiliLog {
      * numarası (programdan; koşunun atları ayağın atlarıyla örtüşmeli), olmazsa atları en benzer koşu tablosu.
      */
     public static List<Object> legWinners(Map<String, Object> rec, Map<String, Object> city) {
+        return legWinners(rec, city, new String[1]);
+    }
+
+    /** how[0]: kazananların kaynağı: "kombinasyon" (resmî 6'lı sonucu), "koşu no" ya da "atlar" (en benzer koşu). */
+    static List<Object> legWinners(Map<String, Object> rec, Map<String, Object> city, String[] how) {
         List<Object> out = new ArrayList<>(java.util.Collections.nCopies(6, (Object) null));
         if (city == null || Json.arr(rec.get("legs")).size() < 6) return out;
         Object[] combo = combo(rec, city);
-        if (combo != null) return new ArrayList<>(Json.arr(combo[0]));
+        if (combo != null) {
+            how[0] = "kombinasyon";
+            return new ArrayList<>(Json.arr(combo[0]));
+        }
         List<Object> races = Json.arr(city.get("races")), rs = Json.arr(rec.get("races"));
         // 2.35: koşu numaraları (altılıda ve sonuç sayfasında) varsa yalnızca onlarla; atlarla eşleştirme yalnızca tek ve
         // açık bir aday varsa (ABD'de atlar her koşuda 1, 2, 3… diye numaralı: koşular atlarla ayırt edilemiyor, yanlış
@@ -182,6 +225,7 @@ public final class AltiliLog {
         for (int k = 0; k < 6 && numbered; k++) numbered = Json.lng(Json.obj(rs.get(k)), "no", 0) > 0;
         for (Object o : races) pageNumbered |= Json.obj(o).get("no") != null;
         Set<Integer> used = new HashSet<>();
+        how[0] = numbered && pageNumbered ? "koşu no" : "atlar";
         for (int k = 0; k < 6; k++) {
             Set<String> leg = agf(String.valueOf(Json.arr(rec.get("legs")).get(k))).keySet();
             int pick = -1;
@@ -247,8 +291,9 @@ public final class AltiliLog {
     static Object[] winners(Map<String, Object> rec, Map<String, Object> city) {
         Object[] c = combo(rec, city);
         if (c != null) return c;
-        List<Object> lw = legWinners(rec, city);
-        return lw.contains(null) ? null : new Object[] {lw, null, "koşular"};
+        String[] how = new String[1];
+        List<Object> lw = legWinners(rec, city, how);
+        return lw.contains(null) ? null : new Object[] {lw, null, how[0]};
     }
 
     /**
@@ -388,10 +433,13 @@ public final class AltiliLog {
         });
         int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0;
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
-        List<LegData> data = new ArrayList<>();
-        List<Integer> dayIndex = new ArrayList<>();
+        List<LegData> data = new ArrayList<>(), dataHome = new ArrayList<>(), dataAway = new ArrayList<>();
+        Map<String, double[]> groups = new LinkedHashMap<>();
         for (int i = 0; i < settled.size(); i++) {
             Map<String, Object> r = settled.get(i), res = Json.obj(r.get("result"));
+            boolean sure = reliable(res), home = domestic(r); // 2.36: kaynak ve hipodrom
+            String via = Json.str(res, "from");
+            String source = via == null || "kombinasyon".equals(via) ? "Resmî 6'lı sonucundan" : "koşu no".equals(via) ? "Koşu numarasıyla" : "Atlarla eşleşmeden";
             List<Object> win = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
             double payout = Json.dbl(res, "payout", 0);
             Map<String, Object> nc = Json.obj(r.get("notified")), pc = Json.obj(r.get("plan"));
@@ -445,8 +493,13 @@ public final class AltiliLog {
                     if (p[j] > p[fav]) fav = j;
                     j++;
                 }
-                data.add(new LegData(p, wi));
-                dayIndex.add(i);
+                if (sure) { // 2.36: öğrenme yalnızca güvenilir sonuçlarla (yerli ve yabancı ayrı da)
+                    data.add(new LegData(p, wi));
+                    (home ? dataHome : dataAway).add(new LegData(p, wi));
+                }
+                count(groups, source, fav == wi, p[fav]);
+                count(groups, home ? "Yerli hipodrom" : "Yabancı hipodrom", fav == wi, p[fav]);
+                if (sure) count(groups, "güvenilir", fav == wi, p[fav]);
                 favN++;
                 favAgf += p[fav];
                 if (fav == wi) favWin++;
@@ -468,18 +521,34 @@ public final class AltiliLog {
         fv.put("n", (long) favN);
         fv.put("win", favN > 0 ? (double) favWin / favN : 0.0);
         fv.put("agf", favN > 0 ? favAgf / favN : 0.0);
-        // 2.35: öz denetim: AGF favorisi beklenenden çok az kazanıyorsa (3 standart sapma) sonuçlar yanlış okunuyordur
-        double pf = favN > 0 ? favAgf / favN : 0;
-        boolean suspect = favN >= 40 && favWin < favN * pf - 3 * Math.sqrt(favN * pf * (1 - pf));
+        // 2.35–2.36: öz denetim: favori beklenenden çok az kazanıyorsa ve bunu güvenilir sonuçlar (resmî 6'lı, koşu
+        // numarası; en az 40 ayak) doğrulamıyorsa sonuçlar yanlış okunuyordur. Güvenilir sonuçlar da aynısını diyorsa gerçek.
+        double[] rel = groups.containsKey("güvenilir") ? groups.get("güvenilir") : new double[3];
+        boolean confirmed = rel[0] >= 40 && low(rel[0], rel[1], rel[2]);
+        boolean suspect = low(favN, favWin, favAgf) && !confirmed;
         if (suspect) fv.put("suspect", true);
+        if (confirmed) fv.put("confirmed", true);
+        List<Object> gs = new ArrayList<>();
+        for (Map.Entry<String, double[]> e : groups.entrySet()) {
+            if ("güvenilir".equals(e.getKey())) continue;
+            Map<String, Object> g = new LinkedHashMap<>();
+            g.put("label", e.getKey());
+            g.put("n", (long) e.getValue()[0]);
+            g.put("win", e.getValue()[1] / e.getValue()[0]);
+            g.put("agf", e.getValue()[2] / e.getValue()[0]);
+            gs.add(g);
+        }
+        fv.put("groups", gs);
         out.put("fav", fv);
-        Map<String, Object> calib = calibrate(data);
-        if (suspect) {
-            calib.put("use", false);
-            calib.put("alphaUse", 1.0);
-            calib.put("why", "Sonuçlar şüpheli (AGF favorisi beklenenden çok az kazanmış): öğrenmede kullanılmıyor, AGF olduğu gibi.");
+        Map<String, Object> calib = calibrate(data); // yalnızca güvenilir sonuçlar
+        if (suspect && Json.bool(calib, "use", false) == false) {
+            calib.put("why", "Sonuçlar şüpheli (AGF favorisi beklenenden çok az kazanmış, güvenilir sonuçlarla doğrulanmadı): öğrenmede kullanılmıyor.");
         }
         out.put("calib", calib);
+        Map<String, Object> region = new LinkedHashMap<>(); // 2.36: yerli ve yabancı hipodromda ayrı düzeltme
+        region.put("yerli", calibrate(dataHome));
+        region.put("yabancı", calibrate(dataAway));
+        out.put("calibRegion", region);
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
         double bestRoi = -1, bestFraction = 0;
@@ -591,6 +660,7 @@ public final class AltiliLog {
                 h.put("status", hit[6] ? "tuttu" : "tutmadı");
                 h.put("legs", (long) legs);
                 h.put("winners", res.get("winners"));
+                h.put("from", res.get("from"));
                 h.put("ret", hit[6] ? Json.dbl(res, "payout", 0) * Json.lng(c, "kat", 1) : 0.0);
                 h.put("estimated", Json.bool(res, "estimated", false));
             }

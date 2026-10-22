@@ -252,6 +252,12 @@ bildirim olarak gelir.
   Başlıksız tabloda at no sütunu yalnızca tek aday varsa okunur. Atlarla eşleşmiş eski sonuçlar silinip yeniden
   sonuçlanır. Öz denetim: favori beklenenden 3 standart sapma az kazanıyorsa karne "Sonuçlar şüpheli" der ve öğrenmez.
 - **2.35.1:** Kullanıcı istedi: "Kupon en fazla" varsayılanı 600 TL (kayıtlı 320 bir kez 600'e taşınır).
+- **2.36: karne kendini doğrular.** Kullanıcı karnenin güvenilir olduğunu düşünüyor; buradan TJK'ya erişilemediğinden
+  karne doğrulanabilir yapıldı. Her sonucun kaynağı tutulur: TJK resmî 6'lı sonucu, koşu numarasıyla, atlarla eşleşme (eski
+  sonuçlar silinmez, "atlarla eşleşme" diye etiketlenir). Favori istatistiği kaynağa ve yerli/yabancı hipodroma göre ayrı;
+  "Son altılılar"da her altılının kazananları ve kaynağı (TJK sonucuyla karşılaştırmak için). Öğrenme yalnızca güvenilir
+  sonuçlarla; güvenilir sonuçlar da favoriyi zayıf gösterirse "Doğrulandı" denir ve öğrenilir. AGF düzeltmesi yerli ve
+  yabancı hipodromda ayrı öğrenilir (yabancıda AGF Türk bahisçilerin payı, daha az bilgili olabilir).
 
 ## Beraberlik fırsatları (2.17)
 

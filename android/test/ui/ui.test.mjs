@@ -921,11 +921,13 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
 test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
-    legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34},
+    legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34,
+      groups: [{label: "Resmî 6'lı sonucundan", n: 90, win: 0.36, agf: 0.34}, {label: "Yabancı hipodrom", n: 54, win: 0.15, agf: 0.35}]},
     calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor."},
     strategies: [{fraction: 0.01, budget: 20, n: 24, hits: 0, cost: 480, ret: 0, roi: 0}, {fraction: 0.03, budget: 60, n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
       {fraction: 0.06, budget: 120, n: 24, hits: 4, cost: 2880, ret: 2300, roi: 0.799}], fraction: 0.06,
-    history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", notified: true, cost: 60, status: "tuttu", legs: 6, ret: 410, estimated: true},
+    history: [{day: "2026-10-21", label: "Bursa 1. altılı", source: "TJK", notified: true, cost: 60, status: "tuttu", legs: 6, ret: 410, estimated: true,
+        winners: ["5", "7", "5", "1", "5", "2"], from: "kombinasyon"},
       {day: "2026-10-21", label: "Karma 1. altılı", source: "TJK", notified: false, cost: 60, status: "tutmadı", legs: 4, ret: 0},
       {day: "2026-10-22", label: "Ankara 1. altılı", source: "TJK", notified: false, cost: 60, status: "bekliyor"}]};
   s.agf.settleLog = {at: "2026-10-22T07:00:00Z", log: ["Sonuçlar 2026-10-21", "  Bursa: 1 altılı sonucu, 9 koşu", "  1 altılı sonuçlandı"]};
@@ -938,14 +940,21 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Ayak tahminibeklenen %62, gerçekleşen %60 \(144 ayak\)/);
   assert.match(k, /Bir ayakla kaçan9\/24 kupon · yatan ayak tek atlı \(banko\): 4/);
   assert.doesNotMatch(k, /Sonuçlar şüpheli/);
+  assert.match(k, /Favori: kaynağa ve hipodroma göreResmî 6'lı sonucundan: kazandı %36 · AGF %34 \(90 ayak\)<?.*Yabancı hipodrom: kazandı %15 · AGF %35 \(54 ayak\)/);
+  assert.match(k, /kazananlar 5-7-5-1-5-2 \(TJK resmî 6'lı sonucu\)/);
   s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, suspect: true};
-  assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar şüpheli: favori %15 kazanmış, AGF %35 veriyor; bu fark tesadüf olamayacak kadar büyük\. Kazananlar büyük ihtimalle yanlış okunuyor/);
+  assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar şüpheli: favori %15 kazanmış, AGF %35 veriyor; bu fark tesadüf olamayacak kadar büyük ve güvenilir sonuçlar \(resmî 6'lı, koşu numarası\) bunu doğrulamıyor/);
+  s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, confirmed: true};
+  s.agf.learn.calibRegion = {yerli: {use: false}, "yabancı": {use: true, alphaUse: 0.62}};
+  const kc = boot(s, "#firsat").$("#altiliKarne").textContent;
+  assert.match(kc, /Doğrulandı: güvenilir sonuçlarda da favori AGF'nin verdiğinden belirgin az kazanıyor/);
+  assert.match(kc, /Bölgeye göre düzeltmeyabancı α 0,62/);
   assert.match(k, /AGF favorisikazandı %38 · AGF'nin verdiği %34 \(144 ayak\)/);
   assert.match(k, /AGF düzeltmesikullanılmıyor/);
   assert.match(k, /Bütçekasanın %7'si \(ayar\) · geçmişte en iyi getiri %6'sı/);
   assert.match(k, /Veri az \(144\/150 ayak\)/);
   assert.match(k, /kasanın %6'sı: 4\/24 tuttu, getiri %80/);
-  assert.match(k, /21\.10 · Bursa 1\. altılı · önerildi60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
+  assert.match(k, /21\.10 · Bursa 1\. altılı · önerildikazananlar 5-7-5-1-5-2 \(TJK resmî 6'lı sonucu\)60,00 TL · tuttu · 410,00 TL \(tahmini\)/);
   assert.match(k, /Karma 1\. altılı60,00 TL · tutmadı \(4\/6 ayak\)/);
   assert.match(k, /Ankara 1\. altılı60,00 TL · bekliyor/);
   assert.match(k, /Bursa: 1 altılı sonucu, 9 koşu/);

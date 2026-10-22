@@ -135,7 +135,7 @@ public class AltiliLogTest {
         assertEquals(1, AltiliLog.settle(store, DAY, results(city(1, "BURSA", new ArrayList<Object>(), races)), 1, 0.27, 0, TODAY, NOW));
         Map<String, Object> r = Json.obj(rec(store, "bilyoner/Bursa").get("result"));
         assertEquals(Arrays.asList("3", "2", "6", "4", "7", "2"), r.get("winners"));
-        assertEquals("koşular", r.get("from"));
+        assertEquals("atlar", r.get("from")); // 2.36: koşu numarası yok: atlarla (tek ve açık aday)
         assertEquals(Boolean.TRUE, r.get("estimated"));
         double pw = 0.30 * 0.30 * 0.33 * 0.25 * 0.20 * 0.79;
         assertEquals(0.73 / pw, Json.dbl(r, "payout", 0), 1e-6);
@@ -296,6 +296,9 @@ public class AltiliLogTest {
         a.put("races", rs);
         Map<String, Object> city = city(31, "Keeneland ABD", new ArrayList<Object>(), new ArrayList<Object>(races));
         assertEquals(Arrays.asList("6", "9", "3", null, null, null), AltiliLog.legWinners(a, city));
+        String[] how = new String[1];
+        AltiliLog.legWinners(a, city, how);
+        assertEquals("koşu no", how[0]); // 2.36: kaynak karnede gösterilir
         // 2.35: koşu numarası yanlış koşuyu gösterirse (atlar örtüşmüyor) atlara göre tahmin edilmez: boş kalır
         rs.set(0, new LinkedHashMap<String, Object>(Json.obj(rs.get(1))));
         assertEquals(null, AltiliLog.legWinners(a, city).get(0));
@@ -336,13 +339,32 @@ public class AltiliLogTest {
 
     @Test
     public void suspiciousResultsAreFlaggedAndOldRaceMatchesReset() {
-        // 2.35: favori neredeyse rastgele kazanıyorsa (yanlış okunan sonuçlar) karne uyarır, öğrenilmez
-        Map<String, Object> bad = AltiliLog.analyze(history(0.01, 12, 7), 1, 2000, TODAY);
+        // 2.35–2.36: favori neredeyse rastgele kazanıyor. Sonuçlar atlarla eşleşmeden geldiyse şüpheli (öğrenilmez)...
+        Map<String, Object> weak = history(0.01, 12, 7), matched = history(0.01, 12, 7);
+        for (Object o : AltiliLog.records(matched)) Json.obj(Json.obj(o).get("result")).put("from", "atlar");
+        Map<String, Object> bad = AltiliLog.analyze(matched, 1, 2000, TODAY);
         assertEquals(Boolean.TRUE, Json.obj(bad.get("fav")).get("suspect"));
-        assertEquals(Boolean.FALSE, Json.obj(bad.get("calib")).get("use"));
+        assertEquals(0L, Json.obj(bad.get("calib")).get("n")); // atlarla eşleşen sonuçla öğrenilmez
         assertTrue(Json.str(Json.obj(bad.get("calib")), "why").startsWith("Sonuçlar şüpheli"));
+        // ...resmî 6'lı sonuçlarından geldiyse gerçek: doğrulandı, öğrenmede kullanılır (yabancı hipodrom ayrı)
+        Map<String, Object> real = AltiliLog.analyze(weak, 1, 2000, TODAY);
+        Map<String, Object> fv = Json.obj(real.get("fav"));
+        assertEquals(null, fv.get("suspect"));
+        assertEquals(Boolean.TRUE, fv.get("confirmed"));
+        assertEquals(144L, Json.obj(real.get("calib")).get("n"));
+        assertEquals(144L, Json.obj(Json.obj(real.get("calibRegion")).get("yabancı")).get("n")); // "Şehir0" yabancı
+        assertEquals(0L, Json.obj(Json.obj(real.get("calibRegion")).get("yerli")).get("n"));
+        List<Object> gs = Json.arr(fv.get("groups"));
+        assertEquals("Resmî 6'lı sonucundan", Json.obj(gs.get(0)).get("label"));
+        assertEquals("Yabancı hipodrom", Json.obj(gs.get(1)).get("label"));
         assertEquals(null, Json.obj(AltiliLog.analyze(history(1.0, 40, 7), 1, 2000, TODAY).get("fav")).get("suspect"));
-        // atlarla eşleşmiş eski sonuçlar silinir (yeniden sonuçlanır), kazanan kombinasyondan gelenler kalır
+        // yerli: TJK şehir numarası 1–10 ya da yerli şehir adı
+        assertTrue(AltiliLog.domestic(altili("tjk/x/3/1", "İstanbul", 3, 1, LEGS)));
+        assertFalse(AltiliLog.domestic(altili("tjk/x/31/1", "Belmont Park ABD", 31, 1, LEGS)));
+        Map<String, Object> bil = altili("bilyoner/İstanbul 3–8. koşu", "İstanbul", 99, 1, LEGS);
+        bil.put("source", "Bilyoner");
+        assertTrue(AltiliLog.domestic(bil));
+        // atlarla eşleşmiş eski sonuçlar silinmez, "atlar" diye etiketlenir; kazanan kombinasyondan gelenler aynen
         Map<String, Object> store = new LinkedHashMap<>();
         AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("k1", "A", 1, 1, LEGS), altili("k2", "B", 2, 1, LEGS)));
         Map<String, Object> r1 = new LinkedHashMap<>(), r2 = new LinkedHashMap<>();
@@ -351,7 +373,7 @@ public class AltiliLogTest {
         rec(store, "k1").put("result", r1);
         rec(store, "k2").put("result", r2);
         assertTrue(AltiliLog.migrate(store));
-        assertEquals(null, rec(store, "k1").get("result"));
+        assertEquals("atlar", Json.obj(rec(store, "k1").get("result")).get("from"));
         assertEquals(r2, rec(store, "k2").get("result"));
         assertFalse(AltiliLog.migrate(store)); // bir kez
     }

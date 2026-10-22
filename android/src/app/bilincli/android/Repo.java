@@ -543,7 +543,12 @@ final class Repo {
         in.maxHit = s.altiliCap > 0; // 2.33: tavan varsa kupon tavana kadar en yüksek tutmayla (para önce zayıf ayaklara)
         in.minCost = s.altiliMinCost; // 2.31: kupon en az minCost TL (varsayılan 60); üstüne yalnızca kârlı atlar (2.32)
         Map<String, Object> learn = altiliLearn;
-        if (learn != null) in.alpha = Json.dbl(Json.obj(learn.get("calib")), "alphaUse", 1); // 2.26: öğrenilen AGF düzeltmesi
+        if (learn != null) { // 2.26: öğrenilen AGF düzeltmesi; 2.36: önce altılının bölgesine (yerli/yabancı) ait olan
+            Map<String, Object> region = Json.obj(Json.obj(learn.get("calibRegion")) == null ? null
+                    : Json.obj(learn.get("calibRegion")).get(AltiliLog.domestic(a) ? "yerli" : "yabancı"));
+            Map<String, Object> c = region != null && Json.bool(region, "use", false) ? region : Json.obj(learn.get("calib"));
+            in.alpha = Json.dbl(c, "alphaUse", 1);
+        }
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
             in.devir = Json.dbl(by, "devir", 0);
@@ -588,7 +593,7 @@ final class Repo {
             if (raw != null && !raw.trim().isEmpty()) {
                 altiliLogRaw = raw;
                 Map<String, Object> log = Json.parseObject(raw);
-                if (AltiliLog.migrate(log)) saveAltiliLog(log); // 2.35: atlarla eşleşmiş şüpheli sonuçlar yeniden
+                if (AltiliLog.migrate(log)) saveAltiliLog(log); // 2.35–2.36: atlarla eşleşmiş eski sonuçlar etiketlenir
                 return log;
             }
         } catch (RuntimeException ignored) {
