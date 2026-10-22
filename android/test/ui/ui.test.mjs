@@ -838,7 +838,8 @@ test("altılı: kendiliğinden okunan kupon, OYNA/OYNAMA, altılı seçimi, otom
   const s = altiliState();
   const f = boot(s, "#firsat");
   assert.equal(f.$("#alt_enaz").value, "60"); // 2.32.4 varsayılanı
-  assert.equal(f.$("#alt_ayak").value, "70"); // 2.32.6 varsayılanı
+  assert.equal(f.$("#alt_ayak").value, ""); // 2.33: %70 kuralı kalktı (boş: sınır yok)
+  assert.match(f.$("#altiliCard").textContent, /Bir ayak yatarsa6 ayak %9,6 · tam 5 ayak \(biri yatar\) %29 · en zayıf ayak: 4\. ayak \(%55\)/);
   let card = f.$("#altiliCard").textContent;
   assert.match(card, /İstanbul 3–8\. koşu · Bilyoner · 1\. ayak 14:30/);
   assert.match(card, /1\. ayak \(3\. koşu · 14:30\): 2, 1 \(%100\)/);
@@ -920,7 +921,7 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
 test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
-    legs: {n: 144, expected: 0.62, actual: 0.6}, fav: {n: 144, win: 0.38, agf: 0.34},
+    legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34},
     calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor."},
     strategies: [{fraction: 0.01, budget: 20, n: 24, hits: 0, cost: 480, ret: 0, roi: 0}, {fraction: 0.03, budget: 60, n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
       {fraction: 0.06, budget: 120, n: 24, hits: 4, cost: 2880, ret: 2300, roi: 0.799}], fraction: 0.06,
@@ -935,6 +936,7 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /kasanın %3'ü: 2\/24 tuttu/);
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu · getiri %70/);
   assert.match(k, /Ayak tahminibeklenen %62, gerçekleşen %60 \(144 ayak\)/);
+  assert.match(k, /Bir ayakla kaçan9\/24 kupon · yatan ayak tek atlı \(banko\): 4/);
   assert.match(k, /AGF favorisikazandı %38 · AGF'nin verdiği %34 \(144 ayak\)/);
   assert.match(k, /AGF düzeltmesikullanılmıyor/);
   assert.match(k, /Bütçekasanın %7'si \(ayar\) · geçmişte en iyi getiri %6'sı/);
@@ -1005,7 +1007,7 @@ test("altılı: oynamaya en değer olandan başlayarak numaralı liste", async (
   const f = boot(s, "#firsat");
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
   assert.equal(rows.length, 2);
-  assert.match(rows[0], /^İstanbul 3–8\. koşu · Bilyoner · OYNA.*Oyna · 30 TL \(3 misli\) · 100 TL'den ort\. 138 TL döner · 1\. ayak 14:30$/);
+  assert.match(rows[0], /^İstanbul 3–8\. koşu · Bilyoner · OYNA.*Oyna · 30 TL \(3 misli\) · 100 TL'den ort\. 138 TL döner · 3–8\. koşular 14:30, 15:00, 15:30, 16:00, 16:30, 17:00$/);
   assert.match(rows[1], /^İzmir 1\. altılı · TJK.*Ortalamada zarar, yine de oynarsan · 40 TL · 100 TL'den ort\. 73 TL döner · AGF 19:02 okumasından$/);
   f.chip("İzmir 1. altılı · TJK").click();
   assert.match(f.$("#altiliCard").textContent, /Son okumada bu altılı okunamadı; AGF 21\.10 19:02 okumasından\./);
@@ -1032,6 +1034,20 @@ test("altılı: her ayak %70 ve en fazla 320 TL; sığmayan oynanmaz", async () 
   assert.match(boot(none, "#firsat").$("#altiliCard").textContent, /Bugün kurallara uyan altılı yok: her ayağı %70 tutan ve 320 TL'ye sığan altılı bulunamadı\. Oynama\./);
   f.$("#alt_tavan").value = "250"; f.$("#alt_tavan").dispatchEvent(new f.w.Event("change"));
   assert.deepEqual(f.calls.at(-1).payload, {cap: 250});
+  assert.deepEqual(f.errors, []);
+});
+
+test("altılı: bütçeyle en yüksek tutma (320 TL'ye kadar, para önce zayıf ayaklara)", async () => {
+  const s = altiliState();
+  Object.assign(s.agf.altilis[1].plan, {legMin: 0, minCost: 60, cap: 320, maxHit: true, units: 288, cost: 288, budget: 320,
+    weakLeg: 1, weakHorse: "4", weakCost: 432, weakHit: 0.305});
+  const f = boot(s, "#firsat");
+  f.chip("İzmir 1. altılı · TJK").click();
+  const card = f.$("#altiliCard").textContent;
+  assert.match(card, /Kupon \(en fazla 320 TL, TL başına tutmayı en çok artıran atlar\)/);
+  assert.match(card, /Yine de oynarsan: kupon 320,00 TL'ye kadar, her adımda tutmayı TL başına en çok artıran atla kurulur; para önce en zayıf ayaklara gider\./);
+  assert.doesNotMatch(card, /her ayağı en az %0/);
+  assert.match(card, /en zayıf ayak: 1\. ayak \(%65\)\. Bu ayağa 4 numarayı da eklersen kupon 432,00 TL, 6 ayak %23,3 → %30,5/);
   assert.deepEqual(f.errors, []);
 });
 

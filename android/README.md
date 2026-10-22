@@ -233,6 +233,12 @@ bildirim olarak gelir.
 - **2.32.10:** Kullanıcı Belmont Park 2. altılı kuponunun (her ayak %70–81, 192 TL) kurallarını istedi: ayaklar artık
   daraltılmaz. Her ayak en az %70 ve kupon en fazla 320 TL birlikte; ikisi sağlanamıyorsa altılı "320 TL'yi aşıyor,
   oynama" diye sıranın sonunda, günün kuponu olarak önerilmez ve "yine de oynarsan" kuponu verilmez.
+- **2.33: bütçeyle en yüksek tutma.** Kullanıcı istedi: %70 kuralı kalktı. Oynanmayacak günde kupon "Kupon en fazla"
+  (320 TL) içinde 6 ayağın birden tutma olasılığı en yüksek olacak şekilde kurulur: her ayakta en olası atlar, ayak başına
+  at sayılarının bütün dağılımları denenir (adım adım eklemek bir ayağı tek atta bırakıp başkasını şişirebiliyordu).
+  "6 ayaktan biri yatıyor" için: kartta 6 ayak ve tam 5 ayak (biri yatar) olasılığı, en zayıf ayak ve o ayağa bir at
+  daha eklemenin bedeli ile tutmaya etkisi; karnede bir ayakla kaçan kuponlar ve yatan ayağın tek atlı (banko) olup
+  olmadığı. Sıra listesinde altı koşunun numarası ve saati.
 
 ## Beraberlik fırsatları (2.17)
 

@@ -109,6 +109,23 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void oneLegMissIsCounted() {
+        // 2.33: "6 ayaktan hep 1 tanesi yatıyor": tek ayakla kaçan kupon ve yatan ayağın tek atlı (banko) olup olmadığı
+        Map<String, Object> store = new LinkedHashMap<>();
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS)));
+        List<Object> horses = Json.arr(Json.obj(rec(store, "tjk/2026-10-21/3/1").get("plan")).get("horses"));
+        String[] win = new String[6];
+        for (int k = 0; k < 6; k++) win[k] = String.valueOf(Json.arr(horses.get(k)).get(0));
+        win[5] = "3"; // 6. ayakta sürpriz
+        assertFalse(Json.arr(horses.get(5)).contains("3"));
+        assertEquals(1, AltiliLog.settle(store, DAY, results(city(3, "İstanbul", Arrays.<Object>asList(combo(500, win)), new ArrayList<Object>())),
+                1, 0.27, 0, TODAY, NOW));
+        Map<String, Object> lg = Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY).get("legs"));
+        assertEquals(1L, lg.get("five"));
+        assertEquals(Json.arr(horses.get(5)).size() == 1 ? 1L : 0L, lg.get("fiveBanko"));
+    }
+
+    @Test
     public void settleFromRaceTablesWithEstimatedPayoutAndMissing() {
         Map<String, Object> store = new LinkedHashMap<>();
         AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("bilyoner/Bursa", "Bursa", 99, 1, LEGS)));

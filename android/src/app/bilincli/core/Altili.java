@@ -76,6 +76,11 @@ public final class Altili {
          * beklenen kazancı artıran (kârlı) atlar eklenir. Üst sınır bütçe (kasanın %7'si).
          */
         public double minCost = 0;
+        /**
+         * 2.33: bütçeyle en yüksek tutma: oynanmayacak günde kupon tavana (maxCost) kadar, her adımda tutma olasılığını
+         * bedele göre en çok artıran atla doldurulur; para önce en zayıf ayaklara gider (6 ayaktan biri yatmasın diye).
+         */
+        public boolean maxHit = false;
     }
 
     private static double num(String s) {
@@ -438,6 +443,56 @@ public final class Altili {
         for (List<Horse> hs : pick) hs.sort(BY_Q);
     }
 
+    static List<Horse> byQ(Leg leg) {
+        List<Horse> hs = new ArrayList<>(leg.horses);
+        hs.sort(BY_Q);
+        return hs;
+    }
+
+    /**
+     * 2.33: ayak başına at sayıları (her ayakta en olası atlar): kombinasyon sayısı maxUnits'i aşmadan tutma olasılığı
+     * (ayak olasılıklarının çarpımı) en yüksek olan; eşitse en ucuz. Bütün dağılımlar denenir (adım adım eklemek bir
+     * ayağı tek atta bırakıp başkasını şişirebiliyordu). Her ayak en az legMin'e tamamlanır; sığmıyorsa bu en az sayılar.
+     */
+    static int[] bestHit(List<Leg> legs, long maxUnits, double legMin) {
+        double[][] s = new double[6][];
+        int[] lo = new int[6];
+        long minUnits = 1;
+        for (int k = 0; k < 6; k++) {
+            List<Horse> hs = byQ(legs.get(k));
+            int m = Math.min(hs.size(), MAX_PER_LEG);
+            s[k] = new double[m + 1];
+            for (int i = 0; i < m; i++) s[k][i + 1] = s[k][i] + hs.get(i).q;
+            lo[k] = 1;
+            while (lo[k] < m && s[k][lo[k]] < legMin - 1e-9) lo[k]++;
+            minUnits *= lo[k];
+        }
+        if (minUnits > maxUnits) return lo;
+        int[] best = lo.clone(), cur = new int[6];
+        double[] bestHit = {-1};
+        long[] bestUnits = {Long.MAX_VALUE};
+        hitSearch(s, lo, 0, 1, 1, maxUnits, cur, best, bestHit, bestUnits);
+        return best;
+    }
+
+    private static void hitSearch(double[][] s, int[] lo, int k, long units, double hit, long maxUnits, int[] cur, int[] best, double[] bestHit,
+            long[] bestUnits) {
+        if (k == 6) {
+            if (hit > bestHit[0] + 1e-12 || (Math.abs(hit - bestHit[0]) <= 1e-12 && units < bestUnits[0])) {
+                bestHit[0] = hit;
+                bestUnits[0] = units;
+                System.arraycopy(cur, 0, best, 0, 6);
+            }
+            return;
+        }
+        long rest = 1;
+        for (int j = k + 1; j < 6; j++) rest *= lo[j];
+        for (int n = lo[k]; n < s[k].length && units * n * rest <= maxUnits; n++) {
+            cur[k] = n;
+            hitSearch(s, lo, k + 1, units * n, hit * s[k][n], maxUnits, cur, best, bestHit, bestUnits);
+        }
+    }
+
     private static final Comparator<Horse> BY_Q = new Comparator<Horse>() {
         @Override
         public int compare(Horse a, Horse b) {
@@ -557,8 +612,13 @@ public final class Altili {
         boolean tutma = !play && budget >= in.unit;
         if (tutma) { // 2.30: oynanmayacak günde ayak sınırını sağlayan en kârlı (en az zararlı) seçim; bütçe üst sınır
             pick.clear();
-            for (int k = 0; k < 6; k++) pick.add(new ArrayList<>(chosen(legs.get(k), mostProfitable(cands.get(k)))));
-            fill(pick, legs, in, budget); // 2.31–2.32: en az minCost TL'ye kadar tutmayı artıran, üstüne yalnızca kârlı atlar
+            if (in.maxHit) { // 2.33: tavana sığan en yüksek tutma (kesin arama; para en zayıf ayaklara)
+                int[] n = bestHit(legs, (long) Math.floor(budget / in.unit + 1e-9), in.legMin);
+                for (int k = 0; k < 6; k++) pick.add(new ArrayList<>(byQ(legs.get(k)).subList(0, n[k])));
+            } else {
+                for (int k = 0; k < 6; k++) pick.add(new ArrayList<>(chosen(legs.get(k), mostProfitable(cands.get(k)))));
+                fill(pick, legs, in, budget); // 2.31–2.32: en az minCost TL'ye kadar tutmayı artıran, üstüne yalnızca kârlı atlar
+            }
             r = 1;
             double hit = 1;
             long units = 1;
@@ -575,6 +635,20 @@ public final class Altili {
             double roi = in.pool > 0 && units <= MAX_EXACT ? exactRoi(pick, units, 1, in) : factor(in) * r / units;
             e = eval(hit, roi, units, in);
             e.kat = 1;
+            // 2.33: "6 ayaktan biri yatıyor": en zayıf ayak ve ona bir at daha eklemenin bedeli ile tutmaya etkisi
+            int weak = 0;
+            double[] sq = new double[6];
+            for (int k = 0; k < 6; k++) {
+                for (Horse h : pick.get(k)) sq[k] += h.q;
+                if (sq[k] < sq[weak]) weak = k;
+            }
+            Horse next = nextHorse(pick.get(weak), legs.get(weak));
+            out.put("weakLeg", (long) (weak + 1));
+            if (next != null && sq[weak] > 0) {
+                out.put("weakHorse", next.no);
+                out.put("weakCost", units / pick.get(weak).size() * (pick.get(weak).size() + 1) * in.unit);
+                out.put("weakHit", hit * (sq[weak] + next.q) / sq[weak]);
+            }
         }
         List<Object> legsOut = new ArrayList<>();
         for (int k = 0; k < 6; k++) {
@@ -598,6 +672,7 @@ public final class Altili {
             out.put("budget", budget);
             if (in.minCost > 0) out.put("minCost", in.minCost);
             if (in.maxCost > 0) out.put("cap", in.maxCost); // 2.32.10: kupon en fazla (her ayak sınırıyla birlikte; sığmazsa oynanmaz)
+            if (in.maxHit) out.put("maxHit", true); // 2.33: tavana kadar en yüksek tutma
             if (e.cost > budget + 1e-9) out.put("overBudget", true); // ayak başına en az tutma için bütçe aşıldı
         }
         if (in.legMin > 0) out.put("legMin", in.legMin);

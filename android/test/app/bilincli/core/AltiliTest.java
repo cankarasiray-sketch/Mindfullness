@@ -263,14 +263,14 @@ public class AltiliTest {
     @Test
     public void reasonableDefaultsAndRevertOf2322And2323() {
         // 2.32.4: kupon en az 60 TL; 2.32.6: kullanıcı istedi, her ayak en az %70
-        assertEquals(0.70, new Settings().altiliLegMin, 1e-9);
+        assertEquals(0.0, new Settings().altiliLegMin, 1e-9); // 2.33: %70 kuralı kalktı
         assertEquals(60.0, new Settings().altiliMinCost, 1e-9);
         Map<String, Object> v11 = new Settings().toMap();
         v11.put("v", 11L);
         v11.put("altiliLegMin", 0.80);
         v11.put("altiliMinCost", 120.0);
         Settings back = Settings.fromMap(v11);
-        assertEquals(0.70, back.altiliLegMin, 1e-9);
+        assertEquals(0.0, back.altiliLegMin, 1e-9);
         assertEquals(60.0, back.altiliMinCost, 1e-9);
         v11.put("altiliLegMin", 0.60); // kullanıcının kendi seçimi korunur
         v11.put("altiliMinCost", 90.0);
@@ -279,8 +279,12 @@ public class AltiliTest {
         Settings mine = new Settings();
         Map<String, Object> v12 = new Settings().toMap();
         v12.put("v", 12L);
-        v12.put("altiliLegMin", 0.50); // 2.32.4–2.32.5 varsayılanı %70'e taşınır
-        assertEquals(0.70, Settings.fromMap(v12).altiliLegMin, 1e-9);
+        v12.put("altiliLegMin", 0.50); // 2.32.4–2.32.5 varsayılanı %70'e, 2.33'te sınırsıza taşınır
+        assertEquals(0.0, Settings.fromMap(v12).altiliLegMin, 1e-9);
+        Map<String, Object> v13 = new Settings().toMap();
+        v13.put("v", 13L);
+        v13.put("altiliLegMin", 0.70);
+        assertEquals(0.0, Settings.fromMap(v13).altiliLegMin, 1e-9);
         mine.altiliLegMin = 0.80; // yeni sürümde bilerek %80'e çeken korunur
         mine.altiliMinCost = 120;
         assertEquals(0.80, Settings.fromMap(mine.toMap()).altiliLegMin, 1e-9);
@@ -304,6 +308,53 @@ public class AltiliTest {
         assertEquals((Double) p.get("roi"), (Double) lean.get("roi"), 1e-9);
         assertTrue((Double) lean.get("cost") < (Double) p.get("cost") / 3);
         assertTrue((Double) lean.get("hit") / -(Double) lean.get("ev") > (Double) p.get("hit") / -(Double) p.get("ev"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void maxHitFillsToCapAndFeedsWeakestLegs() {
+        // 2.33: bütçeyle en yüksek tutma: kupon 320 TL'ye kadar, para önce en zayıf (açık) ayaklara
+        Altili.Inputs in = rule();
+        in.legMin = 0;
+        in.maxCost = 320;
+        in.maxHit = true;
+        List<String> legs = Arrays.asList("1:85 2:10 3:5", "1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:60 2:25 3:15", "1:45 2:20 3:15 4:10 5:10",
+                "1:50 2:30 3:20", "1:40 2:30 3:15 4:15");
+        Map<String, Object> p = Altili.plan(legs, in);
+        double cost = (Double) p.get("cost");
+        assertTrue("kupon " + cost, cost <= 320 + 1e-9 && cost >= 240);
+        assertEquals(true, p.get("maxHit"));
+        assertTrue(horses(p, 0).size() < horses(p, 1).size()); // favorisi net ayakta az, açık ayakta çok at
+        Altili.Inputs cheap = rule();
+        cheap.legMin = 0;
+        assertTrue((Double) p.get("hit") > 1.5 * (Double) Altili.plan(legs, cheap).get("hit"));
+        assertEquals(320.0, cost, 1e-9); // tavana sığan en yüksek tutma (kesin arama)
+        // en zayıf ayak (5. ayak, 1-2: %80) ve 3 numarayı eklemenin bedeli
+        assertEquals(5L, p.get("weakLeg"));
+        assertEquals("3", p.get("weakHorse"));
+        assertEquals(480.0, (Double) p.get("weakCost"), 1e-9);
+        assertEquals((Double) p.get("hit") / 0.8, (Double) p.get("weakHit"), 1e-9);
+        // adım adım eklemenin tuzağı: tek atta bırakılan ayak yerine en iyi dağılım (en yüksek tutma) seçilir
+        List<String> open = Arrays.asList("1:35 2:20 3:15 4:10 5:10 6:5 7:5", "1:45 2:20 3:15 4:10 5:10", "1:25 2:20 3:15 4:15 5:10 6:10 7:5",
+                "1:50 2:20 3:15 4:15", "1:30 2:25 3:20 4:15 5:10", "1:40 2:30 3:15 4:15");
+        Map<String, Object> o = Altili.plan(open, in);
+        assertTrue((Double) o.get("cost") <= 320 + 1e-9);
+        int[] n = Altili.bestHit(legsOf(open), 320, 0);
+        double best = 0;
+        for (int a = 1; a <= 7; a++) for (int b = 1; b <= 5; b++) for (int c = 1; c <= 7; c++) for (int d = 1; d <= 4; d++) for (int e = 1; e <= 5; e++)
+            for (int f = 1; f <= 4; f++) {
+                if (a * b * c * d * e * f > 320) continue;
+                int[] m = {a, b, c, d, e, f};
+                double h = 1;
+                for (int k = 0; k < 6; k++) h *= top(open.get(k), m[k]);
+                best = Math.max(best, h);
+            }
+        assertEquals(best, (Double) o.get("hit"), 1e-9); // bütün dağılımlar arasında en yüksek
+        assertEquals(n.length, 6);
+        // tavanın altındaki her eklemeden daha iyisi yok: ayakların en zayıfı en çok güçlenir
+        double weakest = 1;
+        for (Object l : (List<Object>) p.get("legs")) weakest = Math.min(weakest, (Double) ((Map<String, Object>) l).get("share"));
+        assertTrue("en zayıf ayak %" + weakest * 100, weakest >= 0.6);
     }
 
     @Test
@@ -333,6 +384,20 @@ public class AltiliTest {
         assertEquals(0, Altili.best(Arrays.asList(p, w)));
         assertEquals(1, Altili.best(Arrays.asList(w, p)));
         assertEquals(-1, Altili.best(Arrays.asList(w)));
+    }
+
+    static List<Altili.Leg> legsOf(List<String> texts) {
+        List<Altili.Leg> out = new ArrayList<>();
+        for (String t : texts) out.add(Altili.leg(t));
+        return out;
+    }
+
+    /** Ayağın en olası n atının toplam payı (0–1). */
+    static double top(String leg, int n) {
+        double s = 0;
+        String[] ts = leg.split(" ");
+        for (int i = 0; i < n && i < ts.length; i++) s += Double.parseDouble(ts[i].split(":")[1]) / 100;
+        return s;
     }
 
     static double share(String leg, String horse) {

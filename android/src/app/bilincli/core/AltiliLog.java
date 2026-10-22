@@ -326,7 +326,7 @@ public final class AltiliLog {
                 return String.valueOf(a.get("day")).compareTo(String.valueOf(b.get("day")));
             }
         });
-        int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0;
+        int sn = 0, sh = 0, an = 0, ah = 0, legN = 0, legHit = 0, favN = 0, favWin = 0, five = 0, fiveBanko = 0;
         double sc = 0, sr = 0, ac = 0, ar = 0, legExp = 0, favAgf = 0;
         List<LegData> data = new ArrayList<>();
         List<Integer> dayIndex = new ArrayList<>();
@@ -354,6 +354,15 @@ public final class AltiliLog {
                     ar += payout;
                 }
                 List<Object> horses = Json.arr(pc.get("horses"));
+                int miss = -1, misses = 0; // 2.33: tek ayakla kaçan kupon ve yatan ayak tek atlı (banko) mıydı
+                for (int k = 0; k < 6; k++) if (!h[k]) {
+                    misses++;
+                    miss = k;
+                }
+                if (misses == 1) {
+                    five++;
+                    if (Json.arr(horses.get(miss)).size() == 1) fiveBanko++;
+                }
                 for (int k = 0; k < 6; k++) {
                     Map<String, Double> agf = agf(String.valueOf(legs.get(k)));
                     for (Object x : Json.arr(horses.get(k))) {
@@ -392,6 +401,8 @@ public final class AltiliLog {
         lg.put("n", (long) legN);
         lg.put("expected", legN > 0 ? legExp / legN : 0.0);
         lg.put("actual", legN > 0 ? (double) legHit / legN : 0.0);
+        lg.put("five", (long) five);
+        lg.put("fiveBanko", (long) fiveBanko);
         out.put("legs", lg);
         Map<String, Object> fv = new LinkedHashMap<>();
         fv.put("n", (long) favN);
