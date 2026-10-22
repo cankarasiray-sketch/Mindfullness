@@ -30,7 +30,7 @@ import java.util.Set;
 public final class AltiliLog {
     private AltiliLog() {}
 
-    static final int KEEP_DAYS = 200, SETTLE_DAYS = 5, ANALYZE_DAYS = 190; // 2.46: 6 aylık geriye dönük karne
+    static final int KEEP_DAYS = 380, SETTLE_DAYS = 5, ANALYZE_DAYS = 370; // 2.46–2.47: 1 yıllık geriye dönük karne
     static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12;
     /** 2.42: bölge kuralı için en az doğrulanmış ayak (3 altılı). */
     static final int REGION_MIN_LEGS = 18; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
@@ -157,6 +157,13 @@ public final class AltiliLog {
      * edilemediğinden kazananlar yanlış olabilir. Silinmez; karnede güvenilir sonuçlarla ayrı gösterilir, öğrenmede
      * kullanılmaz. Değiştiyse true.
      */
+    /** 2.47: defterde kaydı olan günler (geriye dönük taramada atlanır; defter bir kez okunur). */
+    public static Set<String> days(Map<String, Object> store) {
+        Set<String> out = new HashSet<>();
+        for (Object o : records(store)) if (Json.str(Json.obj(o), "day") != null) out.add(Json.str(Json.obj(o), "day"));
+        return out;
+    }
+
     /** 2.43: o günün defterdeki altılı anahtarları (geriye dönük tahmin olanlara dokunmasın). */
     public static Set<String> keys(Map<String, Object> store, String day) {
         Set<String> out = new HashSet<>();

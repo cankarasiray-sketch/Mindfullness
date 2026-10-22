@@ -829,10 +829,7 @@ final class Repo {
     private int[] backtestDay(java.time.LocalDate d, AndroidHttp http, Map<String, Object> inp, Settings s, Instant now, List<Object> lines,
             Daily.Progress progress) {
         String day = d.toString(), today = now.atOffset(Fmt.TR).toLocalDate().toString();
-        java.util.Set<String> have;
-        synchronized (altiliLogLock) {
-            have = AltiliLog.keys(altiliLog(), day);
-        }
+        java.util.Set<String> have = java.util.Collections.emptySet(); // yalnızca kaydı olmayan gün işlenir
         Map<String, Object> r = Tjk.read(http, d, now, progress, false); // 2.46: koşu saatleri gerekmez
         List<Object> fresh = new ArrayList<>();
         java.util.Set<Integer> cities = new java.util.HashSet<>();
@@ -869,15 +866,22 @@ final class Repo {
         }
     }
 
-    /** 2.46: geriye dönük tarama ne kadar geriye (6 ay); bir seferde en çok bu kadar süre (iş sınırı). */
-    static final int ALTILI_BACKFILL_DAYS = 180;
+    /** 2.46–2.47: geriye dönük tarama ne kadar geriye (1 yıl); bir seferde en çok bu kadar süre (iş sınırı). */
+    static final int ALTILI_BACKFILL_DAYS = 365;
     static final long ALTILI_BACKFILL_STEP_MS = 4 * 60 * 1000;
 
     /** Geriye dönük taramanın durumu: {from (en yeni gün), to (en eski gün), next (sıradaki gün), days, added, settled, verified, at}. */
     Map<String, Object> altiliBackfillState() {
         try {
             String raw = prefs.getString("altiliBackfill", "");
-            return raw.isEmpty() ? null : Json.parseObject(raw);
+            if (raw.isEmpty()) return null;
+            Map<String, Object> st = Json.parseObject(raw);
+            if (Json.lng(st, "days", 0) < ALTILI_BACKFILL_DAYS && Json.str(st, "from") != null) { // 2.47: 6 aylık tarama 1 yıla uzar, kaldığı yerden
+                st.put("days", (long) ALTILI_BACKFILL_DAYS);
+                st.put("to", java.time.LocalDate.parse(Json.str(st, "from")).minusDays(ALTILI_BACKFILL_DAYS - 1).toString());
+                prefs.edit().putString("altiliBackfill", Json.write(st)).apply();
+            }
+            return st;
         } catch (RuntimeException e) {
             return null;
         }
@@ -915,13 +919,13 @@ final class Repo {
         }
         long t0 = System.currentTimeMillis();
         int doneDays = 0;
+        java.util.Set<String> covered;
+        synchronized (altiliLogLock) {
+            covered = AltiliLog.days(altiliLog()); // 2.47: büyük defter bir kez okunur
+        }
         java.time.LocalDate d = java.time.LocalDate.parse(next);
         while (d.toString().compareTo(to) >= 0 && System.currentTimeMillis() - t0 < budgetMs) {
-            boolean covered;
-            synchronized (altiliLogLock) {
-                covered = !AltiliLog.keys(altiliLog(), d.toString()).isEmpty(); // o günün kaydı var: atla
-            }
-            if (!covered) {
+            if (!covered.contains(d.toString())) { // o günün kaydı varsa atla
                 if (progress != null) progress.step("Geriye dönük " + d + " (" + (Json.lng(st, "days", days) - java.time.temporal.ChronoUnit.DAYS.between(d, today) + 1) + " gün kaldı)…");
                 int[] o = backtestDay(d, http, inp, s, now, lines, progress);
                 st.put("added", Json.lng(st, "added", 0) + o[0]);

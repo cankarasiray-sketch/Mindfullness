@@ -309,6 +309,8 @@ bildirim olarak gelir.
   işte 4 dk'lık parçalarla yalnızca Wi-Fi gibi ücretsiz ağda (AGF sayfaları büyük: 6 ay birkaç yüz MB); kaldığı yerden
   sürer, kaydı olan gün atlanır. Karnede ilerleme ("30/180 gün · N altılı tahmin, M doğrulandı") ve "Geçmiş taramayı şimdi
   sürdür". Defter 200 gün, analiz 190 gün tutar; görünüm önbelleği büyük defterde içerik yerine özetle karşılaştırılır.
+- **2.47:** Kullanıcı istedi: tarama 1 yıl (365 gün). Başlamış 6 aylık tarama kaldığı yerden 1 yıla uzar. Defter 380,
+  analiz 370 gün; taramada büyük defter her bölümde bir kez okunur (kaydı olan günler bir seferde bulunur).
 
 ## Beraberlik fırsatları (2.17)
 
