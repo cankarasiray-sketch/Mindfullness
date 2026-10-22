@@ -587,7 +587,9 @@ final class Repo {
             String raw = altiliLogRaw != null ? altiliLogRaw : altiliLogStore.read();
             if (raw != null && !raw.trim().isEmpty()) {
                 altiliLogRaw = raw;
-                return Json.parseObject(raw);
+                Map<String, Object> log = Json.parseObject(raw);
+                if (AltiliLog.migrate(log)) saveAltiliLog(log); // 2.35: atlarla eşleşmiş şüpheli sonuçlar yeniden
+                return log;
             }
         } catch (RuntimeException ignored) {
             // bozuk defter: yeniden başlar

@@ -245,6 +245,12 @@ bildirim olarak gelir.
   ayak tuttu" özeti, başlamış çipte "2/3 ayak"; okuma ayrıntısında "Ayak sonuçları" bölümü. Ayak koşu numarasıyla
   (programdan) eşleşir; sonuç sayfası iskelet çıkarsa şehir sekmesinin adresi denenir; at no başlıksız sütundan da okunur.
   Tamamlanan altılı aynı gün karneye işlenir.
+- **2.35: yanlış sonuç düzeltmesi.** Karnede AGF favorisi 108 ayakta %15 kazanmış görünüyordu (AGF %35 veriyordu;
+  3 standart sapmadan fazla). Neden: kazananlar ayağın atları en benzer koşudan alınıyordu; ABD'de (ve çoğu yerde) atlar
+  her koşuda 1, 2, 3… diye numaralı olduğundan koşular ayırt edilemiyor, yanlış koşunun kazananı alınıyordu. Artık koşu
+  numarasıyla eşleşir (altılıda ve sonuç sayfasında); atlarla eşleştirme yalnızca tek ve açık aday varsa, yoksa boş.
+  Başlıksız tabloda at no sütunu yalnızca tek aday varsa okunur. Atlarla eşleşmiş eski sonuçlar silinip yeniden
+  sonuçlanır. Öz denetim: favori beklenenden 3 standart sapma az kazanıyorsa karne "Sonuçlar şüpheli" der ve öğrenmez.
 
 ## Beraberlik fırsatları (2.17)
 

@@ -296,9 +296,9 @@ public class AltiliLogTest {
         a.put("races", rs);
         Map<String, Object> city = city(31, "Keeneland ABD", new ArrayList<Object>(), new ArrayList<Object>(races));
         assertEquals(Arrays.asList("6", "9", "3", null, null, null), AltiliLog.legWinners(a, city));
-        // koşu numarası yanlış koşuyu gösterirse (atlar örtüşmüyor) atlara göre eşleşir
+        // 2.35: koşu numarası yanlış koşuyu gösterirse (atlar örtüşmüyor) atlara göre tahmin edilmez: boş kalır
         rs.set(0, new LinkedHashMap<String, Object>(Json.obj(rs.get(1))));
-        assertEquals("6", AltiliLog.legWinners(a, city).get(0));
+        assertEquals(null, AltiliLog.legWinners(a, city).get(0));
         assertEquals(Arrays.<Object>asList(null, null, null, null, null, null), AltiliLog.legWinners(a, null));
         // şehir bağlantısı sayfa iskeleti (tablosuz): şehir sekmesinin adresi denenir
         String main = "<a href=\"?SehirId=31&amp;QueryParameter_Tarih=21%2F10%2F2026&amp;SehirAdi=Keeneland+ABD\">K</a>"
@@ -313,6 +313,46 @@ public class AltiliLogTest {
         assertEquals(1, Json.arr(r.get("cities")).size()); // yalnızca istenen şehir
         assertEquals(3, Json.arr(Json.obj(Json.arr(r.get("cities")).get(0)).get("races")).size());
         assertEquals(3, asked.size());
-        assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Keeneland ABD: 0 altılı sonucu, 3 koşu (kazananlar 1→6, 2→9, 3→3)"));
+        assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Keeneland ABD: 0 altılı sonucu, 3 koşu (kazananlar 1→6, 2→9, 3→3; "
+                + "sütunlar: Sıra | At | Derece | Gny → at no 2. sütun)"));
+    }
+
+    @Test
+    public void ambiguousRacesGiveNoWinner() {
+        // 2.35: ABD'de atlar her koşuda 1, 2, 3…: koşu numarası yoksa atlarla ayırt edilemez → yanlış kazanan yerine boş
+        List<Object> races = Arrays.<Object>asList(race("3", "1", "2", "3", "4", "5", "6", "7", "8"), race("6", "1", "2", "3", "4", "5", "6", "7", "8"),
+                race("2", "1", "2", "3", "4", "5", "6", "7"));
+        String leg8 = "1:30 2:20 3:15 4:10 5:10 6:5 7:5 8:5";
+        Map<String, Object> a = altili("tjk/x/40/1", "Belmont Park ABD", 40, 1, Arrays.asList(leg8, leg8, leg8, leg8, leg8, leg8));
+        assertEquals(Arrays.<Object>asList(null, null, null, null, null, null), AltiliLog.legWinners(a, city(40, "Belmont Park ABD", new ArrayList<Object>(), races)));
+        // kazanan kombinasyon varsa o kesin
+        Map<String, Object> withCombo = city(40, "Belmont Park ABD", Arrays.<Object>asList(combo(900, "1", "2", "3", "4", "5", "6")), races);
+        assertEquals(Arrays.<Object>asList("1", "2", "3", "4", "5", "6"), AltiliLog.legWinners(a, withCombo));
+        // başlıksız tabloda at no olabilecek iki sütun (at no ve start): hangisi bilinemez → koşu okunmaz
+        String two = "<h3>1. Koşu</h3><table><tr><td>Sıra</td><td>At</td><td>St</td></tr><tr><td>1</td><td>5</td><td>3</td></tr>"
+                + "<tr><td>2</td><td>2</td><td>7</td></tr><tr><td>3</td><td>8</td><td>1</td></tr></table>";
+        assertEquals(0, Tjk.raceResults(two).size());
+    }
+
+    @Test
+    public void suspiciousResultsAreFlaggedAndOldRaceMatchesReset() {
+        // 2.35: favori neredeyse rastgele kazanıyorsa (yanlış okunan sonuçlar) karne uyarır, öğrenilmez
+        Map<String, Object> bad = AltiliLog.analyze(history(0.01, 12, 7), 1, 2000, TODAY);
+        assertEquals(Boolean.TRUE, Json.obj(bad.get("fav")).get("suspect"));
+        assertEquals(Boolean.FALSE, Json.obj(bad.get("calib")).get("use"));
+        assertTrue(Json.str(Json.obj(bad.get("calib")), "why").startsWith("Sonuçlar şüpheli"));
+        assertEquals(null, Json.obj(AltiliLog.analyze(history(1.0, 40, 7), 1, 2000, TODAY).get("fav")).get("suspect"));
+        // atlarla eşleşmiş eski sonuçlar silinir (yeniden sonuçlanır), kazanan kombinasyondan gelenler kalır
+        Map<String, Object> store = new LinkedHashMap<>();
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(altili("k1", "A", 1, 1, LEGS), altili("k2", "B", 2, 1, LEGS)));
+        Map<String, Object> r1 = new LinkedHashMap<>(), r2 = new LinkedHashMap<>();
+        r1.put("from", "koşular");
+        r2.put("from", "kombinasyon");
+        rec(store, "k1").put("result", r1);
+        rec(store, "k2").put("result", r2);
+        assertTrue(AltiliLog.migrate(store));
+        assertEquals(null, rec(store, "k1").get("result"));
+        assertEquals(r2, rec(store, "k2").get("result"));
+        assertFalse(AltiliLog.migrate(store)); // bir kez
     }
 }

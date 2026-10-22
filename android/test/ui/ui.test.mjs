@@ -937,6 +937,9 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu · getiri %70/);
   assert.match(k, /Ayak tahminibeklenen %62, gerçekleşen %60 \(144 ayak\)/);
   assert.match(k, /Bir ayakla kaçan9\/24 kupon · yatan ayak tek atlı \(banko\): 4/);
+  assert.doesNotMatch(k, /Sonuçlar şüpheli/);
+  s.agf.learn.fav = {n: 108, win: 0.15, agf: 0.35, suspect: true};
+  assert.match(boot(s, "#firsat").$("#altiliKarne").textContent, /Sonuçlar şüpheli: favori %15 kazanmış, AGF %35 veriyor; bu fark tesadüf olamayacak kadar büyük\. Kazananlar büyük ihtimalle yanlış okunuyor/);
   assert.match(k, /AGF favorisikazandı %38 · AGF'nin verdiği %34 \(144 ayak\)/);
   assert.match(k, /AGF düzeltmesikullanılmıyor/);
   assert.match(k, /Bütçekasanın %7'si \(ayar\) · geçmişte en iyi getiri %6'sı/);

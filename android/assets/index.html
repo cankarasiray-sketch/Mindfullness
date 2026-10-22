@@ -780,6 +780,8 @@ function altiliKarne(L, sl) {
       + item("Ayak tahmini", "beklenen " + pc(lg.expected) + ", gerçekleşen " + pc(lg.actual) + " (" + lg.n + " ayak)")
       + (lg.five != null ? item("Bir ayakla kaçan", lg.five + "/" + a.n + " kupon" + (lg.five ? " · yatan ayak tek atlı (banko): " + lg.fiveBanko : "")) : "")
       + item("AGF favorisi", "kazandı " + pc(fv.win) + " · AGF'nin verdiği " + pc(fv.agf) + " (" + fv.n + " ayak)")
+      + (fv.suspect ? '<p class="neg small"><b>Sonuçlar şüpheli:</b> favori ' + pc(fv.win) + " kazanmış, AGF " + pc(fv.agf)
+        + " veriyor; bu fark tesadüf olamayacak kadar büyük. Kazananlar büyük ihtimalle yanlış okunuyor: bu sonuçlarla öğrenilmiyor, karne güvenilir değil.</p>" : "")
       + item("AGF düzeltmesi", c.use ? "kullanılıyor (α " + num(c.alphaUse, 2) + ")" : "kullanılmıyor")
       + item("Bütçe", "kasanın " + pctOf((S.settings && S.settings.altiliBudgetShare) || 0.07) + " (ayar)" + (f ? " · geçmişte en iyi getiri " + pctOf(f) : " · karşılaştırma için en az 20 sonuç gerekli, şu an " + L.settled))
       + "</div>"

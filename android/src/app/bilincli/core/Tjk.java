@@ -945,6 +945,7 @@ public final class Tjk {
         String[] rows = table.split("(?i)<tr\\b");
         int horseCol = -1, posCol = -1, width = 0;
         boolean header = false;
+        List<String> headCells = new ArrayList<>();
         List<List<String>> data = new ArrayList<>();
         for (int r = 1; r < rows.length; r++) {
             String[] cells = rows[r].split("(?i)<t[dh]\\b");
@@ -958,6 +959,7 @@ public final class Tjk {
                 }
                 if (h >= 0 || p >= 0) { // başlık satırı (önceki satırlar başlık üstü yazı)
                     header = true;
+                    headCells = ts;
                     horseCol = h;
                     posCol = p;
                     data.clear();
@@ -967,8 +969,11 @@ public final class Tjk {
             data.add(ts);
             width = Math.max(width, ts.size());
         }
-        if (horseCol < 0) {
-            for (int c = 0; c < width && horseCol < 0; c++) {
+        String headText = header ? String.join(" | ", headCells) : "başlıksız";
+        if (horseCol >= 0) headText += " → at no '" + headCells.get(horseCol) + "'";
+        if (horseCol < 0) { // 2.35: başlık yoksa at no yalnızca tek ve açık aday sütundan (start, ganyan sütunu karışmasın)
+            List<Integer> found = new ArrayList<>();
+            for (int c = 0; c < width; c++) {
                 if (c == posCol) continue;
                 List<String> col = new ArrayList<>();
                 int rowsWith = 0;
@@ -985,8 +990,11 @@ public final class Tjk {
                     if (posCol < 0) posCol = c;
                     continue;
                 }
-                horseCol = c;
+                found.add(c);
             }
+            if (found.size() != 1) return null;
+            horseCol = found.get(0);
+            headText += " → at no " + (horseCol + 1) + ". sütun";
         }
         if (horseCol < 0) return null;
         List<Object> runners = new ArrayList<>();
@@ -1003,6 +1011,7 @@ public final class Tjk {
         Map<String, Object> race = new LinkedHashMap<>();
         race.put("runners", runners);
         race.put("winner", winner != null ? winner : first);
+        race.put("head", headText); // okuma ayrıntısı için: hangi sütunlar, at no nereden
         return race;
     }
 
@@ -1073,7 +1082,7 @@ public final class Tjk {
             city.put("races", new ArrayList<Object>(races));
             cities.add(city);
             log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu, " + races.size() + " koşu"
-                    + (races.isEmpty() ? "" : " (kazananlar " + winnersText(races) + ")")
+                    + (races.isEmpty() ? "" : " (kazananlar " + winnersText(races) + "; sütunlar: " + races.get(0).get("head") + ")")
                     + (combos.isEmpty() && races.isEmpty() ? " (" + excerpt(body) + ")" : ""));
         }
         return out;

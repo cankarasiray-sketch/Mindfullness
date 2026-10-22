@@ -68,6 +68,20 @@ public final class AltiliLog {
         return c;
     }
 
+    /**
+     * 2.35: atlarla eşleştirilmiş eski sonuçlar ("koşular") silinir: koşular atlarla ayırt edilemediğinden kazananlar
+     * yanlış olabilir. Son günlerinkiler yeni (koşu numaralı) okuyucuyla yeniden sonuçlanır. Değiştiyse true.
+     */
+    public static boolean migrate(Map<String, Object> store) {
+        if (store == null || Json.lng(store, "v", 1) >= 2) return false;
+        for (Object o : records(store)) {
+            Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
+            if (res != null && "koşular".equals(Json.str(res, "from"))) r.remove("result");
+        }
+        store.put("v", 2L);
+        return true;
+    }
+
     /** Okunan altılıları (planlarıyla) deftere yazar; sonuçlanmışlara dokunmaz. Gün: altılının günü, yoksa bugün. */
     public static void record(Map<String, Object> store, String today, List<Object> altilis) {
         List<Object> recs = records(store);
@@ -161,23 +175,34 @@ public final class AltiliLog {
         Object[] combo = combo(rec, city);
         if (combo != null) return new ArrayList<>(Json.arr(combo[0]));
         List<Object> races = Json.arr(city.get("races")), rs = Json.arr(rec.get("races"));
+        // 2.35: koşu numaraları (altılıda ve sonuç sayfasında) varsa yalnızca onlarla; atlarla eşleştirme yalnızca tek ve
+        // açık bir aday varsa (ABD'de atlar her koşuda 1, 2, 3… diye numaralı: koşular atlarla ayırt edilemiyor, yanlış
+        // koşunun kazananı alınıyordu — karnede favori %15 kazanmış görünüyordu)
+        boolean numbered = rs.size() >= 6, pageNumbered = false;
+        for (int k = 0; k < 6 && numbered; k++) numbered = Json.lng(Json.obj(rs.get(k)), "no", 0) > 0;
+        for (Object o : races) pageNumbered |= Json.obj(o).get("no") != null;
         Set<Integer> used = new HashSet<>();
         for (int k = 0; k < 6; k++) {
             Set<String> leg = agf(String.valueOf(Json.arr(rec.get("legs")).get(k))).keySet();
-            long no = k < rs.size() ? Json.lng(Json.obj(rs.get(k)), "no", 0) : 0;
             int pick = -1;
-            for (int i = 0; i < races.size() && no > 0 && pick < 0; i++) {
-                Map<String, Object> race = Json.obj(races.get(i));
-                if (Json.lng(race, "no", -1) == no && !used.contains(i) && contained(leg, race) >= 0.6) pick = i;
-            }
-            double score = 0.6;
-            for (int i = 0; i < races.size() && pick < 0; i++) {
-                if (used.contains(i) || Json.obj(races.get(i)).get("winner") == null) continue;
-                double j = jaccard(runners(Json.obj(races.get(i))), leg);
-                if (j >= score) score = j;
-            }
-            for (int i = 0; i < races.size() && pick < 0; i++) {
-                if (!used.contains(i) && Json.obj(races.get(i)).get("winner") != null && jaccard(runners(Json.obj(races.get(i))), leg) >= score - 1e-12) pick = i;
+            if (numbered && pageNumbered) {
+                long no = Json.lng(Json.obj(rs.get(k)), "no", 0);
+                for (int i = 0; i < races.size() && pick < 0; i++) {
+                    Map<String, Object> race = Json.obj(races.get(i));
+                    if (Json.lng(race, "no", -1) == no && !used.contains(i) && contained(leg, race) >= 0.6) pick = i;
+                }
+            } else {
+                double best = 0, second = 0;
+                for (int i = 0; i < races.size(); i++) {
+                    if (used.contains(i) || Json.obj(races.get(i)).get("winner") == null) continue;
+                    double j = jaccard(runners(Json.obj(races.get(i))), leg);
+                    if (j > best + 1e-12) {
+                        second = best;
+                        best = j;
+                        pick = i;
+                    } else if (j > second) second = j;
+                }
+                if (best < 0.6 || second > best - 0.1) pick = -1; // eşleşme yok ya da belirsiz: yanlış kazanan yerine boş
             }
             if (pick < 0 || Json.obj(races.get(pick)).get("winner") == null) continue;
             used.add(pick);
@@ -443,8 +468,18 @@ public final class AltiliLog {
         fv.put("n", (long) favN);
         fv.put("win", favN > 0 ? (double) favWin / favN : 0.0);
         fv.put("agf", favN > 0 ? favAgf / favN : 0.0);
+        // 2.35: öz denetim: AGF favorisi beklenenden çok az kazanıyorsa (3 standart sapma) sonuçlar yanlış okunuyordur
+        double pf = favN > 0 ? favAgf / favN : 0;
+        boolean suspect = favN >= 40 && favWin < favN * pf - 3 * Math.sqrt(favN * pf * (1 - pf));
+        if (suspect) fv.put("suspect", true);
         out.put("fav", fv);
-        out.put("calib", calibrate(data));
+        Map<String, Object> calib = calibrate(data);
+        if (suspect) {
+            calib.put("use", false);
+            calib.put("alphaUse", 1.0);
+            calib.put("why", "Sonuçlar şüpheli (AGF favorisi beklenenden çok az kazanmış): öğrenmede kullanılmıyor, AGF olduğu gibi.");
+        }
+        out.put("calib", calib);
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
         double bestRoi = -1, bestFraction = 0;
