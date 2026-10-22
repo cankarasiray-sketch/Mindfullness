@@ -187,6 +187,8 @@ public final class Texts {
         double cost = Json.dbl(plan, "cost", 0);
         return units + " kombinasyon" + (kat > 1 ? ", misli " + kat : "") + " = " + Fmt.tl(Math.round(Math.max(1, kat) * cost * 100))
                 + " · tutma %" + Fmt.num(Json.dbl(plan, "hit", 0) * 100, 1) + " · beklenen getiri %" + Fmt.num(Json.dbl(plan, "roi", 0) * 100, 0)
+                + (plan.get("hitRef") != null ? "\nKupon kasaya göre küçük (" + Fmt.num(Json.dbl(plan, "refCost", 0), 0) + " TL'lik kuponla tutma %" // 2.51
+                        + Fmt.num(Json.dbl(plan, "hitRef", 0) * 100, 1) + ")" : "")
                 + "\n" + Json.str(plan, "reason");
     }
 }

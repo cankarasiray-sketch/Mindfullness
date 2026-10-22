@@ -65,6 +65,7 @@ public final class AltiliLog {
             int n = 0, h = 0;
             double cost = 0, ret = 0, e = 0, g = 0;
             boolean ok = true;
+            List<double[]> outs = new ArrayList<>(); // 2.52: {bedel, dönüş} (kasa ihtiyacı için)
             for (int i = 0; i < coupons.size(); i++) {
                 if (!fits(coupons.get(i), scope, t)) continue;
                 Map<String, Object> r = recs.get(i), pc = Json.obj(r.get("plan"));
@@ -93,6 +94,7 @@ public final class AltiliLog {
                     all &= in;
                 }
                 double cst = units * u, rt = all ? payout : 0;
+                outs.add(new double[] {cst, rt});
                 n++;
                 if (all) h++;
                 cost += cst;
@@ -105,6 +107,12 @@ public final class AltiliLog {
             row.put("expected", e);
             row.put("cap", c);
             if (ok && n > 0) row.put("growth", g / n);
+            double[] need = kasaNeed(outs); // 2.52: kasa ne kadar olmalı
+            if (need != null) {
+                row.put("kasaMin", need[0]);
+                row.put("kasaKelly", need[1]);
+                row.put("kasaRec", need[1] / Math.max(1e-9, km));
+            }
             rows.add(row);
             if (ok && n > 0 && g / n > bestG + 1e-12) {
                 bestG = g / n;
@@ -121,6 +129,37 @@ public final class AltiliLog {
         out.put("stakes", st);
         out.put("capUse", best != null ? best : caps.get(0));
         return out;
+    }
+
+    /**
+     * 2.52: kasa ne kadar olmalı: geçmiş kuponların {bedel, dönüş} sonuçları tekrarlanırsa kasanın kupon başına log büyümesi
+     * h(x) = ort. log(1 + net · x), x = 1/kasa (içbükey, h(0) = 0). {en az kasa (h = 0: altında kasa uzun vadede erir),
+     * tam Kelly kasası (h en büyük: kupon bu kasanın Kelly payı)}. Ortalamada kâr yoksa null (hiçbir kasa yetmez).
+     */
+    static double[] kasaNeed(List<double[]> outs) {
+        double mean = 0, maxCost = 0;
+        for (double[] o : outs) {
+            mean += o[1] - o[0];
+            maxCost = Math.max(maxCost, o[0]);
+        }
+        if (outs.isEmpty() || !(mean > 0) || !(maxCost > 0)) return null;
+        double top = (1 - 1e-9) / maxCost, lo = 0, hi = top; // kaybedince kasa sıfıra inmesin: x < 1 / en büyük bedel
+        for (int it = 0; it < 80; it++) { // tam Kelly: h'(x) = 0 (azalan)
+            double x = (lo + hi) / 2, d = 0;
+            for (double[] o : outs) d += (o[1] - o[0]) / (1 + (o[1] - o[0]) * x);
+            if (d > 0) lo = x;
+            else hi = x;
+        }
+        double xk = (lo + hi) / 2;
+        lo = xk;
+        hi = top;
+        for (int it = 0; it < 80; it++) { // en az: h(x) = 0, Kelly noktasının ötesinde
+            double x = (lo + hi) / 2, v = 0;
+            for (double[] o : outs) v += Math.log(1 + (o[1] - o[0]) * x);
+            if (v > 0) lo = x;
+            else hi = x;
+        }
+        return new double[] {1 / ((lo + hi) / 2), 1 / xk};
     }
 
     /** 2.51: kupon 6/6 kuralına (eşik t, bölge) uyuyor mu. x: {6/6 olasılığı, yerli, …}. */

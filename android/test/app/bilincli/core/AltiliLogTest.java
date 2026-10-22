@@ -254,6 +254,21 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void bankrollNeed() {
+        // 2.52: 10 kupon × 100 TL, 3'ü 500 TL döndü: tam Kelly payı (4 × 0,3 − 0,7) / 4 = %12,5 → kasa 800 TL
+        List<double[]> outs = new ArrayList<>();
+        for (int i = 0; i < 10; i++) outs.add(new double[] {100, i < 3 ? 500 : 0});
+        double[] need = AltiliLog.kasaNeed(outs);
+        assertEquals(800, need[1], 0.01);
+        double h = 0;
+        for (double[] o : outs) h += Math.log(1 + (o[1] - o[0]) / need[0]);
+        assertEquals(0, h, 1e-6); // en az kasada kasa ne büyür ne erir
+        assertTrue(need[0] > 100 && need[0] < 800);
+        outs.set(0, new double[] {100, 0}); // 2/10 × 500: ortalamada zarar, hiçbir kasa yetmez
+        assertNull(AltiliLog.kasaNeed(outs));
+    }
+
+    @Test
     public void learnedAlphaMovesProbabilityToFavorites() {
         Altili.Leg plain = Altili.leg("1:50 2:30 3:20"), learned = Altili.leg("1:50 2:30 3:20", 1.5);
         assertEquals(0.5, plain.horses.get(0).q, 1e-9);
@@ -490,6 +505,10 @@ public class AltiliLogTest {
         assertEquals(20L, Json.obj(srows.get(0)).get("n"));
         assertTrue((Double) Json.obj(srows.get(3)).get("cost") > (Double) Json.obj(srows.get(0)).get("cost"));
         assertEquals(100.0, (Double) stk.get("best"), 1e-9);
+        Map<String, Object> s100 = Json.obj(srows.get(0)); // 2.52: kasa ihtiyacı (hepsi tuttu: en büyük bedel kadar)
+        assertTrue((Double) s100.get("kasaMin") <= (Double) s100.get("kasaKelly") + 1e-6);
+        assertEquals((Double) s100.get("kasaKelly") / 0.25, (Double) s100.get("kasaRec"), 1e-6);
+        assertEquals(null, Json.obj(srows.get(3)).get("kasaMin")); // 600 TL'lik kupon ikramiyeden pahalı: kârlı değil
         assertEquals(100.0, (Double) sz.get("capUse"), 1e-9);
         assertEquals(null, stk.get("neg"));
         // kasa küçük: kayıp Kelly payını aşıyor, hiçbir büyüklükte kasa büyümüyor: en küçüğü

@@ -933,8 +933,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
     calib: {n: 144, alpha: 1.21, lr: 2.1, holdout: true, use: false, alphaUse: 1, why: "Veri az (144/150 ayak): AGF olduğu gibi kullanılıyor.",
       beta: 0.78, betaOn: true, betaUse: 0.83, betaWhy: "AGF favoriyi abartıyor: favorinin payı düşürülüyor"},
     holdout: {scope: "yerli", minHit: 0.1, trainN: 23, trainRoi: 1.3, n: 12, hits: 2, expected: 1.7, cost: 7200, ret: 5040, roi: 0.7, from: "2026-06-21"},
-    stakes: {km: 0.25, kasa: 2934, best: 100, rows: [{cap: 100, n: 35, hits: 4, expected: 3.1, cost: 3500, ret: 8000, roi: 2.29, growth: 0.012},
-      {cap: 600, n: 35, hits: 10, expected: 4.9, cost: 20706, ret: 24448, roi: 1.18}]},
+    stakes: {km: 0.25, kasa: 2934, best: 100, rows: [{cap: 100, n: 35, hits: 4, expected: 3.1, cost: 3500, ret: 8000, roi: 2.29, growth: 0.012, kasaMin: 1500, kasaKelly: 3000, kasaRec: 12000},
+      {cap: 600, n: 35, hits: 10, expected: 4.9, cost: 20706, ret: 24448, roi: 1.18, kasaMin: 5100, kasaKelly: 10200, kasaRec: 40800}]},
     capUse: 100,
     strategies: [{fraction: 0.01, budget: 20, n: 24, hits: 0, cost: 480, ret: 0, roi: 0}, {fraction: 0.03, budget: 60, n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701},
       {fraction: 0.06, budget: 120, n: 24, hits: 4, cost: 2880, ret: 2300, roi: 0.799}], fraction: 0.06,
@@ -975,9 +975,15 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
   assert.match(k, /Eşik taraması \(6\/6 kuralı: tuttu\/kupon, dönüş\)6\/6 ≥ %10: hepsi 18\/102 %60 · yerli 9\/41 %75 · yabancı 9\/61 %506\/6 ≥ %20: hepsi 8\/30 %90 · yerli 7\/22 %110 ← en iyi · yabancı 1\/8 %35\*6\/6 ≥ %40: hepsi – · yerli – · yabancı –En iyi: en az 20 kuponla en yüksek dönüş; \* az veri\./); // 2.49–2.50
   // 2.51: strateji özeti, son dönem sınaması, kupon büyüklüğü, banko, favori düzeltmesi
-  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113son dönem sınaması: 2\/12 tuttu · dönüş %70Önerilerim/);
+  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113son dönem sınaması: 2\/12 tuttu · dönüş %70kasa: şu an 2\.934,00 TL · 100,00 TL'lik kuponla en az 1\.500,00 TL, önerilen 12\.000,00 TL · 600,00 TL'lik kuponla en az 5\.100,00 TL, önerilen 40\.800,00 TLgerçek sonuç denetimi: 10 bildirilen kupon \(20 kupondan sonra; dönüş %70'in altındaysa dur\)Önerilerim/);
   assert.match(k, /Son dönem sınamasıilk dönemle seçilen kural: yerli, 6\/6 ≥ %10 \(23 kupon, dönüş %130\)21\.06 sonrası \(seçimde kullanılmadı\): 2\/12 tuttu \(beklenen 1,7\) · dönüş %70/);
-  assert.match(k, /Kupon büyüklüğü \(kasa 2\.934,00 TL, Kelly ×0,25\)100,00 TL: 4\/35 tuttu \(beklenen 3,1\) · dönüş %229 · kasa kupon başına \+%1,2 ← en iyi600,00 TL: 10\/35 tuttu \(beklenen 4,9\) · dönüş %118 · kasaya göre büyük/);
+  assert.match(k, /Kupon büyüklüğü \(kasa 2\.934,00 TL, Kelly ×0,25\)100,00 TL: 4\/35 tuttu \(beklenen 3,1\) · dönüş %229 · kasa kupon başına \+%1,2 ← en iyi · kasa en az 1\.500,00 TL, önerilen 12\.000,00 TL600,00 TL: 10\/35 tuttu \(beklenen 4,9\) · dönüş %118 · kasaya göre büyük · kasa en az 5\.100,00 TL, önerilen 40\.800,00 TL/);
+  const stop = clone(s); // 2.52: gerçek kuponlar 20'yi geçti, dönüş %70'in altında: dur
+  stop.agf.learn.suggested = {n: 24, hits: 1, cost: 14400, ret: 7200, roi: 0.5};
+  stop.agf.learn.stakes.kasa = 1000;
+  const ks = boot(stop, "#firsat").$("#altiliKarne").textContent;
+  assert.match(ks, /Gerçek kuponlar beklenenin çok altında \(1\/24 tuttu, dönüş %50\): oynamayı durdur, karneyi yeniden değerlendir\./);
+  assert.match(ks, /kasa: şu an 1\.000,00 TL · 100,00 TL'lik kuponla en az 1\.500,00 TL, önerilen 12\.000,00 TL · .* · kasa yetersiz/);
   assert.match(k, /Banko \(tek atlı\) ayaklarkazandı %52 · AGF'nin verdiği %61 \(120 ayak\)/);
   assert.match(k, /Favori düzeltmesi: favorinin payı ×0,83 \(AGF favoriyi abartıyor: favorinin payı düşürülüyor\)/);
   assert.match(k, /Oynanacak olanlar \(yerli, 6\/6 ≥ %30, en iyi\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);

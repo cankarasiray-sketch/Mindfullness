@@ -338,6 +338,12 @@ bildirim olarak gelir.
   edilebilirlik (6/6 eşiği) ayardaki tavandaki kuponla ölçülür; defter de o kuponla tutulur (eşik ve taramalar aynı ölçüde),
   "Önerilerim" bildirilen gerçek kuponla. (3) Son dönem sınaması: kural ilk üçte ikiyle seçilseydi seçimde kullanılmayan son
   üçte birde ne olurdu. Karnenin başında "Strateji": bölge, eşik, kupon büyüklüğü, geçmiş ve sınama sonucu.
+- **2.52: kasa ne kadar olmalı, gerçek sonuç denetimi.** Kupon büyüklüğü taramasında her büyüklük için geçmiş kuponların
+  {bedel, dönüş} sonuçlarından: en az kasa (kupon başına log büyüme sıfır; altında, sonuçlar tekrarlansa bile kasa uzun
+  vadede erir) ve önerilen kasa (kupon tam Kelly payı olduğu kasa / Kelly çarpanı). Ortalamada kâr yoksa "hiçbir kasa
+  yetmez". Strateji özetinde şimdiki kasa, seçilen ve tavandaki kupon için gerekli kasa, yetersizse uyarı. Gerçek sonuç
+  denetimi: bildirilen kuponlar 20'yi geçip dönüş %70'in altındaysa "oynamayı durdur". Bildirimde kupon kasaya göre
+  küçüldüyse tavandaki kuponla tutma.
 
 ## Beraberlik fırsatları (2.17)
 
