@@ -523,6 +523,32 @@ public class AltiliLogTest {
         assertEquals(0.20, (Double) auto.get("minHitUse"), 1e-9);
         assertEquals(20L, Json.obj(auto.get("rule")).get("n"));
         assertEquals(true, Json.obj(auto.get("rule")).get("auto"));
+        // 2.55: şehirlere göre ve verinin kapsadığı gün
+        assertEquals(1, Json.arr(Json.obj(auto.get("rule")).get("byCity")).size());
+        assertEquals(20L, Json.obj(Json.arr(Json.obj(auto.get("rule")).get("byCity")).get(0)).get("n"));
+        assertTrue(Json.lng(Json.obj(auto.get("rule")), "days", 0) >= 30);
+        // 2.55: en kârlı kural toplam net kâra göre: 20 kupon %12 (6 tuttu) + 20 kupon %32 (10 tuttu), kupon 10 TL;
+        // ≥ %10 dönüşü düşük ama toplam kârı büyük: o seçilir (dönüş oranına göre ≥ %15 seçilirdi)
+        Map<String, Object> mix = new LinkedHashMap<>();
+        for (int i = 0; i < 40; i++) {
+            Map<String, Object> c = Json.parseObject(Json.write(rec));
+            c.put("key", "tjk/mix/" + i);
+            c.put("day", LocalDate.parse(DAY).minusDays(i).toString());
+            Json.obj(c.get("result")).put("payout", pay * 5);
+            Map<String, Object> plan = Json.obj(c.get("plan"));
+            plan.put("hit", i < 20 ? 0.12 : 0.32);
+            plan.put("cost", 10.0);
+            if (!(i < 20 ? i < 6 : i % 2 == 0)) {
+                List<Object> horses = Json.arr(plan.get("horses")), first = new ArrayList<>(Json.arr(horses.get(0)));
+                first.remove("5");
+                if (first.isEmpty()) first.add("9");
+                horses.set(0, first);
+            }
+            AltiliLog.records(mix).add(c);
+        }
+        Map<String, Object> mx = AltiliLog.analyze(mix, 1, 2000, TODAY, 0, 0.20, 0.10, true);
+        assertEquals(0.10, (Double) mx.get("minHitUse"), 1e-9);
+        assertEquals(40L, Json.obj(mx.get("rule")).get("n"));
         // 2.53: kurala uyan kuponlar tek tek; tuttu sayısının varyansı
         List<Object> list = Json.arr(Json.obj(auto.get("rule")).get("list"));
         assertEquals(20, list.size());

@@ -174,20 +174,30 @@ public final class AltiliLog {
         return x[0] >= t - 1e-12 && ("hepsi".equals(scope) || scope.equals(x[1] > 0 ? "yerli" : "yabancı"));
     }
 
-    /** 2.49–2.50: en iyi 6/6 kuralı {eşik, bölge}: en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik, geniş bölge). */
+    /**
+     * 2.49–2.55: en iyi 6/6 kuralı {eşik, bölge}, en az MIN_SETTLED kuponla: en kârlısı (toplam net kâr en büyük; 2.55:
+     * dönüş oranı değil: kârlı kuponu çok olan kural daha çok kazandırır); hiçbiri kârlı değilse en yüksek dönüş.
+     * Eşitlikte düşük eşik, geniş bölge.
+     */
     private static Object[] pick(List<double[]> coupons) {
-        Object[] best = null;
-        double br = -1;
+        Object[] best = null, bestR = null;
+        double bn = 0, br = -1;
         for (double t : SWEEP) {
             for (String sco : SCOPES) {
                 Map<String, Object> cell = rule(coupons, sco, t);
-                if (Json.lng(cell, "n", 0) >= MIN_SETTLED && Json.dbl(cell, "roi", 0) > br + 1e-12) {
-                    br = Json.dbl(cell, "roi", 0);
+                if (Json.lng(cell, "n", 0) < MIN_SETTLED) continue;
+                double net = Json.dbl(cell, "ret", 0) - Json.dbl(cell, "cost", 0), roi = Json.dbl(cell, "roi", 0);
+                if (net > bn + 1e-9) {
+                    bn = net;
                     best = new Object[] {t, sco};
+                }
+                if (roi > br + 1e-12) {
+                    br = roi;
+                    bestR = new Object[] {t, sco};
                 }
             }
         }
-        return best;
+        return best != null ? best : bestR;
     }
 
     /** 2.51: altılının bölgesine göre kullanılan AGF düzeltmesi {alpha, beta} (analizden: önce bölgeninki, yoksa genel). */
@@ -1205,6 +1215,38 @@ public final class AltiliLog {
                 list.add(c);
             }
             rule.put("list", list);
+            // 2.55: şehirlere göre (kâr nereden geliyor) ve verinin kapsadığı gün (yıllık kâr için)
+            Map<String, double[]> cities = new LinkedHashMap<>();
+            for (int i = 0; i < coupons.size(); i++) {
+                double[] x = coupons.get(i);
+                if (!fits(x, scope, use)) continue;
+                Map<String, Object> r = couponRecs.get(i);
+                String c = String.valueOf(r.get("city") != null ? r.get("city") : r.get("label")).trim();
+                double[] g = cities.get(c);
+                if (g == null) cities.put(c, g = new double[4]);
+                g[0]++;
+                g[1] += x[3];
+                g[2] += x[2];
+                g[3] += x[4];
+            }
+            List<Object> byCity = new ArrayList<>();
+            for (Map.Entry<String, double[]> e : cities.entrySet()) {
+                Map<String, Object> g = agg((int) e.getValue()[0], (int) e.getValue()[1], e.getValue()[2], e.getValue()[3]);
+                g.put("city", e.getKey());
+                byCity.add(g);
+            }
+            byCity.sort(new Comparator<Object>() {
+                @Override
+                public int compare(Object a, Object b) {
+                    Map<String, Object> x = Json.obj(a), y = Json.obj(b);
+                    return Double.compare(Json.dbl(y, "ret", 0) - Json.dbl(y, "cost", 0), Json.dbl(x, "ret", 0) - Json.dbl(x, "cost", 0));
+                }
+            });
+            rule.put("byCity", byCity);
+            if (!settled.isEmpty()) {
+                long span = ChronoUnit.DAYS.between(LocalDate.parse(String.valueOf(settled.get(0).get("day"))), LocalDate.parse(today)) + 1;
+                rule.put("days", Math.max(1, span));
+            }
             out.put("rule", rule);
             // 2.51: son dönem sınaması: kural ilk üçte ikiyle seçilseydi seçimde kullanılmayan son üçte birde ne olurdu
             int cut = coupons.size() * 2 / 3;

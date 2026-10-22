@@ -356,6 +356,11 @@ bildirim olarak gelir.
   aynı ölçü (önce gösterilen "en az" ile karar farklıydı); önerilen kasa aynı. (3) Kupon büyüklüğü basamakları 100–600 TL
   (400 ve 500 eklendi). (4) Yazı hataları ("en küçüğü kullanılıyor"; çift "kasa yetersiz"). (5) Kurala uyan kuponlarda
   kazananlar ve ikramiye–AGF oranı; liste paylaşılabilir (denetim için).
+- **2.55: en kârlı kural toplam kâra göre.** Eşik ve bölge, en az 20 kuponla toplam net kârı (TL) en büyük olan kuralla
+  seçilir (önce dönüş oranıyla: az sayıda çok kârlı kupon, çok sayıda kârlı kupondan önde olabiliyordu); hiçbiri kârlı
+  değilse en yüksek dönüş. Taramada ve kupon büyüklüğü tablosunda net kâr; strateji özetinde net kâr, 100 TL'lik kuponda
+  ortalama kâr ve yıllık kârın gerekli kasaya oranı (dönüş %118, yılda %18 değil: her 100 TL'de 18 TL). Kurala uyan
+  kuponlar şehirlere göre.
 
 ## Beraberlik fırsatları (2.17)
 

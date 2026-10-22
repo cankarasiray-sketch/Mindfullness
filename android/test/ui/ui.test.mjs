@@ -921,7 +921,8 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
 test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701, expected: 4.3},
-    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, var: 2.2, minHit: 0.3, auto: true, scope: "yerli",
+    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, var: 2.2, minHit: 0.3, auto: true, scope: "yerli", days: 365,
+      byCity: [{city: "İstanbul", n: 5, hits: 2, cost: 3000, ret: 5000}, {city: "Ankara", n: 4, hits: 0, cost: 2400, ret: 0}],
       list: [{day: "2026-10-21", label: "İstanbul 1. altılı", source: "TJK", notified: true, hit: 0.31, cost: 600, won: true, ret: 3050,
           winners: ["5", "7", "5", "1", "5", "2"], payout: 3050, ratio: 0.74},
         {day: "2026-10-19", label: "Bursa 1. altılı", source: "TJK", backtest: true, hit: 0.34, cost: 600, won: false, ret: 0}]},
@@ -977,16 +978,17 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.doesNotMatch(k, /Sayılmayan:/);
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu \(beklenen 4,3\) · getiri %70/);
   assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
-  assert.match(k, /Eşik taraması \(6\/6 kuralı: tuttu\/kupon, dönüş\)6\/6 ≥ %10: hepsi 18\/102 %60 · yerli 9\/41 %75 · yabancı 9\/61 %506\/6 ≥ %20: hepsi 8\/30 %90 · yerli 7\/22 %110 ← en iyi · yabancı 1\/8 %35\*6\/6 ≥ %40: hepsi – · yerli – · yabancı –En iyi: en az 20 kuponla en yüksek dönüş; \* az veri\./); // 2.49–2.50
+  assert.match(k, /Eşik taraması \(6\/6 kuralı: tuttu\/kupon, dönüş\)6\/6 ≥ %10: hepsi 18\/102 %60 −24\.480 TL · yerli 9\/41 %75 −6\.150 TL · yabancı 9\/61 %50 −18\.330 TL6\/6 ≥ %20: hepsi 8\/30 %90 −1\.800 TL · yerli 7\/22 %110 \+1\.320 TL ← en iyi · yabancı 1\/8 %35 −3\.120 TL\*6\/6 ≥ %40: hepsi – · yerli – · yabancı –En iyi: en az 20 kuponla en çok net kâr \(hiçbiri kârlı değilse en yüksek dönüş\); \* az veri\./); // 2.49–2.55
   // 2.51: strateji özeti, son dönem sınaması, kupon büyüklüğü, banko, favori düzeltmesi
-  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113son dönem sınaması: 2\/12 tuttu \(beklenen 1,7\) · dönüş %70kasa: şu an 2\.934,00 TL · 100,00 TL'lik kuponla gerekli 6\.000,00 TL, önerilen 12\.000,00 TL · 600,00 TL'lik kuponla gerekli 20\.400,00 TL, önerilen 40\.800,00 TLgerçek sonuç denetimi: 10 bildirilen kupon \(20 kupondan sonra; dönüş %70'in altındaysa dur\)Önerilerim/);
+  assert.match(k, /StratejiYerli altılı · 600 TL'lik kuponla 6\/6 olasılığı en az %30 \(karnedeki en iyi\)kupon 100,00 TL'ye kadar \(kasaya göre\) · günde en fazla 1: günün en mantıklı kuponugeçmişte 2\/9 tuttu \(beklenen 3,6\) · dönüş %113kâr: \+700 TL \(365 günde\) · 100 TL'lik kuponda ort\. 13 TL · yıllık kâr gerekli kasanın \(20\.400,00 TL\) ~%3'ison dönem sınaması: 2\/12 tuttu \(beklenen 1,7\) · dönüş %70kasa: şu an 2\.934,00 TL · 100,00 TL'lik kuponla gerekli 6\.000,00 TL, önerilen 12\.000,00 TL · 600,00 TL'lik kuponla gerekli 20\.400,00 TL, önerilen 40\.800,00 TLgerçek sonuç denetimi: 10 bildirilen kupon \(20 kupondan sonra; dönüş %70'in altındaysa dur\)Önerilerim/);
   assert.match(k, /Son dönem sınamasıilk dönemle seçilen kural: yerli, 6\/6 ≥ %10 \(23 kupon, dönüş %130\)21\.06 sonrası \(seçimde kullanılmadı\): 2\/12 tuttu \(beklenen 1,7\) · dönüş %70/);
-  assert.match(k, /Kupon büyüklüğü \(kasa 2\.934,00 TL, Kelly ×0,25\)100,00 TL: 4\/35 tuttu \(beklenen 3,1\) · dönüş %229 · kasa kupon başına \+%1,2 ← en iyi · kasa gerekli 6\.000,00 TL, önerilen 12\.000,00 TL600,00 TL: 10\/35 tuttu \(beklenen 4,9\) · dönüş %118 · kasaya göre büyük · kasa gerekli 20\.400,00 TL, önerilen 40\.800,00 TL/);
+  assert.match(k, /Kupon büyüklüğü \(kasa 2\.934,00 TL, Kelly ×0,25\)100,00 TL: 4\/35 tuttu \(beklenen 3,1\) · dönüş %229 · kasa kupon başına \+%1,2 ← en iyi · net \+4\.500 TL · kasa gerekli 6\.000,00 TL, önerilen 12\.000,00 TL600,00 TL: 10\/35 tuttu \(beklenen 4,9\) · dönüş %118 · kasaya göre büyük · net \+3\.742 TL · kasa gerekli 20\.400,00 TL, önerilen 40\.800,00 TL/);
   // 2.53: çift kayıt notu ve kurala uyan kuponlar
   assert.match(k, /Aynı altılının ikinci kaydı \(aynı gün, aynı kazananlar ve ikramiye; ör\. Bilyoner ve TJK\) bir kez sayıldı: 3\./);
   assert.match(k, /Kurala uyan kuponlar \(2\)21\.10 · İstanbul 1\. altılı · TJK · önerildi6\/6 %31 · 600,00 TL · tuttu 3\.050,00 TL \(5-7-5-1-5-2 · ikramiye ×0,74\)19\.10 · Bursa 1\. altılı · TJK · geriye dönük6\/6 %34 · 600,00 TL · tutmadı/);
   assert.doesNotMatch(k, /şans olamayacak kadar iyi/);
   assert.match(k, /1\. ayak başladıktan sonra kaydedilen 4 altılı sayılmadı/); // 2.54
+  assert.match(k, /Şehirlere göre \(kurala uyan\)İstanbul: 2\/5 tuttu · \+2\.000 TLAnkara: 0\/4 tuttu · −2\.400 TL/); // 2.55
   const kf = boot(s, "#firsat");
   kf.$$("#altiliKarne button").find((b) => b.textContent === "Listeyi paylaş").click();
   assert.match(kf.calls.at(-1).payload.text, /^Kurala uyan kuponlar \(yerli, 6\/6 ≥ %30\)\n2026-10-21 · İstanbul 1\. altılı · TJK · önerildi · 6\/6 %31,0 · 600 TL · tuttu 3\.050,00 TL · kazananlar 5-7-5-1-5-2 · ikramiye 3\.050,00 \(×0,74\)\n2026-10-19/);
