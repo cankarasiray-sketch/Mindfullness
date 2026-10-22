@@ -422,7 +422,10 @@ public class AltiliLogTest {
         Map<String, Object> sw = Json.obj(AltiliLog.analyze(many, 1, 2000, TODAY, 0, 0.15, 0.10, true).get("sweep"));
         List<Object> rows = Json.arr(sw.get("rows"));
         assertEquals(7, rows.size());
-        Map<String, Object> r10 = Json.obj(rows.get(0)), r20 = Json.obj(rows.get(2)), r25 = Json.obj(rows.get(3));
+        Map<String, Object> r10 = Json.obj(Json.obj(rows.get(0)).get("hepsi")), r20 = Json.obj(Json.obj(rows.get(2)).get("hepsi")),
+                r25 = Json.obj(Json.obj(rows.get(3)).get("hepsi"));
+        assertEquals(20L, Json.obj(Json.obj(rows.get(2)).get("yerli")).get("n")); // hepsi İstanbul (yerli)
+        assertEquals(0L, Json.obj(Json.obj(rows.get(2)).get("yabancı")).get("n"));
         assertEquals(30L, r10.get("n"));
         assertEquals(10L, r10.get("hits"));
         assertEquals(20L, r20.get("n"));
@@ -430,6 +433,7 @@ public class AltiliLogTest {
         assertEquals(10 * pay / (20 * cost), (Double) r20.get("roi"), 1e-9);
         assertEquals(15L, r25.get("n")); // 20 kupondan az: seçilmez (dönüşü daha yüksek olsa da)
         assertEquals(0.20, (Double) sw.get("best"), 1e-9);
+        assertEquals("hepsi", sw.get("bestScope")); // eşitlikte geniş bölge
         Map<String, Object> auto = AltiliLog.analyze(many, 1, 2000, TODAY, 0, 0.15, 0.10, true);
         assertEquals(0.20, (Double) auto.get("minHitUse"), 1e-9);
         assertEquals(20L, Json.obj(auto.get("rule")).get("n"));
@@ -445,33 +449,47 @@ public class AltiliLogTest {
     }
 
     @Test
-    public void regionWhereAgfFailsIsFlagged() {
-        // 2.42: doğrulanmış sonuçlarda yerli favori hiç kazanmıyor (3 altılı, 18 ayak), yabancıda kazanıyor
+    public void regionWhereCouponsFailIsFlagged() {
+        // 2.42 → 2.50: bölge kuralı kupon sonuçlarıyla: 20 yerli kupon hep kaçıyor (favori kazansa da), 20 yabancı kupon tutuyor
         Map<String, Object> store = new LinkedHashMap<>();
-        String[] days = {"2026-10-18", "2026-10-19", "2026-10-20"};
-        for (int d = 0; d < 3; d++) {
-            Map<String, Object> home = altili("tjk/" + days[d] + "/3/1", "İstanbul", 3, 1, LEGS), away = altili("tjk/" + days[d] + "/31/1", "Belmont Park ABD", 31, 1, LEGS);
-            home.put("day", days[d]);
-            away.put("day", days[d]);
-            AltiliLog.record(store, days[d], Arrays.<Object>asList(home, away));
-            List<Object> outsiders = Arrays.<Object>asList("2", "4", "6", "2", "7", "3"), favs = Arrays.<Object>asList("5", "7", "5", "1", "5", "2");
-            for (Object[] x : new Object[][] {{home, outsiders}, {away, favs}}) {
-                @SuppressWarnings("unchecked")
-                List<Object> w = (List<Object>) x[1];
-                double pw = 1;
-                for (int k = 0; k < 6; k++) pw *= AltiliLog.agf(LEGS.get(k)).get(String.valueOf(w.get(k)));
-                Map<String, Object> res = new LinkedHashMap<>();
-                res.put("winners", new ArrayList<Object>(w));
-                res.put("payout", 0.73 / pw); // ikramiyeyle doğrulanmış
-                res.put("from", "kombinasyon");
-                rec(store, Json.str((Map<String, Object>) x[0], "key")).put("result", res);
-            }
+        List<Object> list = new ArrayList<>();
+        for (int i = 1; i <= 20; i++) {
+            list.add(altili("tjk/2026-10-21/3/" + i, "İstanbul", 3, i, LEGS));
+            list.add(altili("tjk/2026-10-21/31/" + i, "Belmont Park ABD", 31, i, LEGS));
         }
-        Map<String, Object> rt = Json.obj(AltiliLog.analyze(store, 1, 2000, TODAY).get("regionTrust"));
+        AltiliLog.record(store, DAY, list);
+        List<Object> favs = Arrays.<Object>asList("5", "7", "5", "1", "5", "2");
+        double pw = 1;
+        for (int k = 0; k < 6; k++) pw *= AltiliLog.agf(LEGS.get(k)).get(String.valueOf(favs.get(k)));
+        for (Object o : list) {
+            Map<String, Object> r = rec(store, Json.str(Json.obj(o), "key"));
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("winners", new ArrayList<Object>(favs));
+            res.put("payout", 0.73 / pw); // ikramiyeyle doğrulanmış
+            res.put("from", "kombinasyon");
+            r.put("result", res);
+            Map<String, Object> plan = Json.obj(r.get("plan"));
+            plan.put("hit", 0.30);
+            if (AltiliLog.domestic(r)) Json.arr(plan.get("horses")).set(0, new ArrayList<Object>(Arrays.<Object>asList("9"))); // yerli kupon kaçar
+        }
+        Map<String, Object> an = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.20, 0.10, true);
+        assertEquals("yabancı", an.get("scopeUse"));
+        assertEquals(0.10, (Double) an.get("minHitUse"), 1e-9); // eşitlikte düşük eşik
+        Map<String, Object> rt = Json.obj(an.get("regionTrust"));
         assertEquals(Boolean.TRUE, Json.obj(rt.get("yerli")).get("weak"));
-        assertEquals(0.0, (Double) Json.obj(rt.get("yerli")).get("win"), 1e-9);
+        assertEquals(1.0, (Double) Json.obj(rt.get("yerli")).get("win"), 1e-9); // favori kazandı; ölçü kupon
+        assertEquals(0L, Json.obj(Json.obj(rt.get("yerli")).get("coupons")).get("hits"));
         assertEquals(Boolean.FALSE, Json.obj(rt.get("yabancı")).get("weak"));
-        assertEquals(1.0, (Double) Json.obj(rt.get("yabancı")).get("win"), 1e-9);
+        assertEquals(20L, Json.obj(Json.obj(rt.get("yabancı")).get("coupons")).get("hits"));
+        assertEquals("yabancı", Json.obj(an.get("rule")).get("scope"));
+        assertEquals(20L, Json.obj(an.get("rule")).get("n"));
+        // elle eşik: o eşikte en iyi dönen bölge; veri azken (20 kupondan az) bölge kuralı yok
+        Map<String, Object> manual = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.25, 0.10, false);
+        assertEquals("yabancı", manual.get("scopeUse"));
+        assertEquals(0.25, (Double) manual.get("minHitUse"), 1e-9);
+        Map<String, Object> high = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.35, 0.10, false);
+        assertEquals("hepsi", high.get("scopeUse"));
+        assertEquals(Boolean.FALSE, Json.obj(Json.obj(high.get("regionTrust")).get("yerli")).get("weak"));
     }
 
     @Test

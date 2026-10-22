@@ -322,6 +322,12 @@ bildirim olarak gelir.
   ≥ %10, 15, 20, 25, 30, 35, 40) her eşikte kaç kupon, kaç tuttu, beklenen, bedel → dönüş. "6/6 eşiği otomatik" (varsayılan
   açık): en az 20 doğrulanmış kuponla en yüksek dönüşü veren eşik kullanılır (eşitlikte düşük olan); öyle eşik yoksa
   ayardaki %20. "Oynanacak olanlar" satırı artık bölge kuralını da uygular (uygulamanın önereceği kuponlar).
+- **2.50: bölge kuralı kupon sonuçlarıyla.** 146 doğrulanmış altılıda favori yerli ve yabancıda AGF'nin verdiğinden az
+  kazanıyordu (%28, AGF %34–35); favoriye bakan 2.42 kuralı iki bölgeyi de durdurdu, öneri kalmadı. Oysa yerli kuponlar
+  beklenenden çok tuttu (11/51, beklenen 6,0, dönüş %88; yabancı 8/89, beklenen 12,6, dönüş %23). Ölçü artık kupon: eşik
+  taraması her eşikte hepsi / yerli / yabancı için ayrı; en iyisi (en az 20 kupon, en yüksek dönüş; eşitlikte düşük eşik ve
+  geniş bölge) eşiği ve bölgeyi birlikte seçer. Elle eşikte bölge o eşikte en iyi dönen. Seçilen bölge dışındaki altılılar
+  önerilmez; 20 kuponluk bölge yoksa kural yok. Favori istatistiği karnede bilgi olarak kalır.
 
 ## Beraberlik fırsatları (2.17)
 

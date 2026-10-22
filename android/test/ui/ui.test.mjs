@@ -921,10 +921,11 @@ test("altılı: hiç altılı yoksa nedeni (TJK programı, AGF henüz oluşmadı
 test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme, bütçe ve geçmiş", async () => {
   const s = altiliState();
   s.agf.learn = {settled: 24, pending: 2, suggested: {n: 10, hits: 1, cost: 600, ret: 410, roi: 0.683}, all: {n: 24, hits: 2, cost: 1440, ret: 1010, roi: 0.701, expected: 4.3},
-    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, minHit: 0.3, auto: true},
-    sweep: {min: 20, best: 0.2, rows: [{minHit: 0.1, n: 41, hits: 9, expected: 8.1, cost: 24600, ret: 18450, roi: 0.75},
-      {minHit: 0.2, n: 22, hits: 7, expected: 6.0, cost: 13200, ret: 14520, roi: 1.1}, {minHit: 0.3, n: 9, hits: 2, expected: 3.6, cost: 5400, ret: 6100, roi: 1.13},
-      {minHit: 0.4, n: 0, hits: 0, expected: 0, cost: 0, ret: 0, roi: 0}]},
+    rule: {n: 9, hits: 2, cost: 5400, ret: 6100, roi: 1.13, expected: 3.6, minHit: 0.3, auto: true, scope: "yerli"},
+    sweep: {min: 20, best: 0.2, bestScope: "yerli", rows: [
+      {minHit: 0.1, hepsi: {n: 102, hits: 18, cost: 61200, ret: 36720, roi: 0.6}, yerli: {n: 41, hits: 9, cost: 24600, ret: 18450, roi: 0.75}, "yabancı": {n: 61, hits: 9, cost: 36600, ret: 18270, roi: 0.5}},
+      {minHit: 0.2, hepsi: {n: 30, hits: 8, cost: 18000, ret: 16200, roi: 0.9}, yerli: {n: 22, hits: 7, cost: 13200, ret: 14520, roi: 1.1}, "yabancı": {n: 8, hits: 1, cost: 4800, ret: 1680, roi: 0.35}},
+      {minHit: 0.4, hepsi: {n: 0, hits: 0, cost: 0, ret: 0, roi: 0}, yerli: {n: 0, hits: 0, cost: 0, ret: 0, roi: 0}, "yabancı": {n: 0, hits: 0, cost: 0, ret: 0, roi: 0}}]},
     table: [{lo: 0, hi: 0.1, n: 88, hits: 5, expected: 4.2, cost: 52800, ret: 16368, roi: 0.31}, {lo: 0.15, hi: 0.25, n: 27, hits: 7, expected: 5.1, cost: 16200, ret: 14256, roi: 0.88},
       {region: "yerli", n: 47, hits: 9, expected: 7.3, cost: 28200, ret: 22278, roi: 0.79}],
     legs: {n: 144, expected: 0.62, actual: 0.6, five: 9, fiveBanko: 4}, fav: {n: 144, win: 0.38, agf: 0.34,
@@ -967,8 +968,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.doesNotMatch(k, /Sayılmayan:/);
   assert.match(k, /Bütün altılılar \(en mantıklı kupon\)2\/24 tuttu \(beklenen 4,3\) · getiri %70/);
   assert.match(k, /Strateji tablosu \(doğrulanmış kuponlar\)6\/6 < %10: 5\/88 tuttu \(beklenen 4,2\) · dönüş %31.*6\/6 %15–25: 7\/27 tuttu \(beklenen 5,1\) · dönüş %88.*Yerli: 9\/47 tuttu \(beklenen 7,3\) · dönüş %79/);
-  assert.match(k, /Eşik taraması \(6\/6 kuralı, AGF'si tutan bölge\)6\/6 ≥ %10: 9\/41 tuttu \(beklenen 8,1\) · 24\.600,00 TL → 18\.450,00 TL \(%75\)6\/6 ≥ %20: 7\/22 tuttu \(beklenen 6,0\) · 13\.200,00 TL → 14\.520,00 TL \(%110\) ← en iyi6\/6 ≥ %30: 2\/9 tuttu .*\(%113\) \(az veri\)6\/6 ≥ %40: kupon yokEn iyi eşik en az 20 kuponla en yüksek dönüş\. Geçmişe göre/); // 2.49
-  assert.match(k, /Oynanacak olanlar \(6\/6 ≥ %30, en iyi eşik\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);
+  assert.match(k, /Eşik taraması \(6\/6 kuralı: tuttu\/kupon, dönüş\)6\/6 ≥ %10: hepsi 18\/102 %60 · yerli 9\/41 %75 · yabancı 9\/61 %506\/6 ≥ %20: hepsi 8\/30 %90 · yerli 7\/22 %110 ← en iyi · yabancı 1\/8 %35\*6\/6 ≥ %40: hepsi – · yerli – · yabancı –En iyi: en az 20 kuponla en yüksek dönüş; \* az veri\./); // 2.49–2.50
+  assert.match(k, /Oynanacak olanlar \(yerli, 6\/6 ≥ %30, en iyi\)2\/9 tuttu \(beklenen 3,6\) · 5\.400,00 TL → 6\.100,00 TL \(%113\)/);
   assert.match(k, /19\.10 · Keeneland ABD 1\. altılı · geriye dönük600,00 TL · tutmadı \(5\/6 ayak\)/);
   const bad = clone(s);
   bad.agf.learn = {settled: 0, pending: 0, inconsistent: 18, unverified: 0, fav: {groups: [{label: "İkramiyeyle tutarsız (sayılmadı)", n: 108, win: 0.13, agf: 0.34}]},
@@ -1142,18 +1143,20 @@ test("altılı: 6/6 olasılığı düşük altılı oynanmaz (en az %30)", async
   assert.deepEqual(f.errors, []);
 });
 
-test("altılı: doğrulanmış sonuçlarda AGF'si tutmayan bölgenin altılısı önerilmez", async () => {
+test("altılı: karnede kuponları az dönen bölgenin altılısı önerilmez", async () => {
   const s = altiliState();
-  Object.assign(s.agf.altilis[1].plan, {cap: 600, maxHit: true, regionWeak: true, region: "yerli", regionWin: 0.06, regionAgf: 0.34, regionN: 18});
+  const yab = {n: 89, hits: 8, expected: 12.6, cost: 53400, ret: 12282, roi: 0.23};
+  Object.assign(s.agf.altilis[1].plan, {cap: 600, maxHit: true, regionWeak: true, region: "yabancı", regionCoupons: yab, regionBest: "yerli"});
   s.agf.learn = {settled: 6, pending: 0, suggested: {}, all: {n: 6, hits: 0, cost: 3600, ret: 0, roi: 0}, legs: {n: 36, expected: 0.72, actual: 0.61}, fav: {n: 36, win: 0.19, agf: 0.36},
-    calib: {use: false}, regionTrust: {yerli: {n: 18, win: 0.06, agf: 0.34, weak: true}, "yabancı": {n: 18, win: 0.33, agf: 0.37, weak: false}}, history: []};
+    calib: {use: false}, scopeUse: "yerli", regionTrust: {yerli: {n: 324, win: 0.28, agf: 0.34, weak: false, coupons: {n: 51, hits: 11, expected: 6.0, cost: 30600, ret: 26928, roi: 0.88}},
+      "yabancı": {n: 552, win: 0.28, agf: 0.35, weak: true, coupons: yab}}, history: []};
   const f = boot(s, "#firsat");
   const rows = f.$$("#altiliCard ol.rank li").map((li) => li.textContent);
-  assert.match(rows[1], /yerli hipodromda AGF tutmuyor, oynama/);
-  assert.match(f.$("#altiliKarne").textContent, /Bölge kuralıYerli: favori %6 · AGF %34 \(18 ayak\) → AGF tutmuyor, altılıları önerilmiyorYabancı: favori %33 · AGF %37 \(18 ayak\) → AGF tutuyor/);
+  assert.match(rows[1], /yabancı altılılar karnede az dönüyor, oynama/);
+  assert.match(f.$("#altiliKarne").textContent, /Bölge kuralı \(kupon sonuçlarıyla\)Yerli: kupon 11\/51 tuttu \(beklenen 6,0\) · dönüş %88 · favori %28, AGF %34 → oynanıyorYabancı: kupon 8\/89 tuttu \(beklenen 12,6\) · dönüş %23 · favori %28, AGF %35 → önerilmiyor/);
   f.chip("İzmir 1. altılı · TJK").click();
   const card = f.$("#altiliCard").textContent;
-  assert.match(card, /Bu altılıyı oynama: doğrulanmış sonuçlarda yerli hipodromlarda AGF favorisi %6 kazanmış, AGF %34 veriyordu \(18 ayak\)/);
+  assert.match(card, /Bu altılıyı oynama: doğrulanmış kuponlarda yabancı altılılar 8\/89 tuttu \(beklenen 12,6\), dönüş %23; en iyi dönen yerli altılılar\./);
   assert.doesNotMatch(card, /Yine de oynarsan/);
   assert.deepEqual(f.errors, []);
 });

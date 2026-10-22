@@ -31,13 +31,13 @@ public final class AltiliLog {
     private AltiliLog() {}
 
     static final int KEEP_DAYS = 380, SETTLE_DAYS = 5, ANALYZE_DAYS = 370; // 2.46–2.47: 1 yıllık geriye dönük karne
-    static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12;
+    static final int MIN_LEGS = 60, MIN_SETTLED = 20, HISTORY = 12; // 2.40: MIN_LEGS 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
     /** 2.48: strateji tablosunun 6/6 olasılığı aralıkları: <%10, %10–15, %15–25, %25–40, ≥%40. */
     static final double[] HIT_EDGES = {0.10, 0.15, 0.25, 0.40};
-    /** 2.49: eşik taraması: 6/6 kuralının (6/6 olasılığı ≥ eşik, AGF'si tutan bölge) eşikleri; en iyisi en az MIN_SETTLED kuponla. */
+    /** 2.49: eşik taraması: 6/6 kuralının (6/6 olasılığı ≥ eşik) eşikleri; en iyisi en az MIN_SETTLED kuponla. */
     static final double[] SWEEP = {0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40};
-    /** 2.42: bölge kuralı için en az doğrulanmış ayak (3 altılı). */
-    static final int REGION_MIN_LEGS = 18; // 2.40: 150 → 60 (doğrulanmış veriyle; büzülme payı korur)
+    /** 2.50: taramanın bölgeleri; eşitlikte geniş olan (önce "hepsi"). */
+    static final String[] SCOPES = {"hepsi", "yerli", "yabancı"};
     /** alpha'nın 1'e büzülmesi: kullanılan = 1 + (bulunan − 1) × n / (n + PRIOR_LEGS). */
     static final double PRIOR_LEGS = 200;
     /** Karşılaştırılan bütçeler (2.29: kullanıcının %7'si dahil; bilgi için, bütçe ayardan). */
@@ -45,12 +45,12 @@ public final class AltiliLog {
     /** Kazanan at AGF listesinde yoksa payı (tahmini ikramiye için). */
     static final double MISSING_P = 0.005;
 
-    /** 2.49: 6/6 kuralına (eşik ve bölge kuralı) uyan kuponların sonucu: agg + expected, minHit. */
-    private static Map<String, Object> rule(List<double[]> coupons, Map<String, Object> trustRegion, double t) {
+    /** 2.49–2.50: 6/6 kuralına (eşik; bölge: hepsi, yerli, yabancı) uyan kuponların sonucu: agg + expected, minHit. */
+    private static Map<String, Object> rule(List<double[]> coupons, String scope, double t) {
         int n = 0, h = 0;
         double e = 0, c = 0, ret = 0;
         for (double[] x : coupons) {
-            if (x[0] < t - 1e-12 || Json.bool(Json.obj(trustRegion.get(x[1] > 0 ? "yerli" : "yabancı")), "weak", false)) continue;
+            if (x[0] < t - 1e-12 || !"hepsi".equals(scope) && !scope.equals(x[1] > 0 ? "yerli" : "yabancı")) continue;
             n++;
             e += x[0];
             c += x[2];
@@ -866,44 +866,72 @@ public final class AltiliLog {
         }
         out.put("calib", calib);
         out.put("calibRegion", region);
-        // 2.42: bölge güveni: ikramiyeyle doğrulanmış sonuçlarda favori AGF'nin verdiğinden belirgin az kazanıyorsa (en az 18
-        // ayak, z < −2) o bölgede AGF'ye dayalı kupon 6/6 getirmiyor: altılıları önerilmez. Veri değişince kendiliğinden kalkar.
+        // 2.49–2.50: eşik ve bölge taraması: 6/6 kuralı (6/6 olasılığı ≥ eşik; hepsi, yerli ya da yabancı altılılar) her
+        // eşikte nasıl dönerdi; en iyisi en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik, geniş bölge)
+        List<Object> sweep = new ArrayList<>();
+        Double bestT = null;
+        String bestS = null;
+        double bestRoi6 = -1;
+        for (double t : SWEEP) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("minHit", t);
+            for (String sco : SCOPES) {
+                Map<String, Object> cell = rule(coupons, sco, t);
+                row.put(sco, cell);
+                if (Json.lng(cell, "n", 0) >= MIN_SETTLED && Json.dbl(cell, "roi", 0) > bestRoi6 + 1e-12) {
+                    bestRoi6 = Json.dbl(cell, "roi", 0);
+                    bestT = t;
+                    bestS = sco;
+                }
+            }
+            sweep.add(row);
+        }
+        double use = auto && bestT != null ? bestT : minHit;
+        String scope = auto && bestT != null ? bestS : "hepsi";
+        if (!(auto && bestT != null)) { // elle eşik: o eşikte en iyi dönen bölge (en az MIN_SETTLED kupon)
+            double br = -1;
+            for (String sco : SCOPES) {
+                Map<String, Object> cell = rule(coupons, sco, use);
+                if (Json.lng(cell, "n", 0) >= MIN_SETTLED && Json.dbl(cell, "roi", 0) > br + 1e-12) {
+                    br = Json.dbl(cell, "roi", 0);
+                    scope = sco;
+                }
+            }
+        }
+        out.put("minHitUse", use);
+        out.put("scopeUse", scope);
+        // 2.42 → 2.50: bölge kuralı kupon sonuçlarıyla: taramada en iyi dönen bölge dışındaki altılılar önerilmez. Favori
+        // istatistiği (AGF favorisi az kazanıyor mu) yalnızca bilgi: favori her iki bölgede de AGF'nin verdiğinden az kazanıyor,
+        // ama yerli kuponlar beklenenden çok tuttu; ölçü kuponun kendisi. Veri değişince kural kendiliğinden değişir.
         Map<String, Object> trustRegion = new LinkedHashMap<>();
         for (String[] k : new String[][] {{"yerli", "Yerli hipodrom"}, {"yabancı", "Yabancı hipodrom"}}) {
             double[] g = groups.get(k[1]);
-            if (g == null) continue;
+            Map<String, Object> cell = rule(coupons, k[0], 0);
+            if (g == null && Json.lng(cell, "n", 0) == 0) continue;
             Map<String, Object> t = new LinkedHashMap<>();
-            double p = g[2] / g[0], z = (g[1] - g[0] * p) / Math.sqrt(Math.max(1e-9, g[0] * p * (1 - p)));
-            t.put("n", (long) g[0]);
-            t.put("win", g[1] / g[0]);
-            t.put("agf", p);
-            t.put("z", z);
-            t.put("weak", g[0] >= REGION_MIN_LEGS && z < -2);
+            if (g != null) {
+                double p = g[2] / g[0], z = (g[1] - g[0] * p) / Math.sqrt(Math.max(1e-9, g[0] * p * (1 - p)));
+                t.put("n", (long) g[0]);
+                t.put("win", g[1] / g[0]);
+                t.put("agf", p);
+                t.put("z", z);
+            }
+            t.put("coupons", cell);
+            t.put("weak", !"hepsi".equals(scope) && !k[0].equals(scope));
             trustRegion.put(k[0], t);
         }
         out.put("regionTrust", trustRegion);
-        // 2.49: eşik taraması: 6/6 kuralı (AGF'si tutmayan bölge hariç, 6/6 olasılığı ≥ eşik) her eşikte nasıl dönerdi;
-        // en iyi eşik en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik: daha çok oyun)
-        List<Object> sweep = new ArrayList<>();
-        Double bestT = null;
-        double bestRoi6 = -1;
-        for (double t : SWEEP) {
-            Map<String, Object> row = rule(coupons, trustRegion, t);
-            sweep.add(row);
-            if (Json.lng(row, "n", 0) >= MIN_SETTLED && Json.dbl(row, "roi", 0) > bestRoi6 + 1e-12) {
-                bestRoi6 = Json.dbl(row, "roi", 0);
-                bestT = t;
-            }
-        }
-        double use = auto && bestT != null ? bestT : minHit;
-        out.put("minHitUse", use);
         if (en > 0) {
             Map<String, Object> sw = new LinkedHashMap<>();
             sw.put("rows", sweep);
-            if (bestT != null) sw.put("best", bestT);
+            if (bestT != null) {
+                sw.put("best", bestT);
+                sw.put("bestScope", bestS);
+            }
             sw.put("min", (long) MIN_SETTLED);
             out.put("sweep", sw);
-            Map<String, Object> rule = rule(coupons, trustRegion, use); // 2.43: uygulamanın oynatacağı kuponlar
+            Map<String, Object> rule = rule(coupons, scope, use); // 2.43: uygulamanın oynatacağı kuponlar
+            rule.put("scope", scope);
             if (auto && bestT != null) rule.put("auto", true);
             out.put("rule", rule);
         }

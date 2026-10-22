@@ -644,14 +644,13 @@ final class Repo {
             for (Object l : Json.arr(a.get("legs"))) legs.add(String.valueOf(l));
             Altili.Inputs in = altiliInputsFor(key, inp, a);
             Map<String, Object> plan = Altili.plan(legs, in);
-            // 2.42: doğrulanmış sonuçlarda bu bölgede (yerli/yabancı) AGF favorisi belirgin tutmuyorsa altılı önerilmez
+            // 2.42 → 2.50: karnede kuponları en iyi dönen bölge dışındaki (yerli/yabancı) altılı önerilmez
             Map<String, Object> rt = Json.obj(Json.obj(learn.get("regionTrust")) == null ? null
                     : Json.obj(learn.get("regionTrust")).get(AltiliLog.domestic(a) ? "yerli" : "yabancı"));
             if (rt != null && Json.bool(rt, "weak", false) && !"manual".equals(key) && plan.get("error") == null) {
                 plan.put("regionWeak", true);
-                plan.put("regionWin", rt.get("win"));
-                plan.put("regionAgf", rt.get("agf"));
-                plan.put("regionN", rt.get("n"));
+                plan.put("regionCoupons", rt.get("coupons"));
+                plan.put("regionBest", learn.get("scopeUse"));
                 plan.put("region", AltiliLog.domestic(a) ? "yerli" : "yabancı");
             }
             a.put("plan", plan);
