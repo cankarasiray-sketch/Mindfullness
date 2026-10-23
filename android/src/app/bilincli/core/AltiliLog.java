@@ -175,6 +175,147 @@ public final class AltiliLog {
         return false;
     }
 
+    /** 2.57: değer kuponu geriye dönük testinde en az bu kasa (kullanıcının yükseltebileceği; Kelly payı buna göre). */
+    static final double VALUE_KASA = 10000;
+
+    /**
+     * 2.57: ikramiye modeli: doğrulanmış sonuçlarda log(ikramiye × P / birim) = a + b · log P (P: kazanan kombinasyonun AGF
+     * payları çarpımı). b > 0: popüler kombinasyon AGF'nin söylediğinden çok, sürpriz az öder. {n, payA = e^a, payB, mean, use}.
+     */
+    static Map<String, Object> payoutFit(List<Map<String, Object>> recs, double unit) {
+        double sx = 0, sy = 0, sxx = 0, sxy = 0, sr = 0;
+        int n = 0;
+        for (Map<String, Object> r : recs) {
+            Map<String, Object> res = Json.obj(r.get("result"));
+            Double ratio = payoutRatio(r, res, unit);
+            if (ratio == null || !consistent(ratio)) continue;
+            List<Object> w = Json.arr(res.get("winners")), legs = Json.arr(r.get("legs"));
+            double lp = 0;
+            boolean ok = true;
+            for (int k = 0; k < 6 && ok; k++) {
+                Double p = agf(String.valueOf(legs.get(k))).get(String.valueOf(w.get(k)));
+                ok = p != null && p > 0;
+                if (ok) lp += Math.log(p);
+            }
+            if (!ok) continue;
+            double y = Math.log(ratio);
+            n++;
+            sx += lp;
+            sy += y;
+            sxx += lp * lp;
+            sxy += lp * y;
+            sr += ratio;
+        }
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("n", (long) n);
+        if (n < 2) return m;
+        double vx = sxx - sx * sx / n, b = vx > 1e-9 ? (sxy - sx * sy / n) / vx : 0;
+        b *= n / (n + 30.0); // az veride eğim 0'a büzülür
+        double a = (sy - b * sx) / n;
+        m.put("payA", Math.exp(a));
+        m.put("payB", b);
+        m.put("mean", sr / n);
+        m.put("use", n >= MIN_LEGS);
+        return m;
+    }
+
+    /** 2.57: kayıtların ayak verisi (AGF payları, kazanan) — öğrenme için. */
+    private static void legData(Map<String, Object> r, List<LegData> out) {
+        List<Object> win = Json.arr(Json.obj(r.get("result")).get("winners")), legs = Json.arr(r.get("legs"));
+        for (int k = 0; k < 6 && k < win.size() && k < legs.size(); k++) {
+            Map<String, Double> agf = agf(String.valueOf(legs.get(k)));
+            String w = String.valueOf(win.get(k));
+            if (!agf.containsKey(w) || agf.size() < 2) continue;
+            double[] p = new double[agf.size()];
+            int wi = 0, j = 0;
+            for (Map.Entry<String, Double> e : agf.entrySet()) {
+                if (e.getKey().equals(w)) wi = j;
+                p[j++] = e.getValue();
+            }
+            out.add(new LegData(p, wi));
+        }
+    }
+
+    /** 2.57: yalnızca verilen kayıtlardan öğrenilenler {calib, calibRegion, payout} (geriye dönük testte gelecek sızmasın). */
+    private static Map<String, Object> learnFrom(List<Map<String, Object>> recs, Set<Map<String, Object>> devir, double unit) {
+        List<LegData> all = new ArrayList<>(), home = new ArrayList<>(), away = new ArrayList<>();
+        List<Map<String, Object>> verified = new ArrayList<>();
+        for (Map<String, Object> r : recs) {
+            if (devir.contains(r)) continue;
+            verified.add(r);
+            List<LegData> d = new ArrayList<>();
+            legData(r, d);
+            all.addAll(d);
+            (domestic(r) ? home : away).addAll(d);
+        }
+        Map<String, Object> learn = new LinkedHashMap<>(), region = new LinkedHashMap<>();
+        learn.put("calib", calibrate(all));
+        region.put("yerli", calibrate(home));
+        region.put("yabancı", calibrate(away));
+        learn.put("calibRegion", region);
+        learn.put("payout", payoutFit(verified, unit));
+        return learn;
+    }
+
+    /** 2.57: altılı girdileri öğrenilenlerle (AGF ve favori düzeltmesi, ikramiye modeli). */
+    public static void applyLearn(Altili.Inputs in, Map<String, Object> learn, boolean home) {
+        double[] ab = alphaBeta(learn, home);
+        in.alpha = ab[0];
+        in.beta = ab[1];
+        Map<String, Object> pay = Json.obj(learn.get("payout"));
+        if (Json.bool(pay, "use", false)) {
+            in.payA = Json.dbl(pay, "payA", 0);
+            in.payB = Json.dbl(pay, "payB", 0);
+        }
+    }
+
+    /**
+     * 2.57: değer kuponu geriye dönük: her altılıda öğrenilenlerle değer kuponu kurulur; model dönüşü en az 1 + minEdge
+     * olanlar oynanmış sayılır (kat Kelly'den, en az 1); sonuç gerçek ikramiyeyle (devirde kesin kaçtı). {agg, yerli, yabancı}.
+     */
+    private static Map<String, Object> valueRun(List<Map<String, Object>> recs, Set<Map<String, Object>> devir, Map<String, Object> learn,
+            double unit, double kasa, double km, double cap, double legMin, double minEdge) {
+        int[] n = new int[3], h = new int[3];
+        double[] cost = new double[3], ret = new double[3], ex = new double[3];
+        for (Map<String, Object> r : recs) {
+            List<String> legs = new ArrayList<>();
+            for (Object l : Json.arr(r.get("legs"))) legs.add(String.valueOf(l));
+            Altili.Inputs in = new Altili.Inputs();
+            in.unit = unit;
+            in.kasa = kasa;
+            in.km = km;
+            in.maxFraction = 0.07; // kupon kasanın en fazla %7'si (varsayılan bütçe payı)
+            in.maxCost = cap;
+            in.legMin = legMin;
+            in.minEdge = minEdge;
+            applyLearn(in, learn, domestic(r));
+            Map<String, Object> v = Altili.valueCoupon(legs, in);
+            if (v == null || !Json.bool(v, "play", false)) continue;
+            List<Object> win = Json.arr(Json.obj(r.get("result")).get("winners"));
+            Map<String, Object> c = new LinkedHashMap<>();
+            c.put("horses", v.get("horses"));
+            boolean hit = !devir.contains(r) && hits(c, win)[6];
+            long kat = Math.max(1, Json.lng(v, "kat", 1));
+            double cs = Json.dbl(v, "cost", 0) * kat, rt = hit ? Json.dbl(Json.obj(r.get("result")), "payout", 0) * kat : 0;
+            for (int g : new int[] {0, domestic(r) ? 1 : 2}) {
+                n[g]++;
+                if (hit) h[g]++;
+                cost[g] += cs;
+                ret[g] += rt;
+                ex[g] += Json.dbl(v, "hit", 0);
+            }
+        }
+        Map<String, Object> out = agg(n[0], h[0], cost[0], ret[0]);
+        out.put("expected", ex[0]);
+        String[] names = {null, "yerli", "yabancı"};
+        for (int g = 1; g < 3; g++) {
+            Map<String, Object> m = agg(n[g], h[g], cost[g], ret[g]);
+            m.put("expected", ex[g]);
+            out.put(names[g], m);
+        }
+        return out;
+    }
+
     /** 2.53: çift kayıtta hangisi sayılır: bildirilen (2), TJK (1). */
     private static int rank(Map<String, Object> r) {
         return (r.get("notified") != null ? 2 : 0) + ("TJK".equals(Json.str(r, "source")) ? 1 : 0);
@@ -320,13 +461,25 @@ public final class AltiliLog {
     public static boolean domestic(Map<String, Object> r) {
         long id = Json.lng(r, "cityId", -1);
         if ("TJK".equals(Json.str(r, "source")) && id >= 1 && id < Tjk.KNOWN.length) return true;
-        String c = norm(r.get("city") != null ? Json.str(r, "city") : Json.str(r, "label"));
-        for (int i = 1; i < Tjk.KNOWN.length; i++) {
-            String k = norm(Tjk.KNOWN[i]);
-            if (c.equals(k) || c.startsWith(k + " ")) return true;
+        String raw = r.get("city") != null ? Json.str(r, "city") : Json.str(r, "label");
+        synchronized (DOMESTIC) { // 2.57: şehir adı başına bir kez (analizde her kayıt defalarca soruluyor)
+            Boolean b = DOMESTIC.get(raw);
+            if (b != null) return b;
         }
-        return false;
+        String c = norm(raw);
+        boolean home = false;
+        for (int i = 1; i < Tjk.KNOWN.length && !home; i++) {
+            String k = norm(Tjk.KNOWN[i]);
+            home = c.equals(k) || c.startsWith(k + " ");
+        }
+        synchronized (DOMESTIC) {
+            if (DOMESTIC.size() > 2000) DOMESTIC.clear();
+            DOMESTIC.put(raw, home);
+        }
+        return home;
     }
+
+    private static final Map<String, Boolean> DOMESTIC = new java.util.HashMap<>();
 
     /** Sonucun kaynağı güvenilir mi: resmî 6'lı sonucu ya da koşu numarasıyla eşleşme (eski kayıtta kaynak yoksa evet). */
     static boolean reliable(Map<String, Object> res) {
@@ -490,10 +643,26 @@ public final class AltiliLog {
 
     /** Ayak metninden at no → AGF payı (0–1). */
     static Map<String, Double> agf(String leg) {
+        synchronized (AGF_CACHE) {
+            Map<String, Double> c = AGF_CACHE.get(leg);
+            if (c != null) return c;
+        }
         Map<String, Double> out = new LinkedHashMap<>();
         for (Altili.Horse h : Altili.leg(leg).horses) out.put(h.no, h.p);
+        out = java.util.Collections.unmodifiableMap(out);
+        synchronized (AGF_CACHE) {
+            AGF_CACHE.put(leg, out);
+        }
         return out;
     }
+
+    /** 2.57: ayrıştırılmış AGF (aynı ayak metni analizde defalarca okunur); en çok 30.000 ayak, en eski kullanılan çıkar. */
+    private static final Map<String, Map<String, Double>> AGF_CACHE = new LinkedHashMap<String, Map<String, Double>>(1024, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, Map<String, Double>> e) {
+            return size() > 30000;
+        }
+    };
 
     static String norm(String s) {
         String t = Normalizer.normalize(String.valueOf(s).toLowerCase(new Locale("tr")), Normalizer.Form.NFD).replaceAll("\\p{M}", "");
@@ -774,15 +943,27 @@ public final class AltiliLog {
 
     /** Ayaklar: her biri {AGF payları, kazananın sırası}. */
     static final class LegData {
-        final double[] p;
+        final double[] p, lp; // 2.57: lp = log p (bir kez; öğrenmede p^a = e^(a·lp), hızlı)
         final int w, fav; // 2.51: AGF favorisi (ilk en yüksek)
 
         LegData(double[] p, int w) {
             this.p = p;
             this.w = w;
             int f = 0;
-            for (int j = 1; j < p.length; j++) if (p[j] > p[f]) f = j;
+            lp = new double[p.length];
+            for (int j = 0; j < p.length; j++) {
+                lp[j] = Math.log(p[j]);
+                if (p[j] > p[f]) f = j;
+            }
             this.fav = f;
+        }
+
+        /** Σ p^a (a = 1 ise doğrudan). */
+        double z(double a) {
+            double z = 0;
+            if (a == 1) for (double x : p) z += x;
+            else for (double x : lp) z += Math.exp(a * x);
+            return z;
         }
     }
 
@@ -793,12 +974,10 @@ public final class AltiliLog {
 
     /** 2.51: q ∝ p^alpha · beta^[favori] modelinin log-olabilirliği. */
     static double ll(List<LegData> legs, double alpha, double beta) {
-        double s = 0;
+        double s = 0, lb = Math.log(beta);
         for (LegData l : legs) {
-            double z = 0;
-            for (double p : l.p) z += Math.pow(p, alpha);
-            z += (beta - 1) * Math.pow(l.p[l.fav], alpha);
-            s += alpha * Math.log(l.p[l.w]) + (l.w == l.fav ? Math.log(beta) : 0) - Math.log(z);
+            double z = l.z(alpha) + (beta - 1) * Math.exp(alpha * l.lp[l.fav]);
+            s += alpha * l.lp[l.w] + (l.w == l.fav ? lb : 0) - Math.log(z);
         }
         return s;
     }
@@ -806,15 +985,18 @@ public final class AltiliLog {
     /** 2.51: alpha verilince en çok olabilirlikli beta (0,3–3; log beta'ya göre türev azalan, ikiye bölme). */
     static double fitBeta(List<LegData> legs, double alpha) {
         if (legs.isEmpty()) return 1;
+        int n = legs.size(), wins = 0;
+        double[] z0 = new double[n], f = new double[n]; // 2.57: beta'dan bağımsız: bir kez
+        for (int i = 0; i < n; i++) {
+            LegData l = legs.get(i);
+            z0[i] = l.z(alpha);
+            f[i] = Math.exp(alpha * l.lp[l.fav]);
+            if (l.w == l.fav) wins++;
+        }
         double lo = Math.log(0.3), hi = Math.log(3);
         for (int it = 0; it < 40; it++) {
-            double b = (lo + hi) / 2, beta = Math.exp(b), d = 0;
-            for (LegData l : legs) {
-                double z = 0, f = Math.pow(l.p[l.fav], alpha);
-                for (double p : l.p) z += Math.pow(p, alpha);
-                z += (beta - 1) * f;
-                d += (l.w == l.fav ? 1 : 0) - beta * f / z;
-            }
+            double b = (lo + hi) / 2, beta = Math.exp(b), d = wins;
+            for (int i = 0; i < n; i++) d -= beta * f[i] / (z0[i] + (beta - 1) * f[i]);
             if (d > 0) lo = b;
             else hi = b;
         }
@@ -824,22 +1006,30 @@ public final class AltiliLog {
     /** En çok olabilirlikli alpha (0,3–3 aralığında; türev azalan, ikiye bölme). */
     static double fit(List<LegData> legs) {
         if (legs.isEmpty()) return 1;
-        double lo = 0.3, hi = 3;
-        for (int it = 0; it < 40; it++) {
-            double a = (lo + hi) / 2, d = 0;
+        // 2.57: Newton (türev azalan, ikinci türev −Σ varyans): birkaç adımda; aralık dışına çıkarsa ikiye bölme
+        double lo = 0.3, hi = 3, a = 1;
+        for (int it = 0; it < 60; it++) {
+            double d = 0, dd = 0;
             for (LegData l : legs) {
-                double z = 0, zl = 0;
-                for (double p : l.p) {
-                    double x = Math.pow(p, a);
-                    z += x;
-                    zl += x * Math.log(p);
+                double z = 0, zl = 0, zll = 0;
+                for (double x : l.lp) {
+                    double e = Math.exp(a * x);
+                    z += e;
+                    zl += e * x;
+                    zll += e * x * x;
                 }
-                d += Math.log(l.p[l.w]) - zl / z;
+                double m = zl / z;
+                d += l.lp[l.w] - m;
+                dd -= zll / z - m * m;
             }
             if (d > 0) lo = a;
             else hi = a;
+            double next = dd < 0 ? a - d / dd : (lo + hi) / 2;
+            if (!(next > lo && next < hi)) next = (lo + hi) / 2;
+            if (Math.abs(next - a) < 1e-7 || hi - lo < 1e-7) return Math.max(0.3, Math.min(3, next));
+            a = next;
         }
-        return (lo + hi) / 2;
+        return a;
     }
 
     /**
@@ -1169,6 +1359,9 @@ public final class AltiliLog {
         }
         out.put("calib", calib);
         out.put("calibRegion", region);
+        List<Map<String, Object>> verified = new ArrayList<>(); // 2.57: ikramiyesi doğrulanmış (devir değil)
+        for (Map<String, Object> r : settled) if (!devir.contains(r)) verified.add(r);
+        out.put("payout", payoutFit(verified, unit));
         // 2.49–2.50: eşik ve bölge taraması: 6/6 kuralı (6/6 olasılığı ≥ eşik; hepsi, yerli ya da yabancı altılılar) her
         // eşikte nasıl dönerdi; en iyisi en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik, geniş bölge)
         List<Object> sweep = new ArrayList<>();
@@ -1296,22 +1489,49 @@ public final class AltiliLog {
                 out.put("holdout", ho);
             }
             if (cap > 0 && kasa > 0) out.putAll(stakes(coupons, couponRecs, scope, use, cap, km, kasa, unit, legMin, out));
+            // 2.57: seçim yöntemi son dönem sınamasında kaybettirdiyse kural kanıtlanmadı (önerilmez; ayarla yine de)
+            Map<String, Object> ho = Json.obj(out.get("holdout"));
+            if (ho != null && Json.lng(ho, "n", 0) >= MIN_SETTLED && Json.dbl(ho, "roi", 0) < 1) out.put("ruleUnproven", true);
+        }
+        if (cap > 0 && settled.size() >= 3) { // 2.57: değer kuponu geriye dönük: ilk üçte ikiyle öğren, son üçte birde dene
+            int cut = settled.size() * 2 / 3;
+            List<Map<String, Object>> train = settled.subList(0, cut), test = settled.subList(cut, settled.size());
+            double kref = Math.max(kasa, VALUE_KASA);
+            Map<String, Object> vt = valueRun(test, devir, learnFrom(train, devir, unit), unit, kref, km, cap, legMin, minEdge);
+            vt.put("from", test.get(0).get("day"));
+            vt.put("kasa", kref);
+            Map<String, Object> va = valueRun(settled, devir, out, unit, kref, km, cap, legMin, minEdge);
+            Map<String, Object> vs = new LinkedHashMap<>();
+            vs.put("test", vt);
+            vs.put("all", va);
+            boolean proven = Json.lng(vt, "n", 0) >= MIN_SETTLED && Json.dbl(vt, "roi", 0) > 1;
+            vs.put("proven", proven);
+            out.put("value", vs);
         }
         // bütçe stratejileri: geçmiş altılılar düz AGF ile, her bütçeyle yeniden kurulur
         List<Object> strategies = new ArrayList<>();
         double bestRoi = -1, bestFraction = 0;
+        List<List<Altili.Leg>> parsed = new ArrayList<>(); // 2.57: ayaklar bir kez ayrıştırılır (her bütçe için değil)
+        for (Map<String, Object> r : settled) {
+            List<Altili.Leg> ls = new ArrayList<>();
+            boolean ok = true;
+            for (Object l : Json.arr(r.get("legs"))) {
+                Altili.Leg leg = Altili.leg(String.valueOf(l));
+                ok &= !leg.horses.isEmpty();
+                ls.add(leg);
+            }
+            parsed.add(ok && ls.size() == 6 ? ls : null);
+        }
         for (double f : FRACTIONS) {
             double budget = Math.max(unit, Math.floor(f * kasa / 10) * 10);
             long maxUnits = (long) Math.floor(budget / unit + 1e-9);
             int n = 0, h = 0;
             double cost = 0, ret = 0;
-            for (Map<String, Object> r : settled) {
-                List<Object> legs = Json.arr(r.get("legs")), win = Json.arr(Json.obj(r.get("result")).get("winners"));
-                List<Altili.Leg> ls = new ArrayList<>();
-                for (Object l : legs) ls.add(Altili.leg(String.valueOf(l)));
-                boolean ok = true;
-                for (Altili.Leg l : ls) ok &= !l.horses.isEmpty();
-                if (!ok) continue;
+            for (int ri = 0; ri < settled.size(); ri++) {
+                Map<String, Object> r = settled.get(ri);
+                List<Object> win = Json.arr(Json.obj(r.get("result")).get("winners"));
+                List<Altili.Leg> ls = parsed.get(ri);
+                if (ls == null) continue;
                 int[] cnt = Altili.mostLikely(ls, maxUnits, legMin);
                 long units = 1;
                 boolean hit = true;
@@ -1321,6 +1541,7 @@ public final class AltiliLog {
                     for (int j = 0; j < cnt[k]; j++) in |= ls.get(k).horses.get(j).no.equals(String.valueOf(win.get(k)));
                     hit &= in;
                 }
+                hit &= !devir.contains(r); // 2.56: devirde kimse tutturamadı
                 n++;
                 cost += units * unit;
                 if (hit) {

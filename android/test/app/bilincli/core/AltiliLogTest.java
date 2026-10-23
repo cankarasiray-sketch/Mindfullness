@@ -334,6 +334,81 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void valueCouponLearnsAndIsTestedOutOfSample() {
+        // 2.57: değer kuponu ilk üçte ikiyle öğrenilip son üçte birde (öğrenmede kullanılmadan) denenir. AGF favoriyi
+        // abartsa (×0,5) bile değer kuponu az oynanan atlardan, tutma olasılığı çok düşük: 10.000 TL kasada Kelly payı kupon
+        // bedelini karşılamaz, kanıt için 20 kupon da çıkmaz: kanıtlanmadı.
+        Map<String, Object> an = AltiliLog.analyze(history(1.0, 0.5, 150, 11), 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6);
+        Map<String, Object> vs = Json.obj(an.get("value")), vt = Json.obj(vs.get("test")), va = Json.obj(vs.get("all"));
+        assertEquals(10000.0, (Double) vt.get("kasa"), 1e-9); // kasa en az 10.000 TL varsayılır
+        assertTrue(Json.lng(va, "n", 0) >= Json.lng(vt, "n", 0));
+        assertEquals(Boolean.FALSE, vs.get("proven"));
+        Map<String, Object> pay = Json.obj(an.get("payout")); // ikramiye = 0,73 / P: oran sabit, eğim ~0
+        assertEquals(0.73, Json.dbl(pay, "mean", 0), 0.02);
+        assertEquals(0, Json.dbl(pay, "payB", 1), 0.05);
+        assertEquals(Boolean.TRUE, pay.get("use"));
+        // büyük kasada oynanır ama tutma olasılığı çok düşük (piyango): 100 kuponda beklenen 1'in altında
+        Map<String, Object> rich = Json.obj(Json.obj(AltiliLog.analyze(history(1.0, 0.5, 150, 11), 1, 1e6, TODAY, 0, 0.15, 0.10, true, 600, 0.6)
+                .get("value")).get("test"));
+        assertTrue(Json.lng(rich, "n", 0) >= 20);
+        assertTrue(Json.dbl(rich, "expected", 9) < 1);
+        // değer kuponu: öğrenilen favori düzeltmesiyle abartılı favori dışarıda; ikramiye modeli düşükse değer kalmaz
+        Altili.Inputs in = new Altili.Inputs();
+        in.kasa = 1e6;
+        in.km = 0.6;
+        in.maxFraction = 0.07;
+        in.maxCost = 600;
+        in.minEdge = 0.10;
+        List<String> legs = Arrays.asList("1:50 2:20 3:15 4:10 5:5", "1:45 2:25 3:15 4:10 5:5", "1:50 2:20 3:15 4:10 5:5",
+                "1:40 2:25 3:20 4:10 5:5", "1:50 2:20 3:15 4:10 5:5", "1:45 2:25 3:15 4:10 5:5");
+        assertEquals(Boolean.FALSE, Altili.valueCoupon(legs, in).get("play")); // AGF olduğu gibi: dönüş 0,73
+        in.beta = 0.5;
+        Map<String, Object> v = Altili.valueCoupon(legs, in);
+        assertEquals(Boolean.TRUE, v.get("play"));
+        assertTrue((Double) v.get("roi") > 1.1);
+        for (Object l : Json.arr(v.get("horses"))) assertFalse(Json.arr(l).contains("1")); // abartılı favori yok
+        in.payA = 0.2; // ikramiye gerçekte çok daha az ödüyor: değer kalmaz
+        assertEquals(Boolean.FALSE, Altili.valueCoupon(legs, in).get("play"));
+        in.payA = 0;
+        in.kasa = 10000; // 10.000 TL kasada kupon ve kat Kelly payına göre küçülür (kasanın %7'si, en fazla 600 TL)
+        Map<String, Object> k10 = Altili.valueCoupon(legs, in);
+        assertTrue(Json.dbl(k10, "cost", 0) * Math.max(1, Json.lng(k10, "kat", 1)) <= 600 + 1e-9);
+    }
+
+    @Test
+    public void ruleThatLosesOutOfSampleIsUnproven() {
+        // 2.57: seçim yöntemi son dönem sınamasında (en az 20 kupon) kaybettirdiyse 6/6 kuralı kanıtlanmadı
+        Map<String, Object> store = new LinkedHashMap<>();
+        double real = 0.4 * 0.5 * 0.34 * 0.6 * 0.45 * 0.79;
+        for (int i = 0; i < 60; i++) {
+            Map<String, Object> a = altili("tjk/x/" + i, "İstanbul", 3, 1, LEGS);
+            String day = LocalDate.parse(DAY).minusDays(60 - i).toString();
+            a.put("day", day);
+            AltiliLog.record(store, day, Arrays.<Object>asList(a));
+            Map<String, Object> r = rec(store, "tjk/x/" + i), res = new LinkedHashMap<>();
+            res.put("winners", new ArrayList<Object>(Arrays.asList("5", "7", "5", "1", "5", "2")));
+            res.put("payout", 0.73 / real * 5);
+            res.put("from", "kombinasyon");
+            r.put("result", res);
+            Map<String, Object> plan = Json.obj(r.get("plan"));
+            plan.put("hit", 0.30);
+            plan.put("cost", 10.0);
+            if (i >= 40) Json.arr(plan.get("horses")).set(0, new ArrayList<Object>(Arrays.asList("9"))); // son 20 kaçtı
+        }
+        Map<String, Object> an = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6);
+        Map<String, Object> ho = Json.obj(an.get("holdout"));
+        assertEquals(20L, ho.get("n"));
+        assertEquals(0L, ho.get("hits"));
+        assertEquals(Boolean.TRUE, an.get("ruleUnproven"));
+        assertFalse(new Settings().altiliPlayUnproven); // varsayılan: kanıtlanmamış strateji önerilmez
+        Settings mine = new Settings();
+        mine.altiliPlayUnproven = true;
+        assertTrue(Settings.fromMap(mine.toMap()).altiliPlayUnproven);
+        for (int i = 40; i < 60; i++) Json.obj(rec(store, "tjk/x/" + i).get("plan")).put("horses", Json.obj(rec(store, "tjk/x/0").get("plan")).get("horses"));
+        assertNull(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6).get("ruleUnproven")); // son dönem de kazandı
+    }
+
+    @Test
     public void bankrollNeed() {
         // 2.52: 10 kupon × 100 TL, 3'ü 500 TL döndü: tam Kelly payı (4 × 0,3 − 0,7) / 4 = %12,5 → kasa 800 TL
         List<double[]> outs = new ArrayList<>();

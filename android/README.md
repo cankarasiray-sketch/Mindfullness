@@ -368,6 +368,17 @@ bildirim olarak gelir.
   (ya da "6 bilen çıkmadı/devretti") sonuç "devir": kupon kazananları kapsamıyorsa kesin kaçmış sayılır (kupon düzeyinde;
   ayak, favori ve öğrenmeye girmez). Defter v5: tahmini ikramiyeli eski sonuçlara yeniden okuma hakkı. Strateji özetinde
   verinin tarihleri; 180 günden azsa yıllık kâr tahmini yapılmaz.
+- **2.57: ikramiye modeli, değer kuponu, dürüst sınama; hız.** 293 günlük karne (711 altılı, devir dahil): genel dönüş %34; model
+  isabetli (6/6 beklenen 67,9, gerçek 73); AGF favoriyi abartıyor (favori %27, AGF %35; banko %44, AGF %57). Tek kârlı kesim
+  (yerli, 6/6 ≥ %15: 26 kupon, +6.193 TL) son dönem sınamasında doğrulanmadı (ilk dönemle seçilen kural son dönemde %73).
+  (1) İkramiye modeli: doğrulanmış sonuçlardan log(ikramiye × P / birim) = a + b·log P (P: kazanan kombinasyonun AGF payları
+  çarpımı); kuponun beklenen dönüşü 1 − kesinti yerine bununla, atın getiri katkısı q·p^(b−1). (2) Değer kuponu: düzeltilmiş
+  olasılık (α, favori β) ve ikramiye modeliyle Kelly araması. Karnede geriye dönük: ilk üçte ikiyle öğrenilip son üçte birde
+  (öğrenmede kullanılmadan) denenir, kasa en az 10.000 TL; tüm veri (iyimser) ayrıca. (3) Kanıt kuralı: değer kuponu son
+  dönemde en az 20 kuponla kâr etmediyse, 6/6 kuralı son dönem sınamasında kaybettirdiyse önerilmez ("kanıtlanmamış stratejiyle
+  de öner" ayarı, varsayılan kapalı). Strateji özetinin başında ikisinin durumu; ikisi de kanıtlanmadıysa "oynama". (4) Hız:
+  AGF ayrıştırma önbelleği, derlenmiş desenler, öğrenmede log p bir kez ve Newton, bütçe karşılaştırmasında ayaklar bir kez
+  ayrıştırılır, değer kuponunda üst sınırla hızlı ret: 720 altılılık karne ~1,2 sn → ~0,3 sn (masaüstü).
 
 ## Beraberlik fırsatları (2.17)
 

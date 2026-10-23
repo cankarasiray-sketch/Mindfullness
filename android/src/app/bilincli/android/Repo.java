@@ -507,6 +507,7 @@ final class Repo {
         if (p.get("playNoEdge") instanceof Boolean) s.altiliPlayNoEdge = (Boolean) p.get("playNoEdge");
         if (p.get("minHitAuto") instanceof Boolean) s.altiliMinHitAuto = (Boolean) p.get("minHitAuto");
         if (p.get("capAuto") instanceof Boolean) s.altiliCapAuto = (Boolean) p.get("capAuto");
+        if (p.get("playUnproven") instanceof Boolean) s.altiliPlayUnproven = (Boolean) p.get("playUnproven");
         if (p.get("auto") instanceof Boolean) s.altiliAuto = (Boolean) p.get("auto");
         String err = s.validate();
         if (err != null) throw new IllegalArgumentException(err);
@@ -560,9 +561,7 @@ final class Repo {
         in.minCost = s.altiliMinCost; // 2.31: kupon en az minCost TL (varsayılan 60); üstüne yalnızca kârlı atlar (2.32)
         Map<String, Object> learn = altiliLearn;
         if (learn != null) { // 2.26: öğrenilen AGF düzeltmesi; 2.36: önce altılının bölgesine (yerli/yabancı) ait olan
-            double[] ab = AltiliLog.alphaBeta(learn, AltiliLog.domestic(a)); // 2.51: favori düzeltmesi de
-            in.alpha = ab[0];
-            in.beta = ab[1];
+            AltiliLog.applyLearn(in, learn, AltiliLog.domestic(a)); // 2.51: favori düzeltmesi; 2.57: ikramiye modeli
         }
         Map<String, Object> by = Json.obj(Json.obj(inp.get("byKey")) == null ? null : Json.obj(inp.get("byKey")).get(key));
         if (by != null) {
@@ -598,7 +597,7 @@ final class Repo {
         Settings st = ledger.settings();
         String cacheKey = (agfRaw == null ? 0 : agfRaw.hashCode()) + "|" + (altiliLogRaw == null ? 0 : altiliLogRaw.hashCode()) + "|" // 2.46: büyük defter
                 + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
-                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinHitAuto + "|" + st.altiliCapAuto + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
+                + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinHitAuto + "|" + st.altiliCapAuto + "|" + st.altiliPlayUnproven + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
         if (cached != null && cacheKey.equals(cached[0]) && agfRaw != null) return Json.obj(cached[1]);
         Map<String, Object> v = agfViewFresh();
@@ -687,6 +686,13 @@ final class Repo {
                         plan.put("kasaRec", row.get("kasaRec"));
                     }
                 }
+            }
+            // 2.57: geriye dönük sınamada kaybettiren strateji önerilmez: değer kuponu (oyna) için son dönem testi, 6/6 kuralı için
+            // son dönem sınaması (Ayarlar'da "kanıtlanmamış stratejiyle de öner" açıksa önerilir)
+            if (!ls.altiliPlayUnproven && !"manual".equals(key) && plan.get("error") == null) {
+                boolean play = Json.bool(plan, "play", false);
+                Map<String, Object> vs = Json.obj(learn.get("value"));
+                if (play ? vs == null || !Json.bool(vs, "proven", false) : Json.bool(learn, "ruleUnproven", false)) plan.put("unproven", play ? "value" : "rule");
             }
             a.put("plan", plan);
             a.put("devir", in.devir);

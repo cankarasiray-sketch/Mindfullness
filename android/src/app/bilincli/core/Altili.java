@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * 2.21: Altılı ganyan kupon planı (çekirdek: arayüz ve arka plan bildirimi aynı hesabı kullanır).
@@ -41,6 +42,8 @@ public final class Altili {
         public final Double odds;
         /** Kazanma olasılığı (0–1). */
         double q;
+        /** 2.57: 1 TL'nin getiri katkısı: q × p^(b − 1) (ikramiye modeli; b = 0: q/p). */
+        double v;
 
         Horse(String no, double p, Double odds) {
             this.no = no;
@@ -64,6 +67,11 @@ public final class Altili {
         public double alpha = 1;
         /** 2.51: öğrenilen favori düzeltmesi: AGF favorisinin payı beta ile çarpılır (beta < 1: favori AGF'de abartılı). */
         public double beta = 1;
+        /**
+         * 2.57: öğrenilen ikramiye modeli: kazanan kombinasyonun ikramiyesi ≈ birim × payA × P^(payB − 1), P kombinasyonun AGF
+         * payları çarpımı (doğrulanmış sonuçlardan). payA 0: öğrenilmedi (1 − kesinti, payB 0).
+         */
+        public double payA = 0, payB = 0;
         public double takeout = 0.27, tax = 0, unit = 1, devir = 0, pool = 0, maxCost = 0;
         /** Kasa (TL), Kelly çarpanı ve kupon başına kasanın en fazla payı (futboldaki sınırla aynı). */
         public double kasa = 0, km = 0.25, maxFraction = 0.05;
@@ -113,12 +121,15 @@ public final class Altili {
         return leg(text, alpha, 1);
     }
 
+    /** 2.57: ayak metni ayrıştırma desenleri (bir kez derlenir; analizde binlerce kez kullanılır). */
+    private static final Pattern TOKENS = Pattern.compile("[\\s;]+"), KV = Pattern.compile("[:=]"), NO = Pattern.compile("\\d{1,2}");
+
     /** beta (2.51, öğrenilen): ganyan yoksa ayağın AGF favorisi beta ile ağırlıklanır, q ∝ p^alpha · beta^[favori]. */
     static Leg leg(String text, double alpha, double beta) {
         List<Horse> out = new ArrayList<>();
-        for (String tok : String.valueOf(text == null ? "" : text).trim().split("[\\s;]+")) {
-            String[] f = tok.split("[:=]");
-            if (f.length < 2 || f.length > 3 || !f[0].matches("\\d{1,2}")) continue;
+        for (String tok : TOKENS.split(String.valueOf(text == null ? "" : text).trim())) {
+            String[] f = KV.split(tok);
+            if (f.length < 2 || f.length > 3 || !NO.matcher(f[0]).matches()) continue;
             try {
                 double p = num(f[1].replace("%", "")) / 100;
                 Double odds = f.length == 3 ? num(f[2]) : null;
@@ -139,6 +150,7 @@ public final class Altili {
         double pow = 0;
         for (Horse h : out) pow += Math.pow(h.p, alpha) * (h == fav ? beta : 1);
         for (Horse h : out) h.q = fromOdds ? 1 / h.odds / book : alpha == 1 && beta == 1 ? h.p : Math.pow(h.p, alpha) * (h == fav ? beta : 1) / pow;
+        for (Horse h : out) h.v = h.q / h.p;
         out.sort(new Comparator<Horse>() {
             @Override
             public int compare(Horse a, Horse b) {
@@ -172,7 +184,7 @@ public final class Altili {
                 @Override
                 public int compare(Integer a, Integer b) {
                     Horse x = horses.get(a), y = horses.get(b);
-                    return Double.compare(y.q + lambda * y.q / y.p, x.q + lambda * x.q / x.p);
+                    return Double.compare(y.q + lambda * y.v, x.q + lambda * x.v);
                 }
             });
             long mask = 0;
@@ -181,7 +193,7 @@ public final class Altili {
                 Horse h = horses.get(idx[m - 1]);
                 mask |= 1L << Math.min(idx[m - 1], 62);
                 sq += h.q;
-                sr += h.q / h.p;
+                sr += h.v; // 2.57: ikramiye modeliyle (önce q/p)
                 if (!out.containsKey(mask)) out.put(mask, new Cand(mask, m, sq, sr));
             }
         }
@@ -207,9 +219,65 @@ public final class Altili {
         long units, kat;
     }
 
-    /** Getiri çarpanı: (1 − vergi) × (1 − kesinti + devir/havuz); havuz bilinmiyorsa devir hesaba katılmaz. */
+    /**
+     * Getiri çarpanı: (1 − vergi) × (1 − kesinti + devir/havuz); havuz bilinmiyorsa devir hesaba katılmaz. 2.57: ikramiye
+     * modeli öğrenildiyse 1 − kesinti yerine payA (gerçek ikramiyelerden).
+     */
     static double factor(Inputs in) {
-        return (1 - in.tax) * (1 - in.takeout + (in.pool > 0 ? in.devir / in.pool : 0));
+        return (1 - in.tax) * ((in.payA > 0 ? in.payA : 1 - in.takeout) + (in.pool > 0 ? in.devir / in.pool : 0));
+    }
+
+    /** 2.57: ikramiye modeli öğrenildiyse atların getiri katkısı q × p^(payB − 1). */
+    static void values(List<Leg> legs, Inputs in) {
+        if (in.payB == 0) return;
+        for (Leg l : legs) for (Horse h : l.horses) h.v = h.q * Math.pow(h.p, in.payB - 1);
+    }
+
+    /**
+     * 2.57: değer kuponu: düzeltilmiş olasılık ve ikramiye modeliyle Kelly araması (oynanmayacak günde tutma kuponu kurulmaz).
+     * {play, roi, hit, units, kat, cost, horses}; AGF okunamazsa null.
+     */
+    public static Map<String, Object> valueCoupon(List<String> legTexts, Inputs in) {
+        if (legTexts == null || legTexts.size() < 6 || !(in.unit > 0)) return null;
+        List<Leg> legs = new ArrayList<>();
+        for (int k = 0; k < 6; k++) {
+            Leg l = leg(legTexts.get(k), in.alpha, in.beta);
+            if (l.horses.isEmpty()) return null;
+            legs.add(l);
+        }
+        values(legs, in);
+        // kuponun dönüşü en fazla çarpan × Π (ayakta en yüksek v): kâr kuralına yetmiyorsa arama gereksiz (hızlı ret)
+        double bound = factor(in);
+        for (Leg l : legs) {
+            double mv = 0;
+            for (Horse h : l.horses) mv = Math.max(mv, h.v);
+            bound *= mv;
+        }
+        if (!(bound > 1 + in.minEdge)) {
+            Map<String, Object> no = new LinkedHashMap<>();
+            no.put("play", false);
+            no.put("roi", bound);
+            return no;
+        }
+        List<List<Cand>> cands = new ArrayList<>();
+        for (Leg l : legs) cands.add(covering(candidates(l.horses), in.legMin));
+        int[] best = search(cands, legs, in);
+        Eval e = evalChoice(cands, best, in);
+        Map<String, Object> out = new LinkedHashMap<>();
+        List<Object> horses = new ArrayList<>();
+        for (int k = 0; k < 6; k++) {
+            List<Object> nos = new ArrayList<>();
+            for (Horse h : chosen(legs.get(k), cands.get(k).get(best[k]))) nos.add(h.no);
+            horses.add(nos);
+        }
+        out.put("play", e.kat >= 1 && e.roi > 1 + in.minEdge);
+        out.put("roi", e.roi);
+        out.put("hit", e.hit);
+        out.put("units", e.units);
+        out.put("kat", e.kat);
+        out.put("cost", e.cost);
+        out.put("horses", horses);
+        return out;
     }
 
     static Eval eval(double hit, double roi, long units, Inputs in) {
@@ -434,7 +502,7 @@ public final class Altili {
             double r = 1;
             for (List<Horse> hs : pick) {
                 double s = 0;
-                for (Horse h : hs) s += h.q / h.p;
+                for (Horse h : hs) s += h.v;
                 r *= s;
             }
             int best = -1;
@@ -445,10 +513,10 @@ public final class Altili {
                 int m = hs.size();
                 if (m >= MAX_PER_LEG || units / m * (m + 1) > maxUnits) continue;
                 double s = 0;
-                for (Horse h : hs) s += h.q / h.p;
+                for (Horse h : hs) s += h.v;
                 for (Horse h : legs.get(k).horses) {
                     if (hs.contains(h)) continue;
-                    double dEv = f * (r / s * (s + h.q / h.p) - r) - (units / m * (m + 1) - units); // birim başına
+                    double dEv = f * (r / s * (s + h.v) - r) - (units / m * (m + 1) - units); // birim başına
                     if (dEv > gain) {
                         gain = dEv;
                         best = k;
@@ -601,6 +669,7 @@ public final class Altili {
             out.put("error", "Birim fiyatı gir.");
             return out;
         }
+        values(legs, in); // 2.57
         List<List<Cand>> cands = new ArrayList<>();
         int oddsLegs = 0;
         for (Leg l : legs) {
@@ -646,7 +715,7 @@ public final class Altili {
                 double sq = 0, sr = 0;
                 for (Horse h : hs) {
                     sq += h.q;
-                    sr += h.q / h.p;
+                    sr += h.v;
                 }
                 hit *= sq;
                 r *= sr;
@@ -778,6 +847,7 @@ public final class Altili {
             if (Json.bool(p, "noEdge", false)) continue; // 2.45: kâr kuralına uymayan önerilmez
             if (Json.bool(p, "regionWeak", false) && !Json.bool(p, "play", false)) continue; // 2.42: AGF'si tutmayan bölge
             if (Json.bool(p, "kasaLow", false) && !Json.bool(p, "play", false)) continue; // 2.53: kasa bu strateji için yetersiz
+            if (p.get("unproven") != null) continue; // 2.57: strateji geriye dönük sınamada kaybettirdi
             if (best < 0 || better(p, plans.get(best))) best = i;
         }
         return best;
@@ -799,6 +869,8 @@ public final class Altili {
         if (la != lb) return !la; // beklenen getirisi %50'nin altındakiler sonda
         boolean wa = Json.bool(a, "regionWeak", false), wb = Json.bool(b, "regionWeak", false);
         if (wa != wb) return !wa; // 2.42: AGF'si tutmayan bölgenin altılıları sonda
+        boolean ua = a.get("unproven") != null, ub = b.get("unproven") != null;
+        if (ua != ub) return !ua; // 2.57: kanıtlanmamış strateji sonda
         boolean ka = Json.bool(a, "kasaLow", false), kb = Json.bool(b, "kasaLow", false);
         if (ka != kb) return !ka; // 2.53: kasanın yetmediği sonda
         boolean ha = Json.bool(a, "lowHit", false), hb = Json.bool(b, "lowHit", false);
