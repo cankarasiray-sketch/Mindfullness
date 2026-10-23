@@ -1233,4 +1233,150 @@ public final class Tjk {
         }
         return out;
     }
+
+    // ---- 2.62: form verisi (şehir programındaki at bilgileri) ------------------------------------------------------
+
+    /** Forma (resim), orijin ve sahip sütunları alınmaz (uzun, modelde gereksiz). */
+    private static final Pattern FORM_SKIP = Pattern.compile("(?iu)^(forma|orijin.*|sahip.*|sahibi)$");
+
+    private static String clip(String s, int n) {
+        return s.length() > n ? s.substring(0, n) : s;
+    }
+
+    /**
+     * Şehir programının at tabloları: [{no, info, head, rows}]. info: tablodan önceki "N. Koşu …" metni (saat, mesafe, pist,
+     * koşu türü); head: başlıklar ("N", "At İsmi", "Son 6 Y.", "KGS", "s20", "HP"…); rows: atların hücreleri (kısaltılmış).
+     */
+    static List<Map<String, Object>> programForm(String html) {
+        String clean = stripScripts(html);
+        List<Map<String, Object>> out = new ArrayList<>();
+        int prev = 0, no = 0;
+        String info = "";
+        for (int[] span : innerTableSpans(clean)) {
+            String gap = text(clean.substring(prev, span[0]));
+            prev = span[1];
+            Matcher m = RACE_NO.matcher(gap);
+            int at = -1;
+            while (m.find()) {
+                no = Integer.parseInt(m.group(1));
+                at = m.start();
+            }
+            if (at >= 0) info = clip(gap.substring(at), 240);
+            String table = clean.substring(span[0], span[1]);
+            Map<String, Object> race = formTable(table);
+            if (race == null) { // başlık tablosu olabilir: "4. Koşu 14:30 …"
+                String in = text(table);
+                Matcher r = RACE_NO.matcher(in);
+                int a = -1;
+                while (r.find()) {
+                    no = Integer.parseInt(r.group(1));
+                    a = r.start();
+                }
+                if (a >= 0) info = clip(in.substring(a), 240);
+                continue;
+            }
+            race.put("no", (long) no);
+            race.put("info", info);
+            out.add(race);
+        }
+        return out;
+    }
+
+    /** Bir at tablosu: başlık satırı (at no "N" ya da at ismi sütunu olan) ve at satırları; at tablosu değilse null. */
+    private static Map<String, Object> formTable(String table) {
+        String[] rows = table.split("(?i)<tr\\b");
+        List<Object> head = null, data = new ArrayList<>();
+        List<Integer> keep = new ArrayList<>();
+        int horseCol = -1;
+        for (int r = 1; r < rows.length; r++) {
+            String[] cells = rows[r].split("(?i)<t[dh]\\b");
+            List<String> ts = new ArrayList<>();
+            for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
+            if (head == null) {
+                int h = -1, a = -1;
+                for (int c = 0; c < ts.size(); c++) {
+                    if (h < 0 && HORSE_HEADER.matcher(ts.get(c)).matches()) h = c;
+                    else if (a < 0 && NAME_HEADER.matcher(ts.get(c)).matches()) a = c;
+                }
+                if (h < 0 || a < 0) continue; // başlık üstü yazı
+                horseCol = h;
+                head = new ArrayList<>();
+                for (int c = 0; c < ts.size(); c++) {
+                    if (FORM_SKIP.matcher(ts.get(c)).matches()) continue;
+                    keep.add(c);
+                    head.add(ts.get(c));
+                }
+                continue;
+            }
+            if (horseCol >= ts.size() || leadNum(ts.get(horseCol)) == null) continue;
+            List<Object> row = new ArrayList<>();
+            for (int c : keep) row.add(c < ts.size() ? clip(ts.get(c), 40) : "");
+            data.add(row);
+        }
+        if (head == null || data.size() < 2) return null;
+        Map<String, Object> race = new LinkedHashMap<>();
+        race.put("head", head);
+        race.put("rows", data);
+        return race;
+    }
+
+    /**
+     * 2.62: günün şehir programlarından form verisi: {day, cities: [{cityId, city, races}], log}. only boş değilse yalnızca
+     * bu şehirler. İstisna fırlatmaz.
+     */
+    public static Map<String, Object> form(Http http, LocalDate day, Daily.Progress progress, Set<Integer> only) {
+        List<Object> log = new ArrayList<>(), cities = new ArrayList<>();
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("day", day.toString());
+        out.put("cities", cities);
+        out.put("log", log);
+        step(progress, "TJK programı okunuyor (" + day + ")…");
+        String page = programUrl(day), html;
+        try {
+            html = http.get(page, headers()).body;
+        } catch (Http.ProviderException e) {
+            log.add("Program okunamadı: " + shortMessage(e.getMessage()));
+            if (!String.valueOf(e.getMessage()).contains("-> HTTP ")) out.put("failed", true); // bağlantı yok: denenmiş sayılmasın
+            return out;
+        }
+        Map<Integer, String[]> links = cityLinks(html, page);
+        if (links.isEmpty()) {
+            log.add("Programda şehir bağlantısı yok (" + excerpt(html) + ")");
+            return out;
+        }
+        int requests = 0;
+        for (Map.Entry<Integer, String[]> c : links.entrySet()) {
+            if (only != null && !only.isEmpty() && !only.contains(c.getKey())) continue;
+            if (++requests > MAX_REQUESTS) break;
+            step(progress, c.getValue()[0] + " programı okunuyor…");
+            List<Map<String, Object>> races = new ArrayList<>();
+            String why = null;
+            for (String u : new String[] {c.getValue()[1], programAlternative(c.getValue()[1])}) {
+                if (u == null || !races.isEmpty()) continue;
+                try {
+                    String body = http.get(u, headers()).body;
+                    races = programForm(body);
+                    if (races.isEmpty() && why == null) why = "at tablosu yok (" + excerpt(body) + ")";
+                } catch (Http.ProviderException e) {
+                    if (why == null) why = shortMessage(e.getMessage());
+                }
+            }
+            Map<String, Object> city = new LinkedHashMap<>();
+            city.put("cityId", c.getKey());
+            city.put("city", c.getValue()[0]);
+            city.put("races", new ArrayList<Object>(races));
+            cities.add(city);
+            if (races.isEmpty()) {
+                log.add(c.getValue()[0] + ": " + why);
+                continue;
+            }
+            Map<String, Object> r0 = races.get(0);
+            List<?> row0 = Json.arr(r0.get("rows")).isEmpty() ? new ArrayList<Object>() : Json.arr(Json.arr(r0.get("rows")).get(0));
+            StringBuilder hs = new StringBuilder(), rs = new StringBuilder();
+            for (Object x : Json.arr(r0.get("head"))) hs.append(hs.length() == 0 ? "" : " | ").append(x);
+            for (Object x : row0) rs.append(rs.length() == 0 ? "" : " | ").append(x);
+            log.add(c.getValue()[0] + ": " + races.size() + " koşu (sütunlar: " + hs + " · 1. satır: " + clip(rs.toString(), 200) + " · " + r0.get("info") + ")");
+        }
+        return out;
+    }
 }

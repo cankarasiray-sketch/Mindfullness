@@ -410,6 +410,13 @@ bildirim olarak gelir.
   ayakların canlı ✓/✗'si de yanlıştı (karne yalnızca ikramiyeyle doğrulanan 6'lı sonucunu saydığından etkilenmedi). Artık at no
   isimdeki "(N)"den; "St" hiç kullanılmaz. Okuma ayrıntısında tablonun ilk satırı ve "6'lı sonucuyla uyan: 2/2" gösterilir.
   Defter v6: eski ganyanlar silinip yeniden okunur, koşu tablosundan bulunan yerli sonuçlar yeniden doğrulanır.
+- **2.62: form verisi.** 780 doğrulanmış altılının analizi: kapanış ganyanı kazananı AGF'den iyi bilmiyor; ikramiye oranı
+  ortalama 0,64; AGF'si %40+ bankolar fazla oynanıyor (beklenenin ~%77'si kazanıyor) ama yalnızca AGF'yle kurulan hiçbir kural
+  son dönemde kâr etmedi (en iyisi modelce başa baş). Kalabalığı kalabalığın görüşüyle yenmek mümkün olmadığından AGF dışı bilgi
+  toplanıyor: doğrulanmış yerli altılıların günleri için TJK şehir programı (at no, at, yaş, sıklet, jokey, antrenör, St, HP,
+  Son 6 Y., KGS, s20, en iyi derece, Gny, AGF ve koşu bilgisi; forma/orijin/sahip alınmaz). Ayrı dosyada (altili_form.json),
+  ganyan bitince "Form verisini oku (N gün)" ya da arka planda Wi-Fi'de; dışa aktarımda "form". Okuma ayrıntısında sütunlar ve
+  ilk satır. Model (AGF + form) bu veriyle önce dışarıda sınanacak.
 
 ## Beraberlik fırsatları (2.17)
 
