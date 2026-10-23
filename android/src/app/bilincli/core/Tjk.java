@@ -902,6 +902,9 @@ public final class Tjk {
     static final Pattern ALTILI_COMBO = Pattern.compile(
             "(?i)(?:6\\s*['’]?\\s*l[ıiİI]|alt[ıi]l[ıi])\\s*ganyan[^0-9]{0,60}?(\\d{1,2}(?:\\s*[/-]\\s*\\d{1,2}){5})(?![\\d/])(?:[^0-9]{0,40}?(\\d{1,3}(?:\\.\\d{3})*,\\d{2}))?");
     private static final Pattern POS_HEADER = Pattern.compile("(?i)^(s|sıra|sira|sn|#|yer|sonuç|sonuc)$");
+    /** 2.59: sonuç tablosunda ganyan oranı sütunu ("Gny") ve hücresi ("2,85"). */
+    private static final Pattern GNY_HEADER = Pattern.compile("(?i)^(gny|ganyan|gny\\.)$");
+    private static final Pattern ODDS_CELL = Pattern.compile("^(\\d{1,4}(?:[.,]\\d{1,2})?)$");
 
     /** "(1-2-3-4-5-6. Koşular)": kazanan değil, altılının koşu numaraları. */
     private static final Pattern RACES_AFTER = Pattern.compile("(?i)^\\s*\\.?\\s*(?:ko[şs]u|ayak)");
@@ -1016,7 +1019,7 @@ public final class Tjk {
 
     private static Map<String, Object> raceTable(String table) {
         String[] rows = table.split("(?i)<tr\\b");
-        int horseCol = -1, posCol = -1, width = 0;
+        int horseCol = -1, posCol = -1, gnyCol = -1, width = 0;
         boolean header = false;
         List<String> headCells = new ArrayList<>();
         List<List<String>> data = new ArrayList<>();
@@ -1025,16 +1028,18 @@ public final class Tjk {
             List<String> ts = new ArrayList<>();
             for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
             if (!header) {
-                int h = -1, p = -1;
+                int h = -1, p = -1, g = -1;
                 for (int c = 0; c < ts.size(); c++) {
                     if (h < 0 && HORSE_HEADER.matcher(ts.get(c)).matches()) h = c;
                     else if (p < 0 && POS_HEADER.matcher(ts.get(c)).matches()) p = c;
+                    else if (g < 0 && GNY_HEADER.matcher(ts.get(c)).matches()) g = c;
                 }
                 if (h >= 0 || p >= 0) { // başlık satırı (önceki satırlar başlık üstü yazı)
                     header = true;
                     headCells = ts;
                     horseCol = h;
                     posCol = p;
+                    gnyCol = g;
                     data.clear();
                     continue;
                 }
@@ -1070,13 +1075,22 @@ public final class Tjk {
             headText += " → at no " + (horseCol + 1) + ". sütun";
         }
         if (horseCol < 0) return null;
+        headText += gnyCol >= 0 ? " · ganyan '" + headCells.get(gnyCol) + "'" : " · ganyan sütunu yok"; // 2.59
         List<Object> runners = new ArrayList<>();
+        Map<String, Object> odds = new LinkedHashMap<>(); // 2.59: at no → ganyan oranı (kapanış)
         String winner = null, first = null;
         for (List<String> ts : data) {
             if (horseCol >= ts.size()) continue;
             String no = leadNum(ts.get(horseCol));
             if (no == null) continue;
             runners.add(no);
+            if (gnyCol >= 0 && gnyCol < ts.size()) {
+                Matcher om = ODDS_CELL.matcher(ts.get(gnyCol).trim());
+                if (om.matches()) {
+                    double o = number(om.group(1));
+                    if (o > 1 && o < 10000) odds.put(no, o);
+                }
+            }
             if (first == null) first = no;
             if (posCol >= 0 && posCol < ts.size() && ts.get(posCol).matches("0*1\\.?")) winner = no;
         }
@@ -1084,6 +1098,7 @@ public final class Tjk {
         Map<String, Object> race = new LinkedHashMap<>();
         race.put("runners", runners);
         race.put("winner", winner != null ? winner : first);
+        if (odds.size() >= 2) race.put("odds", odds);
         race.put("head", headText); // okuma ayrıntısı için: hangi sütunlar, at no nereden
         return race;
     }

@@ -386,6 +386,16 @@ bildirim olarak gelir.
   bölge × eşik (%10–25) × büyüklük arasında ilk üçte ikide en kârlısı seçilip son üçte birde denenir (en az 15 kupon ve dönüş
   %100'ün üstü: kanıt). Canlı kural (eşik, bölge, büyüklük; tavanı aşmadan) tüm veriyle aynı yöntemle seçilir; kanıtlanmadıysa
   önerilmez. Karnede seçilen bölge ve eşikte her büyüklüğün tutma oranı, dönüşü ve net kârı.
+- **2.59: ganyan oranlarıyla tahmin (ölçüm).** 2.58 karnesi: kupon büyüdükçe tutma artıyor (200 TL %19 → 1.500 TL %38) ama
+  dönüş düşüyor (%178 → %56); seçim yöntemi son dönemde %52. Tutmayı kârlı artırmanın tek yolu AGF'den iyi tahmin: ganyan
+  havuzu kazanma şansını AGF'den (banko alışkanlığıyla şişen favori) doğru yansıtır. (1) Sonuç tablolarının "Gny" sütunu
+  okunur (koşu tablosu → at no: kapanış ganyanı; okuma ayrıntısında "ganyan 'Gny'" ya da "ganyan sütunu yok"). (2) Sonuçlanırken
+  ayaklara kazananı aynı ve atlarını içeren koşudan (koşu numarası biliniyorsa o) yazılır; eski doğrulanmış sonuçlara geriye
+  dönük tarama bitince arka planda (Wi-Fi, saatlik) ya da "Geçmiş taramayı şimdi sürdür" ile, her altılı bir kez. (3) Karnede
+  "Ganyan ile tahmin": kazanana verilen olasılık (geometrik ortalama) ve favorinin kazanma oranı AGF, ganyan ve karışım
+  (q ∝ q_AGF^(1−w)·q_ganyan^w; w ilk üçte ikide en çok olabilirlikle) ile, son üçte birde; aynı tavanla en yüksek 6/6 kuponu
+  AGF ve karışımla: tutma ve dönüş. Kupon henüz ganyanla kurulmuyor (oynarken 2–6. ayakların ganyanı daha erken); ölçüm
+  kalıcı fark gösterirse sonraki adım.
 
 ## Beraberlik fırsatları (2.17)
 

@@ -928,6 +928,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
         {day: "2026-10-19", label: "Bursa 1. altılı", source: "TJK", backtest: true, hit: 0.34, cost: 600, won: false, ret: 0}]},
     duplicates: 3, late: 4, devir: 5,
     payout: {n: 570, payA: 0.21, payB: 0.12, mean: 0.6, use: true},
+    ganyan: {records: 300, verified: 570, w: 0.7, legs: 600, from: "2026-07-24", prob: {agf: 0.21, ganyan: 0.24, mix: 0.25}, fav: {agf: 0.27, ganyan: 0.31, mix: 0.32},
+      coupons: {n: 100, cap: 600, agf: {n: 100, hits: 12, cost: 60000, ret: 30000, roi: 0.5}, mix: {n: 100, hits: 16, cost: 60000, ret: 42000, roi: 0.7}}},
     search: {proven: false, from: "2026-07-24",
       all: {scope: "yerli", minHit: 0.15, size: 1000, n: 26, hits: 14, cost: 26000, ret: 27300, roi: 1.05},
       train: {scope: "hepsi", minHit: 0.15, size: 600, n: 37, hits: 9, cost: 22200, ret: 13100, roi: 0.59},
@@ -998,6 +1000,8 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.doesNotMatch(k, /şans olamayacak kadar iyi/);
   assert.match(k, /1\. ayak başladıktan sonra kaydedilen 4 altılı sayılmadı/); // 2.54
   assert.match(k, /Kimsenin 6\/6 yapamadığı \(6 bilen çıkmadı, devir\) 5 altılı kaçmış sayıldı/); // 2.56
+  // 2.59: ganyan ile tahmin
+  assert.match(k, /Ganyan ile tahminganyan okunan: 300\/570 doğrulanmış altılıSon dönemde \(24\.07 sonrası, öğrenmede kullanılmadı; 600 ayak\):kazanana verilen olasılık: AGF %21 · ganyan %24 · karışım %25 \(ganyan ağırlığı 0,7\)favori kazandı: AGF %27 · ganyan %31 · karışım %32600,00 TL'lik kupon: AGF ile 12\/100 tuttu \(tutma %12\) · dönüş %50karışımla 16\/100 tuttu \(tutma %16\) · dönüş %70/);
   // 2.58: strateji araması: en kârlısı, kupon büyüklüğüne göre tutma oranı ve dönüş, son dönem sınaması
   assert.match(k, /Strateji araması \(bölge × 6\/6 eşiği × kupon büyüklüğü\)En kârlı \(tüm veri\): yerli · 6\/6 ≥ %15 · kupon 1\.000,00 TL: 14\/26 tuttu \(tutma %54\) · dönüş %105 · net \+1\.300 TL/);
   assert.match(k, /Kupon büyüklüğüne göre \(yerli, 6\/6 ≥ %15\):200,00 TL: 5\/26 tuttu \(tutma %19\) · dönüş %178 · net \+4\.056 TL1\.500,00 TL: 18\/26 tuttu \(tutma %69\) · dönüş %80 · net −7\.800 TL/);

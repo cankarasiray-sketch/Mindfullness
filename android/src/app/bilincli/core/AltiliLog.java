@@ -175,6 +175,161 @@ public final class AltiliLog {
         return false;
     }
 
+    /**
+     * 2.59: ganyan ile tahmin: doğrulanmış altılılarda (sonuç tablolarından kapanış ganyanı okunmuş) kazanana verilen
+     * olasılık AGF (öğrenilen düzeltmeyle), ganyan (1/oran, normalize) ve karışım q ∝ q_AGF^(1−w) · q_ganyan^w ile; w ilk
+     * üçte ikide en çok olabilirlikle, ölçüm son üçte birde. Aynı tavanla en yüksek 6/6 kuponu AGF ve karışımla kurulur:
+     * son dönemde tutma ve dönüş. {records, verified, w, legs, prob: {agf, ganyan, mix}, fav: {...}, coupons: {n, agf, mix}}.
+     */
+    private static Map<String, Object> oddsCompare(List<Map<String, Object>> verified, Map<String, Object> learn, double unit, double cap,
+            double legMin) {
+        List<Map<String, Object>> recs = new ArrayList<>();
+        for (Map<String, Object> r : verified) if (Json.arr(Json.obj(r.get("result")).get("odds")).size() == 6) recs.add(r);
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("records", (long) recs.size());
+        out.put("verified", (long) verified.size());
+        if (recs.size() < 3) return out;
+        int cut = recs.size() * 2 / 3;
+        // ayaklar: {q_AGF, q_ganyan (ortak atlarda normalize), kazanan sırası}
+        List<double[][]> train = new ArrayList<>(), test = new ArrayList<>();
+        List<int[]> trainW = new ArrayList<>(), testW = new ArrayList<>();
+        for (int i = 0; i < recs.size(); i++) {
+            Map<String, Object> r = recs.get(i), res = Json.obj(r.get("result"));
+            List<Object> legs = Json.arr(r.get("legs")), win = Json.arr(res.get("winners")), odds = Json.arr(res.get("odds"));
+            double[] ab = alphaBeta(learn, domestic(r));
+            for (int k = 0; k < 6; k++) {
+                double[][] qq = legQ(String.valueOf(legs.get(k)), Json.obj(odds.get(k)), ab);
+                if (qq == null) continue;
+                int wi = -1;
+                for (int j = 0; j < qq[2].length; j++) if (String.valueOf((int) qq[2][j]).equals(String.valueOf(win.get(k)))) wi = j;
+                if (wi < 0) continue;
+                (i < cut ? train : test).add(qq);
+                (i < cut ? trainW : testW).add(new int[] {wi});
+            }
+        }
+        double bw = 0, bl = Double.NEGATIVE_INFINITY;
+        for (int s = 0; s <= 10; s++) {
+            double w = s / 10.0, l = 0;
+            for (int i = 0; i < train.size(); i++) l += Math.log(mix(train.get(i), w)[trainW.get(i)[0]]);
+            if (l > bl + 1e-9) {
+                bl = l;
+                bw = w;
+            }
+        }
+        out.put("w", bw);
+        out.put("legs", (long) test.size());
+        double[] lp = new double[3];
+        int[] fav = new int[3];
+        double[] ws = {0, 1, bw};
+        for (int i = 0; i < test.size(); i++) {
+            for (int m = 0; m < 3; m++) {
+                double[] q = mix(test.get(i), ws[m]);
+                lp[m] += Math.log(q[testW.get(i)[0]]);
+                int f = 0;
+                for (int j = 1; j < q.length; j++) if (q[j] > q[f]) f = j;
+                if (f == testW.get(i)[0]) fav[m]++;
+            }
+        }
+        Map<String, Object> prob = new LinkedHashMap<>(), fv = new LinkedHashMap<>();
+        String[] names = {"agf", "ganyan", "mix"};
+        for (int m = 0; m < 3; m++) {
+            if (!test.isEmpty()) {
+                prob.put(names[m], Math.exp(lp[m] / test.size())); // kazanana verilen olasılığın geometrik ortalaması
+                fv.put(names[m], (double) fav[m] / test.size());
+            }
+        }
+        out.put("prob", prob);
+        out.put("fav", fv);
+        // son dönemde kupon: aynı tavanla en yüksek 6/6, AGF ile ve karışımla
+        long mu = (long) Math.floor(cap / unit + 1e-9);
+        int n = 0;
+        int[] h = new int[2];
+        double[] cost = new double[2], ret = new double[2];
+        for (int i = cut; i < recs.size(); i++) {
+            Map<String, Object> r = recs.get(i), res = Json.obj(r.get("result"));
+            List<Object> legs = Json.arr(r.get("legs")), win = Json.arr(res.get("winners")), odds = Json.arr(res.get("odds"));
+            double[] ab = alphaBeta(learn, domestic(r));
+            List<Altili.Leg> la = new ArrayList<>(), lm = new ArrayList<>();
+            boolean ok = true;
+            for (int k = 0; k < 6 && ok; k++) {
+                Altili.Leg a = Altili.leg(String.valueOf(legs.get(k)), ab[0], ab[1]), b = Altili.leg(String.valueOf(legs.get(k)), ab[0], ab[1]);
+                double[][] qq = legQ(String.valueOf(legs.get(k)), Json.obj(odds.get(k)), ab);
+                ok = !a.horses.isEmpty() && qq != null;
+                if (!ok) break;
+                double[] q = mix(qq, bw);
+                for (Altili.Horse x : b.horses) { // ganyanı olmayan at (koşmadı): 0
+                    x.q = 0;
+                    for (int j = 0; j < qq[2].length; j++) if (String.valueOf((int) qq[2][j]).equals(x.no)) x.q = q[j];
+                }
+                la.add(a);
+                lm.add(b);
+            }
+            if (!ok) continue;
+            n++;
+            double payout = Json.dbl(res, "payout", 0);
+            for (int m = 0; m < 2; m++) {
+                List<Altili.Leg> ls = m == 0 ? la : lm;
+                int[] cnt = Altili.bestHit(ls, mu, legMin);
+                long units = 1;
+                boolean all = true;
+                for (int k = 0; k < 6; k++) {
+                    List<Altili.Horse> hs = Altili.byQ(ls.get(k)).subList(0, Math.min(cnt[k], ls.get(k).horses.size()));
+                    boolean in = false;
+                    for (Altili.Horse x : hs) in |= x.no.equals(String.valueOf(win.get(k)));
+                    units *= hs.size();
+                    all &= in;
+                }
+                cost[m] += units * unit;
+                if (all) {
+                    h[m]++;
+                    ret[m] += payout;
+                }
+            }
+        }
+        Map<String, Object> cp = new LinkedHashMap<>();
+        cp.put("n", (long) n);
+        cp.put("cap", cap);
+        cp.put("agf", agg(n, h[0], cost[0], ret[0]));
+        cp.put("mix", agg(n, h[1], cost[1], ret[1]));
+        out.put("coupons", cp);
+        if (cut < recs.size()) out.put("from", recs.get(cut).get("day"));
+        return out;
+    }
+
+    /** 2.59: bir ayakta AGF'li ve ganyanlı ortak atlar: {q_AGF, q_ganyan (ikisi de ortak atlarda normalize), at no}; az ise null. */
+    private static double[][] legQ(String legText, Map<String, Object> odds, double[] ab) {
+        if (odds == null) return null;
+        List<Altili.Horse> hs = Altili.leg(legText, ab[0], ab[1]).horses;
+        List<double[]> c = new ArrayList<>();
+        for (Altili.Horse x : hs) {
+            Double o = Json.num(odds, x.no);
+            if (o != null && o > 1 && x.q > 0) c.add(new double[] {x.q, 1 / o, Integer.parseInt(x.no)});
+        }
+        if (c.size() < 2) return null;
+        double sa = 0, sg = 0;
+        for (double[] x : c) {
+            sa += x[0];
+            sg += x[1];
+        }
+        double[][] out = new double[3][c.size()];
+        for (int j = 0; j < c.size(); j++) {
+            out[0][j] = c.get(j)[0] / sa;
+            out[1][j] = c.get(j)[1] / sg;
+            out[2][j] = c.get(j)[2];
+        }
+        return out;
+    }
+
+    /** 2.59: karışım q ∝ q_AGF^(1−w) · q_ganyan^w (normalize). */
+    private static double[] mix(double[][] qq, double w) {
+        int n = qq[0].length;
+        double[] q = new double[n];
+        double z = 0;
+        for (int j = 0; j < n; j++) z += q[j] = Math.pow(qq[0][j], 1 - w) * Math.pow(qq[1][j], w);
+        for (int j = 0; j < n; j++) q[j] /= z;
+        return q;
+    }
+
     /** 2.58: strateji araması: kupon büyüklükleri (TL) ve 6/6 eşikleri; son dönemde kanıt için en az bu kadar kupon. */
     static final double[] SEARCH_SIZES = {200, 300, 400, 600, 800, 1000, 1500};
     static final double[] SEARCH_T = {0.10, 0.15, 0.20, 0.25};
@@ -947,6 +1102,7 @@ public final class AltiliLog {
                 res.put("at", now.toString());
             } else res = result(rec, w, unit, takeout, tax, now);
             rec.put("result", res);
+            putOdds(rec, city); // 2.59
             n++;
         }
         return n;
@@ -1040,7 +1196,99 @@ public final class AltiliLog {
             if (hadWinners) res.put("previous", old.get("winners"));
             res.put("rechecked", true);
             rec.put("result", res);
+            putOdds(rec, city); // 2.59
             if (verified) n++;
+        }
+        return n;
+    }
+
+    // ---- 2.59: ganyan oranları (sonuç tablolarından, kapanış) ------------------------------------------------
+
+    /**
+     * Ayakların ganyan oranları: her ayağa kazananı sonuçla aynı olan ve ayağın atlarını içeren koşu tablosu (koşu numarası
+     * biliniyorsa o); belirsizse boş. [{at no: oran} ya da null] × 6.
+     */
+    static List<Object> legOdds(Map<String, Object> rec, Map<String, Object> city) {
+        List<Object> out = new ArrayList<>(java.util.Collections.nCopies(6, (Object) null));
+        Map<String, Object> res = Json.obj(rec.get("result"));
+        List<Object> win = Json.arr(res == null ? null : res.get("winners")), legs = Json.arr(rec.get("legs"));
+        if (city == null || win.size() != 6 || legs.size() < 6) return out;
+        List<Object> races = Json.arr(city.get("races")), rs = Json.arr(rec.get("races"));
+        Set<Integer> used = new HashSet<>();
+        for (int k = 0; k < 6; k++) {
+            Set<String> leg = agf(String.valueOf(legs.get(k))).keySet();
+            long no = k < rs.size() ? Json.lng(Json.obj(rs.get(k)), "no", 0) : 0;
+            int pick = -1, count = 0;
+            for (int i = 0; i < races.size(); i++) {
+                Map<String, Object> race = Json.obj(races.get(i));
+                if (used.contains(i) || race.get("odds") == null || !String.valueOf(win.get(k)).equals(String.valueOf(race.get("winner")))
+                        || contained(leg, race) < 0.6) continue;
+                if (no > 0 && Json.lng(race, "no", -1) == no) {
+                    pick = i;
+                    count = 1;
+                    break;
+                }
+                if (no > 0 && race.get("no") != null) continue; // numaralı ama başka koşu
+                count++;
+                if (pick < 0) pick = i;
+            }
+            if (pick < 0 || count != 1) continue;
+            used.add(pick);
+            out.set(k, Json.obj(races.get(pick)).get("odds"));
+        }
+        return out;
+    }
+
+    /** Sonuca ganyan oranlarını yazar (en az bir ayakta bulunduysa). */
+    private static boolean putOdds(Map<String, Object> rec, Map<String, Object> city) {
+        Map<String, Object> res = Json.obj(rec.get("result"));
+        if (res == null || city == null) return false;
+        List<Object> odds = legOdds(rec, city);
+        boolean any = false;
+        for (Object o : odds) any |= o != null;
+        if (any) res.put("odds", odds);
+        return any;
+    }
+
+    /** Ganyanı okunacak mı: ikramiyeyle doğrulanmış, oranı yok, daha denenmemiş. */
+    private static boolean needsOdds(Map<String, Object> rec, double unit) {
+        Map<String, Object> res = Json.obj(rec.get("result"));
+        return res != null && res.get("odds") == null && Json.lng(rec, "oddsTried", 0) < 1 && "ikramiye".equals(trust(rec, res, unit));
+    }
+
+    /** 2.59: ganyanı okunacak günler (analiz penceresinde), yeniden eskiye (son veriler önce). */
+    public static List<String> oddsDays(Map<String, Object> store, String today, double unit) {
+        Set<String> out = new java.util.TreeSet<>(java.util.Collections.reverseOrder());
+        String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
+        for (Object o : records(store)) {
+            Map<String, Object> r = Json.obj(o);
+            String d = Json.str(r, "day");
+            if (d != null && d.compareTo(today) < 0 && d.compareTo(from) >= 0 && needsOdds(r, unit)) out.add(d);
+        }
+        return new ArrayList<>(out);
+    }
+
+    /** O günün ganyanı okunacak altılılarının TJK şehirleri; TJK dışı varsa null (hepsi okunur). */
+    public static Set<Integer> oddsCities(Map<String, Object> store, String day, double unit) {
+        Set<Integer> out = new HashSet<>();
+        for (Object o : records(store)) {
+            Map<String, Object> r = Json.obj(o);
+            if (!day.equals(Json.str(r, "day")) || !needsOdds(r, unit)) continue;
+            if (!"TJK".equals(Json.str(r, "source")) || r.get("cityId") == null) return null;
+            out.add((int) Json.lng(r, "cityId", 0));
+        }
+        return out;
+    }
+
+    /** 2.59: o günün sonuç sayfasından doğrulanmış altılılara ganyan oranları; bulunan sayısı. Her kayıt bir kez denenir. */
+    public static int attachOdds(Map<String, Object> store, String day, Map<String, Object> results, double unit) {
+        List<Object> cities = Json.arr(results == null ? null : results.get("cities"));
+        int n = 0;
+        for (Object o : records(store)) {
+            Map<String, Object> rec = Json.obj(o);
+            if (!day.equals(Json.str(rec, "day")) || !needsOdds(rec, unit)) continue;
+            rec.put("oddsTried", 1L);
+            if (putOdds(rec, cityOf(rec, cities))) n++;
         }
         return n;
     }
@@ -1491,6 +1739,10 @@ public final class AltiliLog {
         List<Map<String, Object>> verified = new ArrayList<>(); // 2.57: ikramiyesi doğrulanmış (devir değil)
         for (Map<String, Object> r : settled) if (!devir.contains(r)) verified.add(r);
         out.put("payout", payoutFit(verified, unit));
+        if (cap > 0) { // 2.59: ganyan ile tahmin
+            Map<String, Object> g = oddsCompare(verified, out, unit, cap, legMin);
+            if (g != null) out.put("ganyan", g);
+        }
         // 2.49–2.50: eşik ve bölge taraması: 6/6 kuralı (6/6 olasılığı ≥ eşik; hepsi, yerli ya da yabancı altılılar) her
         // eşikte nasıl dönerdi; en iyisi en az MIN_SETTLED kuponla en yüksek dönüş (eşitlikte düşük eşik, geniş bölge)
         List<Object> sweep = new ArrayList<>();

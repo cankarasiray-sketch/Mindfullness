@@ -802,6 +802,7 @@ function altiliKarne(L, sl) {
           : "kurala uyan kupon olmadı" + (a.expectedRoi ? " (kuponların beklenen dönüşü ortalama %" + num(a.expectedRoi * 100, 0) + ", gerçekleşen %" + num(a.roi * 100, 0) + ")" : "")) : "")
       + altiliValue(L.value, L.payout, tl0, pc) // 2.57
       + altiliSearch(L.search, tl0, pc) // 2.58
+      + altiliGanyan(L.ganyan, tl0, pc) // 2.59
       + altiliSweep(L.sweep) // 2.49
       + altiliCities(L.rule) // 2.55
       + altiliHoldout(L.holdout, pc) // 2.51
@@ -964,6 +965,22 @@ function altiliSearch(se, tl0, pc) {
     + (t && x ? "<br><b>Son dönem sınaması</b> (" + esc(dm(se.from + "T12:00:00Z")) + " sonrası, seçimde kullanılmadı): ilk dönemle seçilen " + name(t) + " → " + res(x)
       + (se.proven ? ' <b class="pos">kanıtlandı</b>' : ' <b class="neg">kanıtlanmadı</b>') : "")
     + '<br><span class="small">Büyük kupon tutma oranını artırır ama ikramiye aynı kalır; dönüş ancak eklenen kombinasyonlar az oynanmışsa artar. Kanıt: son dönemde en az 15 kupon ve dönüş %100\'ün üstü.</span>');
+}
+/** 2.59: ganyan ile tahmin: kazanana verilen olasılık ve kupon (AGF ile ganyan karışımı), son dönemde. */
+function altiliGanyan(g, tl0, pc) {
+  if (!g) return "";
+  var head = "ganyan okunan: " + g.records + "/" + g.verified + " doğrulanmış altılı";
+  if (!g.prob || !g.prob.agf) return item("Ganyan ile tahmin", head + '<br><span class="small">Sonuç tablolarındaki ganyan oranları geriye dönük tarama bitince arka planda (Wi-Fi) okunur; '
+    + "\"Geçmiş taramayı şimdi sürdür\" ile hemen. Sonuç okuma ayrıntısında \"ganyan sütunu yok\" yazıyorsa TJK tablosunda bulunamadı.</span>");
+  var c = g.coupons || {}, row = function (x) {
+    return x && x.n ? x.hits + "/" + x.n + " tuttu (tutma %" + num(x.hits / x.n * 100, 0) + ") · dönüş " + '<span class="' + cls(x.ret - x.cost) + '">' + pc(x.roi) + "</span>" : "kupon yok";
+  };
+  return item("Ganyan ile tahmin", head + "<br>Son dönemde (" + esc(dm(g.from + "T12:00:00Z")) + " sonrası, öğrenmede kullanılmadı; " + g.legs + " ayak):"
+    + "<br>kazanana verilen olasılık: AGF " + pc(g.prob.agf) + " · ganyan " + pc(g.prob.ganyan) + " · karışım " + pc(g.prob.mix) + " (ganyan ağırlığı " + num(g.w, 1) + ")"
+    + "<br>favori kazandı: AGF " + pc(g.fav.agf) + " · ganyan " + pc(g.fav.ganyan) + " · karışım " + pc(g.fav.mix)
+    + "<br>" + tl0(c.cap) + "'lik kupon: AGF ile " + row(c.agf) + "<br>karışımla " + row(c.mix)
+    + '<br><span class="small">Ganyan sonuç tablosundaki kapanış oranı: her koşunun başında kesinleşir. Altılı 1. ayakta kapandığından 2–6. ayakların oranı oynarken daha erkendir; '
+    + "gerçek kullanımda fark biraz daha az olur. Karışım kalıcı olarak daha iyiyse kupon kurarken ganyanı okumak gerekir (sonraki adım).</span>");
 }
 /** 2.55: net kâr kısaca: "+3.742 TL", "−1.200 TL". */
 function altiliNet(x) {

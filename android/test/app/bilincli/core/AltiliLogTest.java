@@ -423,6 +423,90 @@ public class AltiliLogTest {
     }
 
     @Test
+    public void ganyanOddsAreReadMatchedAndCompared() {
+        // 2.59: sonuç tablosunun "Gny" sütunu: at no → kapanış ganyanı
+        String html = "<h3>3. Koşu</h3><table><tr><th>S</th><th>N</th><th>At İsmi</th><th>Derece</th><th>Gny</th></tr>"
+                + "<tr><td>1</td><td>5</td><td>KARAYEL</td><td>1.25.36</td><td>2,85</td></tr>"
+                + "<tr><td>2</td><td>3</td><td>RÜZGAR</td><td>1.25.50</td><td>4,10</td></tr>"
+                + "<tr><td>3</td><td>1</td><td>ŞİMŞEK</td><td>1.26.00</td><td>12,5</td></tr></table>";
+        Map<String, Object> race = Tjk.raceResults(html).get(0);
+        assertEquals(3L, race.get("no"));
+        assertEquals(2.85, Json.dbl(Json.obj(race.get("odds")), "5", 0), 1e-9);
+        assertEquals(12.5, Json.dbl(Json.obj(race.get("odds")), "1", 0), 1e-9);
+        assertTrue(String.valueOf(race.get("head")).contains("ganyan 'Gny'"));
+        assertTrue(String.valueOf(Tjk.raceResults(html.replace("Gny", "Fark")).get(0).get("head")).contains("ganyan sütunu yok"));
+        // sonuçlanırken ayaklara: kazananı aynı ve atları içeren koşu (koşu numarasıyla)
+        Map<String, Object> store = new LinkedHashMap<>();
+        Map<String, Object> a = altili("tjk/2026-10-21/3/1", "İstanbul", 3, 1, LEGS);
+        List<Object> rs = new ArrayList<>();
+        for (int k = 1; k <= 6; k++) rs.add(new LinkedHashMap<String, Object>(java.util.Collections.singletonMap("no", (Object) (long) k)));
+        a.put("races", rs);
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(a));
+        List<Object> favs = Arrays.<Object>asList("5", "7", "5", "1", "5", "2");
+        double pw = 1;
+        for (int k = 0; k < 6; k++) pw *= AltiliLog.agf(LEGS.get(k)).get(String.valueOf(favs.get(k)));
+        List<Object> races = new ArrayList<>();
+        for (int k = 0; k < 6; k++) {
+            Map<String, Object> rc = new LinkedHashMap<>();
+            List<Object> runners = new ArrayList<Object>(AltiliLog.agf(LEGS.get(k)).keySet());
+            Map<String, Object> odds = new LinkedHashMap<>();
+            for (Object x : runners) odds.put(String.valueOf(x), x.equals(favs.get(k)) ? 2.0 : 6.0);
+            rc.put("no", (long) (k + 1));
+            rc.put("runners", runners);
+            rc.put("winner", favs.get(k));
+            rc.put("odds", odds);
+            races.add(rc);
+        }
+        Map<String, Object> page = results(city(3, "İstanbul", Arrays.<Object>asList(combo(0.73 / pw, "5", "7", "5", "1", "5", "2")), races));
+        AltiliLog.settle(store, DAY, page, 1, 0.27, 0, TODAY, NOW);
+        List<Object> odds = Json.arr(Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")).get("odds"));
+        assertEquals(6, odds.size());
+        assertEquals(2.0, Json.dbl(Json.obj(odds.get(3)), "1", 0), 1e-9); // 4. ayak: 4. koşu, kazanan 1
+        // eski sonuca sonradan (bir kez)
+        Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")).remove("odds");
+        assertEquals(Arrays.asList(DAY), AltiliLog.oddsDays(store, TODAY, 1));
+        assertEquals(new java.util.HashSet<>(Arrays.asList(3)), AltiliLog.oddsCities(store, DAY, 1));
+        assertEquals(1, AltiliLog.attachOdds(store, DAY, page, 1));
+        assertEquals(6, Json.arr(Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")).get("odds")).size());
+        assertEquals(0, AltiliLog.oddsDays(store, TODAY, 1).size());
+        // karşılaştırma: ganyan kazananı bilir (kazanana 1,5, ötekilere 12): karışım ganyana yaslanır, kupon daha çok tutar
+        Map<String, Object> big = new LinkedHashMap<>();
+        for (int i = 0; i < 60; i++) {
+            Map<String, Object> x = altili("tjk/g/" + i, "İstanbul", 3, 1, LEGS);
+            String day = LocalDate.parse(DAY).minusDays(60 - i).toString();
+            x.put("day", day);
+            AltiliLog.record(big, day, Arrays.<Object>asList(x));
+            Map<String, Object> r = rec(big, "tjk/g/" + i);
+            List<Object> w = new ArrayList<>(), od = new ArrayList<>();
+            double p = 1;
+            for (int k = 0; k < 6; k++) {
+                List<String> hs = new ArrayList<>(AltiliLog.agf(LEGS.get(k)).keySet());
+                String win = hs.get((i + k) % hs.size());
+                w.add(win);
+                p *= AltiliLog.agf(LEGS.get(k)).get(win);
+                Map<String, Object> o = new LinkedHashMap<>();
+                for (String h : hs) o.put(h, h.equals(win) ? 1.5 : 12.0);
+                od.add(o);
+            }
+            Map<String, Object> res = new LinkedHashMap<>();
+            res.put("winners", w);
+            res.put("payout", 0.73 / p);
+            res.put("from", "kombinasyon");
+            res.put("odds", od);
+            r.put("result", res);
+        }
+        Map<String, Object> g = Json.obj(AltiliLog.analyze(big, 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6).get("ganyan"));
+        assertEquals(60L, g.get("records"));
+        assertTrue("ağırlık " + g.get("w"), Json.dbl(g, "w", 0) >= 0.5);
+        Map<String, Object> prob = Json.obj(g.get("prob")), cp = Json.obj(g.get("coupons"));
+        assertTrue(Json.dbl(prob, "ganyan", 0) > Json.dbl(prob, "agf", 1));
+        assertTrue(Json.dbl(prob, "mix", 0) > Json.dbl(prob, "agf", 1));
+        assertEquals(20L, cp.get("n"));
+        assertEquals(20L, Json.obj(cp.get("mix")).get("hits"));
+        assertTrue(Json.lng(Json.obj(cp.get("mix")), "hits", 0) > Json.lng(Json.obj(cp.get("agf")), "hits", 0));
+    }
+
+    @Test
     public void bankrollNeed() {
         // 2.52: 10 kupon × 100 TL, 3'ü 500 TL döndü: tam Kelly payı (4 × 0,3 − 0,7) / 4 = %12,5 → kasa 800 TL
         List<double[]> outs = new ArrayList<>();
@@ -544,7 +628,7 @@ public class AltiliLogTest {
         assertEquals(3, Json.arr(Json.obj(Json.arr(r.get("cities")).get(0)).get("races")).size());
         assertEquals(3, asked.size());
         assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Keeneland ABD: 0 altılı sonucu, 3 koşu (kazananlar 1→6, 2→9, 3→3; "
-                + "sütunlar: Sıra | At | Derece | Gny → at no 2. sütun)"));
+                + "sütunlar: Sıra | At | Derece | Gny → at no 2. sütun · ganyan 'Gny')")); // 2.59
     }
 
     @Test

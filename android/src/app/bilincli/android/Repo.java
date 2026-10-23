@@ -958,7 +958,10 @@ final class Repo {
             st.put("verified", 0L);
         }
         String next = Json.str(st, "next"), to = Json.str(st, "to");
-        if (next == null || to == null || next.compareTo(to) < 0) return "Geriye dönük tarama tamamlandı.";
+        if (next == null || to == null || next.compareTo(to) < 0) {
+            if (start) return "Geriye dönük tarama tamamlandı.";
+            return "Geriye dönük tarama tamamlandı. " + altiliOdds(budgetMs, progress); // 2.59: sonra ganyan oranları
+        }
         Settings s = ledger.settings();
         AndroidHttp http = new AndroidHttp(app);
         Map<String, Object> inp = altiliInputs();
@@ -994,12 +997,60 @@ final class Repo {
                 + " ikramiyeyle doğrulandı)" + (left > 0 ? "; kalan " + left + " gün arka planda Wi-Fi'deyken işlenir." : "; tarama tamamlandı.");
     }
 
+    /**
+     * 2.59: geçmiş doğrulanmış sonuçların ganyan oranları (sonuç sayfaları yeniden, yeniden eskiye; her altılı bir kez).
+     * En çok budgetMs. Özet metni.
+     */
+    String altiliOdds(long budgetMs, Daily.Progress progress) {
+        if (isDemo()) return "";
+        Settings s = ledger.settings();
+        String today = Fmt.dayKey(Instant.now());
+        List<String> days;
+        synchronized (altiliLogLock) {
+            days = AltiliLog.oddsDays(altiliLog(), today, s.altiliUnit);
+        }
+        if (days.isEmpty()) return "Ganyan oranları okundu.";
+        AndroidHttp http = new AndroidHttp(app);
+        long t0 = System.currentTimeMillis();
+        int done = 0, found = 0;
+        List<Object> lines = new ArrayList<>();
+        for (String day : days) {
+            if (System.currentTimeMillis() - t0 >= budgetMs) break;
+            if (progress != null) progress.step("Ganyan oranları " + day + " (" + (days.size() - done) + " gün kaldı)…");
+            java.util.Set<Integer> cities;
+            synchronized (altiliLogLock) {
+                cities = AltiliLog.oddsCities(altiliLog(), day, s.altiliUnit);
+            }
+            Map<String, Object> res = Tjk.results(http, java.time.LocalDate.parse(day), progress, cities);
+            synchronized (altiliLogLock) {
+                Map<String, Object> log = altiliLog();
+                int k = AltiliLog.attachOdds(log, day, res, s.altiliUnit);
+                found += k;
+                lines.add("Ganyan " + day + ": " + k + " altılı");
+                for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
+                Map<String, Object> ol = new LinkedHashMap<>();
+                ol.put("at", Instant.now().toString());
+                ol.put("log", lines);
+                log.put("oddsLog", ol);
+                saveAltiliLog(log);
+            }
+            done++;
+        }
+        return "Ganyan oranları: " + done + " gün okundu, " + found + " altılıya eklendi" + (done < days.size() ? "; kalan " + (days.size() - done)
+                + " gün arka planda Wi-Fi'deyken." : ".");
+    }
+
     /** 2.46: arka planda sürdür: yalnızca Wi-Fi gibi ücretsiz ağda (AGF sayfaları büyük). Yaptıysa true. */
     boolean altiliBackfillStep() {
         Map<String, Object> st = altiliBackfillState();
-        if (st == null || isDemo() || Json.str(st, "next") == null || Json.str(st, "next").compareTo(Json.str(st, "to")) < 0) return false;
+        if (st == null || isDemo()) return false;
+        boolean done = Json.str(st, "next") == null || Json.str(st, "next").compareTo(Json.str(st, "to")) < 0;
         android.net.ConnectivityManager cm = app.getSystemService(android.net.ConnectivityManager.class);
         if (cm == null || cm.isActiveNetworkMetered()) return false;
+        if (done) { // 2.59: tarama bitti: geçmiş sonuçların ganyan oranları
+            altiliOdds(ALTILI_BACKFILL_STEP_MS, null);
+            return true;
+        }
         altiliBackfill(false, ALTILI_BACKFILL_DAYS, ALTILI_BACKFILL_STEP_MS, null);
         return true;
     }
