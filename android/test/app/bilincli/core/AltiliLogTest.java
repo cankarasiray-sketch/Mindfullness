@@ -377,35 +377,49 @@ public class AltiliLogTest {
 
     @Test
     public void ruleThatLosesOutOfSampleIsUnproven() {
-        // 2.57: seçim yöntemi son dönem sınamasında (en az 20 kupon) kaybettirdiyse 6/6 kuralı kanıtlanmadı
+        // 2.57–2.58: strateji araması (bölge × eşik × kupon büyüklüğü) ilk dönemde seçer, son dönemde (en az 15 kupon) dener:
+        // son 20 altılıda sürprizler kazandı, aramada seçilen kupon kaçtı: kural kanıtlanmadı
         Map<String, Object> store = new LinkedHashMap<>();
-        double real = 0.4 * 0.5 * 0.34 * 0.6 * 0.45 * 0.79;
+        List<Object> favs = Arrays.<Object>asList("5", "7", "5", "1", "5", "2"), outs = Arrays.<Object>asList("2", "4", "6", "2", "7", "3");
         for (int i = 0; i < 60; i++) {
             Map<String, Object> a = altili("tjk/x/" + i, "İstanbul", 3, 1, LEGS);
             String day = LocalDate.parse(DAY).minusDays(60 - i).toString();
             a.put("day", day);
             AltiliLog.record(store, day, Arrays.<Object>asList(a));
-            Map<String, Object> r = rec(store, "tjk/x/" + i), res = new LinkedHashMap<>();
-            res.put("winners", new ArrayList<Object>(Arrays.asList("5", "7", "5", "1", "5", "2")));
-            res.put("payout", 0.73 / real * 5);
-            res.put("from", "kombinasyon");
-            r.put("result", res);
-            Map<String, Object> plan = Json.obj(r.get("plan"));
-            plan.put("hit", 0.30);
-            plan.put("cost", 10.0);
-            if (i >= 40) Json.arr(plan.get("horses")).set(0, new ArrayList<Object>(Arrays.asList("9"))); // son 20 kaçtı
+            Json.obj(rec(store, "tjk/x/" + i).get("plan")).put("hit", 0.30);
+            setWinners(rec(store, "tjk/x/" + i), i >= 40 ? outs : favs);
         }
         Map<String, Object> an = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6);
-        Map<String, Object> ho = Json.obj(an.get("holdout"));
-        assertEquals(20L, ho.get("n"));
-        assertEquals(0L, ho.get("hits"));
+        Map<String, Object> se = Json.obj(an.get("search")), test = Json.obj(se.get("test"));
+        assertEquals(20L, test.get("n"));
+        assertEquals(0L, test.get("hits"));
+        assertEquals(Boolean.FALSE, se.get("proven"));
         assertEquals(Boolean.TRUE, an.get("ruleUnproven"));
+        assertEquals(7, Json.arr(se.get("sizes")).size()); // 200–1500 TL: tutma oranı ve dönüş
+        Map<String, Object> s1500 = Json.obj(Json.arr(se.get("sizes")).get(6));
+        assertEquals(60L, s1500.get("n"));
+        assertEquals(60L, s1500.get("hits")); // 1.500 TL bütün atları kapsıyor (972 kombinasyon): hep tutar, ama pahalı
         assertFalse(new Settings().altiliPlayUnproven); // varsayılan: kanıtlanmamış strateji önerilmez
         Settings mine = new Settings();
         mine.altiliPlayUnproven = true;
         assertTrue(Settings.fromMap(mine.toMap()).altiliPlayUnproven);
-        for (int i = 40; i < 60; i++) Json.obj(rec(store, "tjk/x/" + i).get("plan")).put("horses", Json.obj(rec(store, "tjk/x/0").get("plan")).get("horses"));
-        assertNull(AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6).get("ruleUnproven")); // son dönem de kazandı
+        for (int i = 40; i < 60; i++) setWinners(rec(store, "tjk/x/" + i), favs); // son dönem de favoriler: kazandı
+        Map<String, Object> ok = AltiliLog.analyze(store, 1, 2000, TODAY, 0, 0.15, 0.10, true, 600, 0.6);
+        assertEquals(Boolean.TRUE, Json.obj(ok.get("search")).get("proven"));
+        assertNull(ok.get("ruleUnproven"));
+        Map<String, Object> sAll = Json.obj(Json.obj(ok.get("search")).get("all"));
+        assertEquals(Math.min(600.0, Json.dbl(sAll, "size", 0)), (Double) ok.get("capUse"), 1e-9); // kupon aramada seçilen büyüklükte
+    }
+
+    /** Doğrulanmış sonuç: ikramiye kazananların AGF paylarıyla tutarlı (× 0,73 / P × 5: kârlı ama tutarlı). */
+    private static void setWinners(Map<String, Object> r, List<Object> w) {
+        double pw = 1;
+        for (int k = 0; k < 6; k++) pw *= AltiliLog.agf(LEGS.get(k)).get(String.valueOf(w.get(k)));
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("winners", new ArrayList<Object>(w));
+        res.put("payout", 0.73 / pw * (w.get(0).equals("5") ? 5 : 1));
+        res.put("from", "kombinasyon");
+        r.put("result", res);
     }
 
     @Test
@@ -702,7 +716,7 @@ public class AltiliLogTest {
         List<Object> srows = Json.arr(stk.get("rows"));
         assertEquals(6, srows.size()); // 2.54: 100–600 TL (400, 500 dahil)
         for (Object o : srows) assertEquals(Json.obj(o).get("n"), Json.obj(o).get("hits"));
-        assertEquals(20L, Json.obj(srows.get(0)).get("n"));
+        assertEquals(30L, Json.obj(srows.get(0)).get("n")); // 2.58: kural strateji aramasından (hepsi tuttu: en çok kupon, ≥ %10)
         assertTrue((Double) Json.obj(srows.get(5)).get("cost") > (Double) Json.obj(srows.get(0)).get("cost"));
         assertEquals(100.0, (Double) stk.get("best"), 1e-9);
         Map<String, Object> s100 = Json.obj(srows.get(0)); // 2.52: kasa ihtiyacı (hepsi tuttu: en büyük bedel kadar)

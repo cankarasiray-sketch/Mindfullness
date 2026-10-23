@@ -175,6 +175,135 @@ public final class AltiliLog {
         return false;
     }
 
+    /** 2.58: strateji araması: kupon büyüklükleri (TL) ve 6/6 eşikleri; son dönemde kanıt için en az bu kadar kupon. */
+    static final double[] SEARCH_SIZES = {200, 300, 400, 600, 800, 1000, 1500};
+    static final double[] SEARCH_T = {0.10, 0.15, 0.20, 0.25};
+    static final int TEST_MIN = 15;
+
+    /**
+     * 2.58: strateji araması: 6/6 olasılığı (tavandaki kuponla, defterde) en az SEARCH_T[0] olan doğrulanmış altılılar her
+     * büyüklükte bugünkü düzeltmeyle en yüksek 6/6 için yeniden kurulur (gerçek ikramiyeyle; devirde kaçtı). Bölge × eşik ×
+     * büyüklük: ilk üçte ikide en kârlısı (en az MIN_SETTLED kupon, toplam net kâr; kârlı yoksa en yüksek dönüş) seçilir, son
+     * üçte birde denenir: en az TEST_MIN kupon ve dönüş > %100 ise kanıtlandı. Canlı kural tüm veriyle aynı yöntemle seçilir.
+     * {train, test, all: {scope, minHit, size, n, hits, …}, sizes: [tüm veride seçilen bölge ve eşikte her büyüklük], proven, from}.
+     */
+    private static Map<String, Object> strategySearch(List<double[]> coupons, List<Map<String, Object>> recs, Map<String, Object> learn,
+            double unit, double legMin) {
+        int m = SEARCH_SIZES.length, cut = coupons.size() * 2 / 3;
+        long[] mu = new long[m];
+        for (int j = 0; j < m; j++) mu[j] = (long) Math.floor(SEARCH_SIZES[j] / unit + 1e-9);
+        List<double[]> rows = new ArrayList<>(); // {ph, yerli, test?, j, bedel, dönüş, tuttu, beklenen}
+        for (int i = 0; i < coupons.size(); i++) {
+            double[] x = coupons.get(i);
+            if (x[0] < SEARCH_T[0] - 1e-12) continue;
+            Map<String, Object> r = recs.get(i);
+            double[] ab = alphaBeta(learn, x[1] > 0);
+            List<Altili.Leg> ls = new ArrayList<>();
+            boolean ok = true;
+            for (Object l : Json.arr(r.get("legs"))) {
+                Altili.Leg leg = Altili.leg(String.valueOf(l), ab[0], ab[1]);
+                ok &= !leg.horses.isEmpty();
+                ls.add(leg);
+            }
+            if (!ok || ls.size() != 6) continue;
+            List<Object> win = Json.arr(Json.obj(r.get("result")).get("winners"));
+            double payout = Json.dbl(Json.obj(r.get("result")), "payout", 0);
+            boolean dv = x.length > 5 && x[5] > 0;
+            int[][] cnt = Altili.bestHitMulti(ls, mu, legMin);
+            for (int j = 0; j < m; j++) {
+                long units = 1;
+                double hit = 1;
+                boolean all = !dv;
+                for (int k = 0; k < 6; k++) {
+                    List<Altili.Horse> hs = Altili.byQ(ls.get(k)).subList(0, Math.min(cnt[j][k], ls.get(k).horses.size()));
+                    double sq = 0;
+                    boolean in = false;
+                    for (Altili.Horse h : hs) {
+                        sq += h.q;
+                        in |= h.no.equals(String.valueOf(win.get(k)));
+                    }
+                    units *= hs.size();
+                    hit *= sq;
+                    all &= in;
+                }
+                if (units > mu[j]) continue; // ayak sınırıyla sığmadı
+                rows.add(new double[] {x[0], x[1], i >= cut ? 1 : 0, j, units * unit, all ? payout : 0, all ? 1 : 0, hit});
+            }
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        if (cut < coupons.size()) out.put("from", recs.get(cut).get("day"));
+        Map<String, Object> train = searchPick(rows, 0), all = searchPick(rows, -1);
+        if (train != null) {
+            out.put("train", train);
+            Map<String, Object> test = searchCell(rows, 1, (String) train.get("scope"), Json.dbl(train, "minHit", 0), (int) Json.lng(train, "j", 0));
+            out.put("test", test);
+            out.put("proven", Json.lng(test, "n", 0) >= TEST_MIN && Json.dbl(test, "roi", 0) > 1);
+        } else out.put("proven", false);
+        if (all != null) {
+            out.put("all", all);
+            List<Object> sizes = new ArrayList<>(); // tutma oranı ve dönüş kupon büyüklüğüne göre (tüm veri, seçilen bölge ve eşik)
+            for (int j = 0; j < m; j++) sizes.add(searchCell(rows, -1, (String) all.get("scope"), Json.dbl(all, "minHit", 0), j));
+            out.put("sizes", sizes);
+            List<double[]> outs = new ArrayList<>(); // seçilen büyüklükte kasa ihtiyacı
+            for (double[] x : rows) {
+                if (x[3] == Json.lng(all, "j", 0) && fits(new double[] {x[0], x[1]}, (String) all.get("scope"), Json.dbl(all, "minHit", 0))) {
+                    outs.add(new double[] {x[4], x[5]});
+                }
+            }
+            double[] need = kasaNeed(outs);
+            if (need != null) {
+                all.put("kasaMin", need[0]);
+                all.put("kasaKelly", need[1]);
+            }
+        }
+        return out;
+    }
+
+    /** 2.58: aramada bir hücre (bölge, eşik, büyüklük); part 0: ilk dönem, 1: son dönem, −1: hepsi. */
+    private static Map<String, Object> searchCell(List<double[]> rows, int part, String scope, double t, int j) {
+        int n = 0, h = 0;
+        double c = 0, r = 0, e = 0;
+        for (double[] x : rows) {
+            if ((part >= 0 && x[2] != part) || x[3] != j || !fits(new double[] {x[0], x[1]}, scope, t)) continue;
+            n++;
+            h += (int) x[6];
+            c += x[4];
+            r += x[5];
+            e += x[7];
+        }
+        Map<String, Object> m = agg(n, h, c, r);
+        m.put("expected", e);
+        m.put("scope", scope);
+        m.put("minHit", t);
+        m.put("size", SEARCH_SIZES[j]);
+        m.put("j", (long) j);
+        return m;
+    }
+
+    /** 2.58: aramada en kârlısı (en az MIN_SETTLED kupon): toplam net kâr; kârlı yoksa en yüksek dönüş. */
+    private static Map<String, Object> searchPick(List<double[]> rows, int part) {
+        Map<String, Object> best = null, bestR = null;
+        double bn = 0, br = -1;
+        for (double t : SEARCH_T) {
+            for (String sco : SCOPES) {
+                for (int j = 0; j < SEARCH_SIZES.length; j++) {
+                    Map<String, Object> c = searchCell(rows, part, sco, t, j);
+                    if (Json.lng(c, "n", 0) < MIN_SETTLED) continue;
+                    double net = Json.dbl(c, "ret", 0) - Json.dbl(c, "cost", 0), roi = Json.dbl(c, "roi", 0);
+                    if (net > bn + 1e-9) {
+                        bn = net;
+                        best = c;
+                    }
+                    if (roi > br + 1e-12) {
+                        br = roi;
+                        bestR = c;
+                    }
+                }
+            }
+        }
+        return best != null ? best : bestR;
+    }
+
     /** 2.57: değer kuponu geriye dönük testinde en az bu kasa (kullanıcının yükseltebileceği; Kelly payı buna göre). */
     static final double VALUE_KASA = 10000;
 
@@ -1374,6 +1503,14 @@ public final class AltiliLog {
         Object[] bp = pick(coupons);
         Double bestT = bp == null ? null : (Double) bp[0];
         String bestS = bp == null ? null : (String) bp[1];
+        // 2.58: strateji araması (bölge × eşik × kupon büyüklüğü, son dönem sınamasıyla): varsa kural ondan
+        Map<String, Object> search = cap > 0 && en > 0 ? strategySearch(coupons, couponRecs, out, unit, legMin) : null;
+        Map<String, Object> sAll = search == null ? null : Json.obj(search.get("all"));
+        if (sAll != null) {
+            bestT = Json.dbl(sAll, "minHit", 0);
+            bestS = (String) sAll.get("scope");
+            out.put("search", search);
+        }
         double use = auto && bestT != null ? bestT : minHit;
         String scope = auto && bestT != null ? bestS : "hepsi";
         if (!(auto && bestT != null)) { // elle eşik: o eşikte en iyi dönen bölge (en az MIN_SETTLED kupon)
@@ -1491,7 +1628,19 @@ public final class AltiliLog {
             if (cap > 0 && kasa > 0) out.putAll(stakes(coupons, couponRecs, scope, use, cap, km, kasa, unit, legMin, out));
             // 2.57: seçim yöntemi son dönem sınamasında kaybettirdiyse kural kanıtlanmadı (önerilmez; ayarla yine de)
             Map<String, Object> ho = Json.obj(out.get("holdout"));
-            if (ho != null && Json.lng(ho, "n", 0) >= MIN_SETTLED && Json.dbl(ho, "roi", 0) < 1) out.put("ruleUnproven", true);
+            if (search != null) { // 2.58: sınama strateji aramasından (bölge, eşik ve kupon büyüklüğü birlikte)
+                if (!Json.bool(search, "proven", false)) out.put("ruleUnproven", true);
+                else if (sAll != null) { // kanıtlandı: kupon aramada seçilen büyüklükte (tavanı aşmadan); kasa ihtiyacı ona göre
+                    out.put("capUse", Math.min(Json.dbl(sAll, "size", cap), cap));
+                    if (sAll.get("kasaMin") != null) {
+                        double needKm = Json.dbl(sAll, "kasaMin", 0) / Math.max(1e-9, km);
+                        sAll.put("kasaNeed", needKm);
+                        sAll.put("kasaRec", Json.dbl(sAll, "kasaKelly", 0) / Math.max(1e-9, km));
+                        Map<String, Object> st = Json.obj(out.get("stakes"));
+                        if (st != null) st.put("neg", kasa < needKm);
+                    }
+                }
+            } else if (ho != null && Json.lng(ho, "n", 0) >= MIN_SETTLED && Json.dbl(ho, "roi", 0) < 1) out.put("ruleUnproven", true);
         }
         if (cap > 0 && settled.size() >= 3) { // 2.57: değer kuponu geriye dönük: ilk üçte ikiyle öğren, son üçte birde dene
             int cut = settled.size() * 2 / 3;

@@ -686,6 +686,11 @@ final class Repo {
                         plan.put("kasaRec", row.get("kasaRec"));
                     }
                 }
+                Map<String, Object> sAll = Json.obj(Json.obj(learn.get("search")) == null ? null : Json.obj(learn.get("search")).get("all"));
+                if (sAll != null && sAll.get("kasaNeed") != null) { // 2.58: aramada seçilen büyüklüğün kasa ihtiyacı
+                    plan.put("kasaNeed", sAll.get("kasaNeed"));
+                    plan.put("kasaRec", sAll.get("kasaRec"));
+                }
             }
             // 2.57: geriye dönük sınamada kaybettiren strateji önerilmez: değer kuponu (oyna) için son dönem testi, 6/6 kuralı için
             // son dönem sınaması (Ayarlar'da "kanıtlanmamış stratejiyle de öner" açıksa önerilir)

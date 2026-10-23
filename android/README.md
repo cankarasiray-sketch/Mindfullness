@@ -379,6 +379,13 @@ bildirim olarak gelir.
   de öner" ayarı, varsayılan kapalı). Strateji özetinin başında ikisinin durumu; ikisi de kanıtlanmadıysa "oynama". (4) Hız:
   AGF ayrıştırma önbelleği, derlenmiş desenler, öğrenmede log p bir kez ve Newton, bütçe karşılaştırmasında ayaklar bir kez
   ayrıştırılır, değer kuponunda üst sınırla hızlı ret: 720 altılılık karne ~1,2 sn → ~0,3 sn (masaüstü).
+- **2.58: strateji araması (bölge × 6/6 eşiği × kupon büyüklüğü), tutma oranı.** 2.57 karnesi: değer kuponu son dönemde hiç
+  çıkmadı, 6/6 kuralı sınamada kaybettirdi: "kanıtlanmış kârlı strateji yok". Kullanıcı "gerekirse tutma oranını artır" dedi:
+  6/6 olasılığı (tavandaki kuponla) en az %10 olan doğrulanmış altılılar 200, 300, 400, 600, 800, 1.000 ve 1.500 TL ile bugünkü
+  düzeltmeyle en yüksek 6/6 için yeniden kurulur (tek aramada bütün büyüklükler: Altili.bestHitMulti), gerçek ikramiyeyle;
+  bölge × eşik (%10–25) × büyüklük arasında ilk üçte ikide en kârlısı seçilip son üçte birde denenir (en az 15 kupon ve dönüş
+  %100'ün üstü: kanıt). Canlı kural (eşik, bölge, büyüklük; tavanı aşmadan) tüm veriyle aynı yöntemle seçilir; kanıtlanmadıysa
+  önerilmez. Karnede seçilen bölge ve eşikte her büyüklüğün tutma oranı, dönüşü ve net kârı.
 
 ## Beraberlik fırsatları (2.17)
 

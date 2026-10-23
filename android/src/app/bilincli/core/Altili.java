@@ -563,6 +563,56 @@ public final class Altili {
         return best;
     }
 
+    /**
+     * 2.58: bestHit bütün büyüklükler için tek aramada (maxUnits artan sırada): her büyüklükte kombinasyon sayısı onu
+     * aşmadan 6/6 olasılığı en yüksek dağılım (eşitse en ucuz).
+     */
+    static int[][] bestHitMulti(List<Leg> legs, long[] maxUnits, double legMin) {
+        double[][] s = new double[6][];
+        int[] lo = new int[6];
+        long minUnits = 1;
+        for (int k = 0; k < 6; k++) {
+            List<Horse> hs = byQ(legs.get(k));
+            int m = Math.min(hs.size(), MAX_PER_LEG);
+            s[k] = new double[m + 1];
+            for (int i = 0; i < m; i++) s[k][i + 1] = s[k][i] + hs.get(i).q;
+            lo[k] = 1;
+            while (lo[k] < m && s[k][lo[k]] < legMin - 1e-9) lo[k]++;
+            minUnits *= lo[k];
+        }
+        int n = maxUnits.length;
+        int[][] best = new int[n][];
+        double[] bestHit = new double[n];
+        long[] bestUnits = new long[n];
+        for (int j = 0; j < n; j++) {
+            best[j] = lo.clone();
+            bestHit[j] = -1;
+            bestUnits[j] = Long.MAX_VALUE;
+        }
+        if (minUnits <= maxUnits[n - 1]) hitSearchMulti(s, lo, 0, 1, 1, maxUnits, new int[6], best, bestHit, bestUnits);
+        return best;
+    }
+
+    private static void hitSearchMulti(double[][] s, int[] lo, int k, long units, double hit, long[] maxUnits, int[] cur, int[][] best,
+            double[] bestHit, long[] bestUnits) {
+        if (k == 6) {
+            for (int j = maxUnits.length - 1; j >= 0 && units <= maxUnits[j]; j--) {
+                if (hit > bestHit[j] + 1e-12 || (Math.abs(hit - bestHit[j]) <= 1e-12 && units < bestUnits[j])) {
+                    bestHit[j] = hit;
+                    bestUnits[j] = units;
+                    System.arraycopy(cur, 0, best[j], 0, 6);
+                }
+            }
+            return;
+        }
+        long rest = 1, max = maxUnits[maxUnits.length - 1];
+        for (int j = k + 1; j < 6; j++) rest *= lo[j];
+        for (int c = lo[k]; c < s[k].length && units * c * rest <= max; c++) {
+            cur[k] = c;
+            hitSearchMulti(s, lo, k + 1, units * c, hit * s[k][c], maxUnits, cur, best, bestHit, bestUnits);
+        }
+    }
+
     private static void hitSearch(double[][] s, int[] lo, int k, long units, double hit, long maxUnits, int[] cur, int[] best, double[] bestHit,
             long[] bestUnits) {
         if (k == 6) {

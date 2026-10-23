@@ -801,6 +801,7 @@ function altiliKarne(L, sl) {
             + num(L.profitRule.roi * 100, 0) + ")</span> · beklenen %" + num(L.profitRule.expectedRoi * 100, 0)
           : "kurala uyan kupon olmadı" + (a.expectedRoi ? " (kuponların beklenen dönüşü ortalama %" + num(a.expectedRoi * 100, 0) + ", gerçekleşen %" + num(a.roi * 100, 0) + ")" : "")) : "")
       + altiliValue(L.value, L.payout, tl0, pc) // 2.57
+      + altiliSearch(L.search, tl0, pc) // 2.58
       + altiliSweep(L.sweep) // 2.49
       + altiliCities(L.rule) // 2.55
       + altiliHoldout(L.holdout, pc) // 2.51
@@ -883,13 +884,19 @@ function altiliStrategy(L, tl0, pc) {
   if (!r) return "";
   var cap = st.altiliCap || 600, use = L.capUse != null && st.altiliCapAuto !== false && L.capUse < cap ? L.capUse : cap;
   var where = r.scope === "yerli" ? "Yerli altılı" : r.scope === "yabancı" ? "Yabancı altılı" : "Yerli ve yabancı altılı";
-  var vs = L.value, vt = vs && vs.test, pre = []; // 2.57: değer kuponu ve kanıt
+  var vs = L.value, vt = vs && vs.test, pre = [], parts0 = ""; // 2.57: değer kuponu ve kanıt
   if (vt) pre.push("<b>Değer kuponu</b> (az oynanan atlar, ikramiye modeliyle): son dönemde " + (vt.n ? vt.hits + "/" + vt.n + " tuttu · dönüş "
     + '<b class="' + cls(vt.ret - vt.cost) + '">' + pc(vt.roi) + "</b> " + altiliNet(vt.ret - vt.cost) : "oynanacak kupon çıkmadı")
     + (vs.proven ? ' → <b class="pos">oynanıyor</b>' : ' → <b class="neg">kanıtlanmadı, oynanmıyor</b>'));
-  pre.push("<b>6/6 kuralı</b>" + (L.ruleUnproven ? ': <b class="neg">son dönem sınamasında kaybettirdi, önerilmiyor</b>' : ""));
+  var se = L.search, st0 = se && se.test; // 2.58: strateji araması (bölge, eşik ve kupon büyüklüğü birlikte sınanır)
+  pre.push("<b>6/6 kuralı</b>" + (st0 ? " (bölge, eşik ve kupon büyüklüğü birlikte): son dönemde " + (st0.n ? st0.hits + "/" + st0.n + " tuttu · dönüş "
+      + '<b class="' + cls(st0.ret - st0.cost) + '">' + pc(st0.roi) + "</b>" : "kupon yok")
+      + (se.proven ? ' → <b class="pos">kanıtlandı, oynanıyor</b>' : ' → <b class="neg">kanıtlanmadı, önerilmiyor</b>')
+    : L.ruleUnproven ? ': <b class="neg">son dönem sınamasında kaybettirdi, önerilmiyor</b>' : ""));
   if (vs && !vs.proven && L.ruleUnproven) pre.push('<b class="neg">Bu verilerle kanıtlanmış kârlı strateji yok: oynama.</b>');
-  var parts = [where + " · " + num(cap, 0) + " TL'lik kuponla 6/6 olasılığı en az %" + num(r.minHit * 100, 0) + (r.auto ? " (karnedeki en iyi)" : ""),
+  var sa = se && se.all;
+  if (sa && sa.size > cap) parts0 = " · aramada en kârlı kupon " + tl0(sa.size) + " (Ayarlar'da tavanı yükseltirsen)";
+  var parts = [where + " · " + num(cap, 0) + " TL'lik kuponla 6/6 olasılığı en az %" + num(r.minHit * 100, 0) + (r.auto ? " (karnedeki en iyi)" : "") + parts0,
     "kupon " + tl0(use) + "'ye kadar" + (use < cap ? " (kasaya göre)" : "") + " · günde en fazla 1: günün en mantıklı kuponu"];
   if (r.n) parts.push("geçmişte " + r.hits + "/" + r.n + " tuttu (beklenen " + num(r.expected, 1) + ") · dönüş " + '<b class="' + cls(r.ret - r.cost) + '">' + pc(r.roi) + "</b>" + altiliOdd(r));
   if (r.n) { // 2.55: kâr TL olarak: dönüş %118 = 100 TL'lik kuponda ort. 18 TL; yıllık kâr kasaya göre
@@ -940,6 +947,23 @@ function altiliValue(vs, pay, tl0, pc) {
       + "<br>Tüm veri (öğrenmeyle aynı, iyimser): " + row(a)
       + '<br><span class="small">AGF favoriyi abartıyor; değer kuponu kalabalığın az oynadığı atlarla beklenen dönüşü %100\'ün üstüne çıkarmaya çalışır. '
       + "Kanıt: son dönemde en az 20 kupon ve dönüş %100'ün üstü.</span>");
+}
+/** 2.58: strateji araması: en kârlısı, kupon büyüklüğüne göre tutma oranı ve dönüş, son dönem sınaması. */
+function altiliSearch(se, tl0, pc) {
+  if (!se || !se.all) return "";
+  var name = function (c) { return esc(c.scope) + " · 6/6 ≥ %" + num(c.minHit * 100, 0) + " · kupon " + tl0(c.size); };
+  var res = function (c) {
+    return c.n ? c.hits + "/" + c.n + " tuttu (tutma %" + num(c.hits / c.n * 100, 0) + ") · dönüş " + '<span class="' + cls(c.ret - c.cost) + '">' + pc(c.roi) + "</span> · net " + altiliNet(c.ret - c.cost)
+      : "kupon yok";
+  };
+  var a = se.all, t = se.train, x = se.test;
+  return item("Strateji araması (bölge × 6/6 eşiği × kupon büyüklüğü)", "<b>En kârlı (tüm veri):</b> " + name(a) + ": " + res(a)
+    + "<br><b>Kupon büyüklüğüne göre</b> (" + esc(a.scope) + ", 6/6 ≥ %" + num(a.minHit * 100, 0) + "):" + (se.sizes || []).map(function (c) {
+      return "<br>" + tl0(c.size) + ": " + res(c);
+    }).join("")
+    + (t && x ? "<br><b>Son dönem sınaması</b> (" + esc(dm(se.from + "T12:00:00Z")) + " sonrası, seçimde kullanılmadı): ilk dönemle seçilen " + name(t) + " → " + res(x)
+      + (se.proven ? ' <b class="pos">kanıtlandı</b>' : ' <b class="neg">kanıtlanmadı</b>') : "")
+    + '<br><span class="small">Büyük kupon tutma oranını artırır ama ikramiye aynı kalır; dönüş ancak eklenen kombinasyonlar az oynanmışsa artar. Kanıt: son dönemde en az 15 kupon ve dönüş %100\'ün üstü.</span>');
 }
 /** 2.55: net kâr kısaca: "+3.742 TL", "−1.200 TL". */
 function altiliNet(x) {
