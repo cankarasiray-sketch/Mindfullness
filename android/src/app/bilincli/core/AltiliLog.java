@@ -824,24 +824,33 @@ public final class AltiliLog {
     }
 
     public static boolean migrate(Map<String, Object> store) {
-        if (store == null || Json.lng(store, "v", 1) >= 5) return false;
-        if (Json.lng(store, "v", 1) >= 4) { // 2.56: devirli günler (6 bilen çıkmadı) okunabiliyor: ikramiyesiz sonuçlara yeniden deneme
+        if (store == null || Json.lng(store, "v", 1) >= 6) return false;
+        long v = Json.lng(store, "v", 1);
+        if (v == 4) { // 2.56: devirli günler (6 bilen çıkmadı) okunabiliyor: ikramiyesiz sonuçlara yeniden deneme
             for (Object o : records(store)) {
                 Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
                 if (res != null && (Json.bool(res, "estimated", false) || Json.bool(res, "missing", false))) r.remove("rechecks");
             }
-            store.put("v", 5L);
-            return true;
+        } else if (v < 4) {
+            for (Object o : records(store)) {
+                Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
+                r.remove("rechecks"); // 2.41: ikramiye okuyucusu düzeldi: doğrulanamayanlara yeniden deneme hakkı
+                if (res == null) continue;
+                if ("koşular".equals(Json.str(res, "from"))) res.put("from", "atlar");
+                List<Object> w = Json.arr(res.get("winners"));
+                if (w.size() == 6 && Tjk.raceNumbers(w)) r.remove("result"); // 2.37: koşu numaraları kazanan sanılmıştı: yeniden
+            }
         }
+        // 2.61: yerli sonuç tablolarında at no yerine start kapısı ("St") okunuyordu: ganyanlar yanlış atlara yazılmış olabilir,
+        // koşu tablosundan bulunan kazananlar yanlıştı. Ganyanlar silinip yeniden okunur; o sonuçlar yeniden doğrulanır.
         for (Object o : records(store)) {
             Map<String, Object> r = Json.obj(o), res = Json.obj(r.get("result"));
-            r.remove("rechecks"); // 2.41: ikramiye okuyucusu düzeldi: doğrulanamayanlara yeniden deneme hakkı
+            r.remove("oddsTried");
             if (res == null) continue;
-            if ("koşular".equals(Json.str(res, "from"))) res.put("from", "atlar");
-            List<Object> w = Json.arr(res.get("winners"));
-            if (w.size() == 6 && Tjk.raceNumbers(w)) r.remove("result"); // 2.37: koşu numaraları kazanan sanılmıştı: yeniden
+            res.remove("odds");
+            if ("koşu no".equals(Json.str(res, "from")) && domestic(r)) r.remove("rechecks");
         }
-        store.put("v", 5L);
+        store.put("v", 6L);
         return true;
     }
 

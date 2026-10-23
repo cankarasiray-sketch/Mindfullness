@@ -404,6 +404,12 @@ bildirim olarak gelir.
   Claude sohbetine eklenir (ekran görüntüsü gerekmez). androidx olmadığından küçük bir ContentProvider (FilesProvider:
   önbellekteki share klasörü, salt okunur, geçici izinle). Tarama bitince ganyanı okunmamış yerli altılı kaldıkça
   "Ganyan oranlarını şimdi oku (N altılı)" düğmesi (önce taramayı baştan başlatan düğme çıkıyordu); ganyan okuma ayrıntısı ayrı.
+- **2.61: sonuç tablosunda at no düzeltmesi.** TJK sonuç tablosunda at no ayrı sütunda değil, at isminin yanında parantezde
+  ("KARAYEL(5)", "(7)SİDAR BEY"); okuyucu tek sayı sütunu olan "St"yi (start kapısı, kura) at no sanıyordu. Bu yüzden koşu
+  tablosundan bulunan kazananlar 6'lı sonucunu tutmuyor, ganyan hiçbir altılıya yazılamıyordu (ayrıntıda "0 altılı"); yerli
+  ayakların canlı ✓/✗'si de yanlıştı (karne yalnızca ikramiyeyle doğrulanan 6'lı sonucunu saydığından etkilenmedi). Artık at no
+  isimdeki "(N)"den; "St" hiç kullanılmaz. Okuma ayrıntısında tablonun ilk satırı ve "6'lı sonucuyla uyan: 2/2" gösterilir.
+  Defter v6: eski ganyanlar silinip yeniden okunur, koşu tablosundan bulunan yerli sonuçlar yeniden doğrulanır.
 
 ## Beraberlik fırsatları (2.17)
 

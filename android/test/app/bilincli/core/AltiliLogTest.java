@@ -328,9 +328,35 @@ public class AltiliLogTest {
         r.put("rechecks", 2L);
         AltiliLog.records(old).add(r);
         assertTrue(AltiliLog.migrate(old));
-        assertEquals(5L, old.get("v"));
+        assertEquals(6L, old.get("v"));
         assertNull(r.get("rechecks"));
         assertFalse(AltiliLog.migrate(old));
+        // 2.61: start kapısıyla okunmuş ganyanlar silinir, yeniden okunur; koşu tablosundan bulunan yerli sonuç yeniden doğrulanır
+        Map<String, Object> v5 = new LinkedHashMap<>();
+        v5.put("v", 5L);
+        Map<String, Object> withOdds = new LinkedHashMap<>(), byRace = new LinkedHashMap<>();
+        withOdds.put("source", "TJK");
+        withOdds.put("cityId", 2L);
+        withOdds.put("oddsTried", 1L);
+        Map<String, Object> got = new LinkedHashMap<>();
+        got.put("winners", new ArrayList<Object>(Arrays.asList("3", "2", "8", "8", "6", "3")));
+        got.put("odds", new ArrayList<Object>(Arrays.asList(null, null, null, null, null, null)));
+        withOdds.put("result", got);
+        byRace.put("source", "TJK");
+        byRace.put("cityId", 2L);
+        byRace.put("rechecks", 2L);
+        Map<String, Object> race = new LinkedHashMap<>();
+        race.put("from", "koşu no");
+        byRace.put("result", race);
+        AltiliLog.records(v5).add(withOdds);
+        AltiliLog.records(v5).add(byRace);
+        assertTrue(AltiliLog.migrate(v5));
+        assertEquals(6L, v5.get("v"));
+        assertNull(withOdds.get("oddsTried"));
+        assertNull(got.get("odds"));
+        assertEquals(Arrays.asList("3", "2", "8", "8", "6", "3"), got.get("winners"));
+        assertNull(byRace.get("rechecks"));
+        assertFalse(AltiliLog.migrate(v5));
     }
 
     @Test
@@ -420,6 +446,75 @@ public class AltiliLogTest {
         res.put("payout", 0.73 / pw * (w.get(0).equals("5") ? 5 : 1));
         res.put("from", "kombinasyon");
         r.put("result", res);
+    }
+
+    /**
+     * TJK sonuç sayfası gibi (2.61): at no ayrı sütunda değil, at isminde parantezde ("KARAYEL(5)", "(7)SİDAR BEY",
+     * "SKY TURK(5) (USA)"); "St" start kapısı (kura); AGF hücresinde de parantez (AGF sırası).
+     */
+    static String tjkResultPage(List<String> legs, List<String> winners) {
+        StringBuilder b = new StringBuilder("<div class=\"bahisSonucCard\">6'LI GANYAN " + String.join("/", winners) + " 6 BİLEN: 12.345,67 TL</div>");
+        for (int k = 0; k < legs.size(); k++) {
+            b.append("<h3 class=\"race-no\">").append(k + 1).append(". Koşu 14.").append(k).append("0</h3><table class=\"tablesorter\"><thead><tr>");
+            for (String h : new String[] {"Forma", "S", "At İsmi", "Yaş", "Orijin(Baba - Anne)", "Sıklet", "Jokey", "Sahip", "Antrenörü", "Derece",
+                    "Gny", "AGF", "St", "Fark", "G. Çık.", "HP"})
+                b.append("<th>").append(h).append("</th>");
+            b.append("</tr></thead><tbody>");
+            List<String> hs = new ArrayList<>(AltiliLog.agf(legs.get(k)).keySet());
+            hs.remove(winners.get(k));
+            hs.add(0, winners.get(k)); // bitiriş sırasıyla: önce kazanan
+            for (int i = 0; i < hs.size(); i++) {
+                String no = hs.get(i), name = i % 3 == 0 ? "KARAYEL" + no + "(" + no + ")" : i % 3 == 1 ? "(" + no + ")SİDAR" + no : "SKY" + no + "(" + no + ") (USA)";
+                b.append("<tr><td><img src=\"forma.png\"></td><td>").append(i + 1).append("</td><td><a href=\"#\">").append(name)
+                        .append("</a><sup>KG</sup> <sup>DB</sup></td><td>4y d a</td><td>BABA - ANNE</td><td>58</td><td>A. ÇELİK</td><td>SAHİP</td>")
+                        .append("<td>ANTRENÖR</td><td>1.2").append(i).append(".36</td><td>").append(i == 0 ? "2,10" : (5 + i) + ",50").append("</td><td>%")
+                        .append(40 - i).append(",00(").append(i + 1).append(")</td><td>").append((i + 2) % hs.size() + 1)
+                        .append("</td><td>1 Boy</td><td></td><td>65</td></tr>");
+            }
+            b.append("</tbody></table>");
+        }
+        return b.toString();
+    }
+
+    @Test
+    public void tjkResultTableHorseNumberIsInTheName() {
+        // 2.61: telefonda "at no 13. sütun" (St) okunuyordu: kazananlar 6'lı sonucunu tutmuyor, ganyan 0 altılıya yazılıyordu
+        List<String> favs = Arrays.asList("5", "7", "5", "1", "5", "2");
+        String html = tjkResultPage(LEGS, favs);
+        List<Map<String, Object>> races = Tjk.raceResults(html);
+        assertEquals(6, races.size());
+        for (int k = 0; k < 6; k++) {
+            assertEquals((long) (k + 1), races.get(k).get("no"));
+            assertEquals(favs.get(k), races.get(k).get("winner"));
+            assertEquals(new java.util.HashSet<Object>(AltiliLog.agf(LEGS.get(k)).keySet()), new java.util.HashSet<Object>(Json.arr(races.get(k).get("runners"))));
+        }
+        assertEquals(2.10, Json.dbl(Json.obj(races.get(0).get("odds")), "5", 0), 1e-9);
+        assertEquals(6.50, Json.dbl(Json.obj(races.get(0).get("odds")), "3", 0), 1e-9); // 2. gelen: "(3)SİDAR3"
+        assertEquals(7.50, Json.dbl(Json.obj(races.get(0).get("odds")), "1", 0), 1e-9); // 3. gelen: "SKY1(1) (USA)"
+        String head = String.valueOf(races.get(0).get("head"));
+        assertTrue(head, head.contains("at no 'At İsmi' içinde (N)") && head.contains("ganyan 'Gny'") && head.contains("1. satır:  | 1 | KARAYEL5(5) KG DB"));
+        // okuma ayrıntısında 6'lı sonucuyla uyum
+        String main = "<a href=\"?SehirId=2&amp;QueryParameter_Tarih=21%2F10%2F2026&amp;SehirAdi=%C4%B0zmir\">İzmir</a>";
+        Map<Integer, String[]> links = Tjk.cityLinks(main, Tjk.resultsUrl(LocalDate.parse(DAY)));
+        Map<String, String> pages = new LinkedHashMap<>();
+        pages.put(Tjk.resultsUrl(LocalDate.parse(DAY)), main);
+        pages.put(links.get(2)[1], html);
+        Map<String, Object> page = Tjk.results(TjkTest.fake(pages, new ArrayList<String>()), LocalDate.parse(DAY), null);
+        String log = String.valueOf(page.get("log"));
+        assertTrue(log, log.contains("kazananlar 1→5, 2→7, 3→5, 4→1, 5→5, 6→2") && log.contains("6'lı sonucuyla uyan: 1/1"));
+        // ganyan ayaklara at numarasıyla yazılır
+        Map<String, Object> store = new LinkedHashMap<>();
+        Map<String, Object> a = altili("tjk/2026-10-21/2/1", "İzmir", 2, 1, LEGS);
+        List<Object> rs = new ArrayList<>();
+        for (int k = 1; k <= 6; k++) rs.add(new LinkedHashMap<String, Object>(java.util.Collections.singletonMap("no", (Object) (long) k)));
+        a.put("races", rs);
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(a));
+        AltiliLog.settle(store, DAY, page, 1, 0.27, 0, TODAY, NOW);
+        Map<String, Object> res = Json.obj(rec(store, "tjk/2026-10-21/2/1").get("result"));
+        assertEquals(favs, res.get("winners"));
+        List<Object> odds = Json.arr(res.get("odds"));
+        assertEquals(6, odds.size());
+        for (int k = 0; k < 6; k++) assertEquals(2.10, Json.dbl(Json.obj(odds.get(k)), favs.get(k), 0), 1e-9);
     }
 
     @Test
@@ -636,7 +731,7 @@ public class AltiliLogTest {
         assertEquals(3, Json.arr(Json.obj(Json.arr(r.get("cities")).get(0)).get("races")).size());
         assertEquals(3, asked.size());
         assertTrue(String.valueOf(r.get("log")), String.valueOf(r.get("log")).contains("Keeneland ABD: 0 altılı sonucu, 3 koşu (kazananlar 1→6, 2→9, 3→3; "
-                + "sütunlar: Sıra | At | Derece | Gny → at no 2. sütun · ganyan 'Gny')")); // 2.59
+                + "sütunlar: Sıra | At | Derece | Gny → at no 2. sütun · ganyan 'Gny' · 1. satır: 1 | 6 AT6 (USA) | 1.21.10 | 4,10)")); // 2.59, 2.61
     }
 
     @Test
@@ -933,10 +1028,12 @@ public class AltiliLogTest {
         // 2.37: ardışık numaralar (1-2-3-4-5-6) koşu numarasıdır, kazanan değil
         Map<String, Object> raceNos = city(40, "Belmont Park ABD", Arrays.<Object>asList(combo(900, "1", "2", "3", "4", "5", "6")), races);
         assertEquals(Arrays.<Object>asList(null, null, null, null, null, null), AltiliLog.legWinners(a, raceNos));
-        // başlıksız tabloda at no olabilecek iki sütun (at no ve start): hangisi bilinemez → koşu okunmaz
-        String two = "<h3>1. Koşu</h3><table><tr><td>Sıra</td><td>At</td><td>St</td></tr><tr><td>1</td><td>5</td><td>3</td></tr>"
+        // at no olabilecek iki adsız sütun: hangisi bilinemez → koşu okunmaz
+        String two = "<h3>1. Koşu</h3><table><tr><td>Sıra</td><td>A</td><td>B</td></tr><tr><td>1</td><td>5</td><td>3</td></tr>"
                 + "<tr><td>2</td><td>2</td><td>7</td></tr><tr><td>3</td><td>8</td><td>1</td></tr></table>";
         assertEquals(0, Tjk.raceResults(two).size());
+        // 2.61: "St" start kapısıdır, at no değil: öteki sütun
+        assertEquals("5", Tjk.raceResults(two.replace("<td>A</td><td>B</td>", "<td>At</td><td>St</td>")).get(0).get("winner"));
     }
 
     @Test

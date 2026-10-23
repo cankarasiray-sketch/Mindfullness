@@ -905,6 +905,13 @@ public final class Tjk {
     /** 2.59: sonuç tablosunda ganyan oranı sütunu ("Gny") ve hücresi ("2,85"). */
     private static final Pattern GNY_HEADER = Pattern.compile("(?i)^(gny|ganyan|gny\\.)$");
     private static final Pattern ODDS_CELL = Pattern.compile("^(\\d{1,4}(?:[.,]\\d{1,2})?)$");
+    /**
+     * 2.61: TJK sonuç tablosunda at no ayrı sütunda değil, at isminde parantezde: "KARAYEL(5)", "(7)SİDAR BEY",
+     * "SKY TURK(5) (USA)". "St" start kapısıdır (kura), at no değil.
+     */
+    private static final Pattern NAME_HEADER = Pattern.compile("(?iu)^(at|at ismi|at İsmi|at adı|at adi|isim)$");
+    private static final Pattern START_HEADER = Pattern.compile("(?iu)^(st|start|st\\.|kulvar|kapı|kapi)$");
+    private static final Pattern PAREN_NUM = Pattern.compile("\\((\\d{1,2})\\)");
 
     /** "(1-2-3-4-5-6. Koşular)": kazanan değil, altılının koşu numaraları. */
     private static final Pattern RACES_AFTER = Pattern.compile("(?i)^\\s*\\.?\\s*(?:ko[şs]u|ayak)");
@@ -1017,10 +1024,31 @@ public final class Tjk {
         return n >= 1 && n <= 30 ? String.valueOf(n) : null;
     }
 
+    /** 2.61: hücredeki ilk "(N)" (1–30): sonuç tablosunda at isminin yanındaki at no. */
+    private static String parenNum(String cell) {
+        Matcher m = PAREN_NUM.matcher(cell);
+        if (!m.find()) return null;
+        int n = Integer.parseInt(m.group(1));
+        return n >= 1 && n <= 30 ? String.valueOf(n) : null;
+    }
+
+    /** Sütunda satırların en az %70'inde farklı "(N)" var mı (at isminde at no). */
+    private static boolean parenColumn(List<List<String>> data, int c) {
+        Set<String> seen = new HashSet<>();
+        int rowsWith = 0;
+        for (List<String> ts : data) {
+            if (c >= ts.size()) continue;
+            rowsWith++;
+            String n = parenNum(ts.get(c));
+            if (n != null && !seen.add(n)) return false;
+        }
+        return seen.size() >= 2 && seen.size() >= rowsWith * 0.7;
+    }
+
     private static Map<String, Object> raceTable(String table) {
         String[] rows = table.split("(?i)<tr\\b");
-        int horseCol = -1, posCol = -1, gnyCol = -1, width = 0;
-        boolean header = false;
+        int horseCol = -1, posCol = -1, gnyCol = -1, nameCol = -1, width = 0;
+        boolean header = false, paren = false;
         List<String> headCells = new ArrayList<>();
         List<List<String>> data = new ArrayList<>();
         for (int r = 1; r < rows.length; r++) {
@@ -1028,11 +1056,12 @@ public final class Tjk {
             List<String> ts = new ArrayList<>();
             for (int c = 1; c < cells.length; c++) ts.add(text(cells[c].substring(cells[c].indexOf('>') + 1)));
             if (!header) {
-                int h = -1, p = -1, g = -1;
+                int h = -1, p = -1, g = -1, a = -1;
                 for (int c = 0; c < ts.size(); c++) {
                     if (h < 0 && HORSE_HEADER.matcher(ts.get(c)).matches()) h = c;
                     else if (p < 0 && POS_HEADER.matcher(ts.get(c)).matches()) p = c;
                     else if (g < 0 && GNY_HEADER.matcher(ts.get(c)).matches()) g = c;
+                    else if (a < 0 && NAME_HEADER.matcher(ts.get(c)).matches()) a = c;
                 }
                 if (h >= 0 || p >= 0) { // başlık satırı (önceki satırlar başlık üstü yazı)
                     header = true;
@@ -1040,6 +1069,7 @@ public final class Tjk {
                     horseCol = h;
                     posCol = p;
                     gnyCol = g;
+                    nameCol = a;
                     data.clear();
                     continue;
                 }
@@ -1049,10 +1079,16 @@ public final class Tjk {
         }
         String headText = header ? String.join(" | ", headCells) : "başlıksız";
         if (horseCol >= 0) headText += " → at no '" + headCells.get(horseCol) + "'";
+        if (horseCol < 0 && nameCol >= 0 && parenColumn(data, nameCol)) { // 2.61: TJK: at isminde "(5)"
+            horseCol = nameCol;
+            paren = true;
+            headText += " → at no '" + headCells.get(nameCol) + "' içinde (N)";
+        }
         if (horseCol < 0) { // 2.35: başlık yoksa at no yalnızca tek ve açık aday sütundan (start, ganyan sütunu karışmasın)
             List<Integer> found = new ArrayList<>();
             for (int c = 0; c < width; c++) {
-                if (c == posCol) continue;
+                if (c == posCol || c == gnyCol) continue;
+                if (c < headCells.size() && START_HEADER.matcher(headCells.get(c)).matches()) continue; // 2.61: start kapısı at no değil
                 List<String> col = new ArrayList<>();
                 int rowsWith = 0;
                 for (List<String> ts : data) {
@@ -1081,7 +1117,7 @@ public final class Tjk {
         String winner = null, first = null;
         for (List<String> ts : data) {
             if (horseCol >= ts.size()) continue;
-            String no = leadNum(ts.get(horseCol));
+            String no = paren ? parenNum(ts.get(horseCol)) : leadNum(ts.get(horseCol));
             if (no == null) continue;
             runners.add(no);
             if (gnyCol >= 0 && gnyCol < ts.size()) {
@@ -1099,8 +1135,24 @@ public final class Tjk {
         race.put("runners", runners);
         race.put("winner", winner != null ? winner : first);
         if (odds.size() >= 2) race.put("odds", odds);
-        race.put("head", headText); // okuma ayrıntısı için: hangi sütunlar, at no nereden
+        String row = data.isEmpty() ? "" : String.join(" | ", data.get(0)); // 2.61: ilk satır da (okuma doğru mu, görülsün)
+        race.put("head", headText + " · 1. satır: " + (row.length() > 160 ? row.substring(0, 160) + "…" : row));
         return race;
+    }
+
+    /** 2.61: okunan 6'lı sonuçlarından kaçı ardışık koşu tablolarının kazananlarıyla aynı (at no doğru okunuyor mu). */
+    static int comboFit(List<Map<String, Object>> combos, List<Map<String, Object>> races) {
+        int n = 0;
+        for (Map<String, Object> co : combos) {
+            List<?> nos = (List<?>) co.get("nos");
+            boolean fit = false;
+            for (int s = 0; s + 6 <= races.size() && !fit; s++) {
+                fit = true;
+                for (int k = 0; k < 6 && fit; k++) fit = String.valueOf(nos.get(k)).equals(String.valueOf(races.get(s + k).get("winner")));
+            }
+            if (fit) n++;
+        }
+        return n;
     }
 
     /** Okuma ayrıntısı için: "1→5, 2→7" (koşu → kazanan). */
@@ -1176,6 +1228,7 @@ public final class Tjk {
             }
             log.add(c.getValue()[0] + ": " + combos.size() + " altılı sonucu" + (combos.isEmpty() ? "" : " (" + cs + ")") + ", " + races.size() + " koşu"
                     + (races.isEmpty() ? "" : " (kazananlar " + winnersText(races) + "; sütunlar: " + races.get(0).get("head") + ")")
+                    + (combos.isEmpty() || races.size() < 6 ? "" : " · 6'lı sonucuyla uyan: " + comboFit(combos, races) + "/" + combos.size()) // 2.61
                     + (combos.isEmpty() && races.isEmpty() ? " (" + excerpt(body) + ")" : ""));
         }
         return out;
