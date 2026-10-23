@@ -853,7 +853,6 @@ function altiliKarne(L, sl) {
   html += '<div class="btns"><button class="b ghost" onclick="act(\'altiliSettle\')">Sonuçları kontrol et, geçmişi yeniden doğrula</button>'
     + (bfLeft > 0 && bf && bf.at ? '<button class="b ghost" onclick="act(\'altiliBacktest\', {resume: true})">Geçmiş taramayı şimdi sürdür</button>'
       : L.oddsLeft ? '<button class="b ghost" onclick="act(\'altiliBacktest\', {resume: true})">Ganyan oranlarını şimdi oku (' + L.oddsLeft + " altılı)</button>" // 2.60
-      : S.agf && S.agf.formLeft ? '<button class="b ghost" onclick="act(\'altiliBacktest\', {resume: true})">Form verisini oku (' + S.agf.formLeft + " gün)</button>" // 2.62
       : '<button class="b ghost" onclick="act(\'altiliBacktest\')">Geçmiş 1 yılı tahmin et, karneye ekle</button>') // 2.43–2.47
     + '<button class="b ghost" onclick="act(\'altiliExport\')">Veriyi dosya olarak paylaş (analiz için)</button></div>'; // 2.60
   if (bf) html += '<p class="small muted">Geriye dönük tarama: ' + (bfDays - bfLeft) + "/" + bfDays + " gün" + (bfLeft > 0 ? " (kalanı arka planda, Wi-Fi'deyken)" : " · tamamlandı")
@@ -861,8 +860,6 @@ function altiliKarne(L, sl) {
   if (sl && sl.log && sl.log.length) html += '<details class="info"><summary class="small">Sonuç okuma ayrıntısı</summary><pre class="out">' + esc(sl.log.join("\n")) + "</pre></details>";
   var ol = S.agf && S.agf.oddsLog; // 2.60: ganyan okuma ayrıntısı
   if (ol && ol.log && ol.log.length) html += '<details class="info"><summary class="small">Ganyan okuma ayrıntısı</summary><pre class="out">' + esc(ol.log.join("\n")) + "</pre></details>";
-  var fl = S.agf && S.agf.formLog; // 2.62: form verisi (şehir programlarından at bilgileri)
-  if (fl && fl.log && fl.log.length) html += '<details class="info"><summary class="small">Form okuma ayrıntısı</summary><pre class="out">' + esc(fl.log.join("\n")) + "</pre></details>";
   return html + "</div>";
 }
 /** 2.48: strateji tablosu: doğrulanmış kuponların 6/6 olasılığı aralığına ve bölgeye göre gerçekleşen dönüşü. */

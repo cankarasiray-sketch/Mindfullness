@@ -417,6 +417,10 @@ bildirim olarak gelir.
   Son 6 Y., KGS, s20, en iyi derece, Gny, AGF ve koşu bilgisi; forma/orijin/sahip alınmaz). Ayrı dosyada (altili_form.json),
   ganyan bitince "Form verisini oku (N gün)" ya da arka planda Wi-Fi'de; dışa aktarımda "form". Okuma ayrıntısında sütunlar ve
   ilk satır. Model (AGF + form) bu veriyle önce dışarıda sınanacak.
+- **2.63: form okuması kapalı.** 372 altılının 1.836 koşusunda (22 bin at) form bilgileri AGF'ye eklenince son dönem
+  sınamasında tahmin iyileşmedi (AGF + favori düzeltmesi −1,868; + form −1,873; yalnız form −2,057; jokey/antrenör oranları
+  yalnızca geçmiş günlerden): kalabalık bu bilgiyi zaten fiyatlıyor. Okuyucu kaldırıldı; okunmuş veri dosyada kalır ve dışa
+  aktarımda "form" olarak gider.
 
 ## Beraberlik fırsatları (2.17)
 

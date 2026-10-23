@@ -1065,15 +1065,13 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   fo.button("Veriyi dosya olarak paylaş (analiz için)").click();
   assert.equal(fo.calls.at(-1).action, "altiliExport");
   assert.match(fo.$("#altiliKarne").textContent, /Ganyan okuma ayrıntısıGanyan 2026-10-20: 2 altılı[\s\S]*ganyan 'Gny'/);
-  // 2.62: ganyan bitince form verisi (şehir programlarından at bilgileri)
+  // 2.63: form okuması kapalı: ganyan bitince düğme ve ayrıntı yok
   const fm = clone(od);
   delete fm.agf.learn.oddsLeft;
   fm.agf.formLeft = 157;
-  fm.agf.formLog = {at: "2026-10-23T09:00:00Z", log: ["Form 2026-10-20: 1 şehir", "  Bursa: 9 koşu (sütunlar: N | At İsmi | Yaş | Sıklet | Jokey | St | HP | Son 6 Y. | KGS | s20 | EİD | Gny | AGF · 1. satır: 1 | KARAYEL | 4y d a | 58 | A. ÇELİK | 3 | 65 | 1 3 2 | 21 | 14 | 1.25.36 | 2,85 | %40(1))"]};
+  fm.agf.formLog = {at: "2026-10-23T09:00:00Z", log: ["Form 2026-10-20: 1 şehir"]};
   const ff = boot(fm, "#firsat");
-  ff.button("Form verisini oku (157 gün)").click();
-  assert.deepEqual(ff.calls.at(-1), {action: "altiliBacktest", payload: {resume: true}});
-  assert.match(ff.$("#altiliKarne").textContent, /Form okuma ayrıntısıForm 2026-10-20: 1 şehir[\s\S]*Son 6 Y\. \| KGS/);
+  assert.doesNotMatch(ff.$("#altiliKarne").textContent, /Form verisini oku|Form okuma ayrıntısı/);
   assert.deepEqual(ff.errors, []);
   assert.equal(f.calls.at(-1).action, "altiliSettle");
   s.agf.learn = {settled: 0, pending: 3, history: []};

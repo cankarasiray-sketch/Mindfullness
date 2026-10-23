@@ -1305,64 +1305,6 @@ public final class AltiliLog {
         return n;
     }
 
-    // ---- 2.62: form verisi (şehir programından at bilgileri; ayrı dosyada) -------------------------------------
-
-    /** Form verisi okunacak mı: yerli TJK altılısı, ikramiyeyle doğrulanmış, o gün o şehrin programı daha okunmamış. */
-    private static boolean needsForm(Map<String, Object> rec, Map<String, Object> form, double unit) {
-        Map<String, Object> res = Json.obj(rec.get("result"));
-        if (res == null || !"TJK".equals(Json.str(rec, "source")) || rec.get("cityId") == null || !domestic(rec)) return false;
-        Map<String, Object> days = form == null ? null : Json.obj(form.get("days")), day = days == null ? null : Json.obj(days.get(Json.str(rec, "day")));
-        if (day != null && day.containsKey(String.valueOf(Json.lng(rec, "cityId", 0)))) return false;
-        return "ikramiye".equals(trust(rec, res, unit));
-    }
-
-    /** 2.62: form verisi okunacak günler (analiz penceresinde), yeniden eskiye. */
-    public static List<String> formDays(Map<String, Object> store, Map<String, Object> form, String today, double unit) {
-        Set<String> out = new java.util.TreeSet<>(java.util.Collections.reverseOrder());
-        String from = LocalDate.parse(today).minusDays(ANALYZE_DAYS).toString();
-        for (Object o : records(store)) {
-            Map<String, Object> r = Json.obj(o);
-            String d = Json.str(r, "day");
-            if (d != null && d.compareTo(today) < 0 && d.compareTo(from) >= 0 && needsForm(r, form, unit)) out.add(d);
-        }
-        return new ArrayList<>(out);
-    }
-
-    /** O günün form verisi okunacak şehirleri. */
-    public static Set<Integer> formCities(Map<String, Object> store, Map<String, Object> form, String day, double unit) {
-        Set<Integer> out = new java.util.TreeSet<>();
-        for (Object o : records(store)) {
-            Map<String, Object> r = Json.obj(o);
-            if (day.equals(Json.str(r, "day")) && needsForm(r, form, unit)) out.add((int) Json.lng(r, "cityId", 0));
-        }
-        return out;
-    }
-
-    /**
-     * 2.62: okunan programları form dosyasına yazar: days[gün][şehir] = {city, races} (bulunamadıysa boş: bir kez denenir).
-     * Koşusu bulunan şehir sayısı.
-     */
-    public static int attachForm(Map<String, Object> form, String day, Map<String, Object> read, Set<Integer> cities) {
-        @SuppressWarnings("unchecked")
-        Map<String, Object> days = (Map<String, Object>) form.get("days");
-        if (days == null) form.put("days", days = new java.util.TreeMap<>());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> d = (Map<String, Object>) days.get(day);
-        if (d == null) days.put(day, d = new LinkedHashMap<>());
-        int n = 0;
-        for (int id : cities) {
-            Map<String, Object> got = null;
-            for (Object o : Json.arr(read == null ? null : read.get("cities"))) if (Json.lng(Json.obj(o), "cityId", -1) == id) got = Json.obj(o);
-            Map<String, Object> c = new LinkedHashMap<>();
-            List<Object> races = Json.arr(got == null ? null : got.get("races"));
-            if (got != null) c.put("city", got.get("city"));
-            c.put("races", new ArrayList<>(races));
-            d.put(String.valueOf(id), c);
-            if (!races.isEmpty()) n++;
-        }
-        return n;
-    }
-
     // ---- değerlendirme ve öğrenme ---------------------------------------------------------------------------
 
     /** Kuponun her ayağında kazanan var mı (ayak ayak) ve tümü. */

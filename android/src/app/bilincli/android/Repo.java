@@ -596,7 +596,7 @@ final class Repo {
     Map<String, Object> agfView() {
         if (isDemo()) return null;
         Settings st = ledger.settings();
-        String cacheKey = (agfRaw == null ? 0 : agfRaw.hashCode()) + "|" + (altiliLogRaw == null ? 0 : altiliLogRaw.hashCode()) + "|" + altiliFormSize + "|" // 2.46: büyük defter
+        String cacheKey = (agfRaw == null ? 0 : agfRaw.hashCode()) + "|" + (altiliLogRaw == null ? 0 : altiliLogRaw.hashCode()) + "|" // 2.46: büyük defter
                 + prefs.getString("altiliLive", "") + "|" + prefs.getString("altiliInputs", "") + "|" + ledger.balance() + "|" + st.altiliUnit + "|"
                 + st.altiliTakeout + "|" + st.altiliTax + "|" + st.altiliBudgetShare + "|" + st.altiliLegMin + "|" + st.altiliMinCost + "|" + st.altiliCap + "|" + st.altiliMinHit + "|" + st.altiliMinHitAuto + "|" + st.altiliCapAuto + "|" + st.altiliPlayUnproven + "|" + st.altiliMinEdge + "|" + st.altiliPlayNoEdge + "|" + st.kellyMultiplier + "|" + st.maxStakeFraction + "|" + Fmt.dayKey(Instant.now());
         Object[] cached = agfViewCache;
@@ -635,7 +635,7 @@ final class Repo {
         altiliLogRaw = raw;
     }
 
-    /** 2.62: form verisi (şehir programlarından at bilgileri): {days: {gün: {şehir: {city, races}}}, log}. */
+    /** 2.62: okunmuş form verisi (şehir programlarından at bilgileri; 2.63: okuma kapalı, yalnızca dışa aktarımda). */
     private Map<String, Object> altiliForm() {
         try {
             String raw = altiliFormStore.read();
@@ -645,38 +645,6 @@ final class Repo {
         }
         return new LinkedHashMap<>();
     }
-
-    private void saveAltiliForm(Map<String, Object> form) {
-        String raw = Json.write(form);
-        altiliFormStore.write(raw);
-        altiliFormIndex = index(form);
-        altiliFormSize = raw.length();
-    }
-
-    /** Form dosyasının hafif özeti (görünüm için; dosya büyük, her seferinde okunmasın): {days: {gün: {şehir: true}}, log}. */
-    private Map<String, Object> altiliFormIndex() {
-        Map<String, Object> ix = altiliFormIndex;
-        if (ix == null) altiliFormIndex = ix = index(altiliForm());
-        return ix;
-    }
-
-    private static Map<String, Object> index(Map<String, Object> form) {
-        Map<String, Object> days = new LinkedHashMap<>(), out = new LinkedHashMap<>();
-        Map<String, Object> all = Json.obj(form.get("days"));
-        if (all != null) for (Map.Entry<String, Object> e : all.entrySet()) {
-            Map<String, Object> cs = new LinkedHashMap<>();
-            Map<String, Object> d = Json.obj(e.getValue());
-            if (d != null) for (String c : d.keySet()) cs.put(c, true);
-            days.put(e.getKey(), cs);
-        }
-        out.put("days", days);
-        out.put("log", form.get("log"));
-        return out;
-    }
-
-    private volatile Map<String, Object> altiliFormIndex;
-    /** Görünüm önbelleği form dosyası değişince yenilensin. */
-    private volatile long altiliFormSize = -1;
 
     private Map<String, Object> agfViewFresh() {
         Map<String, Object> stored = agfStored(), inp = altiliInputs();
@@ -788,10 +756,6 @@ final class Repo {
         v.put("learn", learn);
         v.put("settleLog", altiliLog().get("settleLog"));
         v.put("oddsLog", altiliLog().get("oddsLog")); // 2.60: ganyan okuma ayrıntısı
-        Map<String, Object> form = altiliFormIndex(); // 2.62
-        int formLeft = AltiliLog.formDays(altiliLog(), form, Fmt.dayKey(Instant.now()), ls.altiliUnit).size();
-        if (formLeft > 0) v.put("formLeft", (long) formLeft);
-        v.put("formLog", form.get("log"));
         Map<String, Object> shown = new LinkedHashMap<>();
         shown.put("maxCost", Json.dbl(inp, "maxCost", 0));
         shown.put("manual", manual);
@@ -1009,7 +973,7 @@ final class Repo {
         String next = Json.str(st, "next"), to = Json.str(st, "to");
         if (next == null || to == null || next.compareTo(to) < 0) {
             if (start) return "Geriye dönük tarama tamamlandı.";
-            return "Geriye dönük tarama tamamlandı. " + altiliAfter(budgetMs, progress); // 2.59: sonra ganyan, 2.62: form
+            return "Geriye dönük tarama tamamlandı. " + altiliOdds(budgetMs, progress); // 2.59: sonra ganyan oranları
         }
         if (!start) { // 2.59.1: elle sürdürünce önce ganyan oranları (eldeki doğrulanmış altılılar; sayfaları küçük), sonra tarama
             List<String> od;
@@ -1051,70 +1015,6 @@ final class Repo {
         long left = Math.max(0, java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.parse(to), d) + 1);
         return "Geriye dönük: " + doneDays + " gün işlendi (toplam " + Json.lng(st, "added", 0) + " altılı tahmin, " + Json.lng(st, "verified", 0)
                 + " ikramiyeyle doğrulandı)" + (left > 0 ? "; kalan " + left + " gün arka planda Wi-Fi'deyken işlenir." : "; tarama tamamlandı.");
-    }
-
-    /** Tarama bitince: önce ganyan oranları (2.59), onlar bitince form verisi (2.62). */
-    private String altiliAfter(long budgetMs, Daily.Progress progress) {
-        boolean odds;
-        synchronized (altiliLogLock) {
-            odds = !AltiliLog.oddsDays(altiliLog(), Fmt.dayKey(Instant.now()), ledger.settings().altiliUnit).isEmpty();
-        }
-        return odds ? altiliOdds(budgetMs, progress) : altiliFormRead(budgetMs, progress);
-    }
-
-    /**
-     * 2.62: doğrulanmış yerli altılıların günleri için şehir programlarından form verisi (son 6 yarış, KGS, s20, en iyi
-     * derece, HP, jokey…; yeniden eskiye, her gün-şehir bir kez). Ayrı dosyaya; birkaç günde bir yazılır. En çok budgetMs.
-     */
-    String altiliFormRead(long budgetMs, Daily.Progress progress) {
-        if (isDemo()) return "";
-        Settings s = ledger.settings();
-        String today = Fmt.dayKey(Instant.now());
-        Map<String, Object> form = altiliForm();
-        List<String> days;
-        synchronized (altiliLogLock) {
-            days = AltiliLog.formDays(altiliLog(), form, today, s.altiliUnit);
-        }
-        if (days.isEmpty()) return "Form verisi okundu.";
-        AndroidHttp http = new AndroidHttp(app);
-        long t0 = System.currentTimeMillis();
-        int done = 0, found = 0, unsaved = 0;
-        Map<String, Object> fl = Json.obj(form.get("log"));
-        List<Object> lines = fl == null ? new ArrayList<Object>() : new ArrayList<>(Json.arr(fl.get("log")));
-        String stop = null;
-        for (String day : days) {
-            if (System.currentTimeMillis() - t0 >= budgetMs) break;
-            if (progress != null) progress.step("Form verisi " + day + " (" + (days.size() - done) + " gün kaldı)…");
-            java.util.Set<Integer> cities;
-            synchronized (altiliLogLock) {
-                cities = AltiliLog.formCities(altiliLog(), form, day, s.altiliUnit);
-            }
-            Map<String, Object> res = Tjk.form(http, java.time.LocalDate.parse(day), progress, cities);
-            lines.add("Form " + day + ": " + cities.size() + " şehir");
-            for (Object l : Json.arr(res.get("log"))) lines.add("  " + l);
-            if (Json.bool(res, "failed", false)) { // bağlantı yok: denenmiş sayılmasın
-                stop = "TJK programı okunamadı; sonra yeniden denenir.";
-                break;
-            }
-            found += AltiliLog.attachForm(form, day, res, cities);
-            done++;
-            if (++unsaved >= 5) {
-                saveForm(form, lines);
-                unsaved = 0;
-            }
-        }
-        saveForm(form, lines);
-        return stop != null ? stop : "Form verisi: " + done + " gün okundu, " + found + " şehir programı" + (done < days.size() ? "; kalan " + (days.size() - done)
-                + " gün arka planda Wi-Fi'deyken." : ".");
-    }
-
-    private void saveForm(Map<String, Object> form, List<Object> lines) {
-        if (lines.size() > 300) lines.subList(0, lines.size() - 300).clear(); // ayrıntı kısa kalsın
-        Map<String, Object> ol = new LinkedHashMap<>();
-        ol.put("at", Instant.now().toString());
-        ol.put("log", new ArrayList<>(lines));
-        form.put("log", ol);
-        saveAltiliForm(form);
     }
 
     /**
@@ -1179,7 +1079,7 @@ final class Repo {
         synchronized (altiliLogLock) {
             out.put("log", altiliLog());
         }
-        out.put("form", altiliForm()); // 2.62: şehir programlarından at bilgileri
+        out.put("form", altiliForm()); // 2.62: okunmuş form verisi (şehir programlarından at bilgileri)
         String name = "bilincli-altili-" + Fmt.dayKey(Instant.now()) + ".json";
         java.io.File dir = FilesProvider.dir(app);
         java.io.File[] old = dir.listFiles();
@@ -1199,8 +1099,8 @@ final class Repo {
         boolean done = Json.str(st, "next") == null || Json.str(st, "next").compareTo(Json.str(st, "to")) < 0;
         android.net.ConnectivityManager cm = app.getSystemService(android.net.ConnectivityManager.class);
         if (cm == null || cm.isActiveNetworkMetered()) return false;
-        if (done) { // 2.59: tarama bitti: geçmiş sonuçların ganyan oranları, 2.62: sonra form verisi
-            altiliAfter(ALTILI_BACKFILL_STEP_MS, null);
+        if (done) { // 2.59: tarama bitti: geçmiş sonuçların ganyan oranları (2.63: form okuması kapalı)
+            altiliOdds(ALTILI_BACKFILL_STEP_MS, null);
             return true;
         }
         altiliBackfill(false, ALTILI_BACKFILL_DAYS, ALTILI_BACKFILL_STEP_MS, null);
