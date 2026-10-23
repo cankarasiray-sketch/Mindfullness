@@ -1062,7 +1062,8 @@ final class Repo {
 
     /**
      * 2.60: altılı verisi dosyaya (analiz için): defterin tamamı (altılılar, AGF, kuponlar, sonuçlar, ganyan, okuma
-     * ayrıntıları), altılı ayarları, kasa ve geriye dönük tarama durumu. Dosya adı (FilesProvider ile paylaşılır).
+     * ayrıntıları), altılı ayarları, kasa ve geriye dönük tarama durumu; 2.64: futbol ve basketbol verisi de (kuponlar,
+     * tahmin defteri, piyasa, sanal takip, Zirve; API anahtarları olmadan). Dosya adı (FilesProvider ile paylaşılır).
      */
     String altiliExportFile() {
         Map<String, Object> out = new LinkedHashMap<>();
@@ -1080,7 +1081,14 @@ final class Repo {
             out.put("log", altiliLog());
         }
         out.put("form", altiliForm()); // 2.62: okunmuş form verisi (şehir programlarından at bilgileri)
-        String name = "bilincli-altili-" + Fmt.dayKey(Instant.now()) + ".json";
+        Map<String, Object> fb = new LinkedHashMap<>(); // 2.64: futbol ve basketbol (API anahtarları olmadan)
+        fb.put("ledger", ledger.shareable()); // kuponlar (ayaklar, oran, adil olasılık, kapanış: CLV), kasa hareketleri, kararlar
+        fb.put("forecasts", fileJson("tahmin.json")); // tahmin defteri (model, ilk oran, kapanış, sonuç)
+        fb.put("radar", fileJson("piyasa.json")); // piyasa: maçların ilk ve son adil olasılıkları, değerli oranlar, hareketler
+        fb.put("virtual", fileJson("sanal.json")); // sanal takip (en yakın seçimler)
+        fb.put("zirve", fileJson("zirve.json")); // Zirve Oran değerlendirmeleri
+        out.put("football", fb);
+        String name = "bilincli-veri-" + Fmt.dayKey(Instant.now()) + ".json";
         java.io.File dir = FilesProvider.dir(app);
         java.io.File[] old = dir.listFiles();
         if (old != null) for (java.io.File f : old) f.delete(); // yalnızca son dışa aktarım kalsın
@@ -1090,6 +1098,16 @@ final class Repo {
             throw new IllegalStateException("Dosya yazılamadı: " + e.getMessage());
         }
         return name;
+    }
+
+    /** Uygulama dosyasındaki JSON (yoksa ya da okunamazsa null). */
+    private Object fileJson(String name) {
+        try {
+            String raw = new FileStorage(new File(app.getFilesDir(), name)).read();
+            return raw == null || raw.trim().isEmpty() ? null : Json.parse(raw);
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     /** 2.46: arka planda sürdür: yalnızca Wi-Fi gibi ücretsiz ağda (AGF sayfaları büyük). Yaptıysa true. */

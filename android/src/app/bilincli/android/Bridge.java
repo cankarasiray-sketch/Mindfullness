@@ -484,7 +484,7 @@ public final class Bridge {
                 });
                 return "Yedek paylaşım ekranı açıldı.";
             }
-            case "altiliExport": { // 2.60: altılı verisi dosya olarak (analiz için: ekran görüntüsü gerekmez)
+            case "altiliExport": { // 2.60: altılı verisi dosya olarak (analiz için: ekran görüntüsü gerekmez); 2.64: futbol da
                 requireReal(repo);
                 final String name = repo.altiliExportFile();
                 activity.runOnUiThread(new Runnable() {
@@ -496,12 +496,12 @@ public final class Bridge {
                                 .putExtra(Intent.EXTRA_SUBJECT, name)
                                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         send.setClipData(ClipData.newRawUri(name, uri));
-                        Intent chooser = Intent.createChooser(send, "Altılı verisini paylaş");
+                        Intent chooser = Intent.createChooser(send, "Veriyi paylaş");
                         chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                         activity.startActivity(chooser);
                     }
                 });
-                return "Paylaşım ekranı açıldı: dosyayı Claude sohbetine ekle (ya da Dosyalar'a kaydet, sonra sohbete ekle).";
+                return "Paylaşım ekranı açıldı: Drive'a kaydet, sonra Claude'da analiz oturumuna ataçla (dosya) ekle."; // 2.64
             }
             case "shareText": {
                 final String text = String.valueOf(Json.str(p, "text"));

@@ -17,6 +17,22 @@ public class BankrollTest {
     static final Instant NOW = CoreTest.NOW;
 
     @Test
+    public void shareableExportHasNoApiKey() {
+        // 2.64: analiz dosyasına futbol defteri gider, API anahtarı gitmez (yedekte kalır)
+        Ledger ledger = new Ledger(new Ledger.MemoryStorage(null), new CoreTest.TestClock());
+        Settings s = ledger.settings();
+        s.oddsApiKey = "gizli-anahtar-123";
+        ledger.saveSettings(s);
+        ledger.deposit(500000, "");
+        Map<String, Object> m = ledger.shareable();
+        assertFalse(Json.write(m).contains("gizli-anahtar-123"));
+        assertTrue(ledger.export().contains("gizli-anahtar-123"));
+        assertEquals(1, Json.arr(m.get("transactions")).size());
+        assertTrue(Json.obj(m.get("settings")).containsKey("kellyMultiplier"));
+        assertEquals("gizli-anahtar-123", ledger.settings().oddsApiKey); // kopya: asıl ayar değişmez
+    }
+
+    @Test
     public void stakeFollowsCurrentBankroll() {
         Ledger ledger = new Ledger(new Ledger.MemoryStorage(null), new CoreTest.TestClock());
         ledger.deposit(1000000, "");

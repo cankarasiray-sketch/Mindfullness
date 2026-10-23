@@ -180,6 +180,14 @@ public final class Ledger {
         return Json.write(m);
     }
 
+    /** 2.64: analiz için paylaşılacak kopya: API anahtarları olmadan (kuponlar, kasa hareketleri, günlük kararlar, ayarlar). */
+    public synchronized Map<String, Object> shareable() {
+        Map<String, Object> m = Json.parseObject(export());
+        Map<String, Object> s = Json.obj(m.get("settings"));
+        if (s != null) s.remove("oddsApiKey");
+        return m;
+    }
+
     public static Map<String, Object> couponMap(Coupon c) {
         Map<String, Object> o = new LinkedHashMap<>();
         o.put("id", c.id);

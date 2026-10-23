@@ -421,6 +421,10 @@ bildirim olarak gelir.
   sınamasında tahmin iyileşmedi (AGF + favori düzeltmesi −1,868; + form −1,873; yalnız form −2,057; jokey/antrenör oranları
   yalnızca geçmiş günlerden): kalabalık bu bilgiyi zaten fiyatlıyor. Okuyucu kaldırıldı; okunmuş veri dosyada kalır ve dışa
   aktarımda "form" olarak gider.
+- **2.64: futbol verisi de dosyada.** "Veriyi dosya olarak paylaş" artık futbol ve basketbol verisini de içerir: kasa defteri
+  (kuponlar ve ayakları: oran, adil olasılık, kapanış adil olasılığı — CLV; kasa hareketleri; günlük kararlar; ayarlar),
+  tahmin defteri, piyasa (ilk ve son adil olasılıklar, değerli oranlar), sanal takip ve Zirve Oran değerlendirmeleri. API
+  anahtarları gitmez (Ledger.shareable; yedekte kalır). Dosya adı bilincli-veri-GÜN.json; paylaşım sonrası Drive yolu yazılır.
 
 ## Beraberlik fırsatları (2.17)
 
