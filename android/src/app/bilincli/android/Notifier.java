@@ -27,10 +27,6 @@ final class Notifier {
     static final int ID_ZIRVE = 16;
     /** Kârlı seçim (2.15.5): tek maç listesinde adil oranı geçen. */
     static final int ID_PROFIT = 17;
-    /** Altılı: ortalamada kârlı kupon (2.21). */
-    static final int ID_ALTILI = 18;
-    /** Altılı okuma sağlığı (2.22): günlerce veri ya da ganyan okunamazsa. */
-    static final int ID_ALTILI_HEALTH = 19;
 
     private Notifier() {}
 

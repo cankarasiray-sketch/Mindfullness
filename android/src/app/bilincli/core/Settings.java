@@ -235,34 +235,6 @@ public final class Settings {
      * ve son taramanın adil oranıyla karşılaştırılır; değerli olan bildirilir.
      */
     public boolean zirve = true;
-    /**
-     * Altılı (2.21): AGF ve ganyan oranları arka planda kendiliğinden okunur, kupon kurulur; ortalamada kârlı kupon
-     * bildirilir (kredi harcamaz).
-     */
-    public boolean altiliAuto = true;
-    /** Altılı birim fiyatı (TL), havuzdan kesinti ve ikramiyeden vergi (kesir). */
-    public double altiliUnit = 1.0, altiliTakeout = 0.27, altiliTax = 0.0;
-    /** Altılı (2.29): kupon bütçesi kasanın bu kadarı (kârlı kuponda da üst sınır) ve ayak başına en az tutma. */
-    public double altiliBudgetShare = 0.07, altiliLegMin = 0; // 2.33: kullanıcı istedi: %70 kuralı kalktı (bütçeyle en yüksek tutma)
-    /** Altılı (2.31–2.32): kupon en az (TL); üstüne yalnızca kârlı atlar, üst sınır kasanın altiliBudgetShare kadarı. */
-    public double altiliMinCost = 60; // 2.32.4: kâr için en makul (TL başına en çok tutma)
-    /** 2.32.9: altılı kuponu en fazla bu kadar TL; 2.32.10: ayak sınırı buna sığmazsa altılı oynanmaz. 0: kasanın payı. */
-    public double altiliCap = 600; // 2.35.1: kullanıcı istedi (önce 320)
-    /** 2.37: 6/6 olasılığı bunun altındaki altılı oynanmaz ve önerilmez (yalnızca tahmin edilebilir altılılar; 0: sınır yok). */
-    /** 2.45: kâr kuralı: kupon yalnızca beklenen dönüşü en az 1 + bu kadar olunca oynanır (anlamlı kâr; 0: ortalamada kârlı yeter). */
-    public double altiliMinEdge = 0.10;
-    /**
-     * 2.48: kârsız günde de 6/6 stratejisi: kâr kuralına uymayan (devirsiz) günde de kurallara uyan en iyi altılı (yerli,
-     * 6/6 olasılığı en az altiliMinHit, düzeltilmiş AGF) önerilir; beklenen dönüş %100'ün altında olduğu açıkça yazar.
-     */
-    public boolean altiliPlayNoEdge = true; // 2.49: kullanıcı istedi: kural 6/6 (önce kâr modu)
-    public double altiliMinHit = 0.20; // 2.49: kullanıcı istedi: %20 (2.44: %15); otomatikte veri azken bu
-    /** 2.49: 6/6 eşiği karnedeki eşik taramasının en iyisi (en az 20 doğrulanmış kuponla en yüksek dönüş); yoksa altiliMinHit. */
-    public boolean altiliMinHitAuto = true;
-    /** 2.51: kupon büyüklüğü kasaya göre: karnedeki büyüklük taramasında kasanın log büyümesi en yüksek olan (en fazla altiliCap). */
-    public boolean altiliCapAuto = true;
-    /** 2.57: geriye dönük sınamada kaybettiren stratejiyle de öner (varsayılan: önerilmez). */
-    public boolean altiliPlayUnproven = false;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -428,20 +400,6 @@ public final class Settings {
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
         m.put("zirve", zirve);
-        m.put("altiliAuto", altiliAuto);
-        m.put("altiliUnit", altiliUnit);
-        m.put("altiliTakeout", altiliTakeout);
-        m.put("altiliTax", altiliTax);
-        m.put("altiliBudgetShare", altiliBudgetShare);
-        m.put("altiliLegMin", altiliLegMin);
-        m.put("altiliMinCost", altiliMinCost);
-        m.put("altiliCap", altiliCap);
-        m.put("altiliMinHit", altiliMinHit);
-        m.put("altiliMinEdge", altiliMinEdge);
-        m.put("altiliPlayNoEdge", altiliPlayNoEdge);
-        m.put("altiliMinHitAuto", altiliMinHitAuto);
-        m.put("altiliCapAuto", altiliCapAuto);
-        m.put("altiliPlayUnproven", altiliPlayUnproven);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("pickMinProb", pickMinProb);
@@ -499,20 +457,6 @@ public final class Settings {
         s.lineupScans = Json.bool(m, "lineupScans", s.lineupScans);
         s.quietNights = Json.bool(m, "quietNights", s.quietNights);
         s.zirve = Json.bool(m, "zirve", s.zirve);
-        s.altiliAuto = Json.bool(m, "altiliAuto", s.altiliAuto);
-        s.altiliUnit = Json.dbl(m, "altiliUnit", s.altiliUnit);
-        s.altiliTakeout = Json.dbl(m, "altiliTakeout", s.altiliTakeout);
-        s.altiliTax = Json.dbl(m, "altiliTax", s.altiliTax);
-        s.altiliBudgetShare = Json.dbl(m, "altiliBudgetShare", s.altiliBudgetShare);
-        s.altiliLegMin = Json.dbl(m, "altiliLegMin", s.altiliLegMin);
-        s.altiliMinCost = Json.dbl(m, "altiliMinCost", s.altiliMinCost);
-        s.altiliCap = Json.dbl(m, "altiliCap", s.altiliCap);
-        s.altiliMinHit = Json.dbl(m, "altiliMinHit", s.altiliMinHit);
-        s.altiliMinEdge = Json.dbl(m, "altiliMinEdge", s.altiliMinEdge);
-        s.altiliPlayNoEdge = Json.bool(m, "altiliPlayNoEdge", s.altiliPlayNoEdge);
-        s.altiliMinHitAuto = Json.bool(m, "altiliMinHitAuto", s.altiliMinHitAuto);
-        s.altiliCapAuto = Json.bool(m, "altiliCapAuto", s.altiliCapAuto);
-        s.altiliPlayUnproven = Json.bool(m, "altiliPlayUnproven", s.altiliPlayUnproven);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
@@ -557,33 +501,6 @@ public final class Settings {
             // 2.15.3: kullanıcı istedi: Karşılıklı Gol açık (günde 12 maç), kredi planı kısmaz
             s.kgEvents = 12;
         }
-        if (Json.lng(m, "v", 1) < 12) {
-            // 2.32.4: kullanıcı "kâr için en makul" istedi: 2.32.2–2.32.3 varsayılanları (120 TL, %80) %50 / 60 TL'ye döner
-            if (Math.abs(s.altiliMinCost - 120) < 1e-9) s.altiliMinCost = 60;
-            if (Math.abs(s.altiliLegMin - 0.80) < 1e-9) s.altiliLegMin = 0.50;
-        }
-        if (Json.lng(m, "v", 1) < 13 && Math.abs(s.altiliLegMin - 0.50) < 1e-9) {
-            // 2.32.6: kullanıcı istedi: altılıda her ayak en az %70 tutma (önceki varsayılan %50)
-            s.altiliLegMin = 0.70;
-        }
-        if (Json.lng(m, "v", 1) < 14 && Math.abs(s.altiliLegMin - 0.70) < 1e-9) {
-            // 2.33: kullanıcı istedi: %70 kuralı kalktı; kupon tavana kadar tutmayı en çok artıran atlarla
-            s.altiliLegMin = 0;
-        }
-        if (Json.lng(m, "v", 1) < 16 && Math.abs(s.altiliMinHit - 0.30) < 1e-9) {
-            // 2.44: geriye dönük veride son bir haftada 6/6 olasılığı %30'u geçen altılı yoktu: eşik %15
-            s.altiliMinHit = 0.15;
-        }
-        if (Json.lng(m, "v", 1) < 17) {
-            // 2.49: kullanıcı istedi: kural 6/6 (kârsız günde de), eşik %20 ya da karnedeki en iyi (otomatik)
-            s.altiliPlayNoEdge = true;
-            if (Math.abs(s.altiliMinHit - 0.15) < 1e-9) s.altiliMinHit = 0.20;
-            s.altiliMinHitAuto = true;
-        }
-        if (Json.lng(m, "v", 1) < 15 && Math.abs(s.altiliCap - 320) < 1e-9) {
-            // 2.35.1: kullanıcı istedi: altılı kuponu en fazla 600 TL (önceki varsayılan 320)
-            s.altiliCap = 600;
-        }
         s.profile = s.detectProfile();
         return s;
     }
@@ -616,15 +533,6 @@ public final class Settings {
         if (pickStake < 0) return "Günün seçimi tutarı negatif olamaz";
         if (pickMaxLoss < 0.005 || pickMaxLoss > 0.30) return "Günün seçiminde en kötü beklenen kayıp %0,5–30 olmalı";
         if (!(pickMinOdds >= 1.01 && pickMinOdds <= 3.0)) return "Tek maçta en düşük oran 1,01 ile 3,00 arasında olmalı";
-        if (!(altiliUnit >= 0.01 && altiliUnit <= 1000)) return "Altılı birim fiyatı 0,01–1.000 TL olmalı";
-        if (!(altiliTakeout >= 0.05 && altiliTakeout <= 0.50)) return "Altılı kesintisi %5–50 olmalı";
-        if (!(altiliTax >= 0 && altiliTax <= 0.50)) return "Altılı ikramiye vergisi %0–50 olmalı";
-        if (!(altiliBudgetShare >= 0.005 && altiliBudgetShare <= 0.20)) return "Altılı bütçesi kasanın %0,5–20'si olmalı";
-        if (!(altiliLegMin >= 0 && altiliLegMin <= 0.95)) return "Altılıda ayak başına tutma %0–95 olmalı";
-        if (!(altiliMinCost >= 0 && altiliMinCost <= 100000)) return "Altılı kupon en az tutarı geçersiz";
-        if (!(altiliCap >= 0 && altiliCap <= 100000)) return "Altılı kupon en fazla tutarı geçersiz";
-        if (!(altiliMinHit >= 0 && altiliMinHit <= 0.95)) return "Altılıda en az 6/6 olasılığı %0–95 olmalı";
-        if (!(altiliMinEdge >= 0 && altiliMinEdge <= 2)) return "Altılıda en az beklenen kâr %0–200 olmalı";
         if (pickHighProb < pickMinProb || pickHighProb > 0.97) return "Yüksek olasılık katmanı, en az tutma olasılığından küçük olamaz (en fazla %97)";
         return null;
     }

@@ -27,12 +27,6 @@ public final class DailyJob extends JobService {
                             zirve(repo, false); // 10 dk sınırı geçerli
                             profit(repo);
                         }
-                        altili(repo); // 2 saatte bir, 09–21
-                        try {
-                            repo.altiliBackfillStep(); // 2.46: geriye dönük 6 aylık tarama (Wi-Fi'de, kaldığı yerden)
-                        } catch (RuntimeException ignored) {
-                            // bir sonraki saatte
-                        }
                         return;
                     }
                     if (radar) {
@@ -55,17 +49,6 @@ public final class DailyJob extends JobService {
                     if (event || !daily) {
                         for (String[] n : repo.events()) Notifier.show(DailyJob.this, "kupon", 13, n[0], n[1]);
                         Notifier.settled(DailyJob.this, repo.takeLiveMessages()); // 2.16.4: maç sürerken tutan kupon
-                        try {
-                            String[] pre = repo.altiliPreRace(); // 2.28: altılı kuponu son AGF'yle, 1. ayaktan 30 dk önce
-                            if (pre != null) Notifier.show(DailyJob.this, "kupon", Notifier.ID_ALTILI, pre[0], pre[1]);
-                        } catch (RuntimeException ignored) {
-                            // bir sonraki olayda
-                        }
-                        try {
-                            repo.altiliLive(false, null); // 2.34: koşan altılıların ayak sonuçları
-                        } catch (RuntimeException ignored) {
-                            // 10 dk sonra yeniden
-                        }
                     }
                     if (event) return;
                     Repo.BackgroundResult r = repo.background(daily);
@@ -98,18 +81,6 @@ public final class DailyJob extends JobService {
     private void profit(Repo repo) {
         String[] n = repo.profitCheck();
         if (n != null) Notifier.show(this, "kupon", Notifier.ID_PROFIT, n[0], n[1]);
-    }
-
-    /** Altılı (2.21): AGF ve ganyan kendiliğinden okunur; ortalamada kârlı yeni kupon bildirilir (kredi harcamaz). */
-    private void altili(Repo repo) {
-        try {
-            String[][] n = repo.altiliAuto();
-            if (n == null) return;
-            if (n[0] != null) Notifier.show(this, "kupon", Notifier.ID_ALTILI, n[0][0], n[0][1]);
-            if (n[1] != null) Notifier.show(this, "kupon", Notifier.ID_ALTILI_HEALTH, n[1][0], n[1][1]);
-        } catch (RuntimeException ignored) {
-            // bir sonraki işte yeniden denenir
-        }
     }
 
     /** Bilyoner Zirve Oran kontrolü (kredi harcamaz); yeni değerli oran bildirilir. */

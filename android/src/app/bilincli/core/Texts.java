@@ -149,46 +149,4 @@ public final class Texts {
                 + " İlk maçtan 90 dk önce otomatik kontrol bildirimi de gelir.";
         return new String[] {title, body};
     }
-
-    /** Altılı kuponu tek satırda (2.21): "1) 5, 3 · 2) 2 · …". */
-    public static String altiliCoupon(Map<String, Object> plan) {
-        StringBuilder b = new StringBuilder();
-        List<Object> legs = Json.arr(plan.get("legs"));
-        for (int k = 0; k < legs.size(); k++) {
-            List<String> nos = new ArrayList<>();
-            for (Object h : Json.arr(Json.obj(legs.get(k)).get("horses"))) nos.add(String.valueOf(h));
-            b.append(k == 0 ? "" : " · ").append(k + 1).append(") ").append(String.join(", ", nos));
-        }
-        return b.toString();
-    }
-
-    /**
-     * 2.27: koşu numarası ve saatiyle, ayak başına bir satır ("1. ayak (4. koşu 14:30): 5, 3"); koşular bilinmiyorsa
-     * tek satır.
-     */
-    public static String altiliCoupon(Map<String, Object> plan, List<Object> races) {
-        if (races == null || races.size() != 6) return altiliCoupon(plan);
-        StringBuilder b = new StringBuilder();
-        List<Object> legs = Json.arr(plan.get("legs"));
-        for (int k = 0; k < legs.size(); k++) {
-            List<String> nos = new ArrayList<>();
-            for (Object h : Json.arr(Json.obj(legs.get(k)).get("horses"))) nos.add(String.valueOf(h));
-            Map<String, Object> r = Json.obj(races.get(k));
-            String race = (r == null || r.get("no") == null ? "" : Json.str(r, "no") + ". koşu") + (r == null || r.get("time") == null ? "" : " " + r.get("time"));
-            b.append(k == 0 ? "" : "\n").append(k + 1).append(". ayak").append(race.trim().isEmpty() ? "" : " (" + race.trim() + ")").append(": ")
-                    .append(String.join(", ", nos));
-        }
-        return b.toString();
-    }
-
-    /** Altılı planının özeti: kombinasyon, misli (Bilyoner'deki adıyla kat) = tutar, tutma olasılığı, beklenen getiri ve gerekçe. */
-    public static String altiliSummary(Map<String, Object> plan) {
-        long units = Json.lng(plan, "units", 0), kat = Json.lng(plan, "kat", 0);
-        double cost = Json.dbl(plan, "cost", 0);
-        return units + " kombinasyon" + (kat > 1 ? ", misli " + kat : "") + " = " + Fmt.tl(Math.round(Math.max(1, kat) * cost * 100))
-                + " · tutma %" + Fmt.num(Json.dbl(plan, "hit", 0) * 100, 1) + " · beklenen getiri %" + Fmt.num(Json.dbl(plan, "roi", 0) * 100, 0)
-                + (plan.get("hitRef") != null ? "\nKupon kasaya göre küçük (" + Fmt.num(Json.dbl(plan, "refCost", 0), 0) + " TL'lik kuponla tutma %" // 2.51
-                        + Fmt.num(Json.dbl(plan, "hitRef", 0) * 100, 1) + ")" : "")
-                + "\n" + Json.str(plan, "reason");
-    }
 }

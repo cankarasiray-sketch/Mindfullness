@@ -15,8 +15,8 @@ TOOLS="$ROOT/.tools"
 OUT="$ROOT/build"
 MIN_SDK=26
 TARGET_SDK=34
-VERSION_CODE=145
-VERSION_NAME=2.64
+VERSION_CODE=146
+VERSION_NAME=2.65
 MAVEN=https://repo1.maven.org/maven2
 
 mkdir -p "$TOOLS" "$OUT"
@@ -73,7 +73,7 @@ rm -rf "$OUT/test" && mkdir -p "$OUT/test"
 JAVA_OPTS_QUIET javac --release 8 -nowarn -encoding UTF-8 -cp "$TOOLS/junit.jar" -d "$OUT/test" \
     src/app/bilincli/core/*.java test/app/bilincli/core/*.java
 java -cp "$OUT/test:$TOOLS/junit.jar:$TOOLS/hamcrest.jar" -Dparity=test/fixtures/parity.json \
-    org.junit.runner.JUnitCore app.bilincli.core.ParityTest app.bilincli.core.CoreTest app.bilincli.core.FeatureTest app.bilincli.core.RadarTest app.bilincli.core.MarketsTest app.bilincli.core.BankrollTest app.bilincli.core.ProfitTest app.bilincli.core.AccuracyTest app.bilincli.core.BasketballTest app.bilincli.core.KeysTest app.bilincli.core.BasketTotalsTest app.bilincli.core.LineupTest app.bilincli.core.PromoTest app.bilincli.core.ZirveTest app.bilincli.core.VirtualTest app.bilincli.core.ProbabilityTest app.bilincli.core.HandicapTest app.bilincli.core.MaxProfitTest app.bilincli.core.PickTest app.bilincli.core.SinglesTest app.bilincli.core.TjkTest app.bilincli.core.AtYarisiTest app.bilincli.core.AltiliTest app.bilincli.core.AltiliLogTest 2>&1 \
+    org.junit.runner.JUnitCore app.bilincli.core.ParityTest app.bilincli.core.CoreTest app.bilincli.core.FeatureTest app.bilincli.core.RadarTest app.bilincli.core.MarketsTest app.bilincli.core.BankrollTest app.bilincli.core.ProfitTest app.bilincli.core.AccuracyTest app.bilincli.core.BasketballTest app.bilincli.core.KeysTest app.bilincli.core.BasketTotalsTest app.bilincli.core.LineupTest app.bilincli.core.PromoTest app.bilincli.core.ZirveTest app.bilincli.core.VirtualTest app.bilincli.core.ProbabilityTest app.bilincli.core.HandicapTest app.bilincli.core.MaxProfitTest app.bilincli.core.PickTest app.bilincli.core.SinglesTest 2>&1 \
     | grep -v "Picked up JAVA_TOOL_OPTIONS" | tee "$OUT/test.log" | tail -3
 grep -q "^OK (" "$OUT/test.log" || { echo "TESTLER BAŞARISIZ" >&2; exit 1; }
 
@@ -101,8 +101,10 @@ mkdir -p "$OUT/gen" "$OUT/classes"
 # ---- kod ----------------------------------------------------------------------
 echo "== derleme"
 JAVA_OPTS_QUIET javac --release 8 -nowarn -Xlint:none -encoding UTF-8 -cp "$TOOLS/android-all.jar" \
-    -d "$OUT/classes" $(find src "$OUT/gen" -name '*.java') | grep -v "UnsupportedAppUsage\|^Note:\|warning" || true
-[ -f "$OUT/classes/app/bilincli/android/MainActivity.class" ] || { echo "derleme başarısız" >&2; exit 1; }
+    -d "$OUT/classes" $(find src "$OUT/gen" -name '*.java') > "$OUT/javac.log"
+grep -v "UnsupportedAppUsage\|^Note:\|warning" "$OUT/javac.log" || true
+# javac hata verse de bazı sınıfları yazabiliyor: hata satırı varsa dur (eksik APK üretilmesin)
+if grep -q ": error:" "$OUT/javac.log" || [ ! -f "$OUT/classes/app/bilincli/android/MainActivity.class" ]; then echo "derleme başarısız" >&2; exit 1; fi
 JAVA_OPTS_QUIET java -cp "$TOOLS/dx.jar" com.android.dx.command.Main --dex --min-sdk-version=$MIN_SDK \
     --output="$OUT/classes.dex" "$OUT/classes"
 

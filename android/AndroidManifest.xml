@@ -42,7 +42,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- 2.60: paylaşılan dosyalar (altılı verisi): yalnızca okuma, geçici izinle -->
+        <!-- 2.60: paylaşılan dosyalar (analiz verisi): yalnızca okuma, geçici izinle -->
         <provider
             android:name=".android.FilesProvider"
             android:authorities="app.bilincli.files"

@@ -10,7 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
- * Ağ seçimi: Türkiye'de The Odds API için VPN gerekebilirken Nesine (Bilyoner, TJK) bazı VPN
+ * Ağ seçimi: Türkiye'de The Odds API için VPN gerekebilirken Nesine (ve Bilyoner) bazı VPN
  * sunucularını engeller. Bu sitelere istekler önce VPN dışındaki ağdan (mobil veri / Wi-Fi) denenir; VPN uygulaması
  * buna izin vermiyorsa ya da başarısız olursa normal yoldan (VPN) denenir.
  */
@@ -23,7 +23,7 @@ final class AndroidHttp extends Http.UrlHttp {
 
     private static boolean direct(URL u) {
         String h = u.getHost();
-        return h.endsWith("nesine.com") || h.endsWith("bilyoner.com") || h.endsWith("tjk.org"); // Türk siteleri VPN'siz
+        return h.endsWith("nesine.com") || h.endsWith("bilyoner.com"); // Türk siteleri VPN'siz
     }
 
     @Override

@@ -58,7 +58,6 @@ public final class Bridge {
         extra.put("demoSummary", repo.isDemo() ? repo.demoSummary : null);
         extra.put("radar", repo.radarView()); // adil oran tablosu dahil: Fırsatlar açılınca hazır
         extra.put("zirve", repo.zirveView());
-        extra.put("agf", repo.agfView());
         extra.put("virtual", repo.virtualView());
         Object[] picks = repo.picks(); // 2.16: üçü tek hesapla (önce her biri ayrı ayrı baştan)
         extra.put("pick", picks[0]);
@@ -377,69 +376,6 @@ public final class Bridge {
                 if (z != null && z.get("error") != null) throw new IllegalStateException("Zirve Oran okunamadı: " + z.get("error"));
                 return note.trim().isEmpty() ? "Zirve Oran okundu." : note.trim();
             }
-            case "agfRead": {
-                requireReal(repo);
-                progress("At yarışı verisi okunuyor (kredi harcamaz)…");
-                Map<String, Object> r = repo.agfRead(new Daily.Progress() {
-                    @Override
-                    public void step(String text) {
-                        progress(text);
-                    }
-                });
-                try {
-                    repo.altiliLive(true, new Daily.Progress() { // 2.34: başlamış altılıların ayak sonuçları
-                        @Override
-                        public void step(String text) {
-                            progress(text);
-                        }
-                    });
-                } catch (RuntimeException ignored) {
-                    // sonuçlar sonraki okumada
-                }
-                Scheduler.scheduleNextEvent(activity); // 2.28: yarış öncesi son kupon bildirimi için
-                if (Json.arr(r.get("altilis")).isEmpty()) {
-                    long waiting = Json.lng(r, "waiting", 0);
-                    throw new IllegalStateException(waiting > 0
-                            ? "AGF henüz oluşmadı: TJK'da " + waiting + " altılının payları boş (bahisler başlayınca dolar). Uygulama 09:00–21:00 arası saatte bir kendisi yeniden okur."
-                            : "AGF okunamadı (bugün yarış yoksa ya da AGF yayınlanmadıysa normal).");
-                }
-                List<String> play = new ArrayList<>();
-                Map<String, Object> view = repo.agfView();
-                for (Object a : Json.arr(view == null ? null : view.get("altilis"))) {
-                    Map<String, Object> m = Json.obj(a);
-                    if (Json.bool(Json.obj(m.get("plan")), "play", false)) play.add(m.get("label") + " (" + m.get("source") + ")");
-                }
-                return Json.arr(r.get("altilis")).size() + " altılı okundu. "
-                        + (play.isEmpty() ? "Bugün ortalamada kârlı kupon yok: oynama." : "OYNA: " + String.join(", ", play) + ".");
-            }
-            case "altiliSettle": {
-                requireReal(repo);
-                progress("Altılı sonuçları okunuyor (kredi harcamaz)…");
-                int n = repo.altiliSettle(true, new Daily.Progress() {
-                    @Override
-                    public void step(String text) {
-                        progress(text);
-                    }
-                });
-                return n > 0 ? n + " altılının sonucu işlendi ya da yeniden doğrulandı." : "Yeni sonuçlanan ya da doğrulanan altılı yok (sonuçlar henüz yayınlanmadıysa ya da okunamadıysa karne aynı kalır; ayrıntı karnede).";
-            }
-            case "altiliBacktest": { // 2.43–2.46: geçmiş 6 ay için tahmin, sonuçlarla karşılaştırma (kaldığı yerden)
-                requireReal(repo);
-                progress("Geçmiş günlerin AGF'si ve sonuçları okunuyor (kredi harcamaz; ilk bölüm birkaç dakika sürer)…");
-                return repo.altiliBackfill(!Boolean.TRUE.equals(p.get("resume")), Repo.ALTILI_BACKFILL_DAYS, Repo.ALTILI_BACKFILL_STEP_MS, new Daily.Progress() {
-                    @Override
-                    public void step(String text) {
-                        progress(text);
-                    }
-                });
-            }
-            case "altiliInputs": {
-                requireReal(repo);
-                synchronized (Repo.LOCK) {
-                    repo.saveAltiliInputs(p);
-                }
-                return "";
-            }
             case "probe": {
                 requireReal(repo);
                 synchronized (Repo.LOCK) {
@@ -484,9 +420,9 @@ public final class Bridge {
                 });
                 return "Yedek paylaşım ekranı açıldı.";
             }
-            case "altiliExport": { // 2.60: altılı verisi dosya olarak (analiz için: ekran görüntüsü gerekmez); 2.64: futbol da
+            case "shareData": { // 2.60: veri dosya olarak (analiz için: ekran görüntüsü gerekmez); 2.64: futbol; 2.65: yalnızca futbol
                 requireReal(repo);
-                final String name = repo.altiliExportFile();
+                final String name = repo.exportFile();
                 activity.runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
