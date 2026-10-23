@@ -962,6 +962,13 @@ final class Repo {
             if (start) return "Geriye dönük tarama tamamlandı.";
             return "Geriye dönük tarama tamamlandı. " + altiliOdds(budgetMs, progress); // 2.59: sonra ganyan oranları
         }
+        if (!start) { // 2.59.1: elle sürdürünce önce ganyan oranları (eldeki doğrulanmış altılılar; sayfaları küçük), sonra tarama
+            List<String> od;
+            synchronized (altiliLogLock) {
+                od = AltiliLog.oddsDays(altiliLog(), Fmt.dayKey(now), ledger.settings().altiliUnit);
+            }
+            if (!od.isEmpty()) return altiliOdds(budgetMs, progress) + " Geriye dönük tarama ganyandan sonra sürer.";
+        }
         Settings s = ledger.settings();
         AndroidHttp http = new AndroidHttp(app);
         Map<String, Object> inp = altiliInputs();

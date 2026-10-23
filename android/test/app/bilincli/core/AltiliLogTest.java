@@ -469,6 +469,13 @@ public class AltiliLogTest {
         assertEquals(1, AltiliLog.attachOdds(store, DAY, page, 1));
         assertEquals(6, Json.arr(Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")).get("odds")).size());
         assertEquals(0, AltiliLog.oddsDays(store, TODAY, 1).size());
+        // yabancı yarışın TJK sonuç sayfasında koşu tablosu yok: ganyan için indirilmez (2.59.1)
+        Map<String, Object> away = altili("tjk/2026-10-21/31/1", "Belmont Park ABD", 31, 1, LEGS);
+        AltiliLog.record(store, DAY, Arrays.<Object>asList(away));
+        Map<String, Object> ares = new LinkedHashMap<>(Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")));
+        ares.remove("odds");
+        rec(store, "tjk/2026-10-21/31/1").put("result", ares);
+        assertEquals(0, AltiliLog.oddsDays(store, TODAY, 1).size());
         // karşılaştırma: ganyan kazananı bilir (kazanana 1,5, ötekilere 12): karışım ganyana yaslanır, kupon daha çok tutar
         Map<String, Object> big = new LinkedHashMap<>();
         for (int i = 0; i < 60; i++) {

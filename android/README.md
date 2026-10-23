@@ -396,6 +396,9 @@ bildirim olarak gelir.
   (q ∝ q_AGF^(1−w)·q_ganyan^w; w ilk üçte ikide en çok olabilirlikle) ile, son üçte birde; aynı tavanla en yüksek 6/6 kuponu
   AGF ve karışımla: tutma ve dönüş. Kupon henüz ganyanla kurulmuyor (oynarken 2–6. ayakların ganyanı daha erken); ölçüm
   kalıcı fark gösterirse sonraki adım.
+- **2.59.1: ganyan elle önce.** "Geçmiş taramayı şimdi sürdür" (mobil veride de çalışır) önce eldeki doğrulanmış altılıların
+  ganyanını okur, geriye dönük tarama ondan sonra sürer. Ganyan yalnızca yerli altılılar için okunur: yabancı yarışların TJK
+  sonuç sayfasında koşu tablosu yok, boşuna indirilmez.
 
 ## Beraberlik fırsatları (2.17)
 

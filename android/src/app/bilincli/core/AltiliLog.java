@@ -1250,10 +1250,13 @@ public final class AltiliLog {
         return any;
     }
 
-    /** Ganyanı okunacak mı: ikramiyeyle doğrulanmış, oranı yok, daha denenmemiş. */
+    /**
+     * Ganyanı okunacak mı: yerli (yabancı yarışların TJK sonuç sayfasında koşu tablosu yok: boşuna indirilmesin), ikramiyeyle
+     * doğrulanmış, oranı yok, daha denenmemiş.
+     */
     private static boolean needsOdds(Map<String, Object> rec, double unit) {
         Map<String, Object> res = Json.obj(rec.get("result"));
-        return res != null && res.get("odds") == null && Json.lng(rec, "oddsTried", 0) < 1 && "ikramiye".equals(trust(rec, res, unit));
+        return res != null && res.get("odds") == null && Json.lng(rec, "oddsTried", 0) < 1 && domestic(rec) && "ikramiye".equals(trust(rec, res, unit));
     }
 
     /** 2.59: ganyanı okunacak günler (analiz penceresinde), yeniden eskiye (son veriler önce). */
