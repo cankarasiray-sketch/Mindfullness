@@ -465,6 +465,7 @@ public class AltiliLogTest {
         // eski sonuca sonradan (bir kez)
         Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")).remove("odds");
         assertEquals(Arrays.asList(DAY), AltiliLog.oddsDays(store, TODAY, 1));
+        assertEquals(1L, AltiliLog.analyze(store, 1, 2000, TODAY).get("oddsLeft")); // 2.60: karnede düğme için
         assertEquals(new java.util.HashSet<>(Arrays.asList(3)), AltiliLog.oddsCities(store, DAY, 1));
         assertEquals(1, AltiliLog.attachOdds(store, DAY, page, 1));
         assertEquals(6, Json.arr(Json.obj(rec(store, "tjk/2026-10-21/3/1").get("result")).get("odds")).size());

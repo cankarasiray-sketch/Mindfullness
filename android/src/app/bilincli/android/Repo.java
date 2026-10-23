@@ -743,6 +743,7 @@ final class Repo {
         v.put("best", best < 0 ? null : Json.str(Json.obj(list.get(best)), "key"));
         v.put("learn", learn);
         v.put("settleLog", altiliLog().get("settleLog"));
+        v.put("oddsLog", altiliLog().get("oddsLog")); // 2.60: ganyan okuma ayrıntısı
         Map<String, Object> shown = new LinkedHashMap<>();
         shown.put("maxCost", Json.dbl(inp, "maxCost", 0));
         shown.put("manual", manual);
@@ -1045,6 +1046,37 @@ final class Repo {
         }
         return "Ganyan oranları: " + done + " gün okundu, " + found + " altılıya eklendi" + (done < days.size() ? "; kalan " + (days.size() - done)
                 + " gün arka planda Wi-Fi'deyken." : ".");
+    }
+
+    /**
+     * 2.60: altılı verisi dosyaya (analiz için): defterin tamamı (altılılar, AGF, kuponlar, sonuçlar, ganyan, okuma
+     * ayrıntıları), altılı ayarları, kasa ve geriye dönük tarama durumu. Dosya adı (FilesProvider ile paylaşılır).
+     */
+    String altiliExportFile() {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("app", appVersion());
+        out.put("at", Instant.now().toString());
+        Settings s = ledger.settings();
+        Map<String, Object> st = new LinkedHashMap<>();
+        Map<String, Object> all = s.toMap();
+        for (Map.Entry<String, Object> e : all.entrySet()) if (e.getKey().startsWith("altili") || e.getKey().equals("kellyMultiplier")) st.put(e.getKey(), e.getValue());
+        out.put("settings", st);
+        out.put("kasa", ledger.balance() / 100.0);
+        Map<String, Object> bf = altiliBackfillState();
+        if (bf != null) out.put("backfill", bf);
+        synchronized (altiliLogLock) {
+            out.put("log", altiliLog());
+        }
+        String name = "bilincli-altili-" + Fmt.dayKey(Instant.now()) + ".json";
+        java.io.File dir = FilesProvider.dir(app);
+        java.io.File[] old = dir.listFiles();
+        if (old != null) for (java.io.File f : old) f.delete(); // yalnızca son dışa aktarım kalsın
+        try (java.io.Writer w = new java.io.OutputStreamWriter(new java.io.FileOutputStream(new java.io.File(dir, name)), java.nio.charset.StandardCharsets.UTF_8)) {
+            w.write(Json.write(out));
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Dosya yazılamadı: " + e.getMessage());
+        }
+        return name;
     }
 
     /** 2.46: arka planda sürdür: yalnızca Wi-Fi gibi ücretsiz ağda (AGF sayfaları büyük). Yaptıysa true. */

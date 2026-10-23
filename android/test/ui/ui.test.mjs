@@ -1054,6 +1054,17 @@ test("altılı karnesi: önerilerin sonucu, ayak tahmini, öğrenilen düzeltme,
   assert.match(fb.$("#altiliKarne").textContent, /Geriye dönük tarama: 30\/365 gün \(kalanı arka planda, Wi-Fi'deyken\) · 412 altılı tahmin edildi, 301 ikramiyeyle doğrulandı\./);
   fb.button("Geçmiş taramayı şimdi sürdür").click();
   assert.deepEqual(fb.calls.at(-1), {action: "altiliBacktest", payload: {resume: true}});
+  // 2.60: tarama bitti, ganyanı okunmamış altılı var: elle oku; veri dosya olarak paylaşılır; ganyan okuma ayrıntısı
+  const od = clone(s);
+  od.agf.backfill = {from: "2026-10-21", to: "2025-10-22", next: "2025-10-21", days: 365, added: 1872, settled: 900, verified: 570, at: "2026-10-22T19:00:00Z"};
+  od.agf.learn.oddsLeft = 328;
+  od.agf.oddsLog = {at: "2026-10-23T08:00:00Z", log: ["Ganyan 2026-10-20: 2 altılı", "  Bursa: 1 altılı sonucu, 9 koşu (sütunlar: S | N | At İsmi | Gny → at no 'N' · ganyan 'Gny')"]};
+  const fo = boot(od, "#firsat");
+  fo.button("Ganyan oranlarını şimdi oku (328 altılı)").click();
+  assert.deepEqual(fo.calls.at(-1), {action: "altiliBacktest", payload: {resume: true}});
+  fo.button("Veriyi dosya olarak paylaş (analiz için)").click();
+  assert.equal(fo.calls.at(-1).action, "altiliExport");
+  assert.match(fo.$("#altiliKarne").textContent, /Ganyan okuma ayrıntısıGanyan 2026-10-20: 2 altılı[\s\S]*ganyan 'Gny'/);
   assert.equal(f.calls.at(-1).action, "altiliSettle");
   s.agf.learn = {settled: 0, pending: 3, history: []};
   f.w.refresh();

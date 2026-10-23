@@ -1644,6 +1644,9 @@ public final class AltiliLog {
         if (dup > 0) out.put("duplicates", (long) dup); // 2.53
         if (late > 0) out.put("late", (long) late); // 2.54
         if (!devir.isEmpty()) out.put("devir", (long) devir.size()); // 2.56
+        long oddsLeft = 0; // 2.60: ganyanı okunacak (yerli, doğrulanmış) altılılar
+        for (Map<String, Object> r : settled) if (needsOdds(r, unit)) oddsLeft++;
+        if (oddsLeft > 0) out.put("oddsLeft", oddsLeft);
         if (inconsistent + unverified > 0) { // 2.38
             out.put("inconsistent", (long) inconsistent);
             out.put("unverified", (long) unverified);

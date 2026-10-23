@@ -399,6 +399,11 @@ bildirim olarak gelir.
 - **2.59.1: ganyan elle önce.** "Geçmiş taramayı şimdi sürdür" (mobil veride de çalışır) önce eldeki doğrulanmış altılıların
   ganyanını okur, geriye dönük tarama ondan sonra sürer. Ganyan yalnızca yerli altılılar için okunur: yabancı yarışların TJK
   sonuç sayfasında koşu tablosu yok, boşuna indirilmez.
+- **2.60: altılı verisi dosya olarak.** Karnede "Veriyi dosya olarak paylaş (analiz için)": defterin tamamı (altılılar, AGF,
+  kuponlar, sonuçlar, ganyan, okuma ayrıntıları), altılı ayarları, kasa ve tarama durumu tek JSON dosyası; paylaşım ekranından
+  Claude sohbetine eklenir (ekran görüntüsü gerekmez). androidx olmadığından küçük bir ContentProvider (FilesProvider:
+  önbellekteki share klasörü, salt okunur, geçici izinle). Tarama bitince ganyanı okunmamış yerli altılı kaldıkça
+  "Ganyan oranlarını şimdi oku (N altılı)" düğmesi (önce taramayı baştan başlatan düğme çıkıyordu); ganyan okuma ayrıntısı ayrı.
 
 ## Beraberlik fırsatları (2.17)
 

@@ -2,6 +2,7 @@ package app.bilincli.android;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
@@ -482,6 +483,25 @@ public final class Bridge {
                     }
                 });
                 return "Yedek paylaşım ekranı açıldı.";
+            }
+            case "altiliExport": { // 2.60: altılı verisi dosya olarak (analiz için: ekran görüntüsü gerekmez)
+                requireReal(repo);
+                final String name = repo.altiliExportFile();
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Uri uri = FilesProvider.uri(name);
+                        Intent send = new Intent(Intent.ACTION_SEND).setType("application/json")
+                                .putExtra(Intent.EXTRA_STREAM, uri)
+                                .putExtra(Intent.EXTRA_SUBJECT, name)
+                                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        send.setClipData(ClipData.newRawUri(name, uri));
+                        Intent chooser = Intent.createChooser(send, "Altılı verisini paylaş");
+                        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                        activity.startActivity(chooser);
+                    }
+                });
+                return "Paylaşım ekranı açıldı: dosyayı Claude sohbetine ekle (ya da Dosyalar'a kaydet, sonra sohbete ekle).";
             }
             case "shareText": {
                 final String text = String.valueOf(Json.str(p, "text"));
