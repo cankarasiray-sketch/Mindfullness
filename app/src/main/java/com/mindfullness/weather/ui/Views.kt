@@ -209,6 +209,7 @@ object Icons {
         AlertType.FLOOD -> R.drawable.ic_waves
         AlertType.AIR_QUALITY -> R.drawable.ic_mask
         AlertType.DUST -> R.drawable.ic_dust
+        AlertType.POLLEN -> R.drawable.ic_flower
     }
 
     fun tip(kind: TipKind): Int = when (kind) {
@@ -220,6 +221,7 @@ object Icons {
         TipKind.BOOTS -> R.drawable.ic_snowflake
         TipKind.WINDBREAKER -> R.drawable.ic_wind
         TipKind.MASK -> R.drawable.ic_mask
+        TipKind.ALLERGY -> R.drawable.ic_flower
     }
 }
 

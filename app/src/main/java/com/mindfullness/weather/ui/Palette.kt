@@ -2,6 +2,7 @@ package com.mindfullness.weather.ui
 
 import android.graphics.Color
 import com.mindfullness.weather.domain.Condition
+import com.mindfullness.weather.domain.PollenLevel
 import com.mindfullness.weather.domain.Severity
 import com.mindfullness.weather.domain.WeatherCodes
 
@@ -36,6 +37,15 @@ object Palette {
         Severity.YELLOW -> Color.parseColor("#FFD43B")
         Severity.ORANGE -> Color.parseColor("#FF922B")
         Severity.RED -> Color.parseColor("#FF5A5F")
+    }
+
+    /** Pollen level colours; NONE is drawn as plain glass by the callers. */
+    fun pollen(level: PollenLevel): Int = when (level) {
+        PollenLevel.NONE -> GLASS
+        PollenLevel.LOW -> GOOD
+        PollenLevel.MODERATE -> severity(Severity.YELLOW)
+        PollenLevel.HIGH -> severity(Severity.ORANGE)
+        PollenLevel.VERY_HIGH -> severity(Severity.RED)
     }
 
     /** Dark text that stays readable on every severity colour (at least 6:1, red included). */

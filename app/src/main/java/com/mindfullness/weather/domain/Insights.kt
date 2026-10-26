@@ -3,7 +3,7 @@ package com.mindfullness.weather.domain
 import org.threeten.bp.LocalDateTime
 import kotlin.math.roundToInt
 
-enum class TipKind { UMBRELLA, WARM_COAT, JACKET, SUNSCREEN, SUNGLASSES, WATER, BOOTS, WINDBREAKER, MASK }
+enum class TipKind { UMBRELLA, WARM_COAT, JACKET, SUNSCREEN, SUNGLASSES, WATER, BOOTS, WINDBREAKER, MASK, ALLERGY }
 
 data class Tip(val kind: TipKind, val text: String)
 
@@ -19,7 +19,7 @@ object Insights {
     private const val PRECIP_HOURS = 24
 
     /** What to take along for the rest of the day. */
-    fun tips(forecast: Forecast, now: LocalDateTime): List<Tip> {
+    fun tips(forecast: Forecast, now: LocalDateTime, allergy: AllergyProfile? = null): List<Tip> {
         val hours = forecast.hoursFrom(now, TIP_HOURS)
         if (hours.isEmpty()) return emptyList()
         val precipitationHours = forecast.precipitationHours(now, TIP_HOURS)
@@ -51,6 +51,14 @@ object Insights {
             if (maxUv >= 6) add(Tip(TipKind.SUNSCREEN, "Güneş kremi (UV ${maxUv.roundToInt()})"))
             if (sunnyDaytime && maxUv >= 3) add(Tip(TipKind.SUNGLASSES, "Güneş gözlüğü"))
             if (maxFeels >= 30) add(Tip(TipKind.WATER, "Su şişesi"))
+            if (allergy != null) {
+                val pollen = allergy.types.mapNotNull { type -> Allergy.day(forecast.air, type, now.toLocalDate(), now)?.let { type to it } }
+                    .maxByOrNull { it.second.level }
+                    ?.takeIf { it.second.level >= PollenLevel.MODERATE }
+                if (pollen != null) {
+                    add(Tip(TipKind.ALLERGY, "Alerji ilacı (${pollen.first.shortLabel.lowercase(TR)} poleni ${pollen.second.level.label.lowercase(TR)})"))
+                }
+            }
             if (worstAir != null) {
                 add(Tip(TipKind.MASK, if (worstAir.isDusty) "Maske (çöl tozu)" else "Maske (hava kirliliği)"))
             }
@@ -100,7 +108,7 @@ object Insights {
         else "${TimeText.relativeDay(time.toLocalDate(), now.toLocalDate())} ${TimeText.hour(time)}"
 
     /** Compact sentence for the morning notification. */
-    fun morningSummary(forecast: Forecast, now: LocalDateTime): String {
+    fun morningSummary(forecast: Forecast, now: LocalDateTime, allergy: AllergyProfile? = null): String {
         val today = forecast.today(now)
         val parts = mutableListOf<String>()
         if (today != null) {
@@ -108,7 +116,11 @@ object Insights {
         }
         val precipitation = precipitation(forecast, now)
         if (precipitation.expectsPrecipitation) parts += precipitation.headline
-        val tips = tips(forecast, now)
+        if (allergy != null) {
+            val pollen = Allergy.summary(forecast, now, allergy)
+            if (pollen.todayLevel >= PollenLevel.MODERATE) parts += pollen.headline
+        }
+        val tips = tips(forecast, now, allergy)
         if (tips.isNotEmpty()) parts += "Yanınıza alın: " + tips.joinToString(", ") { it.text.substringBefore(" (").lowercase(TR) }
         return parts.joinToString(" · ")
     }

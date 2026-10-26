@@ -2,7 +2,9 @@ package com.mindfullness.weather.platform
 
 import android.content.Context
 import com.mindfullness.weather.data.PlaceJson
+import com.mindfullness.weather.domain.AllergyProfile
 import com.mindfullness.weather.domain.Place
+import com.mindfullness.weather.domain.PollenType
 import com.mindfullness.weather.domain.Severity
 import org.json.JSONArray
 import org.json.JSONObject
@@ -14,7 +16,13 @@ data class AppSettings(
     val notificationPlace: Place?,
     /** Announce rain an hour or two before it starts (needs [alertsEnabled]). */
     val rainSoon: Boolean = true,
-)
+    /** The user has a pollen allergy: pollen warnings, tips and notifications for [allergens]. */
+    val allergyEnabled: Boolean = false,
+    val allergens: Set<PollenType> = PollenType.values().toSet(),
+) {
+    val allergyProfile: AllergyProfile?
+        get() = if (allergyEnabled && allergens.isNotEmpty()) AllergyProfile(allergens) else null
+}
 
 /** How many favourite places can be saved; the home screen pages through them with a swipe. */
 const val MAX_FAVORITES = 10
@@ -45,6 +53,10 @@ class SettingsStore(context: Context) {
             morningSummary = prefs.getBoolean(KEY_MORNING, false),
             notificationPlace = readPlace(KEY_NOTIFY_PLACE),
             rainSoon = prefs.getBoolean(KEY_RAIN_SOON, true),
+            allergyEnabled = prefs.getBoolean(KEY_ALLERGY, false),
+            allergens = prefs.getString(KEY_ALLERGENS, null)
+                ?.split(',')?.mapNotNull { name -> PollenType.values().firstOrNull { it.name == name } }?.toSet()
+                ?: PollenType.values().toSet(),
         )
 
     /** [Place.CURRENT_LOCATION_ID], a saved place id, or null before the first choice. */
@@ -104,6 +116,8 @@ class SettingsStore(context: Context) {
             .putString(KEY_MIN_SEVERITY, next.minSeverity.name)
             .putBoolean(KEY_MORNING, next.morningSummary)
             .putBoolean(KEY_RAIN_SOON, next.rainSoon)
+            .putBoolean(KEY_ALLERGY, next.allergyEnabled)
+            .putString(KEY_ALLERGENS, next.allergens.joinToString(",") { it.name })
             .apply()
         writePlace(KEY_NOTIFY_PLACE, next.notificationPlace)
     }
@@ -152,6 +166,8 @@ class SettingsStore(context: Context) {
         const val KEY_MORNING = "morning_summary"
         const val KEY_NOTIFY_PLACE = "notification_place"
         const val KEY_RAIN_SOON = "rain_soon"
+        const val KEY_ALLERGY = "allergy_enabled"
+        const val KEY_ALLERGENS = "allergens"
         const val KEY_NOTIFIED = "notified_keys"
         const val NOTIFIED_TTL_MILLIS = 3 * 24 * 60 * 60 * 1000L
     }

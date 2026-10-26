@@ -2,9 +2,13 @@ package com.mindfullness.weather.ui
 
 import android.content.Context
 import com.mindfullness.weather.domain.AlertEngine
+import com.mindfullness.weather.domain.Allergy
+import com.mindfullness.weather.domain.AllergyProfile
+import com.mindfullness.weather.domain.AllergySummary
 import com.mindfullness.weather.domain.Forecast
 import com.mindfullness.weather.domain.Insights
 import com.mindfullness.weather.domain.Place
+import com.mindfullness.weather.domain.PollenType
 import com.mindfullness.weather.domain.PrecipitationSummary
 import com.mindfullness.weather.domain.Severity
 import com.mindfullness.weather.domain.Tip
@@ -39,20 +43,25 @@ class ForecastContent(
     val alerts: List<WeatherAlert>,
     val tips: List<Tip>,
     val precipitation: PrecipitationSummary,
+    val allergy: AllergySummary,
+    /** The user's pollen allergies, when set. */
+    val allergyProfile: AllergyProfile?,
 ) {
     val isStale: Boolean get() = System.currentTimeMillis() - forecast.fetchedAtMillis > STALE_AFTER_MILLIS
 
     companion object {
         const val STALE_AFTER_MILLIS = 3 * 60 * 60 * 1000L
 
-        fun from(forecast: Forecast, nowMillis: Long = System.currentTimeMillis()): ForecastContent {
+        fun from(forecast: Forecast, nowMillis: Long = System.currentTimeMillis(), allergy: AllergyProfile? = null): ForecastContent {
             val now = forecast.localNow(nowMillis)
             return ForecastContent(
                 forecast = forecast,
                 now = now,
-                alerts = AlertEngine.evaluate(forecast, now),
-                tips = Insights.tips(forecast, now),
+                alerts = AlertEngine.evaluate(forecast, now, allergy),
+                tips = Insights.tips(forecast, now, allergy),
                 precipitation = Insights.precipitation(forecast, now),
+                allergy = Allergy.summary(forecast, now, allergy),
+                allergyProfile = allergy,
             )
         }
     }
@@ -104,6 +113,8 @@ data class SettingsState(
     val version: String = "",
     /** Notifications are wanted but blocked by the system (permission revoked or switched off). */
     val notificationsBlocked: Boolean = false,
+    val allergyEnabled: Boolean = false,
+    val allergens: Set<PollenType> = PollenType.values().toSet(),
 )
 
 /**
@@ -186,6 +197,8 @@ class AppController(context: Context) {
                 viewingPlace = home.place,
                 version = versionName,
                 notificationsBlocked = (settings.alertsEnabled || settings.morningSummary) && !Notifier.canNotify(app),
+                allergyEnabled = settings.allergyEnabled,
+                allergens = settings.allergens,
             )
         }
 
@@ -307,12 +320,12 @@ class AppController(context: Context) {
         // while the new fix comes in.
         if (lastKnown != null && home.place?.isCurrentLocation != true) {
             val known = recall(lastKnown)
-            setHome(HomeState(place = lastKnown, content = known?.let { ForecastContent.from(it) }, isLoading = known == null, isLocating = true))
+            setHome(HomeState(place = lastKnown, content = known?.let { content(it) }, isLoading = known == null, isLocating = true))
             if (known == null) {
                 Async.run({ repository.cached(lastKnown) }) { result ->
                     val cached = result.getOrNull() ?: return@run
                     if (token == locateToken && isLocating && home.place?.isCurrentLocation == true && home.content == null) {
-                        setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = true))
+                        setHome(home.copy(content = content(cached), isLoading = false, isRefreshing = true))
                     }
                 }
             }
@@ -388,9 +401,9 @@ class AppController(context: Context) {
     /** Re-derives time-based content and refetches when the data is older than 30 minutes. */
     fun onResume() {
         val state = home
-        val content = state.content ?: return
-        setHome(state.copy(content = ForecastContent.from(content.forecast)))
-        val age = System.currentTimeMillis() - content.forecast.fetchedAtMillis
+        val forecast = state.content?.forecast ?: return
+        setHome(state.copy(content = content(forecast)))
+        val age = System.currentTimeMillis() - forecast.fetchedAtMillis
         if (age > FRESH_MILLIS && !state.isLoading && !state.isRefreshing && !state.isLocating) {
             val place = state.place ?: return
             // The device may have moved since the last fix, so a stale current location is looked up again.
@@ -411,7 +424,7 @@ class AppController(context: Context) {
             // Remembered from an earlier visit or a prefetch: show it at once and refresh only if old.
             val fresh = System.currentTimeMillis() - known.fetchedAtMillis < FRESH_MILLIS
             fetchPending = userRefresh || !fresh
-            setHome(HomeState(place = place, content = ForecastContent.from(known), isRefreshing = fetchPending, isLocating = isLocating))
+            setHome(HomeState(place = place, content = content(known), isRefreshing = fetchPending, isLocating = isLocating))
             prefetchNeighbours()
             if (!fetchPending) return
         } else {
@@ -422,7 +435,7 @@ class AppController(context: Context) {
                 if (cached != null && !place.isCurrentLocation) remember(place, cached)
                 if (cached != null && token == loadToken && home.content == null) {
                     // The fetch may already have failed; only keep spinning while it is still running.
-                    setHome(home.copy(content = ForecastContent.from(cached), isLoading = false, isRefreshing = fetchPending))
+                    setHome(home.copy(content = content(cached), isLoading = false, isRefreshing = fetchPending))
                 }
             }
             prefetchNeighbours()
@@ -434,7 +447,7 @@ class AppController(context: Context) {
             fetchPending = false
             val forecast = result.getOrNull()
             if (forecast != null) {
-                setHome(home.copy(place = place, content = ForecastContent.from(forecast), isLoading = false, isRefreshing = false, errorMessage = null))
+                setHome(home.copy(place = place, content = content(forecast), isLoading = false, isRefreshing = false, errorMessage = null))
                 putSummary(place, forecast)
             } else {
                 setHome(home.copy(isLoading = false, isRefreshing = false, errorMessage = "İnternet bağlantınızı kontrol edip tekrar deneyin."))
@@ -543,7 +556,7 @@ class AppController(context: Context) {
             isDay = forecast.current.isDay,
             high = today?.temperatureMax,
             low = today?.temperatureMin,
-            topAlert = AlertEngine.evaluate(forecast, now).firstOrNull { !it.outlook },
+            topAlert = AlertEngine.evaluate(forecast, now, store.settings.allergyProfile).firstOrNull { !it.outlook },
         )
         notifyChanged()
     }
@@ -604,6 +617,27 @@ class AppController(context: Context) {
 
     fun message(text: String) {
         onMessage?.invoke(text)
+    }
+
+    /** Everything shown for [forecast], with the user's allergy settings. */
+    private fun content(forecast: Forecast): ForecastContent =
+        ForecastContent.from(forecast, allergy = store.settings.allergyProfile)
+
+    fun setAllergy(enabled: Boolean) {
+        store.update { it.copy(allergyEnabled = enabled) }
+        refreshContent()
+    }
+
+    fun setAllergen(type: PollenType, allergic: Boolean) {
+        store.update { settings -> settings.copy(allergens = if (allergic) settings.allergens + type else settings.allergens - type) }
+        refreshContent()
+    }
+
+    /** Re-derives what home shows after a settings change. */
+    private fun refreshContent() {
+        home.content?.let { setHome(home.copy(content = content(it.forecast))) }
+        summaries.keys.toList().forEach { id -> remembered[id]?.let { (place, forecast) -> putSummary(place, forecast) } }
+        notifyChanged()
     }
 
     private companion object {

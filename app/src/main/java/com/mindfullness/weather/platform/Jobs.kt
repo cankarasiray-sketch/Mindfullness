@@ -59,7 +59,7 @@ class AlertJobService : JobService() {
 
             val now = forecast.localNow()
             // Lazy, so only the alerts actually posted are recorded as notified.
-            val posted = AlertEngine.evaluate(forecast, now).asSequence()
+            val posted = AlertEngine.evaluate(forecast, now, settings.allergyProfile).asSequence()
                 .filter { !it.outlook && it.severity >= settings.minSeverity && it.start.isBefore(now.plusHours(24)) }
                 .filter { store.markNotified(it.key, it.severity.ordinal) }
                 .take(3)
@@ -92,9 +92,9 @@ class MorningJobService : JobService() {
                 val forecast = fetchOrNull(context, place)
                 if (forecast != null) {
                     val now = forecast.localNow()
-                    val important = AlertEngine.evaluate(forecast, now)
+                    val important = AlertEngine.evaluate(forecast, now, settings.allergyProfile)
                         .count { !it.outlook && it.severity >= Severity.YELLOW && it.start.isBefore(now.plusHours(24)) }
-                    Notifier.showMorningSummary(context, place, Insights.morningSummary(forecast, now), important)
+                    Notifier.showMorningSummary(context, place, Insights.morningSummary(forecast, now, settings.allergyProfile), important)
                 }
             }
             jobFinished(params, false)

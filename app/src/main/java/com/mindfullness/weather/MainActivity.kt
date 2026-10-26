@@ -13,6 +13,7 @@ import android.view.View
 import android.widget.FrameLayout
 import android.widget.Toast
 import com.mindfullness.weather.domain.Place
+import com.mindfullness.weather.domain.PollenType
 import com.mindfullness.weather.domain.Severity
 import com.mindfullness.weather.domain.WeatherAlert
 import com.mindfullness.weather.platform.AppShare
@@ -306,6 +307,10 @@ class MainActivity : Activity() {
         }
 
         override fun setRainSoon(enabled: Boolean) = controller.setRainSoon(enabled)
+
+        override fun setAllergy(enabled: Boolean) = controller.setAllergy(enabled)
+
+        override fun setAllergen(type: PollenType, allergic: Boolean) = controller.setAllergen(type, allergic)
 
         override fun shareApp() {
             val send = Intent(Intent.ACTION_SEND)

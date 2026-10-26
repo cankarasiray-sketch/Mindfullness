@@ -22,11 +22,13 @@ class WeatherRepository(
     private val extras = Executors.newCachedThreadPool { runnable -> Thread(runnable).apply { isDaemon = true } }
 
     fun fetch(place: Place): Forecast {
-        // Model comparison and air quality are extras: they load alongside and may fail on their own.
+        // Model comparison, the ensemble and air quality are extras: they load alongside and may
+        // fail on their own.
         val models = optional { api.modelsJson(place.latitude, place.longitude) }
+        val ensemble = optional { api.ensembleJson(place.latitude, place.longitude) }
         val air = optional { api.airQualityJson(place.latitude, place.longitude) }
         val forecastJson = api.forecastJson(place.latitude, place.longitude)
-        val payload = Payload(System.currentTimeMillis(), forecastJson, models.result(), air.result())
+        val payload = Payload(System.currentTimeMillis(), forecastJson, models.result(), air.result(), ensemble.result())
         val forecast = payload.parse()
         runCatching {
             cacheDir.mkdirs()
@@ -54,10 +56,17 @@ class WeatherRepository(
     }
 
     /** The raw API responses of one fetch, as stored in the cache. */
-    private class Payload(val fetchedAt: Long, val forecast: String, val models: String?, val air: String?) {
+    private class Payload(
+        val fetchedAt: Long,
+        val forecast: String,
+        val models: String?,
+        val air: String?,
+        val ensemble: String?,
+    ) {
         fun parse(): Forecast = ForecastParser.parse(forecast, fetchedAt).copy(
             models = models?.let { runCatching { ModelsParser.parse(it) }.getOrNull() }.orEmpty(),
             air = air?.let { runCatching { AirQualityParser.parse(it) }.getOrNull() }.orEmpty(),
+            ensemble = ensemble?.let { runCatching { EnsembleParser.parse(it) }.getOrNull() }.orEmpty(),
         )
 
         fun toJson(): String = JSONObject()
@@ -65,16 +74,20 @@ class WeatherRepository(
             .put("forecast", forecast)
             .putOpt("models", models)
             .putOpt("air", air)
+            .putOpt("ensemble", ensemble)
             .toString()
 
         companion object {
             fun fromCache(text: String): Payload {
                 if (!text.startsWith("{")) {
                     // Format of version 1.0: "<fetchedAt>\n<forecast json>".
-                    return Payload(text.substringBefore('\n').toLong(), text.substringAfter('\n'), null, null)
+                    return Payload(text.substringBefore('\n').toLong(), text.substringAfter('\n'), null, null, null)
                 }
                 val json = JSONObject(text)
-                return Payload(json.getLong("fetchedAt"), json.getString("forecast"), json.stringOrNull("models"), json.stringOrNull("air"))
+                return Payload(
+                    json.getLong("fetchedAt"), json.getString("forecast"), json.stringOrNull("models"),
+                    json.stringOrNull("air"), json.stringOrNull("ensemble"),
+                )
             }
         }
     }

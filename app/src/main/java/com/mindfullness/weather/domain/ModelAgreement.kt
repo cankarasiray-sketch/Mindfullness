@@ -2,6 +2,7 @@ package com.mindfullness.weather.domain
 
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.roundToInt
 
 /**
  * Rates an alert by how many independent weather models predict the same event. A model agrees
@@ -11,11 +12,22 @@ import kotlin.math.min
 internal object ModelAgreement {
     private const val SLACK_HOURS = 2L
 
+    /** Ensemble members share one model, so only a smaller timing difference is forgiven. */
+    private const val ENSEMBLE_SLACK_HOURS = 1L
+
+    /** Fewer members with data than this give no meaningful probability. */
+    private const val MIN_MEMBERS = 10
+
     /** Hours of one model around an alert: instant values and preceding-hour sums. */
     private class Window(val instants: List<ModelHour>, val sums: List<ModelHour>)
 
-    fun rate(alert: WeatherAlert, hours: List<HourlyPoint>, models: List<ModelRun>): Confidence? {
-        if (alert.outlook || alert.allDay || models.isEmpty()) return null
+    fun rate(
+        alert: WeatherAlert,
+        hours: List<HourlyPoint>,
+        models: List<ModelRun>,
+        ensemble: List<ModelRun> = emptyList(),
+    ): Confidence? {
+        if (alert.outlook || alert.allDay || (models.isEmpty() && ensemble.isEmpty())) return null
         // Instant values describe the hour from their timestamp, sums the hour up to it.
         val instants = hours.filter { !it.time.isBefore(alert.start) && it.time.isBefore(alert.end) }
         val sums = hours.filter { it.time.isAfter(alert.start) && !it.time.isAfter(alert.end) }
@@ -32,21 +44,33 @@ internal object ModelAgreement {
             else -> return null
         }
 
-        val from = alert.start.minusHours(SLACK_HOURS)
-        val to = alert.end.plusHours(SLACK_HOURS)
+        val (agreeing, total) = count(alert, models, SLACK_HOURS, agrees)
+        val (inEnsemble, members) = count(alert, ensemble, ENSEMBLE_SLACK_HOURS, agrees)
+        val probability = if (members >= MIN_MEMBERS) (inEnsemble * 100.0 / members).roundToInt() else null
+        return when {
+            total >= 2 -> Confidence(agreeing, total, probability)
+            probability != null -> Confidence(0, 0, probability)
+            else -> null
+        }
+    }
+
+    /** How many of [runs] show the event, and how many have data for the period. */
+    private fun count(alert: WeatherAlert, runs: List<ModelRun>, slack: Long, agrees: (Window) -> Boolean?): Pair<Int, Int> {
+        val from = alert.start.minusHours(slack)
+        val to = alert.end.plusHours(slack)
         var total = 0
         var agreeing = 0
-        for (model in models) {
+        for (run in runs) {
             val window = Window(
-                instants = model.hours.filter { !it.time.isBefore(from) && it.time.isBefore(to) },
-                sums = model.hours.filter { it.time.isAfter(from) && !it.time.isAfter(to) },
+                instants = run.hours.filter { !it.time.isBefore(from) && it.time.isBefore(to) },
+                sums = run.hours.filter { it.time.isAfter(from) && !it.time.isAfter(to) },
             )
-            // A model without data for the period neither agrees nor disagrees.
+            // A run without data for the period neither agrees nor disagrees.
             val result = agrees(window) ?: continue
             total++
             if (result) agreeing++
         }
-        return if (total >= 2) Confidence(agreeing, total) else null
+        return agreeing to total
     }
 
     private fun precipitationAtLeast(needed: Double): (Window) -> Boolean? =

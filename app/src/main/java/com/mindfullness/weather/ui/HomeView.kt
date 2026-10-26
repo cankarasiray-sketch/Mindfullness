@@ -27,6 +27,8 @@ import android.widget.TextView
 import com.mindfullness.weather.R
 import com.mindfullness.weather.domain.AirPoint
 import com.mindfullness.weather.domain.AlertEngine
+import com.mindfullness.weather.domain.Allergy
+import com.mindfullness.weather.domain.PollenLevel
 import com.mindfullness.weather.domain.Confidence
 import com.mindfullness.weather.domain.CurrentWeather
 import com.mindfullness.weather.domain.DailyPoint
@@ -265,11 +267,14 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         content.addView(alertsSection(data.alerts, now).params(bottom = gap))
         if (data.tips.isNotEmpty()) content.addView(tipsSection(data.tips).params(bottom = gap))
         content.addView(precipitationCard(data.precipitation, forecast.precipitationHours(now, 24)).params(bottom = gap))
+        // With an allergy the pollen card matters as much as rain; otherwise it sits further down.
+        if (data.allergyProfile != null) content.addView(allergyCard(data).params(bottom = gap))
         content.addView(hourlyCard(forecast.hoursFrom(now, 36), forecast.current).params(bottom = gap))
         content.addView(
             dailyCard(forecast.daily.filter { !it.date.isBefore(now.toLocalDate()) }, now.toLocalDate(), alertDays(data.alerts))
                 .params(bottom = gap),
         )
+        if (data.allergyProfile == null && data.allergy.hasData) content.addView(allergyCard(data).params(bottom = gap))
         content.addView(detailsSection(forecast.current, forecast.hourAt(now), today, forecast.airAt(now)).params(bottom = gap))
         val sources = buildList {
             add("Veri: Open-Meteo.com (CC BY 4.0)")
@@ -812,6 +817,67 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         return container
     }
 
+    /** Pollen by type for today and the next two days, the user's allergens first. */
+    private fun allergyCard(data: ForecastContent): View = card().apply {
+        val summary = data.allergy
+        val profile = data.allergyProfile
+        addView(context.sectionTitle(R.drawable.ic_flower, "Polen ve alerji", "${Allergy.DAYS} gün").params(bottom = 10))
+        addView(context.text(summary.headline, 16f, Palette.TEXT, Fonts.medium))
+        summary.detail?.let { addView(context.text(it, 14f, Palette.TEXT_SECONDARY).params(top = 3)) }
+        if (summary.types.isNotEmpty()) {
+            val header = context.horizontal()
+            header.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+            summary.dates.forEach { date ->
+                header.addView(
+                    context.text(TimeText.relativeShortDay(date, data.now.toLocalDate()), 12f, Palette.TEXT_TERTIARY, Fonts.medium)
+                        .apply { gravity = Gravity.CENTER },
+                    LinearLayout.LayoutParams(dp(POLLEN_COLUMN), WRAP),
+                )
+            }
+            addView(header.params(top = 14, bottom = 4))
+            summary.types.forEach { outlook ->
+                val allergen = profile?.types?.contains(outlook.type) == true
+                val row = context.horizontal().apply { minimumHeight = dp(36) }
+                row.addView(
+                    context.text(
+                        outlook.type.shortLabel, 14f,
+                        if (allergen || profile == null) Palette.TEXT else Palette.TEXT_SECONDARY,
+                        if (allergen) Fonts.medium else Fonts.regular, maxLines = 1,
+                    ),
+                    LinearLayout.LayoutParams(0, WRAP, 1f),
+                )
+                summary.dates.forEach { date -> row.addView(pollenChip(outlook.on(date)?.level), LinearLayout.LayoutParams(dp(POLLEN_COLUMN), WRAP)) }
+                row.contentDescription = outlook.type.label + ": " + summary.dates.joinToString(", ") { date ->
+                    "${TimeText.relativeDay(date, data.now.toLocalDate())} ${outlook.on(date)?.level?.label ?: "veri yok"}"
+                }
+                addView(row.params(top = 2))
+            }
+        }
+        if (profile == null && summary.hasData) {
+            addView(
+                context.text(
+                    "Polen alerjiniz varsa Ayarlar → Alerji'den türleri seçin; yüksek günlerde uyarı ve bildirim alırsınız.",
+                    12f, Palette.TEXT_TERTIARY,
+                ).params(top = 10),
+            )
+        }
+    }
+
+    private fun pollenChip(level: PollenLevel?): View = FrameLayout(context).apply {
+        val label = when (level) {
+            null -> "–"
+            PollenLevel.VERY_HIGH -> "Çok yük."
+            else -> level.label
+        }
+        val color = level?.let(Palette::pollen)
+        val chip = context.text(label, 11f, if (color == null || level == PollenLevel.NONE) Palette.TEXT_TERTIARY else Palette.ON_SEVERITY, Fonts.medium, maxLines = 1).apply {
+            gravity = Gravity.CENTER
+            background = rounded(if (color == null || level == PollenLevel.NONE) Palette.GLASS else color, dp(10).toFloat())
+            setPadding(dp(6), dp(4), dp(6), dp(4))
+        }
+        addView(chip, LayoutParams(MATCH, WRAP, Gravity.CENTER).apply { marginStart = dp(3); marginEnd = dp(3) })
+    }
+
     private fun detailLine(parent: LinearLayout, label: String, value: String) {
         val row = context.horizontal()
         row.addView(context.text(label, 14f, Palette.TEXT_SECONDARY), LinearLayout.LayoutParams(0, WRAP, 1f))
@@ -1006,6 +1072,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
     private companion object {
         const val LABEL_TAG = "label"
+        const val POLLEN_COLUMN = 66
     }
 }
 

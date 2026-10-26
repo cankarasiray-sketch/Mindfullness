@@ -15,6 +15,12 @@ veya ilçenin hava durumuna da bakabilirsiniz.
     göstermese de gök gürültülü sağanak riski bildirilir.
   - **Sel ve taşkın riski** – dün dahil 3 günde biriken yağış (toprağın suya doyması) ayrıca değerlendirilir.
   - **Hava kalitesi ve çöl tozu** – Copernicus CAMS tahminiyle; toz taşınımında çamur yağmuru uyarısı.
+  - **Gerçek olasılık** – uyarılar ECMWF'nin 51 senaryolu topluluk tahminiyle de sınanır: "olasılık %78"
+    senaryoların ne kadarının olayı gösterdiğidir; güven derecesini bu belirler.
+- **Polen ve alerji** – kızılağaç, huş, zeytin, çim, pelin otu ve ambrosia için bugün, yarın ve ertesi gün
+  polen düzeyi (Yok · Düşük · Orta · Yüksek · Çok yüksek; ABD Ulusal Alerji Bürosu sınıfları). Ayarlarda
+  "Polen alerjim var" açılıp türler seçildiğinde yüksek günlerde uyarı ve bildirim, "alerji ilacı" önerisi ve
+  sabah özetinde polen bilgisi gelir. Polen tahmini Avrupa ve Türkiye için CAMS'ten, mevsiminde verilir.
   - Her uyarıda **ne zaman** (ör. "Bugün 15:00–21:00"), **ne kadar** (mm, km/sa, °C) ve
     MGM'nin kullandığı renk ölçeğiyle **seviye** (Bilgi · Sarı · Turuncu · Kırmızı) gösterilir.
   - **"Ne yapmalı?"** bölümü seviyeye göre somut önlemler sıralar.

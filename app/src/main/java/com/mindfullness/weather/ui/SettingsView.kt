@@ -7,12 +7,14 @@ import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
+import android.widget.CheckBox
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.ScrollView
 import android.widget.Switch
 import com.mindfullness.weather.R
+import com.mindfullness.weather.domain.PollenType
 import com.mindfullness.weather.domain.Severity
 
 class SettingsView(context: Context, private val actions: Actions) : LinearLayout(context) {
@@ -23,6 +25,8 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         fun setMorningSummary(enabled: Boolean)
         fun setRainSoon(enabled: Boolean)
         fun shareApp()
+        fun setAllergy(enabled: Boolean)
+        fun setAllergen(type: PollenType, allergic: Boolean)
         fun useViewingPlaceForNotifications()
         fun openNotificationSettings()
         fun back()
@@ -109,6 +113,33 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
             ) { actions.setMorningSummary(it) },
         )
         body.addView(notifications)
+
+        body.addView(sectionLabel("Alerji").params(top = 24))
+        val allergy = section()
+        allergy.addView(
+            switchRow(
+                "Polen alerjim var",
+                "Seçtiğiniz polenler yüksek olduğu günlerde uyarı ve (bildirimler açıksa) bildirim alırsınız; polen kartı " +
+                    "ana ekranda öne çıkar. Polen tahmini Avrupa ve Türkiye için, mevsiminde yapılır.",
+                state.allergyEnabled,
+            ) { actions.setAllergy(it) },
+        )
+        if (state.allergyEnabled) {
+            allergy.addView(divider())
+            allergy.addView(
+                context.text("Hangi polenlere alerjiniz var?", 14f, Palette.ON_SURFACE_MUTED, Fonts.medium).params(start = 16, top = 14, bottom = 4),
+            )
+            PollenType.values().forEach { type ->
+                allergy.addView(checkRow(type.label, type.group.label, type in state.allergens) { actions.setAllergen(type, it) })
+            }
+            if (state.allergens.isEmpty()) {
+                allergy.addView(
+                    context.text("En az bir tür seçin; aksi halde polen uyarısı verilmez.", 13f, Palette.severity(Severity.ORANGE))
+                        .params(start = 16, end = 16, top = 4, bottom = 12),
+                )
+            }
+        }
+        body.addView(allergy)
 
         body.addView(sectionLabel("Uyarı seviyeleri").params(top = 24))
         val levels = section()
@@ -201,6 +232,29 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
             texts.addView(context.text(text, 14f, Palette.ON_SURFACE_MUTED).params(top = 3))
             addView(texts, LayoutParams(0, WRAP, 1f))
             addView(switch.params(WRAP, WRAP, start = 12))
+        }
+    }
+
+    private fun checkRow(title: String, note: String, checked: Boolean, onChange: (Boolean) -> Unit): View {
+        val box = CheckBox(context).apply {
+            isChecked = checked
+            isClickable = false
+            buttonTintList = ColorStateList(
+                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(Palette.ACCENT, Palette.ON_SURFACE_MUTED),
+            )
+        }
+        return context.horizontal().apply {
+            background = ripple(null)
+            setPadding(dp(8), dp(2), dp(16), dp(2))
+            minimumHeight = dp(52)
+            setOnClickListener { onChange(!checked) }
+            addView(box)
+            box.jumpDrawablesToCurrentState()
+            val texts = context.vertical()
+            texts.addView(context.text(title, 16f, Palette.ON_SURFACE))
+            texts.addView(context.text(note, 12f, Palette.ON_SURFACE_MUTED).params(top = 1))
+            addView(texts, LayoutParams(0, WRAP, 1f).apply { marginStart = dp(4) })
         }
     }
 

@@ -33,8 +33,10 @@ data class Forecast(
     val daily: List<DailyPoint>,
     /** The same hours from independent models (ECMWF, ICON, GFS), used to rate confidence. */
     val models: List<ModelRun> = emptyList(),
-    /** Air quality and desert dust (CAMS), when available. */
+    /** Air quality, desert dust and pollen (CAMS), when available. */
     val air: List<AirPoint> = emptyList(),
+    /** Members of the ECMWF ensemble (51 runs from perturbed starts), to estimate probabilities. */
+    val ensemble: List<ModelRun> = emptyList(),
 ) {
     /** Wall-clock time at the forecast location. */
     fun localNow(nowMillis: Long = System.currentTimeMillis()): LocalDateTime =
@@ -122,6 +124,8 @@ data class AirPoint(
     val pm10: Double?,
     /** Desert dust near the surface, µg/m³. */
     val dust: Double?,
+    /** Pollen grains/m³ per type; types without data are missing (outside Europe or the season). */
+    val pollen: Map<PollenType, Double> = emptyMap(),
 ) {
     /** Saharan dust, rather than local pollution, is the main cause of the particles. */
     val isDusty: Boolean

@@ -152,7 +152,8 @@ class WeatherWidget : AppWidgetProvider() {
                 "${place.name}, ${current.temperature.deg()}, ${WeatherCodes.describe(current.weatherCode)}",
             )
 
-            val top = AlertEngine.evaluate(forecast, now).firstOrNull { !it.outlook && it.severity >= Severity.YELLOW }
+            val allergy = SettingsStore(context).settings.allergyProfile
+            val top = AlertEngine.evaluate(forecast, now, allergy).firstOrNull { !it.outlook && it.severity >= Severity.YELLOW }
             val rain = Insights.precipitation(forecast, now)
             when {
                 top != null -> dot(views, Palette.severity(top.severity), "${top.title} · ${top.whenText(now)}")

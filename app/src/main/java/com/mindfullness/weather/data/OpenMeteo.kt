@@ -8,6 +8,7 @@ import com.mindfullness.weather.domain.HourlyPoint
 import com.mindfullness.weather.domain.ModelHour
 import com.mindfullness.weather.domain.ModelRun
 import com.mindfullness.weather.domain.Place
+import com.mindfullness.weather.domain.PollenType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -43,11 +44,23 @@ class OpenMeteoApi {
         optional = true,
     )
 
-    /** CAMS air quality and desert dust. */
+    /** CAMS air quality, desert dust and (in Europe) pollen. */
     fun airQualityJson(latitude: Double, longitude: Double): String = get(
         "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${coordinate(latitude)}&longitude=${coordinate(longitude)}" +
+            "&hourly=european_aqi,pm2_5,pm10,dust,${PollenType.values().joinToString(",") { it.apiName }}" +
             // The previous day keeps an episode running across midnight on one start (and key).
-            "&hourly=european_aqi,pm2_5,pm10,dust&timezone=auto&past_days=1&forecast_days=4",
+            "&timezone=auto&past_days=1&forecast_days=4",
+        optional = true,
+    )
+
+    /**
+     * The 51 members of the ECMWF IFS ensemble: the same model started from slightly different
+     * states. The share of members showing an event is its probability.
+     */
+    fun ensembleJson(latitude: Double, longitude: Double): String = get(
+        "https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${coordinate(latitude)}&longitude=${coordinate(longitude)}" +
+            "&hourly=precipitation,wind_gusts_10m,temperature_2m&models=$ENSEMBLE_MODEL" +
+            "&timezone=auto&past_days=1&forecast_days=3&wind_speed_unit=kmh",
         optional = true,
     )
 
@@ -81,6 +94,9 @@ class OpenMeteoApi {
     companion object {
         /** Global models compared for confidence: ECMWF IFS 0.25°, DWD ICON and NOAA GFS. */
         val MODELS = listOf("ecmwf_ifs025", "icon_seamless", "gfs_seamless")
+
+        /** A single model, so the API returns its members without a model suffix. */
+        const val ENSEMBLE_MODEL = "ecmwf_ifs025"
 
         private val CURRENT = listOf(
             "temperature_2m", "relative_humidity_2m", "apparent_temperature", "is_day", "precipitation",
@@ -268,9 +284,44 @@ object AirQualityParser {
         val pm25 = hourly.doubles("pm2_5")
         val pm10 = hourly.doubles("pm10")
         val dust = hourly.doubles("dust")
+        val pollen = PollenType.values().associateWith { hourly.doubles(it.apiName) }
         return times.indices.mapNotNull { i ->
             val time = times[i]?.let(LocalDateTime::parse) ?: return@mapNotNull null
-            AirPoint(time, aqi.at(i), pm25.at(i), pm10.at(i), dust.at(i))
+            val grains = pollen.mapNotNull { (type, values) -> values.at(i)?.let { type to it } }.toMap()
+            AirPoint(time, aqi.at(i), pm25.at(i), pm10.at(i), dust.at(i), grains)
+        }
+    }
+}
+
+/**
+ * Splits an ensemble response into one run per member. The control run comes as "precipitation",
+ * the others as "precipitation_member01" … "precipitation_member50".
+ */
+object EnsembleParser {
+    private val MEMBER = Regex("^(precipitation|wind_gusts_10m|temperature_2m)(?:_member(\\d+))?$")
+
+    fun parse(json: String): List<ModelRun> {
+        val hourly = JSONObject(json).optJSONObject("hourly") ?: return emptyList()
+        val times = hourly.strings("time").map { it?.let(LocalDateTime::parse) }
+        // member number (0 = control) -> variable -> values
+        val members = sortedMapOf<Int, MutableMap<String, List<Double?>>>()
+        hourly.keys().forEach { key ->
+            val match = MEMBER.matchEntire(key) ?: return@forEach
+            val member = match.groupValues[2].ifEmpty { "0" }.toInt()
+            members.getOrPut(member) { HashMap() }[match.groupValues[1]] = hourly.doubles(key)
+        }
+        return members.mapNotNull { (member, values) ->
+            val precipitation = values["precipitation"].orEmpty()
+            val gusts = values["wind_gusts_10m"].orEmpty()
+            val temperature = values["temperature_2m"].orEmpty()
+            if (precipitation.all { it == null } && gusts.all { it == null } && temperature.all { it == null }) {
+                return@mapNotNull null
+            }
+            val hours = times.indices.mapNotNull { i ->
+                val time = times[i] ?: return@mapNotNull null
+                ModelHour(time, precipitation.at(i), gusts.at(i), temperature.at(i))
+            }
+            ModelRun("member$member", hours)
         }
     }
 }

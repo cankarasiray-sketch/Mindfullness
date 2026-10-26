@@ -14,19 +14,36 @@ enum class Severity(val label: String, val shortLabel: String) {
 }
 
 enum class AlertType {
-    RAIN, SNOW, THUNDERSTORM, WIND, HEAT, COLD, ICE, FOG, UV, TEMPERATURE_DROP, FLOOD, AIR_QUALITY, DUST,
+    RAIN, SNOW, THUNDERSTORM, WIND, HEAT, COLD, ICE, FOG, UV, TEMPERATURE_DROP, FLOOD, AIR_QUALITY, DUST, POLLEN,
 }
 
 /** How many independent weather models also predict an alert's event. */
-data class Confidence(val agreeing: Int, val total: Int) {
+data class Confidence(
+    /** Independent models (ECMWF, ICON, GFS) that also show the event; total 0 when unknown. */
+    val agreeing: Int,
+    val total: Int,
+    /** Share of the ECMWF ensemble members showing the event, in percent; null when unknown. */
+    val probability: Int? = null,
+) {
     val level: Level
         get() = when {
+            // The ensemble gives a real probability, so it decides when there is one.
+            probability != null -> when {
+                probability >= 70 -> Level.HIGH
+                probability >= 40 -> Level.MEDIUM
+                else -> Level.LOW
+            }
             agreeing == total -> Level.HIGH
             agreeing * 2 >= total -> Level.MEDIUM
             else -> Level.LOW
         }
 
-    val text: String get() = "Güven: ${level.label} · $agreeing/$total model"
+    val text: String
+        get() = buildList {
+            add("Güven: ${level.label}")
+            probability?.let { add("olasılık %$it") }
+            if (total >= 2) add("$agreeing/$total model")
+        }.joinToString(" · ")
 
     enum class Level(val label: String) { HIGH("Yüksek"), MEDIUM("Orta"), LOW("Düşük") }
 }
@@ -101,7 +118,8 @@ object AlertEngine {
     const val DETAIL_HOURS = 48L
     private const val OUTLOOK_DAYS = 7L
 
-    fun evaluate(forecast: Forecast, now: LocalDateTime): List<WeatherAlert> {
+    /** [allergy]: the user's pollen allergies; pollen warnings only appear with one. */
+    fun evaluate(forecast: Forecast, now: LocalDateTime, allergy: AllergyProfile? = null): List<WeatherAlert> {
         val startHour = now.truncatedTo(ChronoUnit.HOURS)
         val windowEnd = startHour.plusHours(DETAIL_HOURS)
         // Episodes are detected on everything up to the window end, including the earlier hours of
@@ -127,10 +145,13 @@ object AlertEngine {
             addAll(uv(hours))
             addAll(airQuality(forecast.air.filter { !it.time.isAfter(windowEnd) }))
         }.filter { it.end.isAfter(now) && it.start.isBefore(windowEnd) }
-            .map { alert -> ModelAgreement.rate(alert, hours, forecast.models)?.let { alert.copy(confidence = it) } ?: alert }
+            .map { alert ->
+                ModelAgreement.rate(alert, hours, forecast.models, forecast.ensemble)?.let { alert.copy(confidence = it) } ?: alert
+            }
         val dayAlerts = temperatureDrop(forecast.daily, now.toLocalDate()) +
             flood(forecast.daily, now.toLocalDate(), windowEnd.toLocalDate())
-                .filter { flood -> hourlyAlerts.none { it.type == AlertType.RAIN && it.severity >= flood.severity && it.overlaps(flood) } }
+                .filter { flood -> hourlyAlerts.none { it.type == AlertType.RAIN && it.severity >= flood.severity && it.overlaps(flood) } } +
+            (allergy?.let { Allergy.alerts(forecast.air, now, it) } ?: emptyList())
         val alerts = hourlyAlerts + dayAlerts
 
         // Day-level heads-ups are dropped for days the hourly alerts already cover at the same or a

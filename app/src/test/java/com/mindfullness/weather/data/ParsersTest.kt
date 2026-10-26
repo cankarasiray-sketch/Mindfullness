@@ -1,6 +1,7 @@
 package com.mindfullness.weather.data
 
 import com.mindfullness.weather.domain.Place
+import com.mindfullness.weather.domain.PollenType
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -57,6 +58,39 @@ class ParsersTest {
     }
 
     @Test
+    fun `parses pollen and leaves missing types out`() {
+        val json = """
+            {"hourly": {
+              "time": ["2026-05-12T00:00", "2026-05-12T01:00"],
+              "european_aqi": [30, 32], "grass_pollen": [12.5, null], "birch_pollen": [null, null]
+            }}
+        """.trimIndent()
+        val air = AirQualityParser.parse(json)
+        assertEquals(12.5, air[0].pollen[PollenType.GRASS]!!, 1e-9)
+        assertTrue(air[1].pollen.isEmpty())
+        assertTrue(PollenType.BIRCH !in air[0].pollen)
+    }
+
+    @Test
+    fun `splits ensemble members`() {
+        val json = """
+            {"hourly": {
+              "time": ["2026-05-12T00:00", "2026-05-12T01:00"],
+              "precipitation": [0.0, 1.0], "precipitation_member01": [0.2, 0.4], "precipitation_member02": [null, null],
+              "wind_gusts_10m": [20, 22], "wind_gusts_10m_member01": [25, 27], "wind_gusts_10m_member02": [null, null],
+              "temperature_2m": [10, 11], "temperature_2m_member01": [9, 10], "temperature_2m_member02": [null, null],
+              "precipitation_probability": [10, 20]
+            }}
+        """.trimIndent()
+        val members = EnsembleParser.parse(json)
+        // The control run and member 1; member 2 has no data.
+        assertEquals(listOf("member0", "member1"), members.map { it.name })
+        assertEquals(0.4, members[1].hours[1].precipitation!!, 1e-9)
+        assertEquals(27.0, members[1].hours[1].windGusts!!, 1e-9)
+        assertEquals(10.0, members[1].hours[1].temperature!!, 1e-9)
+    }
+
+    @Test
     fun `parses cape`() {
         val forecast = ForecastParser.parse(forecastJson, 0)
         assertTrue(forecast.hourly.isNotEmpty())
@@ -82,12 +116,14 @@ class ParsersTest {
         assertTrue(old.models.isEmpty())
 
         file.writeText(
-            JSONObject().put("fetchedAt", 5678L).put("forecast", forecastJson).put("models", modelsJson).put("air", airJson).toString(),
+            JSONObject().put("fetchedAt", 5678L).put("forecast", forecastJson).put("models", modelsJson).put("air", airJson)
+                .put("ensemble", modelsJson.replace("_ecmwf_ifs025", "").replace("_icon_seamless", "_member01")).toString(),
         )
         val current = repository.cached(place)!!
         assertEquals(5678L, current.fetchedAtMillis)
         assertEquals(2, current.models.size)
         assertEquals(2, current.air.size)
+        assertEquals(2, current.ensemble.size)
 
         // A broken extra must not cost the forecast itself.
         file.writeText(JSONObject().put("fetchedAt", 1L).put("forecast", forecastJson).put("air", "not json").toString())
