@@ -10,6 +10,10 @@ on:
         description: Extra URLs to fetch (space separated)
         required: false
         default: ""
+      ua:
+        description: User agent to send (default a mobile browser; the app sends its own)
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -21,8 +25,9 @@ jobs:
       - name: Fetch and print
         env:
           EXTRA: ${{ github.event.inputs.urls }}
+          UA_INPUT: ${{ github.event.inputs.ua }}
         run: |
-          UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+          UA="${UA_INPUT:-Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36}"
           mkdir -p pages
           i=0
           for u in https://polenalerji.ankara.edu.tr/ https://polenalerji.ege.edu.tr/ $EXTRA; do
