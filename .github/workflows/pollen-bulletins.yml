@@ -1,0 +1,42 @@
+# Downloads the official pollen bulletin pages (Ankara, İzmir) and prints them, so the app's
+# bulletin reader can be written and checked against the real pages. The development sandbox
+# cannot reach these hosts; GitHub's runners can.
+name: Pollen bulletin pages
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: Extra URLs to fetch (space separated)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch and print
+        env:
+          EXTRA: ${{ github.event.inputs.urls }}
+        run: |
+          UA="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36"
+          mkdir -p pages
+          i=0
+          for u in https://polenalerji.ankara.edu.tr/ https://polenalerji.ege.edu.tr/ $EXTRA; do
+            i=$((i+1))
+            echo "=== $u"
+            curl -sSL --max-time 60 -A "$UA" -D "pages/$i.headers" -o "pages/$i.body" "$u" || echo "curl failed: $?"
+            echo "--- headers"; tr -d '\r' < "pages/$i.headers" 2>/dev/null
+            echo "--- body ($(wc -c < "pages/$i.body" 2>/dev/null) bytes)"
+            # Long minified lines are folded so the log keeps them whole.
+            fold -w 400 "pages/$i.body" 2>/dev/null
+            echo
+          done
+      - name: Keep the pages
+        uses: actions/upload-artifact@v4
+        with:
+          name: pollen-bulletin-pages
+          path: pages/
