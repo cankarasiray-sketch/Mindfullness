@@ -52,11 +52,8 @@ object Insights {
             if (sunnyDaytime && maxUv >= 3) add(Tip(TipKind.SUNGLASSES, "Güneş gözlüğü"))
             if (maxFeels >= 30) add(Tip(TipKind.WATER, "Su şişesi"))
             if (allergy != null) {
-                val pollen = allergy.types.mapNotNull { type -> Allergy.day(forecast.air, type, now.toLocalDate(), now)?.let { type to it } }
-                    .maxByOrNull { it.second.level }
-                    ?.takeIf { it.second.level >= PollenLevel.MODERATE }
-                if (pollen != null) {
-                    add(Tip(TipKind.ALLERGY, "Alerji ilacı (${pollen.first.shortLabel.lowercase(TR)} poleni ${pollen.second.level.label.lowercase(TR)})"))
+                Allergy.worstToday(forecast, now, allergy)?.takeIf { it.second >= PollenLevel.MODERATE }?.let { (subject, level) ->
+                    add(Tip(TipKind.ALLERGY, "Alerji ilacı ($subject ${level.label.lowercase(TR)})"))
                 }
             }
             if (worstAir != null) {

@@ -39,6 +39,13 @@ object TimeText {
 
     fun dayMonth(date: LocalDate): String = "${date.dayOfMonth} ${monthNames[date.monthValue - 1]}"
 
+    /** "23–29 Mart 2026", or "28 Mart – 3 Nisan 2026" across a month. */
+    fun week(from: LocalDate, to: LocalDate): String = when {
+        from.year != to.year -> "${dayMonth(from)} ${from.year} – ${dayMonth(to)} ${to.year}"
+        from.month != to.month -> "${dayMonth(from)} – ${dayMonth(to)} ${to.year}"
+        else -> "${from.dayOfMonth}–${dayMonth(to)} ${to.year}"
+    }
+
     /** "Bugün", "Yarın" or the weekday name. */
     fun relativeDay(date: LocalDate, today: LocalDate): String = when (date) {
         today -> "Bugün"

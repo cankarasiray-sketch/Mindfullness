@@ -29,6 +29,8 @@ import com.mindfullness.weather.R
 import com.mindfullness.weather.domain.AirPoint
 import com.mindfullness.weather.domain.AlertEngine
 import com.mindfullness.weather.domain.Allergy
+import com.mindfullness.weather.domain.BulletinGroup
+import com.mindfullness.weather.domain.BulletinReading
 import com.mindfullness.weather.domain.PollenBulletin
 import com.mindfullness.weather.domain.PollenBulletins
 import com.mindfullness.weather.domain.PollenLevel
@@ -44,6 +46,7 @@ import com.mindfullness.weather.domain.WeatherAlert
 import com.mindfullness.weather.domain.WeatherCodes
 import org.threeten.bp.LocalDate
 import org.threeten.bp.LocalDateTime
+import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -888,7 +891,10 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 addView(row.params(top = 2))
             }
         }
-        bulletin?.let { addView(bulletinRow(it).params(top = 12)) }
+        bulletin?.let { city ->
+            val reading = data.forecast.bulletin?.takeIf { it.bulletin.id == city.id }
+            addView(bulletinSection(city, reading, data.now.toLocalDate()).params(top = 12))
+        }
         if (profile == null && summary.hasData) {
             addView(
                 context.text(
@@ -899,18 +905,95 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         }
     }
 
-    /** Link to the city's measured counts, which cover more pollen types than the forecast. */
-    private fun bulletinRow(bulletin: PollenBulletin): View = context.horizontal().apply {
-        background = ripple(rounded(Palette.GLASS, dp(12).toFloat()), radius = dp(12).toFloat())
+    /**
+     * The city's measured bulletin: its levels, with a link to the page for more; only the link
+     * while there is nothing current to show (not read yet, or out of season).
+     */
+    private fun bulletinSection(bulletin: PollenBulletin, reading: BulletinReading?, today: LocalDate): View {
+        if (reading == null || !reading.isCurrent(today)) {
+            val note = reading?.measuredTo?.let { "son ölçüm ${TimeText.week(reading.measuredFrom ?: it, it)}" } ?: "tarayıcıda açılır"
+            return bulletinLink(bulletin, "${bulletin.source} · $note").apply {
+                background = ripple(rounded(Palette.GLASS, dp(12).toFloat()), radius = dp(12).toFloat())
+            }
+        }
+        return context.vertical().apply {
+            background = rounded(Palette.GLASS, dp(12).toFloat())
+            setPadding(0, 0, 0, dp(10))
+            addView(bulletinLink(bulletin, "${bulletin.source} · ${TimeText.ago(reading.fetchedAtMillis)}"))
+            val body = context.vertical().apply { setPadding(dp(12), 0, dp(8), 0) }
+            if (reading.isWeekly) {
+                reading.measuredTo?.let { to ->
+                    body.addView(context.text("Ölçüm haftası ${TimeText.week(reading.measuredFrom ?: to, to)}", 12f, Palette.TEXT_TERTIARY).params(bottom = 4))
+                }
+                reading.groups.forEach { group ->
+                    val row = context.horizontal().apply { minimumHeight = dp(36) }
+                    row.addView(groupName(group.group.label), LinearLayout.LayoutParams(0, WRAP, 1f))
+                    row.addView(pollenChip(group.weekLevel), LinearLayout.LayoutParams(dp(92), WRAP))
+                    row.contentDescription = "${group.group.label}: ${group.weekLevel?.label ?: "veri yok"}"
+                    body.addView(row)
+                    dominantLine(group)?.let { body.addView(it) }
+                }
+                if (reading.risk != null && reading.riskDate == today) {
+                    val hours = reading.riskHours?.let { " ($it)" }.orEmpty()
+                    body.addView(
+                        context.text("Bugün polenden etkilenme olasılığı$hours: ${reading.risk.label.lowercase(TR)}", 13f, Palette.TEXT_SECONDARY)
+                            .params(top = 8),
+                    )
+                }
+            } else {
+                val dates = (0 until Allergy.DAYS).map { today.plusDays(it) }
+                val header = context.horizontal()
+                header.addView(View(context), LinearLayout.LayoutParams(0, 0, NAME_WEIGHT))
+                dates.forEach { date ->
+                    header.addView(
+                        context.text(TimeText.relativeShortDay(date, today), 12f, Palette.TEXT_TERTIARY, Fonts.medium, maxLines = 1)
+                            .apply { gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(0, WRAP, 1f),
+                    )
+                }
+                body.addView(header.params(top = 2, bottom = 4))
+                reading.groups.forEach { group ->
+                    val row = context.horizontal().apply { minimumHeight = dp(36) }
+                    row.addView(groupName(group.group.label), LinearLayout.LayoutParams(0, WRAP, NAME_WEIGHT))
+                    dates.forEach { date -> row.addView(pollenChip(group.on(date)), LinearLayout.LayoutParams(0, WRAP, 1f)) }
+                    row.contentDescription = group.group.label + ": " + dates.joinToString(", ") { date ->
+                        "${TimeText.relativeDay(date, today)} ${group.on(date)?.label ?: "veri yok"}"
+                    }
+                    body.addView(row)
+                    dominantLine(group)?.let { body.addView(it) }
+                }
+            }
+            addView(body)
+        }
+    }
+
+    /** The bulletin's name and source; opens its page, which has much more. */
+    private fun bulletinLink(bulletin: PollenBulletin, subtitle: String): LinearLayout = context.horizontal().apply {
+        background = ripple(null, radius = dp(12).toFloat())
         setPadding(dp(12), dp(10), dp(8), dp(10))
         minimumHeight = dp(48)
-        contentDescription = "${bulletin.name}, ${bulletin.source}. Tarayıcıda açılır."
+        contentDescription = "${bulletin.name}, $subtitle. Sayfası tarayıcıda açılır."
         val texts = context.vertical()
         texts.addView(context.text(bulletin.name, 14f, Palette.TEXT, Fonts.medium))
-        texts.addView(context.text("${bulletin.source} · tarayıcıda açılır", 12f, Palette.TEXT_TERTIARY).params(top = 2))
+        texts.addView(context.text(subtitle, 12f, Palette.TEXT_TERTIARY).params(top = 2))
         addView(texts, LinearLayout.LayoutParams(0, WRAP, 1f))
         addView(context.icon(R.drawable.ic_chevron_down, Palette.TEXT_TERTIARY, 18).apply { rotation = -90f })
         setOnClickListener { actions.openLink(bulletin.url) }
+    }
+
+    private fun groupName(label: String): TextView = context.text(label, 14f, Palette.TEXT, maxLines = 1).apply {
+        ellipsize = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            setAutoSizeTextTypeUniformWithConfiguration(9, 14, 1, TypedValue.COMPLEX_UNIT_SP)
+        } else {
+            maxLines = 2
+        }
+    }
+
+    /** "Çamgiller, Servigiller": what makes up the group's count. */
+    private fun dominantLine(group: BulletinGroup): View? {
+        val names = group.dominantNames.takeIf { it.isNotEmpty() } ?: return null
+        return context.text(names.joinToString(", "), 12f, Palette.TEXT_TERTIARY).params(bottom = 4)
     }
 
     private fun pollenChip(level: PollenLevel?): View = FrameLayout(context).apply {
@@ -1128,6 +1211,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private companion object {
         const val LABEL_TAG = "label"
         const val NAME_WEIGHT = 1.5f
+        val TR: Locale = Locale.forLanguageTag("tr-TR")
     }
 }
 

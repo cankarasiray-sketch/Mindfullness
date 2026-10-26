@@ -124,7 +124,7 @@ class AllergyTest {
 
     @Test
     fun `day-long alerts are announced in the evening before or by day, not at night`() {
-        val air = air { type, _ -> if (type == PollenType.GRASS) 60.0 else 0.0 }
+        val air = air { type, i -> if (type == PollenType.GRASS && i in 24..47) 60.0 else 0.0 }
         val tomorrow = AlertEngine.evaluate(forecast(air), now, AllergyProfile.ALL).single { it.start == base.plusDays(1) }
         fun due(hour: Int, minute: Int = 0) = NotificationPolicy.isDue(tomorrow, base.withHour(hour).withMinute(minute))
         assertFalse(due(9)) // a day early
@@ -210,5 +210,78 @@ class AllergyTest {
         assertEquals("İzmir Polen Alerji Bülteni", PollenBulletins.near(38.42, 27.14)?.name) // Konak
         assertNull(PollenBulletins.near(41.01, 28.98)) // İstanbul
         assertNull(PollenBulletins.near(39.58, 32.15)) // Polatlı, ~75 km from Ankara
+    }
+
+    /** Ankara's bulletin as read on the test's day: trees and weeds high, grass low. */
+    private fun ankara(fetchedAt: LocalDateTime = now) = BulletinReading(
+        PollenBulletins.ANKARA,
+        listOf(
+            BulletinGroup(PollenGroup.TREE, days = (0L..2L).map { BulletinDay(base.toLocalDate().plusDays(it), PollenLevel.HIGH) },
+                dominant = listOf("Çamgiller (Pinaceae, The Pine family)", "Servigiller (Cupressaceae, Cypress)")),
+            BulletinGroup(PollenGroup.WEED, days = (0L..2L).map { BulletinDay(base.toLocalDate().plusDays(it), PollenLevel.HIGH) },
+                dominant = listOf("Pelin otu (Artemisia, Mugworth)", "Horozibiğigiller, Ispanakgiller (Amaranthaceae, The Amaranth family)")),
+            BulletinGroup(PollenGroup.GRASS, days = (0L..2L).map { BulletinDay(base.toLocalDate().plusDays(it), PollenLevel.LOW) },
+                dominant = listOf("Buğdaygiller (Poaceae, Grasses)")),
+        ),
+        fetchedAtMillis = fetchedAt.toInstant(org.threeten.bp.ZoneOffset.ofHours(3)).toEpochMilli(),
+    )
+
+    @Test
+    fun `the city bulletin speaks where the forecast has nothing`() {
+        val forecast = forecast(air { _, _ -> null }).copy(bulletin = ankara())
+        val mugwort = AllergyProfile(setOf(PollenType.MUGWORT))
+        val summary = Allergy.summary(forecast, now, mugwort)
+        assertTrue(summary.hasData)
+        assertEquals("Bugün pelin otu poleni yüksek", summary.headline)
+        assertEquals("Kaynak: Ankara Alerjik Polen Bülteni", summary.detail)
+        assertEquals(PollenLevel.HIGH, summary.todayLevel)
+        assertEquals("Alerji ilacı (pelin otu poleni yüksek)", Insights.tips(forecast, now, mugwort).single { it.kind == TipKind.ALLERGY }.text)
+
+        // Three days alike make one warning.
+        val today = AlertEngine.evaluate(forecast, now, mugwort).single { it.type == AlertType.POLLEN }
+        assertEquals(base, today.start)
+        assertEquals(base.plusDays(3), today.end)
+        assertEquals("Bugün – Per", today.whenText(now))
+        assertEquals("Yüksek polen · pelin otu", today.title)
+        assertEquals("Ankara bülteni: yabani ot yüksek", today.detail)
+
+        // Trees are high too, but birch is not among them: nothing to warn a birch allergy about.
+        val birch = AllergyProfile(setOf(PollenType.BIRCH))
+        assertEquals("Alerjiniz olan polenler şu an görülmüyor", Allergy.summary(forecast, now, birch).headline)
+        assertTrue(AlertEngine.evaluate(forecast, now, birch).none { it.type == AlertType.POLLEN })
+        // Grass is named but low.
+        assertEquals("Alerjiniz olan polenler bugün düşük", Allergy.summary(forecast, now, AllergyProfile(setOf(PollenType.GRASS))).headline)
+
+        val everyone = Allergy.summary(forecast, now, null)
+        assertEquals("Bugün ağaç ve çalı polenleri yüksek", everyone.headline)
+        assertEquals("Kaynak: Ankara Alerjik Polen Bülteni", everyone.detail)
+    }
+
+    @Test
+    fun `the forecast keeps the lead when it reports more, and old bulletins are ignored`() {
+        // Model: mugwort very high today; bulletin: weeds high.
+        val air = air { type, _ -> if (type == PollenType.MUGWORT) 600.0 else 0.0 }
+        val mugwort = AllergyProfile(setOf(PollenType.MUGWORT))
+        val both = forecast(air).copy(bulletin = ankara())
+        assertEquals("Bugün pelin otu poleni çok yüksek", Allergy.summary(both, now, mugwort).headline)
+        val alert = AlertEngine.evaluate(both, now, mugwort).single { it.type == AlertType.POLLEN && it.start == base }
+        assertEquals(Severity.ORANGE, alert.severity)
+        assertTrue(alert.detail, alert.detail.startsWith("Pelin otu çok yüksek") && alert.detail.contains("Ankara bülteni: yabani ot yüksek"))
+
+        // A reading whose three days have passed, and İzmir's March week in October: as if there were none.
+        val old = forecast(air { _, _ -> null }).copy(bulletin = ankara(now.minusDays(3)).let { reading ->
+            reading.copy(groups = reading.groups.map { g -> g.copy(days = g.days.map { it.copy(date = it.date.minusDays(3)) }) })
+        })
+        assertEquals("Şu an polen tahmini yok", Allergy.summary(old, now, mugwort).headline)
+        val march = BulletinReading(
+            PollenBulletins.IZMIR, listOf(BulletinGroup(PollenGroup.WEED, weekLevel = PollenLevel.HIGH, dominant = listOf("Pelin otu (Artemisia)"))),
+            fetchedAtMillis = 0, measuredFrom = now.toLocalDate().minusDays(60), measuredTo = now.toLocalDate().minusDays(54),
+        )
+        val stale = forecast(air { _, _ -> null }).copy(bulletin = march)
+        assertEquals("Şu an polen tahmini yok", Allergy.summary(stale, now, mugwort).headline)
+        assertTrue(AlertEngine.evaluate(stale, now, mugwort).none { it.type == AlertType.POLLEN })
+        // The same week while recent counts for today only.
+        val recent = stale.copy(bulletin = march.copy(measuredFrom = now.toLocalDate().minusDays(6), measuredTo = now.toLocalDate()))
+        assertEquals(listOf(base), AlertEngine.evaluate(recent, now, mugwort).filter { it.type == AlertType.POLLEN }.map { it.start })
     }
 }

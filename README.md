@@ -22,6 +22,12 @@ veya ilçenin hava durumuna da bakabilirsiniz.
   polen düzeyi (Yok · Düşük · Orta · Yüksek · Çok yüksek; ABD Ulusal Alerji Bürosu sınıfları). Ayarlarda
   "Polen alerjim var" açılıp türler seçildiğinde yüksek günlerde uyarı ve bildirim, "alerji ilacı" önerisi ve
   sabah özetinde polen bilgisi gelir. Polen tahmini Avrupa ve Türkiye için CAMS'ten, mevsiminde verilir.
+  - **Yerel ölçüm** – Ankara ve İzmir'e 60 km içindeki yerlerde şehrin resmi bülteni uygulamada gösterilir:
+    [Ankara Alerjik Polen Bülteni](https://polenalerji.ankara.edu.tr/) (Ankara Üniversitesi ve MGM; ağaç-çalı,
+    yabani ot ve çayır polenleri, 3 gün) ve [İzmir Polen Alerji Bülteni](https://polenalerji.ege.edu.tr/)
+    (Ege Üniversitesi ve MGM; haftalık ölçüm). Bülten, model tahmininden fazlasını gösterdiğinde başlık,
+    uyarı ve bildirim ondan gelir. Sayfa 3 saatte bir okunur; eski bir ölçüm haftası güncelmiş gibi gösterilmez.
+    Sayfaların yapısı değişirse `Pollen bulletin pages` iş akışı sayfaları indirip gösterir.
   - Her uyarıda **ne zaman** (ör. "Bugün 15:00–21:00"), **ne kadar** (mm, km/sa, °C) ve
     MGM'nin kullandığı renk ölçeğiyle **seviye** (Bilgi · Sarı · Turuncu · Kırmızı) gösterilir.
   - **"Ne yapmalı?"** bölümü seviyeye göre somut önlemler sıralar.

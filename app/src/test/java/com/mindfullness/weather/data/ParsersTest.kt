@@ -102,6 +102,30 @@ class ParsersTest {
     }
 
     @Test
+    fun `cache keeps the city bulletin page`() {
+        val place = Place(Place.CURRENT_LOCATION_ID, "Lalahan", latitude = 39.97, longitude = 33.11)
+        val dir = folder.newFolder()
+        val html = javaClass.getResource("/bulletin_ankara.html")!!.readText()
+        val fetchedAt = LocalDateTime.of(2026, 10, 26, 17, 30).toInstant(org.threeten.bp.ZoneOffset.ofHours(3)).toEpochMilli()
+        File(dir, "forecast_current.json").writeText(
+            JSONObject().put("fetchedAt", fetchedAt).put("forecast", forecastJson)
+                .put("bulletin", JSONObject().put("id", "ankara").put("html", html).put("fetchedAt", fetchedAt)).toString(),
+        )
+        val bulletin = WeatherRepository(OpenMeteoApi(), dir).cached(place)!!.bulletin!!
+        assertEquals("ankara", bulletin.bulletin.id)
+        assertEquals(3, bulletin.groups.size)
+        assertEquals(fetchedAt, bulletin.fetchedAtMillis)
+        // An unknown city or a broken page leaves the forecast intact.
+        File(dir, "forecast_current.json").writeText(
+            JSONObject().put("fetchedAt", fetchedAt).put("forecast", forecastJson)
+                .put("bulletin", JSONObject().put("id", "ankara").put("html", "<html/>").put("fetchedAt", fetchedAt)).toString(),
+        )
+        val forecast = WeatherRepository(OpenMeteoApi(), dir).cached(place)!!
+        assertNull(forecast.bulletin)
+        assertTrue(forecast.hourly.isNotEmpty())
+    }
+
+    @Test
     fun `reads both cache formats`() {
         val place = Place(Place.CURRENT_LOCATION_ID, "Konum", latitude = 41.0, longitude = 29.0)
         val dir = folder.newFolder()

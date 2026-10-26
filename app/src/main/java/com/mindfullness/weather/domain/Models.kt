@@ -37,6 +37,8 @@ data class Forecast(
     val air: List<AirPoint> = emptyList(),
     /** Members of the ECMWF ensemble (51 runs from perturbed starts), to estimate probabilities. */
     val ensemble: List<ModelRun> = emptyList(),
+    /** The official pollen bulletin of the place's city (Ankara, İzmir), as last read. */
+    val bulletin: BulletinReading? = null,
 ) {
     /** Wall-clock time at the forecast location. */
     fun localNow(nowMillis: Long = System.currentTimeMillis()): LocalDateTime =

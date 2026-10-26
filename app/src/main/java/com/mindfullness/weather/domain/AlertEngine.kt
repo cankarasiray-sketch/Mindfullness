@@ -171,7 +171,7 @@ object AlertEngine {
         val dayAlerts = temperatureDrop(forecast.daily, now.toLocalDate()) +
             flood(forecast.daily, now.toLocalDate(), windowEnd.toLocalDate())
                 .filter { flood -> hourlyAlerts.none { it.type == AlertType.RAIN && it.severity >= flood.severity && it.overlaps(flood) } } +
-            (allergy?.let { Allergy.alerts(forecast.air, now, it) } ?: emptyList())
+            (allergy?.let { Allergy.alerts(forecast.air, now, it, forecast.bulletin) } ?: emptyList())
         val alerts = hourlyAlerts + dayAlerts
 
         // Day-level heads-ups are dropped for days the hourly alerts already cover at the same or a
