@@ -825,28 +825,35 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         addView(context.text(summary.headline, 16f, Palette.TEXT, Fonts.medium))
         summary.detail?.let { addView(context.text(it, 14f, Palette.TEXT_SECONDARY).params(top = 3)) }
         if (summary.types.isNotEmpty()) {
+            // Columns share the width (names a little wider), so large fonts and narrow screens still fit.
             val header = context.horizontal()
-            header.addView(View(context), LinearLayout.LayoutParams(0, 0, 1f))
+            header.addView(View(context), LinearLayout.LayoutParams(0, 0, NAME_WEIGHT))
             summary.dates.forEach { date ->
                 header.addView(
-                    context.text(TimeText.relativeShortDay(date, data.now.toLocalDate()), 12f, Palette.TEXT_TERTIARY, Fonts.medium)
+                    context.text(TimeText.relativeShortDay(date, data.now.toLocalDate()), 12f, Palette.TEXT_TERTIARY, Fonts.medium, maxLines = 1)
                         .apply { gravity = Gravity.CENTER },
-                    LinearLayout.LayoutParams(dp(POLLEN_COLUMN), WRAP),
+                    LinearLayout.LayoutParams(0, WRAP, 1f),
                 )
             }
             addView(header.params(top = 14, bottom = 4))
             summary.types.forEach { outlook ->
                 val allergen = profile?.types?.contains(outlook.type) == true
                 val row = context.horizontal().apply { minimumHeight = dp(36) }
-                row.addView(
-                    context.text(
-                        outlook.type.shortLabel, 14f,
-                        if (allergen || profile == null) Palette.TEXT else Palette.TEXT_SECONDARY,
-                        if (allergen) Fonts.medium else Fonts.regular, maxLines = 1,
-                    ),
-                    LinearLayout.LayoutParams(0, WRAP, 1f),
-                )
-                summary.dates.forEach { date -> row.addView(pollenChip(outlook.on(date)?.level), LinearLayout.LayoutParams(dp(POLLEN_COLUMN), WRAP)) }
+                val name = context.text(
+                    outlook.type.shortLabel, 14f,
+                    if (allergen || profile == null) Palette.TEXT else Palette.TEXT_SECONDARY,
+                    if (allergen) Fonts.medium else Fonts.regular, maxLines = 1,
+                ).apply {
+                    // Shrinks a long name on narrow screens instead of breaking it inside the word.
+                    ellipsize = null
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        setAutoSizeTextTypeUniformWithConfiguration(9, 14, 1, TypedValue.COMPLEX_UNIT_SP)
+                    } else {
+                        maxLines = 2
+                    }
+                }
+                row.addView(name, LinearLayout.LayoutParams(0, WRAP, NAME_WEIGHT))
+                summary.dates.forEach { date -> row.addView(pollenChip(outlook.on(date)?.level), LinearLayout.LayoutParams(0, WRAP, 1f)) }
                 row.contentDescription = outlook.type.label + ": " + summary.dates.joinToString(", ") { date ->
                     "${TimeText.relativeDay(date, data.now.toLocalDate())} ${outlook.on(date)?.level?.label ?: "veri yok"}"
                 }
@@ -873,7 +880,12 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         val chip = context.text(label, 11f, if (color == null || level == PollenLevel.NONE) Palette.TEXT_TERTIARY else Palette.ON_SEVERITY, Fonts.medium, maxLines = 1).apply {
             gravity = Gravity.CENTER
             background = rounded(if (color == null || level == PollenLevel.NONE) Palette.GLASS else color, dp(10).toFloat())
-            setPadding(dp(6), dp(4), dp(6), dp(4))
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            // Shrinks rather than cuts the label at large font sizes.
+            ellipsize = null
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                setAutoSizeTextTypeUniformWithConfiguration(7, 11, 1, TypedValue.COMPLEX_UNIT_SP)
+            }
         }
         addView(chip, LayoutParams(MATCH, WRAP, Gravity.CENTER).apply { marginStart = dp(3); marginEnd = dp(3) })
     }
@@ -1072,7 +1084,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
 
     private companion object {
         const val LABEL_TAG = "label"
-        const val POLLEN_COLUMN = 66
+        const val NAME_WEIGHT = 1.5f
     }
 }
 

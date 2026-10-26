@@ -41,7 +41,8 @@ data class Confidence(
     val text: String
         get() = buildList {
             add("Güven: ${level.label}")
-            probability?.let { add("olasılık %$it") }
+            // Distinct from the hourly "olasılık" in the details: the share of ensemble runs with the event.
+            probability?.let { add("senaryoların %$it${TurkishText.possessive(it)}") }
             if (total >= 2) add("$agreeing/$total model")
         }.joinToString(" · ")
 

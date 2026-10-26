@@ -123,6 +123,40 @@ class AllergyTest {
     }
 
     @Test
+    fun `day-long alerts are announced in the evening before or by day, not at night`() {
+        val air = air { type, _ -> if (type == PollenType.GRASS) 60.0 else 0.0 }
+        val tomorrow = AlertEngine.evaluate(forecast(air), now, AllergyProfile.ALL).single { it.start == base.plusDays(1) }
+        fun due(hour: Int, minute: Int = 0) = NotificationPolicy.isDue(tomorrow, base.withHour(hour).withMinute(minute))
+        assertFalse(due(9)) // a day early
+        assertTrue(due(18, 30)) // the evening before
+        assertFalse(due(23)) // never at night
+        val todays = tomorrow.copy(start = base, end = base.plusDays(1))
+        assertFalse(NotificationPolicy.isDue(todays, base.withHour(0).withMinute(20)))
+        assertTrue(NotificationPolicy.isDue(todays, base.withHour(7)))
+        // An urgent day-long warning (e.g. orange flood risk) does not wait for the morning.
+        val flood = todays.copy(type = AlertType.FLOOD, severity = Severity.ORANGE)
+        assertTrue(NotificationPolicy.isDue(flood, base.withHour(2)))
+        // Hourly hazards: 24 hours ahead, any time.
+        val storm = todays.copy(type = AlertType.WIND, allDay = false, start = base.plusHours(20))
+        assertTrue(NotificationPolicy.isDue(storm, base.withHour(1)))
+    }
+
+    @Test
+    fun `turkish possessive after numbers`() {
+        val expected = mapOf(0 to "'ı", 1 to "'i", 2 to "'si", 3 to "'ü", 6 to "'sı", 9 to "'u", 10 to "'u", 30 to "'u", 40 to "'ı",
+            50 to "'si", 60 to "'ı", 78 to "'i", 80 to "'i", 90 to "'ı", 100 to "'ü")
+        expected.forEach { (n, suffix) -> assertEquals("$n", suffix, TurkishText.possessive(n)) }
+    }
+
+    @Test
+    fun `headline says when the allergens are out of season`() {
+        val air = air { type, _ -> if (type == PollenType.RAGWEED) 30.0 else null }
+        val summary = Allergy.summary(forecast(air), now, AllergyProfile(setOf(PollenType.OLIVE)))
+        assertEquals("Alerjiniz olan polenler şu an görülmüyor", summary.headline)
+        assertTrue(summary.hasData)
+    }
+
+    @Test
     fun `ensemble gives warnings a probability`() {
         val rainy = hours(base, 48) { i ->
             if (i in 16..18) copy(precipitation = 4.0, rain = 4.0, precipitationProbability = 80, weatherCode = 63) else this
@@ -136,7 +170,7 @@ class AllergyTest {
         val alert = AlertEngine.evaluate(synthetic(rainy).copy(ensemble = ensemble), now).single { it.type == AlertType.RAIN }
         assertEquals(Confidence(0, 0, 80), alert.confidence)
         assertEquals(Confidence.Level.HIGH, alert.confidence!!.level)
-        assertEquals("Güven: Yüksek · olasılık %80", alert.confidence!!.text)
+        assertEquals("Güven: Yüksek · senaryoların %80'i", alert.confidence!!.text)
 
         // With the models too, both show; the ensemble decides the level.
         val models = listOf("a", "b", "c").map { name ->
@@ -145,6 +179,6 @@ class AllergyTest {
         val both = AlertEngine.evaluate(synthetic(rainy).copy(ensemble = ensemble.take(20), models = models), now)
             .single { it.type == AlertType.RAIN }
         assertEquals(Confidence(3, 3, 100), both.confidence)
-        assertEquals("Güven: Yüksek · olasılık %100 · 3/3 model", both.confidence!!.text)
+        assertEquals("Güven: Yüksek · senaryoların %100'ü · 3/3 model", both.confidence!!.text)
     }
 }

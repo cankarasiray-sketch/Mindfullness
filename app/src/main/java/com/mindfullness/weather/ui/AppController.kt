@@ -543,10 +543,10 @@ class AppController(context: Context) {
         }
     }
 
-    private fun putSummary(place: Place, forecast: Forecast, fetched: Boolean = true) {
+    private fun putSummary(place: Place, forecast: Forecast, fetched: Boolean = true, toWidget: Boolean = true) {
         // A cached device-location forecast may belong to an earlier fix.
         if (fetched || !place.isCurrentLocation) remember(place, forecast)
-        WeatherWidget.onForecast(app, place, forecast)
+        if (toWidget) WeatherWidget.onForecast(app, place, forecast)
         val now = forecast.localNow()
         val today = forecast.today(now)
         summaries[place.id] = PlaceSummary(
@@ -636,7 +636,9 @@ class AppController(context: Context) {
     /** Re-derives what home shows after a settings change. */
     private fun refreshContent() {
         home.content?.let { setHome(home.copy(content = content(it.forecast))) }
-        summaries.keys.toList().forEach { id -> remembered[id]?.let { (place, forecast) -> putSummary(place, forecast) } }
+        summaries.keys.toList().forEach { id -> remembered[id]?.let { (place, forecast) -> putSummary(place, forecast, toWidget = false) } }
+        // The widget redraws from its newest cached forecast; a remembered one may be older.
+        WeatherWidget.requestRefresh(app)
         notifyChanged()
     }
 

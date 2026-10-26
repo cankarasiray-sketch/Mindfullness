@@ -15,6 +15,7 @@ import com.mindfullness.weather.domain.Forecast
 import com.mindfullness.weather.domain.Insights
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.Severity
+import com.mindfullness.weather.domain.NotificationPolicy
 import java.io.File
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
@@ -60,7 +61,7 @@ class AlertJobService : JobService() {
             val now = forecast.localNow()
             // Lazy, so only the alerts actually posted are recorded as notified.
             val posted = AlertEngine.evaluate(forecast, now, settings.allergyProfile).asSequence()
-                .filter { !it.outlook && it.severity >= settings.minSeverity && it.start.isBefore(now.plusHours(24)) }
+                .filter { !it.outlook && it.severity >= settings.minSeverity && NotificationPolicy.isDue(it, now) }
                 .filter { store.markNotified(it.key, it.severity.ordinal) }
                 .take(3)
                 .toList()
@@ -77,6 +78,7 @@ class AlertJobService : JobService() {
         }
 
         private val PRECIPITATION = setOf(AlertType.RAIN, AlertType.SNOW, AlertType.THUNDERSTORM, AlertType.ICE)
+
     }
 }
 
@@ -92,8 +94,11 @@ class MorningJobService : JobService() {
                 val forecast = fetchOrNull(context, place)
                 if (forecast != null) {
                     val now = forecast.localNow()
-                    val important = AlertEngine.evaluate(forecast, now, settings.allergyProfile)
-                        .count { !it.outlook && it.severity >= Severity.YELLOW && it.start.isBefore(now.plusHours(24)) }
+                    // Day-long alerts count on their own day; tomorrow's pollen is not today's concern.
+                    val important = AlertEngine.evaluate(forecast, now, settings.allergyProfile).count {
+                        !it.outlook && it.severity >= Severity.YELLOW &&
+                            (if (it.allDay) !it.start.isAfter(now) else it.start.isBefore(now.plusHours(24)))
+                    }
                     Notifier.showMorningSummary(context, place, Insights.morningSummary(forecast, now, settings.allergyProfile), important)
                 }
             }

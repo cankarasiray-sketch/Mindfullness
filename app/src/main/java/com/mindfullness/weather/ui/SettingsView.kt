@@ -7,7 +7,9 @@ import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.WindowInsets
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.RadioButton
@@ -119,7 +121,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
         allergy.addView(
             switchRow(
                 "Polen alerjim var",
-                "Seçtiğiniz polenler yüksek olduğu günlerde uyarı ve (bildirimler açıksa) bildirim alırsınız; polen kartı " +
+                "Seçtiğiniz polenlerin yüksek olduğu günlerde uyarı ve (bildirimler açıksa) bildirim alırsınız; polen kartı " +
                     "ana ekranda öne çıkar. Polen tahmini Avrupa ve Türkiye için, mevsiminde yapılır.",
                 state.allergyEnabled,
             ) { actions.setAllergy(it) },
@@ -251,10 +253,28 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
             setOnClickListener { onChange(!checked) }
             addView(box)
             box.jumpDrawablesToCurrentState()
+            announceAs(box, checked)
             val texts = context.vertical()
             texts.addView(context.text(title, 16f, Palette.ON_SURFACE))
             texts.addView(context.text(note, 12f, Palette.ON_SURFACE_MUTED).params(top = 1))
             addView(texts, LayoutParams(0, WRAP, 1f).apply { marginStart = dp(4) })
+        }
+    }
+
+    /**
+     * Makes the row read as one checkbox (or radio button) with its label and state, instead of an
+     * unlabelled control plus a row without state.
+     */
+    private fun View.announceAs(control: CompoundButton, checked: Boolean) {
+        control.isFocusable = false
+        control.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.className = control.javaClass.name
+                info.isCheckable = true
+                info.isChecked = checked
+            }
         }
     }
 
@@ -274,6 +294,7 @@ class SettingsView(context: Context, private val actions: Actions) : LinearLayou
             setOnClickListener { if (value != selected) actions.setMinSeverity(value) }
             addView(radio)
             radio.jumpDrawablesToCurrentState()
+            announceAs(radio, value == selected)
             addView(context.text(label, 16f, Palette.ON_SURFACE).params(WRAP, WRAP, start = 4))
         }
     }

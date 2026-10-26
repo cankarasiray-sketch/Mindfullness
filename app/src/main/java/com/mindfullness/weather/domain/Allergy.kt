@@ -82,6 +82,8 @@ object Allergy {
         val worst = todays.maxByOrNull { it.second.level }
         val todayLevel = worst?.second?.level ?: PollenLevel.NONE
         val headline = when {
+            // Data for other types, but none for the allergens: out of their season.
+            worst == null && profile != null -> "Alerjiniz olan polenler şu an görülmüyor"
             worst == null -> "Bugün için polen verisi yok"
             todayLevel <= PollenLevel.LOW -> if (profile != null) "Alerjiniz olan polenler bugün düşük" else "Bugün polen düşük"
             else -> "Bugün ${worst.first.shortLabel.lowercase(TR)} poleni ${todayLevel.label.lowercase(TR)}"
