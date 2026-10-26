@@ -98,6 +98,9 @@ object Allergy {
             // Data for other types, but none for the allergens: out of their season.
             worst == null && local == null && profile != null -> "Alerjiniz olan polenler şu an görülmüyor"
             worst == null && local == null -> "Bugün için polen verisi yok"
+            // "Düşük" would suggest some; the data says none.
+            todayLevel == PollenLevel.NONE ->
+                if (profile != null) "Alerjiniz olan polenler bugün havada yok" else "Bugün havada polen yok"
             todayLevel <= PollenLevel.LOW || worst == null ->
                 if (profile != null) "Alerjiniz olan polenler bugün düşük" else "Bugün polen düşük"
             else -> "Bugün ${worst.first.shortLabel.lowercase(TR)} poleni ${todayLevel.label.lowercase(TR)}"

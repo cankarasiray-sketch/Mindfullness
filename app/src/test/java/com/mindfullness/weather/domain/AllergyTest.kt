@@ -284,4 +284,13 @@ class AllergyTest {
         val recent = stale.copy(bulletin = march.copy(measuredFrom = now.toLocalDate().minusDays(6), measuredTo = now.toLocalDate()))
         assertEquals(listOf(base), AlertEngine.evaluate(recent, now, mugwort).filter { it.type == AlertType.POLLEN }.map { it.start })
     }
+
+    @Test
+    fun `zero pollen reads as none, not low`() {
+        val zero = forecast(air { _, _ -> 0.0 })
+        assertEquals("Alerjiniz olan polenler bugün havada yok", Allergy.summary(zero, now, AllergyProfile.ALL).headline)
+        assertEquals("Bugün havada polen yok", Allergy.summary(zero, now, null).headline)
+        // As in Ankara in late October: the model has nothing, the bulletin measures weeds high.
+        assertEquals("Bugün pelin otu poleni yüksek", Allergy.summary(zero.copy(bulletin = ankara()), now, AllergyProfile.ALL).headline)
+    }
 }

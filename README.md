@@ -26,7 +26,8 @@ veya ilçenin hava durumuna da bakabilirsiniz.
     [Ankara Alerjik Polen Bülteni](https://polenalerji.ankara.edu.tr/) (Ankara Üniversitesi ve MGM; ağaç-çalı,
     yabani ot ve çayır polenleri, 3 gün) ve [İzmir Polen Alerji Bülteni](https://polenalerji.ege.edu.tr/)
     (Ege Üniversitesi ve MGM; haftalık ölçüm). Bülten, model tahmininden fazlasını gösterdiğinde başlık,
-    uyarı ve bildirim ondan gelir. Sayfa 3 saatte bir okunur; eski bir ölçüm haftası güncelmiş gibi gösterilmez.
+    uyarı ve bildirim ondan gelir. Kartta önce bülten (ölçüm), altında yalnızca bültenin kapsamadığı türler için
+    model tahmini yer alır; havada hiç olmayan türler tek cümlede toplanır. Sayfa 3 saatte bir okunur; eski bir ölçüm haftası güncelmiş gibi gösterilmez.
     Sayfaların yapısı değişirse `Pollen bulletin pages` iş akışı sayfaları indirip gösterir.
   - Her uyarıda **ne zaman** (ör. "Bugün 15:00–21:00"), **ne kadar** (mm, km/sa, °C) ve
     MGM'nin kullandığı renk ölçeğiyle **seviye** (Bilgi · Sarı · Turuncu · Kırmızı) gösterilir.

@@ -34,6 +34,9 @@ import com.mindfullness.weather.domain.BulletinReading
 import com.mindfullness.weather.domain.PollenBulletin
 import com.mindfullness.weather.domain.PollenBulletins
 import com.mindfullness.weather.domain.PollenLevel
+import com.mindfullness.weather.domain.AllergyProfile
+import com.mindfullness.weather.domain.PollenOutlook
+import com.mindfullness.weather.domain.PollenType
 import com.mindfullness.weather.domain.Confidence
 import com.mindfullness.weather.domain.CurrentWeather
 import com.mindfullness.weather.domain.DailyPoint
@@ -852,22 +855,47 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private fun allergyCard(data: ForecastContent): View = card().apply {
         val summary = data.allergy
         val profile = data.allergyProfile
+        val today = data.now.toLocalDate()
         addView(context.sectionTitle(R.drawable.ic_flower, "Polen ve alerji", "${Allergy.DAYS} gün").params(bottom = 10))
         addView(context.text(summary.headline, 16f, Palette.TEXT, Fonts.medium))
         summary.detail?.let { addView(context.text(it, 14f, Palette.TEXT_SECONDARY).params(top = 3)) }
-        if (summary.types.isNotEmpty()) {
-            // Columns share the width (names a little wider), so large fonts and narrow screens still fit.
-            val header = context.horizontal()
-            header.addView(View(context), LinearLayout.LayoutParams(0, 0, NAME_WEIGHT))
-            summary.dates.forEach { date ->
-                header.addView(
-                    context.text(TimeText.relativeShortDay(date, data.now.toLocalDate()), 12f, Palette.TEXT_TERTIARY, Fonts.medium, maxLines = 1)
-                        .apply { gravity = Gravity.CENTER },
-                    LinearLayout.LayoutParams(0, WRAP, 1f),
-                )
+        val city = bulletin
+        val reading = city?.let { data.forecast.bulletin?.takeIf { it.bulletin.id == city.id } }
+        if (city != null && reading != null && reading.isCurrent(today)) {
+            // The city's counts come first: they are measured, the model below only estimates.
+            addView(bulletinSection(city, reading, today).params(top = 12))
+            // Pollen the bulletin names is covered by its counts; the model's figure for it would contradict them.
+            val named = PollenType.values().filter { type -> reading.groups.any { it.names(type) } }.toSet()
+            val rest = summary.types.filter { it.type !in named }
+            if (rest.isNotEmpty()) {
+                val box = sourceBox("Model tahmini", "Copernicus CAMS · bültende olmayan türler")
+                pollenTable(box.body, rest, summary.dates, profile, today)
+                addView(box.view.params(top = 10))
             }
-            addView(header.params(top = 14, bottom = 4))
-            summary.types.forEach { outlook ->
+        } else {
+            if (summary.types.isNotEmpty()) pollenTable(this, summary.types, summary.dates, profile, today, top = 14)
+            city?.let { addView(bulletinSection(it, reading, today).params(top = 12)) }
+        }
+        if (profile == null && summary.hasData) {
+            addView(
+                context.text(
+                    "Polen alerjiniz varsa Ayarlar → Alerji'den türleri seçin; yüksek günlerde uyarı ve bildirim alırsınız.",
+                    12f, Palette.TEXT_TERTIARY,
+                ).params(top = 10),
+            )
+        }
+    }
+
+    /**
+     * The model's pollen per type and day. Types with nothing in the air on any day make one
+     * sentence instead of a row of "Yok" each, which out of season would be the whole table.
+     */
+    private fun pollenTable(parent: LinearLayout, types: List<PollenOutlook>, dates: List<LocalDate>, profile: AllergyProfile?, today: LocalDate, top: Int = 2) {
+        val (shown, quiet) = types.partition { outlook -> dates.any { (outlook.on(it)?.level ?: PollenLevel.NONE) > PollenLevel.NONE } }
+        if (shown.isNotEmpty()) {
+            // Columns share the width (names a little wider), so large fonts and narrow screens still fit.
+            parent.addView(dayHeader(dates, today).params(top = top, bottom = 4))
+            shown.forEach { outlook ->
                 val allergen = profile?.types?.contains(outlook.type) == true
                 val row = context.horizontal().apply { minimumHeight = dp(36) }
                 val name = context.text(
@@ -884,23 +912,28 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                     }
                 }
                 row.addView(name, LinearLayout.LayoutParams(0, WRAP, NAME_WEIGHT))
-                summary.dates.forEach { date -> row.addView(pollenChip(outlook.on(date)?.level), LinearLayout.LayoutParams(0, WRAP, 1f)) }
-                row.contentDescription = outlook.type.label + ": " + summary.dates.joinToString(", ") { date ->
-                    "${TimeText.relativeDay(date, data.now.toLocalDate())} ${outlook.on(date)?.level?.label ?: "veri yok"}"
+                dates.forEach { date -> row.addView(pollenChip(outlook.on(date)?.level), LinearLayout.LayoutParams(0, WRAP, 1f)) }
+                row.contentDescription = outlook.type.label + ": " + dates.joinToString(", ") { date ->
+                    "${TimeText.relativeDay(date, today)} ${outlook.on(date)?.level?.label ?: "veri yok"}"
                 }
-                addView(row.params(top = 2))
+                parent.addView(row.params(top = 2))
             }
         }
-        bulletin?.let { city ->
-            val reading = data.forecast.bulletin?.takeIf { it.bulletin.id == city.id }
-            addView(bulletinSection(city, reading, data.now.toLocalDate()).params(top = 12))
+        if (quiet.isNotEmpty()) {
+            val names = quiet.map { it.type.shortLabel.lowercase(TR) }
+            val list = if (names.size == 1) names[0] else names.dropLast(1).joinToString(", ") + " ve " + names.last()
+            val sentence = "$list poleni ${dates.size} gün boyunca beklenmiyor.".replaceFirstChar { it.titlecase(TR) }
+            parent.addView(context.text(sentence, 13f, Palette.TEXT_SECONDARY).params(top = if (shown.isEmpty()) top + 4 else 8))
         }
-        if (profile == null && summary.hasData) {
+    }
+
+    private fun dayHeader(dates: List<LocalDate>, today: LocalDate): View = context.horizontal().apply {
+        addView(View(context), LinearLayout.LayoutParams(0, 0, NAME_WEIGHT))
+        dates.forEach { date ->
             addView(
-                context.text(
-                    "Polen alerjiniz varsa Ayarlar → Alerji'den türleri seçin; yüksek günlerde uyarı ve bildirim alırsınız.",
-                    12f, Palette.TEXT_TERTIARY,
-                ).params(top = 10),
+                context.text(TimeText.relativeShortDay(date, today), 12f, Palette.TEXT_TERTIARY, Fonts.medium, maxLines = 1)
+                    .apply { gravity = Gravity.CENTER },
+                LinearLayout.LayoutParams(0, WRAP, 1f),
             )
         }
     }
@@ -910,75 +943,79 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
      * while there is nothing current to show (not read yet, or out of season).
      */
     private fun bulletinSection(bulletin: PollenBulletin, reading: BulletinReading?, today: LocalDate): View {
+        val open = { actions.openLink(bulletin.url) }
         if (reading == null || !reading.isCurrent(today)) {
             val note = reading?.measuredTo?.let { "son ölçüm ${TimeText.week(reading.measuredFrom ?: it, it)}" } ?: "tarayıcıda açılır"
-            return bulletinLink(bulletin, "${bulletin.source} · $note").apply {
+            return sourceHeader(bulletin.name, "${bulletin.source} · $note", open).apply {
                 background = ripple(rounded(Palette.GLASS, dp(12).toFloat()), radius = dp(12).toFloat())
             }
         }
-        return context.vertical().apply {
-            background = rounded(Palette.GLASS, dp(12).toFloat())
-            setPadding(0, 0, 0, dp(10))
-            addView(bulletinLink(bulletin, "${bulletin.source} · ${TimeText.ago(reading.fetchedAtMillis)}"))
-            val body = context.vertical().apply { setPadding(dp(12), 0, dp(8), 0) }
-            if (reading.isWeekly) {
-                reading.measuredTo?.let { to ->
-                    body.addView(context.text("Ölçüm haftası ${TimeText.week(reading.measuredFrom ?: to, to)}", 12f, Palette.TEXT_TERTIARY).params(bottom = 4))
-                }
-                reading.groups.forEach { group ->
-                    val row = context.horizontal().apply { minimumHeight = dp(36) }
-                    row.addView(groupName(group.group.label), LinearLayout.LayoutParams(0, WRAP, 1f))
-                    row.addView(pollenChip(group.weekLevel), LinearLayout.LayoutParams(dp(92), WRAP))
-                    row.contentDescription = "${group.group.label}: ${group.weekLevel?.label ?: "veri yok"}"
-                    body.addView(row)
-                    dominantLine(group)?.let { body.addView(it) }
-                }
-                if (reading.risk != null && reading.riskDate == today) {
-                    val hours = reading.riskHours?.let { " ($it)" }.orEmpty()
-                    body.addView(
-                        context.text("Bugün polenden etkilenme olasılığı$hours: ${reading.risk.label.lowercase(TR)}", 13f, Palette.TEXT_SECONDARY)
-                            .params(top = 8),
-                    )
-                }
-            } else {
-                val dates = (0 until Allergy.DAYS).map { today.plusDays(it) }
-                val header = context.horizontal()
-                header.addView(View(context), LinearLayout.LayoutParams(0, 0, NAME_WEIGHT))
-                dates.forEach { date ->
-                    header.addView(
-                        context.text(TimeText.relativeShortDay(date, today), 12f, Palette.TEXT_TERTIARY, Fonts.medium, maxLines = 1)
-                            .apply { gravity = Gravity.CENTER },
-                        LinearLayout.LayoutParams(0, WRAP, 1f),
-                    )
-                }
-                body.addView(header.params(top = 2, bottom = 4))
-                reading.groups.forEach { group ->
-                    val row = context.horizontal().apply { minimumHeight = dp(36) }
-                    row.addView(groupName(group.group.label), LinearLayout.LayoutParams(0, WRAP, NAME_WEIGHT))
-                    dates.forEach { date -> row.addView(pollenChip(group.on(date)), LinearLayout.LayoutParams(0, WRAP, 1f)) }
-                    row.contentDescription = group.group.label + ": " + dates.joinToString(", ") { date ->
-                        "${TimeText.relativeDay(date, today)} ${group.on(date)?.label ?: "veri yok"}"
-                    }
-                    body.addView(row)
-                    dominantLine(group)?.let { body.addView(it) }
-                }
+        val box = sourceBox(bulletin.name, "${bulletin.source} · ${TimeText.ago(reading.fetchedAtMillis)}", open)
+        val body = box.body
+        if (reading.isWeekly) {
+            reading.measuredTo?.let { to ->
+                body.addView(context.text("Ölçüm haftası ${TimeText.week(reading.measuredFrom ?: to, to)}", 12f, Palette.TEXT_TERTIARY).params(bottom = 4))
             }
-            addView(body)
+            reading.groups.forEach { group ->
+                val row = context.horizontal().apply { minimumHeight = dp(36) }
+                row.addView(groupName(group.group.label), LinearLayout.LayoutParams(0, WRAP, 1f))
+                row.addView(pollenChip(group.weekLevel), LinearLayout.LayoutParams(dp(92), WRAP))
+                row.contentDescription = "${group.group.label}: ${group.weekLevel?.label ?: "veri yok"}"
+                body.addView(row)
+                dominantLine(group)?.let { body.addView(it) }
+            }
+            if (reading.risk != null && reading.riskDate == today) {
+                val hours = reading.riskHours?.let { " ($it)" }.orEmpty()
+                body.addView(
+                    context.text("Bugün polenden etkilenme olasılığı$hours: ${reading.risk.label.lowercase(TR)}", 13f, Palette.TEXT_SECONDARY)
+                        .params(top = 8),
+                )
+            }
+        } else {
+            val dates = (0 until Allergy.DAYS).map { today.plusDays(it) }
+            body.addView(dayHeader(dates, today).params(top = 2, bottom = 4))
+            reading.groups.forEach { group ->
+                val row = context.horizontal().apply { minimumHeight = dp(36) }
+                row.addView(groupName(group.group.label), LinearLayout.LayoutParams(0, WRAP, NAME_WEIGHT))
+                dates.forEach { date -> row.addView(pollenChip(group.on(date)), LinearLayout.LayoutParams(0, WRAP, 1f)) }
+                row.contentDescription = group.group.label + ": " + dates.joinToString(", ") { date ->
+                    "${TimeText.relativeDay(date, today)} ${group.on(date)?.label ?: "veri yok"}"
+                }
+                body.addView(row)
+                dominantLine(group)?.let { body.addView(it) }
+            }
         }
+        return box.view
     }
 
-    /** The bulletin's name and source; opens its page, which has much more. */
-    private fun bulletinLink(bulletin: PollenBulletin, subtitle: String): LinearLayout = context.horizontal().apply {
-        background = ripple(null, radius = dp(12).toFloat())
+    private class SourceBox(val view: LinearLayout, val body: LinearLayout)
+
+    /** A framed block for one data source; the bulletin's and the model's line up column for column. */
+    private fun sourceBox(title: String, subtitle: String, onClick: (() -> Unit)? = null): SourceBox {
+        val view = context.vertical().apply {
+            background = rounded(Palette.GLASS, dp(12).toFloat())
+            setPadding(0, 0, 0, dp(10))
+        }
+        view.addView(sourceHeader(title, subtitle, onClick))
+        val body = context.vertical().apply { setPadding(dp(12), 0, dp(8), 0) }
+        view.addView(body)
+        return SourceBox(view, body)
+    }
+
+    /** A source's name and origin; with [onClick] it opens the source's page, which has much more. */
+    private fun sourceHeader(title: String, subtitle: String, onClick: (() -> Unit)? = null): LinearLayout = context.horizontal().apply {
         setPadding(dp(12), dp(10), dp(8), dp(10))
         minimumHeight = dp(48)
-        contentDescription = "${bulletin.name}, $subtitle. Sayfası tarayıcıda açılır."
         val texts = context.vertical()
-        texts.addView(context.text(bulletin.name, 14f, Palette.TEXT, Fonts.medium))
+        texts.addView(context.text(title, 14f, Palette.TEXT, Fonts.medium))
         texts.addView(context.text(subtitle, 12f, Palette.TEXT_TERTIARY).params(top = 2))
         addView(texts, LinearLayout.LayoutParams(0, WRAP, 1f))
-        addView(context.icon(R.drawable.ic_chevron_down, Palette.TEXT_TERTIARY, 18).apply { rotation = -90f })
-        setOnClickListener { actions.openLink(bulletin.url) }
+        if (onClick != null) {
+            background = ripple(null, radius = dp(12).toFloat())
+            contentDescription = "$title, $subtitle. Sayfası tarayıcıda açılır."
+            addView(context.icon(R.drawable.ic_chevron_down, Palette.TEXT_TERTIARY, 18).apply { rotation = -90f })
+            setOnClickListener { onClick() }
+        }
     }
 
     private fun groupName(label: String): TextView = context.text(label, 14f, Palette.TEXT, maxLines = 1).apply {
