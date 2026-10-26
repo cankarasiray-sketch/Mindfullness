@@ -2,7 +2,6 @@ package com.mindfullness.weather.domain
 
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * Rates an alert by how many independent weather models predict the same event. A model agrees
@@ -15,7 +14,7 @@ internal object ModelAgreement {
     /** Ensemble members share one model, so only a smaller timing difference is forgiven. */
     private const val ENSEMBLE_SLACK_HOURS = 1L
 
-    /** Fewer members with data than this give no meaningful probability. */
+    /** Fewer members with data than this give no meaningful spread. */
     private const val MIN_MEMBERS = 10
 
     /** Hours of one model around an alert: instant values and preceding-hour sums. */
@@ -46,10 +45,11 @@ internal object ModelAgreement {
 
         val (agreeing, total) = count(alert, models, SLACK_HOURS, agrees)
         val (inEnsemble, members) = count(alert, ensemble, ENSEMBLE_SLACK_HOURS, agrees)
-        val probability = if (members >= MIN_MEMBERS) (inEnsemble * 100.0 / members).roundToInt() else null
+        val scenarios = if (members >= MIN_MEMBERS) members else 0
+        val scenariosAgreeing = if (members >= MIN_MEMBERS) inEnsemble else 0
         return when {
-            total >= 2 -> Confidence(agreeing, total, probability)
-            probability != null -> Confidence(0, 0, probability)
+            total >= 2 -> Confidence(agreeing, total, scenarios, scenariosAgreeing)
+            scenarios > 0 -> Confidence(0, 0, scenarios, scenariosAgreeing)
             else -> null
         }
     }

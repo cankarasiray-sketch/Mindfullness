@@ -65,7 +65,7 @@ class AlertEngineTest {
     fun `precipitation summary names start and end`() {
         val summary = Insights.precipitation(forecast, now)
         assertTrue(summary.expectsPrecipitation)
-        assertEquals("Yağış bekleniyor · 15:00 – 21:00", summary.headline)
+        assertEquals("Yağış bekleniyor · 15:00–21:00", summary.headline)
     }
 
     @Test

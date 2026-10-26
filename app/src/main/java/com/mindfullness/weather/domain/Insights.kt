@@ -93,7 +93,7 @@ object Insights {
         val headline = when {
             firstWet == 0 && episode.first().precipitation >= 0.1 -> "$kind sürüyor · tahmini bitiş ${clock(end, now)}"
             firstWet == 0 -> "$kind olasılığı yüksek · şimdi – ${clock(end, now)}"
-            else -> "$kind bekleniyor · ${clock(start, now)} – ${clock(end, now)}"
+            else -> "$kind bekleniyor · ${span(start, end, now)}"
         }
         val detail = buildList {
             if (total >= 0.1) add(if (snow) "~${AlertEngine.formatAmount(episode.sumOf { it.snowfall })} cm" else "~${AlertEngine.formatAmount(total)} mm")
@@ -102,6 +102,11 @@ object Insights {
         }.joinToString(" · ")
         return PrecipitationSummary(headline, detail, expectsPrecipitation = true)
     }
+
+    /** "15:00–21:00", "Yarın 08:00–12:00" or "22:00 – Yarın 04:00"; [end] is exclusive. */
+    private fun span(start: LocalDateTime, end: LocalDateTime, now: LocalDateTime): String =
+        if (start.toLocalDate() == end.minusMinutes(1).toLocalDate()) "${clock(start, now)}–${TimeText.hour(end)}"
+        else "${clock(start, now)} – ${clock(end, now)}"
 
     private fun clock(time: LocalDateTime, now: LocalDateTime): String =
         if (time.toLocalDate() == now.toLocalDate()) TimeText.hour(time)

@@ -105,7 +105,7 @@ class AllergyTest {
     fun `no pollen data is said plainly`() {
         val summary = Allergy.summary(forecast(air { _, _ -> null }), now, AllergyProfile.ALL)
         assertFalse(summary.hasData)
-        assertEquals("Bu konum için polen tahmini yok", summary.headline)
+        assertEquals("Şu an polen tahmini yok", summary.headline)
         assertTrue(AlertEngine.evaluate(forecast(air { _, _ -> null }), now, AllergyProfile.ALL).none { it.type == AlertType.POLLEN })
     }
 
@@ -168,9 +168,10 @@ class AllergyTest {
             })
         }
         val alert = AlertEngine.evaluate(synthetic(rainy).copy(ensemble = ensemble), now).single { it.type == AlertType.RAIN }
-        assertEquals(Confidence(0, 0, 80), alert.confidence)
+        assertEquals(Confidence(0, 0, 50, 40), alert.confidence)
+        assertEquals(80, alert.confidence!!.probability)
         assertEquals(Confidence.Level.HIGH, alert.confidence!!.level)
-        assertEquals("Güven: Yüksek · senaryoların %80'i", alert.confidence!!.text)
+        assertEquals("Güven: Yüksek · 50 senaryonun 40'ı", alert.confidence!!.text)
 
         // With the models too, both show; the ensemble decides the level.
         val models = listOf("a", "b", "c").map { name ->
@@ -178,7 +179,36 @@ class AllergyTest {
         }
         val both = AlertEngine.evaluate(synthetic(rainy).copy(ensemble = ensemble.take(20), models = models), now)
             .single { it.type == AlertType.RAIN }
-        assertEquals(Confidence(3, 3, 100), both.confidence)
-        assertEquals("Güven: Yüksek · senaryoların %100'ü · 3/3 model", both.confidence!!.text)
+        assertEquals(Confidence(3, 3, 20, 20), both.confidence)
+        assertEquals("Güven: Yüksek · 20 senaryonun tamamı · 3/3 model", both.confidence!!.text)
+        // Few members agreeing lowers the level even when the models agree.
+        assertEquals("Güven: Düşük · 51 senaryonun 6'sı · 3/3 model", Confidence(3, 3, 51, 6).text)
+        assertEquals("Güven: Düşük · 51 senaryonun hiçbiri", Confidence(0, 0, 51, 0).text)
+    }
+
+    @Test
+    fun `thunderstorms in the grass season warn about storm asthma`() {
+        val stormy = hours(base, 72) { i -> if (i == 16) copy(weatherCode = 95, precipitation = 6.0, rain = 6.0) else this }
+        fun stormAdvice(grass: Double, profile: AllergyProfile?): List<String> {
+            val forecast = synthetic(stormy).copy(air = air { type, _ -> if (type == PollenType.GRASS) grass else 0.0 })
+            return AlertEngine.evaluate(forecast, now, profile).single { it.type == AlertType.THUNDERSTORM }.advice
+        }
+        val grass = AllergyProfile(setOf(PollenType.GRASS))
+        val advice = stormAdvice(30.0, grass)
+        assertEquals(1, advice.count { it.contains("Çim poleni") })
+        assertTrue(advice.last(), advice.last().startsWith("Çim poleni yüksek") && advice.last().endsWith("astım atağını tetikleyebilir."))
+        assertTrue(stormAdvice(8.0, grass).any { it.startsWith("Çim poleni orta") })
+        // Low grass pollen, no allergy, or another allergen: the usual storm advice only.
+        assertTrue(stormAdvice(2.0, grass).none { it.contains("astım") })
+        assertTrue(stormAdvice(30.0, null).none { it.contains("astım") })
+        assertTrue(stormAdvice(30.0, AllergyProfile(setOf(PollenType.BIRCH))).none { it.contains("astım") })
+    }
+
+    @Test
+    fun `local bulletins are offered near their city only`() {
+        assertEquals("Ankara Alerjik Polen Bülteni", PollenBulletins.near(39.97, 33.11)?.name) // Lalahan, Mamak
+        assertEquals("İzmir Polen Alerji Bülteni", PollenBulletins.near(38.42, 27.14)?.name) // Konak
+        assertNull(PollenBulletins.near(41.01, 28.98)) // İstanbul
+        assertNull(PollenBulletins.near(39.58, 32.15)) // Polatlı, ~75 km from Ankara
     }
 }

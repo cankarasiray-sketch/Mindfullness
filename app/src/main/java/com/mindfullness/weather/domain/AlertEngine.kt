@@ -17,32 +17,48 @@ enum class AlertType {
     RAIN, SNOW, THUNDERSTORM, WIND, HEAT, COLD, ICE, FOG, UV, TEMPERATURE_DROP, FLOOD, AIR_QUALITY, DUST, POLLEN,
 }
 
-/** How many independent weather models also predict an alert's event. */
+/** How many independent weather models, and how many ensemble scenarios, also predict an alert's event. */
 data class Confidence(
     /** Independent models (ECMWF, ICON, GFS) that also show the event; total 0 when unknown. */
     val agreeing: Int,
     val total: Int,
-    /** Share of the ECMWF ensemble members showing the event, in percent; null when unknown. */
-    val probability: Int? = null,
+    /** ECMWF ensemble members with data for the period (0 when too few), and how many show the event. */
+    val scenarios: Int = 0,
+    val scenariosAgreeing: Int = 0,
 ) {
+    /** Share of the scenarios showing the event, in percent; null without an ensemble. */
+    val probability: Int?
+        get() = if (scenarios > 0) (scenariosAgreeing * 100.0 / scenarios).roundToInt() else null
+
     val level: Level
-        get() = when {
-            // The ensemble gives a real probability, so it decides when there is one.
-            probability != null -> when {
-                probability >= 70 -> Level.HIGH
-                probability >= 40 -> Level.MEDIUM
+        get() {
+            // The ensemble gives a real spread of outcomes, so it decides when there is one.
+            val share = probability
+            return when {
+                share != null -> when {
+                    share >= 70 -> Level.HIGH
+                    share >= 40 -> Level.MEDIUM
+                    else -> Level.LOW
+                }
+                agreeing == total -> Level.HIGH
+                agreeing * 2 >= total -> Level.MEDIUM
                 else -> Level.LOW
             }
-            agreeing == total -> Level.HIGH
-            agreeing * 2 >= total -> Level.MEDIUM
-            else -> Level.LOW
         }
 
     val text: String
         get() = buildList {
             add("Güven: ${level.label}")
-            // Distinct from the hourly "olasılık" in the details: the share of ensemble runs with the event.
-            probability?.let { add("senaryoların %$it${TurkishText.possessive(it)}") }
+            // A count, not a percentage: the card's "olasılık" already is one, and the two measure different things.
+            if (scenarios > 0) {
+                add(
+                    when (scenariosAgreeing) {
+                        scenarios -> "$scenarios senaryonun tamamı"
+                        0 -> "$scenarios senaryonun hiçbiri"
+                        else -> "$scenarios senaryonun $scenariosAgreeing${TurkishText.possessive(scenariosAgreeing)}"
+                    },
+                )
+            }
             if (total >= 2) add("$agreeing/$total model")
         }.joinToString(" · ")
 
@@ -148,6 +164,9 @@ object AlertEngine {
         }.filter { it.end.isAfter(now) && it.start.isBefore(windowEnd) }
             .map { alert ->
                 ModelAgreement.rate(alert, hours, forecast.models, forecast.ensemble)?.let { alert.copy(confidence = it) } ?: alert
+            }
+            .map { alert ->
+                if (allergy != null && alert.type == AlertType.THUNDERSTORM) Allergy.withStormAdvice(alert, forecast.air, allergy) else alert
             }
         val dayAlerts = temperatureDrop(forecast.daily, now.toLocalDate()) +
             flood(forecast.daily, now.toLocalDate(), windowEnd.toLocalDate())

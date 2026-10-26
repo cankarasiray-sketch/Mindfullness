@@ -6,6 +6,7 @@ import com.mindfullness.weather.domain.Allergy
 import com.mindfullness.weather.domain.AllergyProfile
 import com.mindfullness.weather.domain.AllergySummary
 import com.mindfullness.weather.domain.Forecast
+import com.mindfullness.weather.domain.Geo
 import com.mindfullness.weather.domain.Insights
 import com.mindfullness.weather.domain.Place
 import com.mindfullness.weather.domain.PollenType
@@ -22,8 +23,6 @@ import com.mindfullness.weather.platform.Notifier
 import com.mindfullness.weather.platform.SettingsStore
 import com.mindfullness.weather.platform.WeatherWidget
 import org.threeten.bp.LocalDateTime
-import kotlin.math.cos
-import kotlin.math.sqrt
 
 data class HomeState(
     val place: Place? = null,
@@ -648,10 +647,5 @@ class AppController(context: Context) {
     }
 
     /** Approximate distance, good enough to tell "same town" from "moved". */
-    private fun distanceKm(a: Place, b: Place): Double {
-        val meanLat = Math.toRadians((a.latitude + b.latitude) / 2)
-        val dx = Math.toRadians(b.longitude - a.longitude) * cos(meanLat)
-        val dy = Math.toRadians(b.latitude - a.latitude)
-        return sqrt(dx * dx + dy * dy) * 6371.0
-    }
+    private fun distanceKm(a: Place, b: Place): Double = Geo.distanceKm(a.latitude, a.longitude, b.latitude, b.longitude)
 }

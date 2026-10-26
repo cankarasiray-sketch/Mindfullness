@@ -72,7 +72,8 @@ object Allergy {
         )
         if (all.isEmpty()) {
             return AllergySummary(
-                headline = "Bu konum için polen tahmini yok",
+                // No value at all: out of season, or outside Europe; either way nothing to show yet.
+                headline = "Şu an polen tahmini yok",
                 detail = "Polen tahmini Avrupa ve Türkiye için, polen mevsiminde yapılır.",
                 types = emptyList(), dates = dates, hasData = false, todayLevel = PollenLevel.NONE,
             )
@@ -100,6 +101,20 @@ object Allergy {
                 ?.let { (type, day) -> add("yarın ${type.shortLabel.lowercase(TR)} ${day.level.label.lowercase(TR)}") }
         }.joinToString(" · ").replaceFirstChar { it.titlecase(TR) }.ifBlank { null }
         return AllergySummary(headline, detail, types, dates, hasData = true, todayLevel = todayLevel)
+    }
+
+    /**
+     * Thunderstorms in the grass pollen season can set off severe asthma attacks, even in people
+     * with hay fever alone ("thunderstorm asthma"): the gust front sweeps pollen up, moisture bursts
+     * it into fine fragments and the downdraft brings them down to where people breathe.
+     */
+    internal fun withStormAdvice(alert: WeatherAlert, air: List<AirPoint>, profile: AllergyProfile): WeatherAlert {
+        if (PollenType.GRASS !in profile.types) return alert
+        val level = day(air, PollenType.GRASS, alert.start.toLocalDate())?.level ?: return alert
+        if (level < PollenLevel.MODERATE) return alert
+        val advice = "Çim poleni ${level.label.lowercase(TR)}: fırtına öncesi rüzgârda ve fırtına sırasında dışarıda " +
+            "kalmayın, pencereleri kapatın. Fırtına, polen alerjisi olanlarda astım atağını tetikleyebilir."
+        return alert.copy(advice = alert.advice + advice)
     }
 
     /** Warnings for the days the user's allergens reach a high level. */

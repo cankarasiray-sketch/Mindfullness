@@ -6,6 +6,7 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -122,9 +123,12 @@ class MainActivity : Activity() {
 
     private fun drawEdgeToEdge() {
         window.statusBarColor = Color.TRANSPARENT
-        window.navigationBarColor = Color.TRANSPARENT
+        // From Android 10 the system puts a light scrim behind three-button navigation (none behind the gesture
+        // bar); before that the buttons need a translucent bar of their own, or they sit on the text.
+        window.navigationBarColor =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Color.TRANSPARENT else Color.argb(150, 0, 0, 0)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            window.isNavigationBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = true
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.setDecorFitsSystemWindows(false)
@@ -267,6 +271,14 @@ class MainActivity : Activity() {
                 startActivity(Intent.createChooser(send, "Uyarıyı paylaş"))
             } catch (e: ActivityNotFoundException) {
                 Toast.makeText(this@MainActivity, "Paylaşılacak bir uygulama bulunamadı.", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        override fun openLink(url: String) {
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (e: ActivityNotFoundException) {
+                Toast.makeText(this@MainActivity, "Bağlantıyı açacak bir tarayıcı bulunamadı.", Toast.LENGTH_SHORT).show()
             }
         }
     }

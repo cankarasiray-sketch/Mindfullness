@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.os.Build
 import android.util.TypedValue
 import android.view.Gravity
@@ -28,6 +29,8 @@ import com.mindfullness.weather.R
 import com.mindfullness.weather.domain.AirPoint
 import com.mindfullness.weather.domain.AlertEngine
 import com.mindfullness.weather.domain.Allergy
+import com.mindfullness.weather.domain.PollenBulletin
+import com.mindfullness.weather.domain.PollenBulletins
 import com.mindfullness.weather.domain.PollenLevel
 import com.mindfullness.weather.domain.Confidence
 import com.mindfullness.weather.domain.CurrentWeather
@@ -54,6 +57,9 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         fun useLocation()
         fun share(alert: WeatherAlert)
 
+        /** Opens a web page in the browser. */
+        fun openLink(url: String)
+
         /** Shows the next (+1) or previous (-1) place; false when there is none. */
         fun swipe(step: Int): Boolean
     }
@@ -66,6 +72,8 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private val bannerText = context.text("", 14f)
     private val overlay = FrameLayout(context)
     private val topBar = context.horizontal()
+    /** Solid backing of the top bar, faded in once the cards scroll under it. */
+    private val topBarFill = GradientDrawable()
     private val title = context.text("", 20f, Palette.TEXT, Fonts.medium, maxLines = 1)
     private val subtitle = context.text("", 12f, Palette.TEXT_SECONDARY, maxLines = 1)
     private val placeIcon = context.icon(R.drawable.ic_navigation, Palette.TEXT, 16)
@@ -101,6 +109,8 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     private var locateButton: View? = null
     private var locateLabel: TextView? = null
     private var renderedContent: ForecastContent? = null
+    /** The official pollen bulletin of the shown place's city, if it has one. */
+    private var bulletin: PollenBulletin? = null
     private var renderedPlaceId: Long? = null
     private var overlayKey: String? = null
 
@@ -113,6 +123,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         scroll.isFillViewport = true
         scroll.overScrollMode = View.OVER_SCROLL_NEVER
         scroll.addView(content, LayoutParams(MATCH, WRAP))
+        scroll.setOnScrollChangeListener { _, _, y, _, _ -> updateTopBarFill(y) }
         addView(pullToRefresh, LayoutParams(MATCH, MATCH))
         addView(overlay, LayoutParams(MATCH, MATCH))
         buildBanner()
@@ -158,7 +169,9 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         }
         dots.set(pager)
         val current = state.content?.forecast?.current
-        sky.colors = Palette.sky(current?.weatherCode, current?.isDay ?: true)
+        val skyColors = Palette.sky(current?.weatherCode, current?.isDay ?: true)
+        sky.colors = skyColors
+        topBarFill.setColor(skyColors.first())
 
         topBar.visibility = if (state.needsOnboarding) View.GONE else View.VISIBLE
         title.text = state.place?.name ?: "Konum seçin"
@@ -169,6 +182,10 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         setSpinning(state.isRefreshing || state.isLocating || (state.isLoading && state.content != null))
 
         if (state.place?.id != renderedPlaceId) expanded.clear()
+        val nearBulletin = state.place?.let { PollenBulletins.near(it.latitude, it.longitude) }
+        // A current location that moved to another city keeps its id, so the bulletin forces a rebuild too.
+        val bulletinChanged = nearBulletin != bulletin
+        bulletin = nearBulletin
         val data = state.content
         when {
             state.needsOnboarding -> {
@@ -183,7 +200,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             data == null -> showOverlay("error") { error(state.errorMessage) }
             else -> {
                 showOverlay(null) { null }
-                if (data !== renderedContent || state.place?.id != renderedPlaceId) {
+                if (data !== renderedContent || state.place?.id != renderedPlaceId || bulletinChanged) {
                     val placeChanged = state.place?.id != renderedPlaceId
                     rebuild(data)
                     renderedContent = data
@@ -214,6 +231,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
             overlay.visibility = View.GONE
             scroll.visibility = View.VISIBLE
         }
+        updateTopBarFill(if (view == null) scroll.scrollY else 0)
         applyInsets()
     }
 
@@ -452,9 +470,13 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
     // region Top bar & banner -----------------------------------------------------------------
 
     private fun buildTopBar() {
-        topBar.background = GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            intArrayOf(Color.argb(90, 0, 0, 0), Color.TRANSPARENT),
+        topBarFill.setColor(Palette.sky(null, true).first())
+        topBarFill.alpha = 0
+        topBar.background = LayerDrawable(
+            arrayOf(
+                topBarFill,
+                GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(Color.argb(90, 0, 0, 0), Color.TRANSPARENT)),
+            ),
         )
         // The chevron is part of the title so ellipsizing a long name keeps room for it.
         val chevron = context.getDrawable(R.drawable.ic_chevron_down)?.mutate()?.apply {
@@ -483,6 +505,12 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
         topBar.addView(refreshButton)
         topBar.addView(context.iconButton(R.drawable.ic_search, "Yer ara") { actions.openPlaces() })
         topBar.addView(context.iconButton(R.drawable.ic_settings, "Ayarlar") { actions.openSettings() })
+    }
+
+    /** Cards scrolling under the transparent bar would show through the place name and buttons. */
+    private fun updateTopBarFill(scrollY: Int) {
+        val alpha = (scrollY * 255 / dp(24)).coerceIn(0, 255)
+        if (topBarFill.alpha != alpha) topBarFill.alpha = alpha
     }
 
     private fun buildBanner() {
@@ -860,6 +888,7 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 addView(row.params(top = 2))
             }
         }
+        bulletin?.let { addView(bulletinRow(it).params(top = 12)) }
         if (profile == null && summary.hasData) {
             addView(
                 context.text(
@@ -868,6 +897,20 @@ class HomeView(context: Context, private val actions: Actions) : FrameLayout(con
                 ).params(top = 10),
             )
         }
+    }
+
+    /** Link to the city's measured counts, which cover more pollen types than the forecast. */
+    private fun bulletinRow(bulletin: PollenBulletin): View = context.horizontal().apply {
+        background = ripple(rounded(Palette.GLASS, dp(12).toFloat()), radius = dp(12).toFloat())
+        setPadding(dp(12), dp(10), dp(8), dp(10))
+        minimumHeight = dp(48)
+        contentDescription = "${bulletin.name}, ${bulletin.source}. Tarayıcıda açılır."
+        val texts = context.vertical()
+        texts.addView(context.text(bulletin.name, 14f, Palette.TEXT, Fonts.medium))
+        texts.addView(context.text("${bulletin.source} · tarayıcıda açılır", 12f, Palette.TEXT_TERTIARY).params(top = 2))
+        addView(texts, LinearLayout.LayoutParams(0, WRAP, 1f))
+        addView(context.icon(R.drawable.ic_chevron_down, Palette.TEXT_TERTIARY, 18).apply { rotation = -90f })
+        setOnClickListener { actions.openLink(bulletin.url) }
     }
 
     private fun pollenChip(level: PollenLevel?): View = FrameLayout(context).apply {
