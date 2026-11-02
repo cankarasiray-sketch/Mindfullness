@@ -502,7 +502,9 @@ function viewToday() {
     ids.forEach(function (id, i) {
       var c = couponById(id);
       if (!c) return;
-      var title = ids.length > 1 ? "Günün kuponu " + (i + 1) + "/" + ids.length : "Günün kuponu";
+      var first = Math.min.apply(null, c.legs.map(function (l) { return Date.parse(l.kickoff); }));
+      var base = new Date(first + 3 * 3600000).toISOString().slice(0, 10) > run.day ? "Yarının kuponu" : "Günün kuponu"; // 2.66: maçlar yarın (Türkiye günü)
+      var title = ids.length > 1 ? base + " " + (i + 1) + "/" + ids.length : base;
       html += couponCard(c, title, i === ids.length - 1 ? (run.reason ? '<p class="small muted">' + esc(run.reason) + "</p>" : "")
         + summaryHtml(run.summary) : "");
     });
@@ -1430,6 +1432,8 @@ function viewSettings() {
       return '<option value="' + o[0] + '"' + ((st.opportunityHours || 48) === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + "</select>"
     + '<p class="small muted">Tek maç fırsatları, denge tablosu, Değerli oranlar ve kârlı seçim bildirimi bu kadar ilerideki maçları da kapsar. Günün kuponu ve günün seçimi 24 saatte kalır.</p>'
+    + '<label class="check"><input type="checkbox" id="sAhead"' + (st.aheadCoupon !== false ? " checked" : "") + ">Bugün değerli kupon yoksa yarının kuponunu öner</label>" // 2.66
+    + '<p class="small muted">Sabah taramasında bugünün maçlarında değer yoksa aynı taramadaki yarının maçlarına (sonraki 24 saat) aynı kurallarla bakılır; kredi harcamaz. Kupon yarına kadar beklerse oranlar değişebilir: oynamadan önce kontrol et. Yarın da değer yoksa pas.</p>'
     + '<label>En düşük oran</label><input id="sPickMinOdds" inputmode="decimal" value="' + esc(num(st.pickMinOdds || 1.18, 2)) + '">'
     + '<p class="small muted">Tek maç listesi, günün seçimi ve kârlı seçim bildirimi bu orandan düşükleri almaz. Başa baş için gereken tutma = 1 / oran: '
     + "1,18'de %85, 1,25'te %80 (5'te 4 tutarsa ancak başa baş), 1,40'ta %71.</p>"
@@ -1548,6 +1552,7 @@ function collectSettings() {
     st.pickStake = numIn(val("sPickStake"), 0);
     st.pickMinOdds = numIn(val("sPickMinOdds"), 1.18);
     st.opportunityHours = parseInt(val("sOppHours") || "48", 10);
+    st.aheadCoupon = !!(document.getElementById("sAhead") || {}).checked; // 2.66
     st.singlesOnly = !!(document.getElementById("sSingles") || {}).checked;
   }
   var hc = document.getElementById("sHandicap");

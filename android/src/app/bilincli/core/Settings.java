@@ -242,6 +242,11 @@ public final class Settings {
      * en yakın). Kasa Kelly'si değil, sabit küçük tutar.
      */
     public boolean dailyPick = true;
+    /**
+     * 2.66: kullanıcı istedi: bugünün maçlarında değerli kupon yoksa aynı taramadaki yarının maçlarından (karar penceresinden
+     * sonraki 24 saat, Fırsatlar penceresi içinde) aynı kurallarla kupon; yoksa pas.
+     */
+    public boolean aheadCoupon = true;
     /** Günün seçiminde en az tutma olasılığı. */
     public double pickMinProb = 0.60;
     /** Günün seçiminin tutarı (TL); 0 = kasanın %3'ü (2.15.2; önce %1). */
@@ -402,6 +407,7 @@ public final class Settings {
         m.put("zirve", zirve);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
+        m.put("aheadCoupon", aheadCoupon);
         m.put("pickMinProb", pickMinProb);
         m.put("pickStake", pickStake);
         m.put("pickHighProb", pickHighProb);
@@ -459,6 +465,7 @@ public final class Settings {
         s.zirve = Json.bool(m, "zirve", s.zirve);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
+        s.aheadCoupon = Json.bool(m, "aheadCoupon", s.aheadCoupon);
         s.pickMinProb = Json.dbl(m, "pickMinProb", s.pickMinProb);
         s.pickStake = Json.dbl(m, "pickStake", s.pickStake);
         s.pickHighProb = Json.dbl(m, "pickHighProb", s.pickHighProb);

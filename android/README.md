@@ -62,6 +62,16 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Bugün kupon yoksa yarının kuponu (2.66)
+
+- Kullanıcı istedi: sabah kararında bugünün penceresinde (24 saat) değerli kupon çıkmazsa aynı taramadaki yarının maçlarına
+  (karar penceresinden sonraki 24 saat, Fırsatlar penceresi içinde; kredi harcamaz) aynı kurallarla bakılır. Kupon çıkarsa
+  "Yarının kuponu" olarak kaydedilir, Bugün ekranında bu başlıkla görünür ve bildirilir (koşu kaydında `ahead`); yarın da
+  değer yoksa pas ve nedeni iki gün için yazılır. Koruma (kayıp sınırı) devredeyken bakılmaz; bugün değer varsa davranış aynı.
+- Ertesi günün kararı: oynanmış yarının kuponundaki maç yeniden önerilmez (aynı maça iki kupon olmasın); oynanmamış yarının
+  kuponu yeni kararla geçersiz sayılır (güncel oranlarla yeniden değerlendirilir).
+- Ayarlar → Tek maç: "Bugün değerli kupon yoksa yarının kuponunu öner" (varsayılan açık).
+
 ## Altılı ve at yarışı kaldırıldı (2.65)
 
 - 2.18–2.64 arasında altılı (AGF, TJK sonuçları, karne, strateji araması, ganyan, form verisi) geliştirildi ve 10 aylık

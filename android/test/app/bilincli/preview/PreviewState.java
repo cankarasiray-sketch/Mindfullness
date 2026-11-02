@@ -23,6 +23,7 @@ public final class PreviewState {
         app.bilincli.core.Settings legacy = pre.settings();
         legacy.minWinProb = 0.20;
         legacy.minLegProb = 0;
+        legacy.aheadCoupon = false; // 2.66: önizlemede bugünün kupon ekranı görünsün (yarının kuponu arayüz testinde ayrı)
         pre.saveSettings(legacy);
         Map<String, Object> summary = DemoSim.run(st, 60, 1000000, 11, today);
         Ledger ledger = new Ledger(st, new Ledger.Clock() {

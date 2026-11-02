@@ -94,6 +94,8 @@ public final class Ledger {
         public Long couponId;
         /** Günün tüm kuponları (ilki couponId). */
         public List<Long> couponIds = new ArrayList<>();
+        /** 2.66: bugünün maçlarında değerli kupon yoktu; kupon(lar) yarının maçlarından. */
+        public boolean ahead;
 
         public List<Long> ids() {
             if (!couponIds.isEmpty()) return couponIds;
@@ -174,6 +176,7 @@ public final class Ledger {
             o.put("couponId", r.couponId);
             o.put("summary", r.summary);
             o.put("couponIds", new ArrayList<Object>(r.couponIds));
+            if (r.ahead) o.put("ahead", true);
             rs.add(o);
         }
         m.put("runs", rs);
@@ -313,6 +316,7 @@ public final class Ledger {
             r.summary = Json.str(x, "summary");
             r.couponId = x.get("couponId") == null ? null : Json.lng(x, "couponId", 0);
             for (Object id : Json.arr(x.get("couponIds"))) r.couponIds.add(((Number) id).longValue());
+            r.ahead = Json.bool(x, "ahead", false);
             runs.put(r.day, r);
         }
     }
@@ -721,9 +725,29 @@ public final class Ledger {
         r.reason = reason;
         r.couponId = couponId;
         r.summary = summary;
+        if (prev != null && prev.ahead) for (Long id : prev.ids()) r.ahead |= couponIds.contains(id); // yanına ek kupon: yarınınki duruyor
         runs.remove(day);
         runs.put(day, r);
         save();
+    }
+
+    /** 2.66: günün koşusu yarının maçlarından kuruldu. */
+    public synchronized void markRunAhead(String day) {
+        Run r = runs.get(day);
+        if (r == null || r.ahead) return;
+        r.ahead = true;
+        save();
+    }
+
+    /** 2.66: oynanmamış, sonuçlanmamış kuponları geçersiz sayar (yeni günün kararı eskisinin yerine geçti). */
+    public synchronized void supersede(java.util.Collection<Long> ids) {
+        boolean changed = false;
+        for (Coupon c : coupons) {
+            if (!ids.contains(c.id) || c.played || c.result != null || c.superseded) continue;
+            c.superseded = true;
+            changed = true;
+        }
+        if (changed) save();
     }
 
     public synchronized Run runFor(String day) {

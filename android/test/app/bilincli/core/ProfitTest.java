@@ -1,5 +1,6 @@
 package app.bilincli.core;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -126,6 +127,73 @@ public class ProfitTest {
             assertEquals(c.suggestedStake, Daily.stakeNow(ledger, c, cfg));
         }
         assertTrue(exposure <= cfg.maxDailyExposure + 1e-9);
+    }
+
+    @Test
+    public void tomorrowsCouponWhenTodayHasNoValue() {
+        // 2.66: bugünün penceresinde (24 saat) değer yok; yarının maçında (30. saat) var: aynı taramadan yarının kuponu
+        CoreTest.TestClock clock = new CoreTest.TestClock();
+        Ledger ledger = new Ledger(new Ledger.MemoryStorage(null), clock);
+        ledger.deposit(1000000, "");
+        String day = Fmt.dayKey(NOW);
+        List<BookEvent> book = Arrays.asList(FeatureTest.book(1, 1.80, 1, 10), FeatureTest.book(2, 2.30, 1, 30));
+        List<SharpEvent> sharp = Arrays.asList(FeatureTest.sharp(1, 0.50, 10), FeatureTest.sharp(2, 0.50, 30));
+        Daily.Result r = Daily.generate(ledger, sources(book, sharp), false, false);
+        assertTrue(r.ahead);
+        assertEquals("KUPON", r.headline());
+        Ledger.Coupon c = ledger.coupon(r.couponId);
+        assertEquals(1, c.legs.size());
+        assertEquals("b2", c.legs.get(0).bookRef);
+        assertEquals(day, c.day);
+        Ledger.Run run = ledger.runFor(day);
+        assertEquals("kupon", run.decision);
+        assertTrue(run.reason, run.reason.contains("Bugünün maçlarında değerli kupon yok") && run.reason.contains("yarının maçlarından"));
+        String[] n = Texts.notification(ledger, r);
+        assertTrue(n[0], n[0].startsWith("Yarının kuponu · 1 maç"));
+        assertTrue(n[1].startsWith("Bugünün maçlarında değerli kupon yok; bu kupon yarının maçlarından."));
+        // ertesi gün: oynanmış yarının kuponundaki maç yeniden önerilmez (aynı maça iki kupon olmaz)
+        ledger.markPlayed(c.id, c.suggestedStake, null);
+        clock.now = NOW.plusSeconds(24 * 3600);
+        Daily.Result next = Daily.generate(ledger, sources(book, sharp), false, false);
+        assertEquals("PAS", next.headline());
+        assertTrue(ledger.coupon(c.id).played && !ledger.coupon(c.id).superseded);
+        // oynanmamış yarının kuponu ertesi günün kararıyla geçersiz olur (yerine güncel karar)
+        CoreTest.TestClock clock2 = new CoreTest.TestClock();
+        Ledger l2 = new Ledger(new Ledger.MemoryStorage(null), clock2);
+        l2.deposit(1000000, "");
+        Daily.Result a = Daily.generate(l2, sources(book, sharp), false, false);
+        clock2.now = NOW.plusSeconds(24 * 3600);
+        Daily.Result b = Daily.generate(l2, sources(book, sharp), false, false);
+        assertTrue(l2.coupon(a.couponId).superseded);
+        assertFalse(b.ahead); // maç artık bugünün penceresinde
+        assertEquals("b2", l2.coupon(b.couponId).legs.get(0).bookRef);
+    }
+
+    @Test
+    public void tomorrowIsCheckedButPassIsHonest() {
+        // 2.66: yarının maçlarında da değer yoksa pas, nedeni iki gün için de yazılır
+        Ledger ledger = new Ledger(new Ledger.MemoryStorage(null), new CoreTest.TestClock());
+        ledger.deposit(1000000, "");
+        Daily.Result r = Daily.generate(ledger, sources(Arrays.asList(FeatureTest.book(1, 1.80, 1, 10), FeatureTest.book(2, 1.80, 1, 30)),
+                Arrays.asList(FeatureTest.sharp(1, 0.50, 10), FeatureTest.sharp(2, 0.50, 30))), false, false);
+        assertEquals("PAS", r.headline());
+        assertFalse(r.ahead);
+        assertTrue(r.aheadNote, r.aheadNote.startsWith("Yarının maçlarında da değerli kupon yok"));
+        assertTrue(ledger.runFor(Fmt.dayKey(NOW)).reason.endsWith(r.aheadNote));
+        assertTrue(Texts.notification(ledger, r)[1].contains("Yarının maçlarında da değerli kupon yok"));
+        // bugün değer varsa eskisi gibi bugünün kuponu (yarının maçına bakılmaz)
+        Ledger l2 = new Ledger(new Ledger.MemoryStorage(null), new CoreTest.TestClock());
+        l2.deposit(1000000, "");
+        Daily.Result t = Daily.generate(l2, sources(Arrays.asList(FeatureTest.book(1, 2.30, 1, 10), FeatureTest.book(2, 2.30, 1, 30)),
+                Arrays.asList(FeatureTest.sharp(1, 0.50, 10), FeatureTest.sharp(2, 0.50, 30))), false, false);
+        assertFalse(t.ahead);
+        for (Long id : t.couponIds) for (Ledger.Leg l : l2.coupon(id).legs) assertEquals("b1", l.bookRef);
+        assertTrue(Texts.notification(l2, t)[0].startsWith("Günün kuponu"));
+        // taranan süre karar penceresinden uzun değilse yarına bakılmaz
+        Settings cfg = new Settings();
+        cfg.opportunityHours = 12;
+        assertNull(Daily.aheadWindow(cfg));
+        assertArrayEquals(new double[] {24, 48}, Daily.aheadWindow(new Settings()), 1e-9);
     }
 
     static Daily.Sources sources(final List<BookEvent> book, final List<SharpEvent> sharp) {

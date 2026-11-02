@@ -54,8 +54,13 @@ public final class Engine {
 
     /** hours: pencere (kupon kararı windowHours; Fırsatlar'daki Değerli oranlar scanHours, 2.15.7). */
     static List<List<Candidate>> buildCandidates(List<Pair> pairs, Instant now, Settings cfg, double hours) {
-        Instant earliest = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60));
-        Instant latest = now.plusSeconds(Math.round(hours * 3600));
+        return buildCandidates(pairs, now, cfg, 0, hours);
+    }
+
+    /** 2.66: pencere [now + fromHours (en az minLeadMinutes), now + toHours] (yarının kuponu: windowHours'tan sonrası). */
+    static List<List<Candidate>> buildCandidates(List<Pair> pairs, Instant now, Settings cfg, double fromHours, double toHours) {
+        Instant earliest = now.plusSeconds(Math.max(Math.round(cfg.minLeadMinutes * 60), Math.round(fromHours * 3600)));
+        Instant latest = now.plusSeconds(Math.round(toHours * 3600));
         List<Candidate> all = new ArrayList<>(), good = new ArrayList<>();
         for (Pair p : pairs) {
             if (p.book.kickoff.isBefore(earliest) || p.book.kickoff.isAfter(latest)) continue;
@@ -191,16 +196,22 @@ public final class Engine {
     }
 
     public static Decision decide(List<BookEvent> book, List<SharpEvent> sharp, Instant now, Settings cfg) {
+        return decide(book, sharp, now, cfg, 0, cfg.windowHours);
+    }
+
+    /** 2.66: karar penceresi [now + fromHours (en az minLeadMinutes), now + toHours]; yarının kuponu için windowHours'tan sonrası. */
+    public static Decision decide(List<BookEvent> book, List<SharpEvent> sharp, Instant now, Settings cfg, double fromHours, double toHours) {
         List<Pair> pairs = Matching.match(book, sharp);
         List<Instant> kos = new ArrayList<>();
         List<String> kls = new ArrayList<>();
-        Instant from = now.plusSeconds(Math.round(cfg.minLeadMinutes * 60)), to = now.plusSeconds(Math.round(cfg.windowHours * 3600));
+        Instant from = now.plusSeconds(Math.max(Math.round(cfg.minLeadMinutes * 60), Math.round(fromHours * 3600))),
+                to = now.plusSeconds(Math.round(toHours * 3600));
         for (Pair p : pairs) {
             if (p.book.kickoff.isBefore(from) || p.book.kickoff.isAfter(to)) continue;
             kos.add(p.book.kickoff);
             kls.add(p.sharp.sportKey);
         }
-        List<List<Candidate>> built = buildCandidates(pairs, now, cfg);
+        List<List<Candidate>> built = buildCandidates(pairs, now, cfg, fromHours, toHours);
         List<Candidate> cands = built.get(0), all = built.get(1);
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("iddaa_mac", (long) book.size());

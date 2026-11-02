@@ -55,6 +55,35 @@ test("günün kuponu ve özet görünür", async () => {
   assert.deepEqual(t.errors, []);
 });
 
+test("2.66: bugün değerli kupon yoksa yarının kuponu başlığıyla görünür", async () => {
+  const s = clone(baseState);
+  const nextDay = new Date(Date.parse(s.todayRun.day + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
+  const ids = s.todayRun.couponIds && s.todayRun.couponIds.length ? s.todayRun.couponIds : [s.todayRun.couponId];
+  s.coupons.filter((x) => ids.includes(x.id)).forEach((c) => c.legs.forEach((l) => { l.kickoff = nextDay + "T17:00:00Z"; })); // Türkiye'de yarın 20:00
+  s.todayRun.reason = "Bugünün maçlarında değerli kupon yok (640 seçim karşılaştırıldı); bu kupon yarının maçlarından. Oranlar maça kadar değişebilir: oynamadan önce kontrol et.";
+  const t = boot(s);
+  const view = t.$("#view").textContent;
+  assert.match(view, /Yarının kuponu/);
+  assert.doesNotMatch(view, /Günün kuponu/);
+  assert.match(view, /bu kupon yarının maçlarından/);
+  // bugünün maçlarıyla kurulmuşsa yine "Günün kuponu"
+  const today = boot(clone(baseState)).$("#view").textContent;
+  assert.match(today, /Günün kuponu/);
+  assert.doesNotMatch(today, /Yarının kuponu/);
+  // ayar: açık/kapalı köprüye gider
+  const sa = clone(baseState);
+  sa.settings.aheadCoupon = true; // varsayılan (önizleme verisinde kapalı)
+  const st = boot(sa, "#ayarlar");
+  assert.ok(st.$("#sAhead").checked);
+  st.$("#sAhead").checked = false;
+  st.button("Ayarları kaydet").click();
+  await st.tick();
+  assert.equal(st.calls.at(-1).action, "saveSettings");
+  assert.equal(st.calls.at(-1).payload.settings.aheadCoupon, false);
+  assert.deepEqual(t.errors, []);
+  assert.deepEqual(st.errors, []);
+});
+
 test("2.65: altılı kaldırıldı; analiz verisi Geçmiş'ten paylaşılır", async () => {
   const s = clone(baseState);
   s.agf = {altilis: [{key: "tjk/2/1", label: "İzmir 1. altılı", plan: {legs: []}}]}; // eski köprü verisi gelse de gösterilmez

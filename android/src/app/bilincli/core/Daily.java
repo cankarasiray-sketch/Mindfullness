@@ -41,6 +41,9 @@ public final class Daily {
         public List<SharpEvent> sharp;
         /** Bugün oynanmış kupon vardı: plan yenilenmedi, yalnızca kalan sınır içinde ek kupon denendi. */
         public boolean besidePlayed;
+        /** 2.66: bugünün maçlarında değerli kupon yoktu; kupon yarının maçlarından (ahead) ya da onlarda da yok (aheadNote). */
+        public boolean ahead;
+        public String aheadNote;
         public List<String> settleMessages = new ArrayList<>();
 
         public String headline() {
@@ -503,7 +506,9 @@ public final class Daily {
         if (radar != null) radar.update(f.book, f.sharp, now, cfg, true);
         r.book = f.book;
         r.sharp = f.sharp;
-        Decision d = Engine.decide(f.book, f.sharp, now, cfg);
+        if (!keep) supersedeEarlier(ledger, r.day, now); // 2.66: önceki günün oynanmamış yarının kuponu yeni kararla geçersiz
+        List<BookEvent> free = withoutOpen(ledger, f.book, r.day); // 2.66: oynanmış yarının kuponundaki maç yeniden önerilmez
+        Decision d = Engine.decide(free, f.sharp, now, cfg);
         d.stats.put("dogrulama", Calibration.summary(f.calibration));
         r.decision = d;
         r.calibration = f.calibration;
@@ -514,7 +519,25 @@ public final class Daily {
                 r.besidePlayed = true;
                 return r;
             }
-            ledger.recordRun(r.day, "pas", d.reason, (Long) null, summary);
+            double[] w = cfg.aheadCoupon ? aheadWindow(cfg) : null; // 2.66: bugünün kuponu yoksa yarının maçları (aynı tarama: kredi harcamaz)
+            Decision t = w == null ? null : Engine.decide(free, f.sharp, now, cfg, w[0], w[1]);
+            if (t != null && !t.isPass()) {
+                t.stats.put("dogrulama", d.stats.get("dogrulama"));
+                t.stats.put("kasa", ledger.balance());
+                r.decision = t;
+                r.ahead = true;
+                String[] note = new String[1];
+                String why = "Bugünün maçlarında değerli kupon yok (" + d.stats.get("karsilastirilan_secim") + " seçim karşılaştırıldı); "
+                        + "bu kupon yarının maçlarından. Oranlar maça kadar değişebilir: oynamadan önce kontrol et.";
+                r.couponIds = createCoupons(ledger, t, r.day, cfg, autoPlay, why, Texts.statsLine(t.stats), note);
+                ledger.markRunAhead(r.day);
+                r.couponId = r.couponIds.get(0);
+                r.stake = ledger.coupon(r.couponId).suggestedStake;
+                r.stakeNote = note[0];
+                return r;
+            }
+            if (t != null) r.aheadNote = "Yarının maçlarında da değerli kupon yok (" + t.stats.get("karsilastirilan_secim") + " seçim karşılaştırıldı).";
+            ledger.recordRun(r.day, "pas", d.reason + (r.aheadNote == null ? "" : " " + r.aheadNote), (Long) null, summary);
             return r;
         }
         String[] note = new String[1];
@@ -530,6 +553,44 @@ public final class Daily {
         r.stake = ledger.coupon(r.couponId).suggestedStake;
         r.stakeNote = note[0];
         return r;
+    }
+
+    /**
+     * 2.66: yarının kuponu için pencere (saat, şimdiden): karar penceresinin bitişinden bir pencere daha, taranan süre
+     * (scanHours) içinde. Taranan süre karar penceresinden uzun değilse null.
+     */
+    static double[] aheadWindow(Settings cfg) {
+        double from = cfg.windowHours, to = Math.min(cfg.windowHours * 2, cfg.scanHours());
+        return to - from >= 1 ? new double[] {from, to} : null;
+    }
+
+    /** 2.66: yarının kuponu mu (bugünün maçlarında değer yokken yarının maçlarından kurulan koşuda). */
+    static boolean aheadCoupon(Ledger ledger, Ledger.Coupon c) {
+        Ledger.Run run = c.day == null ? null : ledger.runFor(c.day);
+        return run != null && run.ahead && run.ids().contains(c.id);
+    }
+
+    /** 2.66: önceki günlerin oynanmış, sonuçlanmamış yarının kuponlarındaki maçlar çıkarılmış bülten (aynı maça iki kupon olmasın). */
+    static List<BookEvent> withoutOpen(Ledger ledger, List<BookEvent> book, String day) {
+        java.util.Set<String> open = new java.util.HashSet<>();
+        for (Ledger.Coupon c : ledger.coupons()) {
+            if (!c.played || c.result != null || day.equals(c.day) || !aheadCoupon(ledger, c)) continue;
+            for (Ledger.Leg l : c.legs) open.add(l.bookRef);
+        }
+        if (open.isEmpty()) return book;
+        List<BookEvent> out = new ArrayList<>();
+        for (BookEvent b : book) if (!open.contains(b.ref)) out.add(b);
+        return out;
+    }
+
+    /** 2.66: önceki günlerin oynanmamış, maçı henüz başlamamış yarının kuponları yeni günün kararıyla geçersiz. */
+    static void supersedeEarlier(Ledger ledger, String day, Instant now) {
+        List<Long> stale = new ArrayList<>();
+        for (Ledger.Coupon c : ledger.coupons()) {
+            if (c.played || c.result != null || c.superseded || c.day == null || c.day.compareTo(day) >= 0 || !aheadCoupon(ledger, c)) continue;
+            if (Recheck.firstKickoff(c).isAfter(now)) stale.add(c.id);
+        }
+        if (!stale.isEmpty()) ledger.supersede(stale);
     }
 
     /** Gün içi tarama sonucu. */
@@ -573,7 +634,7 @@ public final class Daily {
             out.blocked = blocked;
             return out;
         }
-        Decision d = Engine.decide(book, sharp, now, cfg);
+        Decision d = Engine.decide(withoutOpen(ledger, book, day), sharp, now, cfg); // 2.66: oynanmış yarının kuponundaki maç yeniden önerilmez
         if (d.isPass()) return out;
         List<Long> todayIds = run == null ? new ArrayList<Long>() : run.ids();
         String[] note = new String[1];

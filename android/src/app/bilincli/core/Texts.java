@@ -116,11 +116,12 @@ public final class Texts {
         if (r.blocked != null) return new String[] {"Bugün kupon yok · koruma devrede", r.blocked};
         if (r.decision == null) return null;
         if (r.decision.isPass()) {
+            String passWhy = r.decision.reason + (r.aheadNote == null ? "" : " " + r.aheadNote); // 2.66: yarına da bakıldı
             if (pick != null && Json.bool(pick, "skip", false)) {
                 return new String[] {"Bugün oynama · en iyi tek maç bile " + Fmt.pct(Json.dbl(pick, "ev", 0), true),
                         "Adil orana en yakın, sık tutan tek maç bile beklenen kayıp sınırını aşıyor (sınır "
                                 + Fmt.pct(-Json.dbl(pick, "maxLoss", 0.15), true) + "): oynamamak bugün en kârlı karar.\n"
-                                + Pick.line(pick) + "\n\n" + r.decision.reason};
+                                + Pick.line(pick) + "\n\n" + passWhy};
             }
             if (pick != null) {
                 String head = Json.str(pick, "home") + " – " + Json.str(pick, "away") + " · " + Json.str(pick, "label") + " @ "
@@ -128,15 +129,16 @@ public final class Texts {
                 String why = Json.bool(pick, "value", false) ? "Bu seçim adil oranı geçiyor (değerli). "
                         : "Değerli seçim yok (iddaa oranları adilin altında); bu, kâr ve tutma olasılığı birlikte en iyi seçim. ";
                 return new String[] {"Günün seçimi · " + head, Pick.line(pick) + "\n" + why
-                        + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + ".\n\n" + r.decision.reason};
+                        + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + ".\n\n" + passWhy};
             }
-            return new String[] {"Bugün pas · " + when, r.decision.reason + "\n" + statsLine(r.decision.stats)};
+            return new String[] {"Bugün pas · " + when, passWhy + "\n" + statsLine(r.decision.stats)};
         }
         Coupon c = ledger.coupon(r.couponId);
         List<Long> ids = r.couponIds.isEmpty() ? java.util.Collections.singletonList(r.couponId) : r.couponIds;
+        String which = r.ahead ? "Yarının" : "Günün"; // 2.66: bugün değerli kupon yoktu, yarının maçlarından
         String title = ids.size() > 1
-                ? "Günün kuponları · " + ids.size() + " kupon"
-                : "Günün kuponu · " + c.legs.size() + " maç · oran " + Fmt.odds(c.totalOdds)
+                ? which + " kuponları · " + ids.size() + " kupon"
+                : which + " kuponu · " + c.legs.size() + " maç · oran " + Fmt.odds(c.totalOdds)
                         + (c.suggestedStake > 0 ? " · " + Fmt.tl(c.suggestedStake) : "");
         StringBuilder all = new StringBuilder();
         for (Long id : ids) {
@@ -144,7 +146,7 @@ public final class Texts {
             if (ids.size() > 1) all.append("Kupon #").append(id).append('\n');
             all.append(couponText(ledger.coupon(id)));
         }
-        String body = all + (r.stakeNote != null ? "\n" + r.stakeNote : "")
+        String body = (r.ahead ? "Bugünün maçlarında değerli kupon yok; bu kupon yarının maçlarından.\n" : "") + all + (r.stakeNote != null ? "\n" + r.stakeNote : "")
                 + "\nOranlar gün içinde değişir: oynamadan önce uygulamada \"Oynamadan önce kontrol et\"e bas."
                 + " İlk maçtan 90 dk önce otomatik kontrol bildirimi de gelir.";
         return new String[] {title, body};
