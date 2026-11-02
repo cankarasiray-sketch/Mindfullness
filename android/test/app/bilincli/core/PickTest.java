@@ -62,9 +62,94 @@ public class PickTest {
         return f;
     }
 
+    /**
+     * 2.67 öncesi günün seçimi varsayılanları (%60, 1,18, −%15, yarına bakılmaz): eski testler aynı şeyi sınasın.
+     * Yeni varsayılanlar ve yarının seçimi ayrı testte.
+     */
+    static Settings legacy() {
+        Settings s = new Settings();
+        s.pickMinProb = 0.60;
+        s.pickMinOdds = 1.18;
+        s.pickMaxLoss = 0.15;
+        s.aheadCoupon = false;
+        return s;
+    }
+
+    @Test
+    public void userRulesAndTomorrowsPick() {
+        // 2.67: kullanıcı istedi: en az %68 tutan, oranı en az 1,25, beklenen kaybı en fazla %14 olan maçlardan; bugün yoksa yarının
+        Settings cfg = new Settings();
+        assertEquals(0.68, cfg.pickMinProb, 0);
+        assertEquals(1.25, cfg.pickMinOdds, 0);
+        assertEquals(0.14, cfg.pickMaxLoss, 0);
+        assertTrue(cfg.aheadCoupon);
+        // yeniden kurulumda kalan eski (v17) ayarlar bir kez kullanıcının değerlerine
+        Map<String, Object> old = new Settings().toMap();
+        old.put("v", 17L);
+        old.put("pickMinProb", 0.60);
+        old.put("pickMinOdds", 1.18);
+        old.put("pickMaxLoss", 0.15);
+        Settings moved = Settings.fromMap(old);
+        assertEquals(0.68, moved.pickMinProb, 0);
+        assertEquals(1.25, moved.pickMinOdds, 0);
+        assertEquals(0.14, moved.pickMaxLoss, 0);
+        moved.pickMinProb = 0.70; // sonradan değiştirilen korunur
+        assertEquals(0.70, Settings.fromMap(moved.toMap()).pickMinProb, 0);
+        long bal = 500000;
+        // bugün: %68 altı ve 1,25 altı alınmaz; beklenen kaybı %14'ü aşan önerilmez
+        List<Object> fx = new ArrayList<>();
+        fx.add(row("1", "Arsenal", 8, sel("MS", "1", 0.60, 1.60, 1))); // tutma az
+        fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.85, 1.20, 1))); // oran düşük
+        fx.add(row("3", "Everton", 10, sel("MS", "1", 0.68, 1.25, 1))); // −%15: sınırı aşar
+        fx.add(row("4", "Fulham", 11, sel("MS", "1", 0.70, 1.30, 1))); // −%9: uyar
+        fx.add(row("5", "Leeds", 30, sel("MS", "1", 0.75, 1.40, 1))); // yarın, +%5
+        Map<String, Object> p = Pick.choose(fx, null, cfg, bal, NOW);
+        assertEquals("4", p.get("ref"));
+        assertNull(p.get("ahead"));
+        assertFalse(Json.bool(p, "skip", false));
+        assertEquals(1L, p.get("candidates"));
+        // bugün kurala uyan yok (yalnızca −%15'lik Everton): yarının seçimi
+        fx.remove(3);
+        p = Pick.choose(fx, null, cfg, bal, NOW);
+        assertEquals("5", p.get("ref"));
+        assertEquals(Boolean.TRUE, p.get("ahead"));
+        assertTrue(Json.lng(p, "stake", 0) > 0);
+        Daily.Result r = new Daily.Result();
+        r.day = "2026-10-01";
+        r.decision = Engine.decide(new ArrayList<Models.BookEvent>(), new ArrayList<Models.SharpEvent>(), NOW, cfg);
+        String[] t = Texts.notification(null, r, p);
+        assertTrue(t[0], t[0].startsWith("Yarının seçimi · Leeds – Dep 5 · MS 1 @ 1,40"));
+        assertTrue(t[1].startsWith("Bugün kurala uyan seçim yok; bu seçim yarının maçlarından."));
+        // ayar kapalıysa yarına bakılmaz: bugünün "oynama"sı
+        cfg.aheadCoupon = false;
+        p = Pick.choose(fx, null, cfg, bal, NOW);
+        assertEquals("3", p.get("ref"));
+        assertTrue(Json.bool(p, "skip", false));
+        cfg.aheadCoupon = true;
+        // yarın da sınırı aşıyorsa bugünün "oynama"sı (nedeni görünsün)
+        fx.set(fx.size() - 1, row("5", "Leeds", 30, sel("MS", "1", 0.68, 1.25, 1)));
+        p = Pick.choose(fx, null, cfg, bal, NOW);
+        assertEquals("3", p.get("ref"));
+        assertNull(p.get("ahead"));
+        assertTrue(Json.bool(p, "skip", false));
+        // bugün hiç aday yoksa: yarının kurala uyanı; o da yoksa yarının en iyisi "oynama" olarak
+        List<Object> only = new ArrayList<>();
+        only.add(row("6", "Spurs", 31, sel("MS", "1", 0.68, 1.25, 1))); // −%15
+        only.add(row("7", "Wolves", 32, sel("MS", "1", 0.80, 1.25, 1))); // %0: uyar
+        p = Pick.choose(only, null, cfg, bal, NOW);
+        assertEquals("7", p.get("ref"));
+        assertEquals(Boolean.TRUE, p.get("ahead"));
+        only.remove(1);
+        p = Pick.choose(only, null, cfg, bal, NOW);
+        assertEquals("6", p.get("ref"));
+        assertEquals(Boolean.TRUE, p.get("ahead"));
+        assertTrue(Json.bool(p, "skip", false));
+        assertNull(Pick.choose(new ArrayList<Object>(), null, cfg, bal, NOW));
+    }
+
     @Test
     public void choosesClosestToFairAmongFrequentSingles() {
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         cfg.pickMaxLoss = 0.06; // 2.13 kademeleri (2.15 varsayılanı %15: maxLoss15Default)
         Map<String, Object> p = Pick.choose(fairs(), null, cfg, 500000, NOW);
         assertEquals("3", p.get("ref"));
@@ -74,7 +159,7 @@ public class PickTest {
         assertEquals("iddaa", p.get("source"));
         assertEquals(0.61 * 1.58 - 1, Json.dbl(p, "ev", 0), 1e-12);
         assertEquals(1 / 0.61, Json.dbl(p, "fair", 0), 1e-12);
-        assertEquals(2L, p.get("candidates")); // Arsenal MS 1 ve Liverpool 2,5 Üst
+        assertEquals(1L, p.get("candidates")); // 2.67: yalnızca sınırın içindekiler (Arsenal MS 1 −%6,5 sınırı aşıyor)
         assertFalse(Json.bool(p, "value", true));
         // tutar: kasanın %3'ü (2.15.2; önce %1), 10 TL'ye yuvarlı (5.000 TL -> 150 TL)
         // 2.15.1: beklenen −%3,6 sınırın içinde -> tam tutar (yarım kademe yok)
@@ -83,7 +168,7 @@ public class PickTest {
         assertEquals(Math.round(15000 * (0.61 * 1.58 - 1)), p.get("expected"));
         assertEquals(Math.round(30 * 15000 * (0.61 * 1.58 - 1)), p.get("monthly"));
         assertFalse(Json.bool(p, "skip", false));
-        assertEquals(1, Json.arr(p.get("alternatives")).size());
+        assertEquals(0, Json.arr(p.get("alternatives")).size()); // 2.67: sınırı aşan (Arsenal) seçenek de değil
         assertEquals("soccer_epl", p.get("sport"));
         assertEquals("s3", p.get("sref"));
         // sabit tutar ayarı ve daha sık tutma şartı
@@ -104,13 +189,13 @@ public class PickTest {
         cfg.pickMinProb = 0.95;
         assertNull(Pick.choose(fairs(), null, cfg, 500000, NOW));
         // kasa küçükken en az 10 TL
-        assertEquals(1000L, Pick.stake(new Settings(), 30000));
-        assertEquals(0L, Pick.stake(new Settings(), 0));
+        assertEquals(1000L, Pick.stake(legacy(), 30000));
+        assertEquals(0L, Pick.stake(legacy(), 0));
     }
 
     @Test
     public void zirveOddsCountWhenBetterAndConsistent() {
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         Map<String, Object> zirve = new LinkedHashMap<>();
         List<Object> rows = new ArrayList<>();
         // Arsenal MS 1 Zirve'de 1,52 (normal 1,45): %64,5 x 1,52 − 1 = −%2,0 -> en iyi
@@ -149,7 +234,7 @@ public class PickTest {
 
     @Test
     public void passNotificationLeadsWithPick() {
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         cfg.pickMaxLoss = 0.06;
         Map<String, Object> p = Pick.choose(fairs(), null, cfg, 500000, NOW);
         Engine.Decision d = Engine.decide(new ArrayList<Models.BookEvent>(), new ArrayList<Models.SharpEvent>(), NOW, cfg);
@@ -179,13 +264,13 @@ public class PickTest {
         assertEquals(95000, l.balance());
         // sanal takipte ayrı tür
         Virtual v = new Virtual(new Ledger.MemoryStorage(null));
-        assertTrue(v.record("2026-10-01", Virtual.PICK, Pick.selection(Pick.choose(fairs(), null, new Settings(), 500000, NOW)), NOW));
+        assertTrue(v.record("2026-10-01", Virtual.PICK, Pick.selection(Pick.choose(fairs(), null, legacy(), 500000, NOW)), NOW));
         assertEquals(1L, Json.obj(v.view().get("secim")).get("open"));
         assertEquals(0L, Json.obj(v.view().get("normal")).get("open"));
         // ayar doğrulama ve kalıcılık
         Settings s = new Settings();
         assertTrue(s.dailyPick);
-        assertEquals(0.60, s.pickMinProb, 0);
+        assertEquals(0.68, s.pickMinProb, 0); // 2.67: kullanıcı istedi (önce %60)
         s.pickMinProb = 0.2;
         assertTrue(s.validate().contains("Günün seçimi"));
         s.pickMinProb = 0.7;
@@ -197,7 +282,7 @@ public class PickTest {
 
     @Test
     public void balanceScoreTieredStakeSkipAndBands() {
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         cfg.pickMaxLoss = 0.06;
         cfg.pickMinOdds = 1.05; // düşük oranlı örnekler (2.15.6 varsayılanı 1,18 ayrı testte)
         long bal = 500000;
@@ -236,7 +321,7 @@ public class PickTest {
         assertEquals(0.70 * 1.48 - 1, Json.dbl(Json.obj(bands.get(3)), "bestEv", 0), 1e-9);
         // ayar
         Settings s = new Settings();
-        assertEquals(0.15, s.pickMaxLoss, 0);
+        assertEquals(0.14, s.pickMaxLoss, 0); // 2.67: kullanıcı istedi (önce %15)
         s.pickMaxLoss = 0.5;
         assertTrue(s.validate().contains("en kötü beklenen"));
         s.pickMaxLoss = 0.08;
@@ -245,8 +330,8 @@ public class PickTest {
     @Test
     public void maxLoss15Default() {
         // 2.15: adil oranın %15 altına kadar tutar verilir (beklenen −%15); 2.15.1: hep tam tutar
-        Settings cfg = new Settings();
-        assertEquals(0.15, cfg.pickMaxLoss, 0);
+        Settings cfg = legacy();
+        assertEquals(0.15, cfg.pickMaxLoss, 0); // 2.67'de varsayılan %14 (sınırın davranışı burada %15 ile)
         long bal = 500000; // temel tutar 150 TL (kasanın %3'ü)
         assertEquals(15000L, Pick.stakeFor(0.645, 1.45, cfg, bal)); // −%6,5: tam
         assertEquals(15000L, Pick.stakeFor(0.50, 1.85, cfg, bal)); // −%7,5: tam
@@ -264,11 +349,11 @@ public class PickTest {
         cfg.pickStake = 0;
         assertFalse(Json.bool(ars, "skip", false));
         // eski kayıt (%6 ya da elle girilmiş başka değer) bir kez %15'e taşınır; sonradan değiştirilen korunur
-        Map<String, Object> old = new Settings().toMap();
+        Map<String, Object> old = legacy().toMap();
         old.put("v", 7L);
         old.put("pickMaxLoss", 0.06);
         Settings moved = Settings.fromMap(old);
-        assertEquals(0.15, moved.pickMaxLoss, 0);
+        assertEquals(0.14, moved.pickMaxLoss, 0); // 2.15'te %15'e, 2.67'de kullanıcı isteğiyle %14'e
         moved.pickMaxLoss = 0.10;
         assertEquals(0.10, Settings.fromMap(moved.toMap()).pickMaxLoss, 0);
     }
@@ -285,7 +370,7 @@ public class PickTest {
         fx.add(row("1", "Arsenal", 8, sel("MS", "1", 0.90, 1.11, 1)));
         fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.60, 1.67, 1)));
         fx.add(row("3", "Liverpool", 10, sel("CS", "1X", 0.85, 1.15, 1)));
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         cfg.pickMinOdds = 1.05; // düşük oranlı örnekler
         List<Object> list = Pick.list(fx, null, cfg, 500000, NOW);
         assertEquals("2", Json.obj(list.get(0)).get("ref")); // kârlı
@@ -329,7 +414,7 @@ public class PickTest {
         zr.add(zirveRow("3", "Liverpool", 10, "AU25", "UST", 0.55, 1.95, "oyna")); // Zirve bildirimi zaten gider
         zr.add(zirveRow("4", "Everton", 11, "KG", "VAR", 0.50, 2.02, "oynama")); // +%1: Zirve "oyna" değil ama kârlı
         zirve.put("rows", zr);
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         List<Object> list = Pick.list(fx, zirve, cfg, 500000, NOW);
         List<Object> notified = new ArrayList<>();
         String[] n = Pick.profitNotice(list, notified);
@@ -370,7 +455,7 @@ public class PickTest {
         Map<String, Object> au = sel("AU@1.5", "UST", 0.72, 1.25, 1);
         au.put("model", true);
         fx.add(row("u", "Roma", 6, au));
-        List<Object> list = Pick.list(fx, null, new Settings(), 500000, NOW);
+        List<Object> list = Pick.list(fx, null, legacy(), 500000, NOW);
         assertEquals(102, list.size()); // ilk 100 + MS 2 + 1,5 Üst
         int cs = 0;
         for (Object o : list) if ("CS".equals(Json.obj(o).get("m"))) cs++;
@@ -390,8 +475,8 @@ public class PickTest {
     @Test
     public void minOddsDefault118() {
         // 2.15.6: kullanıcı isteği: tek maçta 1,18'in altındaki oranlar listelenmez, önerilmez, bildirilmez
-        Settings cfg = new Settings();
-        assertEquals(1.18, cfg.pickMinOdds, 0);
+        Settings cfg = legacy();
+        assertEquals(1.18, cfg.pickMinOdds, 0); // 2.67'de varsayılan 1,25 (sınırın davranışı burada 1,18 ile)
         List<Object> fx = new ArrayList<>();
         fx.add(row("1", "Arsenal", 8, sel("CS", "1X", 0.88, 1.17, 1))); // 1,17: alınmaz (+%3 kârlı olsa da)
         fx.add(row("2", "Chelsea", 9, sel("MS", "1", 0.82, 1.18, 1))); // 1,18: alınır
@@ -405,16 +490,16 @@ public class PickTest {
         assertEquals(1.10, Settings.fromMap(cfg.toMap()).pickMinOdds, 0);
         cfg.pickMinOdds = 1.0;
         assertTrue(cfg.validate().contains("en düşük oran"));
-        // eski kayıtta alan yok: 1,18 gelir
+        // eski kayıtta alan yok: varsayılan gelir (2.67: 1,25)
         Map<String, Object> old = new Settings().toMap();
         old.remove("pickMinOdds");
-        assertEquals(1.18, Settings.fromMap(old).pickMinOdds, 0);
+        assertEquals(1.25, Settings.fromMap(old).pickMinOdds, 0);
     }
 
     @Test
     public void opportunitiesCoverTwoDays() {
         // 2.15.7: Fırsatlar 48 saat (kullanıcı isteği); günün seçimi ve kupon kararı 24 saatte kalır
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         assertEquals(48, cfg.opportunityHours, 0);
         assertEquals(48, cfg.scanHours(), 0);
         List<Object> fx = new ArrayList<>();
@@ -432,7 +517,7 @@ public class PickTest {
         assertEquals(72, Settings.fromMap(cfg.toMap()).opportunityHours, 0);
         cfg.opportunityHours = 100;
         assertTrue(cfg.validate().contains("Fırsatlar penceresi"));
-        Map<String, Object> old = new Settings().toMap();
+        Map<String, Object> old = legacy().toMap();
         old.remove("opportunityHours");
         assertEquals(48, Settings.fromMap(old).opportunityHours, 0); // eski kayıt: 2 gün
     }
@@ -443,7 +528,7 @@ public class PickTest {
         assertEquals(Pick.LIST_MIN_PROB, Pick.BANDS[0], 0);
         List<Object> fx = fairs();
         fx.add(row("7", "City", 30, sel("MS", "1", 0.78, 1.22, 1), sel("AU25", "UST", 0.66, 1.50, 1)));
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         cfg.pickMinOdds = 1.05;
         Object[] all = Pick.all(fx, null, cfg, 500000, NOW);
         assertEquals(Pick.choose(fx, null, cfg, 500000, NOW), all[0]);
@@ -699,7 +784,7 @@ public class PickTest {
         mv.put("from", 0.25);
         mv.put("to", 0.28);
         moves.add(mv);
-        Settings cfg = new Settings();
+        Settings cfg = legacy();
         List<Object> d = Pick.draws(fx, null, cfg, 500000, NOW, moves);
         assertEquals(3, d.size());
         for (Object o : d) assertTrue(Json.dbl(Json.obj(o), "p", 0) >= 0.30);

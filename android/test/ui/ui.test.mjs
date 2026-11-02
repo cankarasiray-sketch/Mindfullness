@@ -55,6 +55,24 @@ test("günün kuponu ve özet görünür", async () => {
   assert.deepEqual(t.errors, []);
 });
 
+test("2.67: günün seçimi yoksa yarının seçimi, kuralı açıkça yazar", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "48 seçim karşılaştırıldı, hiçbirinde avantaj yok. Bugün pas.", summary: "Bülten 32 maç", couponId: null };
+  s.settings.dailyPick = true; s.settings.pickMinProb = 0.68; s.settings.pickMinOdds = 1.25; s.settings.pickMaxLoss = 0.14;
+  const ko = new Date(Date.parse(s.now) + 30 * 3600000).toISOString();
+  s.pick = {ref: "7", home: "Fulham", away: "Dep 7", kickoff: ko, league: "Premier Lig", m: "MS", o: "1", label: "MS 1", source: "iddaa", odds: 1.32, fair: 1 / 0.70, p: 0.70,
+    ev: 0.70 * 1.32 - 1, stake: 9000, win: 11880, expected: Math.round(9000 * (0.70 * 1.32 - 1)), monthly: -21000, value: false, candidates: 3, highCount: 1, isHigh: true,
+    maxLoss: 0.14, alternatives: [], ahead: true};
+  const t = boot(s);
+  const card = t.$("#pickCard").textContent;
+  assert.match(card, /YARININ SEÇİMİ · TEK MAÇ/);
+  assert.match(card, /Bugün kurala uyan seçim yok \(en az %68 tutma, oran 1,25\+, beklenen kayıp en fazla %14\); bu seçim yarının maçlarından/);
+  assert.match(card, /Fulham/);
+  delete s.pick.ahead;
+  assert.match(boot(s).$("#pickCard").textContent, /GÜNÜN SEÇİMİ · TEK MAÇ/);
+  assert.deepEqual(t.errors, []);
+});
+
 test("2.66: bugün değerli kupon yoksa yarının kuponu başlığıyla görünür", async () => {
   const s = clone(baseState);
   const nextDay = new Date(Date.parse(s.todayRun.day + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
@@ -1401,15 +1419,15 @@ test("denge: oynama günü, kademeli tutar, denge tablosu ve ayar", async () => 
   const st = boot(clone(s), "#ayarlar");
   assert.equal(st.$("#sPickLoss").value, "6,0");
   st.$("#sPickLoss").value = "8";
-  assert.equal(st.$("#sPickMinOdds").value, "1,18"); // 2.15.6: tek maçta en düşük oran
+  assert.equal(st.$("#sPickMinOdds").value, "1,25"); // 2.15.6: tek maçta en düşük oran (2.67: kullanıcı istedi 1,25)
   assert.match(st.$("#pickSettings").textContent, /1,25'te %80 \(5'te 4 tutarsa ancak başa baş\)/);
-  st.$("#sPickMinOdds").value = "1,25";
+  st.$("#sPickMinOdds").value = "1,30";
   assert.equal(st.$("#sOppHours").value, "48"); // 2.15.7: Fırsatlar 2 gün
   st.$("#sOppHours").value = "72";
   st.button("Ayarları kaydet").click();
   await st.tick();
   assert.equal(st.calls.at(-1).payload.settings.pickMaxLoss, 0.08);
-  assert.equal(st.calls.at(-1).payload.settings.pickMinOdds, 1.25);
+  assert.equal(st.calls.at(-1).payload.settings.pickMinOdds, 1.3);
   assert.equal(st.calls.at(-1).payload.settings.opportunityHours, 72);
   assert.deepEqual(t.errors, []);
   assert.deepEqual(f.errors, []);

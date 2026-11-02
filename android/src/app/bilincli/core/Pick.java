@@ -128,11 +128,13 @@ public final class Pick {
         return "BASKET"; // BS, BT@, BH@
     }
 
-    private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, double hours, Instant now) {
+    /** Pencere: başlamasına en az fromHours (ve en az 30 dk), en fazla hours saat kalan maçlar. */
+    private static boolean eligible(String kickoff, double odds, double p, int mbs, double minProb, Settings cfg, double fromHours, double hours,
+                                    Instant now) {
         if (kickoff == null || !(p > 0 && p < 1) || mbs > 1) return false;
-        if (p < minProb || odds < Math.max(MIN_ODDS, cfg.pickMinOdds)) return false; // 2.15.6: ayardan (varsayılan 1,18)
+        if (p < minProb || odds < Math.max(MIN_ODDS, cfg.pickMinOdds)) return false; // 2.15.6: ayardan (2.67: 1,25)
         Instant ko = Instant.parse(kickoff);
-        return !ko.isBefore(now.plusSeconds(LEAD_S)) && !ko.isAfter(now.plusSeconds(Math.round(hours * 3600)));
+        return !ko.isBefore(now.plusSeconds(Math.max(LEAD_S, Math.round(fromHours * 3600)))) && !ko.isAfter(now.plusSeconds(Math.round(hours * 3600)));
     }
 
     /**
@@ -153,6 +155,12 @@ public final class Pick {
     /** hours: başlangıca en fazla bu kadar saat kalan maçlar (günün seçimi: windowHours; Fırsatlar: scanHours, 2.15.7). */
     static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f,
                                              double hours, Instant now) {
+        return singles(fairs, zirve, cfg, minProb, f, 0, hours, now);
+    }
+
+    /** 2.67: pencere [fromHours, hours] (yarının seçimi: karar penceresinden sonrası). */
+    static List<Map<String, Object>> singles(List<Object> fairs, Map<String, Object> zirve, Settings cfg, double minProb, double f,
+                                             double fromHours, double hours, Instant now) {
         Map<String, Map<String, Object>> best = new LinkedHashMap<>(); // ref|m|o -> en iyi oran
         for (Object o : fairs == null ? new ArrayList<Object>() : fairs) {
             Map<String, Object> r = Json.obj(o);
@@ -162,7 +170,7 @@ public final class Pick {
                 if (s == null) continue;
                 double odds = Json.dbl(s, "i", 0), p = Json.dbl(s, "p", 0);
                 int mbs = (int) Json.lng(s, "mbs", 1);
-                if (!eligible(Json.str(r, "kickoff"), odds, p, mbs, minProb, cfg, hours, now)) continue;
+                if (!eligible(Json.str(r, "kickoff"), odds, p, mbs, minProb, cfg, fromHours, hours, now)) continue;
                 Map<String, Object> e = entry(r, "iddaa", Json.str(s, "m"), Json.str(s, "o"), Json.str(s, "label"), odds, 0, p, mbs);
                 if (Json.bool(s, "model", false)) e.put("model", true);
                 best.put(Json.str(r, "ref") + "|" + Json.str(s, "m") + "|" + Json.str(s, "o"), e);
@@ -176,7 +184,7 @@ public final class Pick {
                 if (z == null || !("oyna".equals(st) || "oynama".equals(st) || "dusuk".equals(st)) || Json.str(z, "ref") == null) continue;
                 double odds = Json.dbl(z, "tval", 0), p = Json.dbl(z, "p", 0);
                 int mbs = (int) Json.lng(z, "mbs", 1);
-                if (!eligible(Json.str(z, "kickoff"), odds, p, mbs, minProb, cfg, hours, now)) continue;
+                if (!eligible(Json.str(z, "kickoff"), odds, p, mbs, minProb, cfg, fromHours, hours, now)) continue;
                 String key = Json.str(z, "ref") + "|" + Json.str(z, "m") + "|" + Json.str(z, "o");
                 Map<String, Object> old = best.get(key);
                 if (old != null && Json.dbl(old, "odds", 0) >= odds) continue;
@@ -250,8 +258,27 @@ public final class Pick {
      */
     public static Map<String, Object> choose(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
         if (!cfg.dailyPick) return null;
-        List<Map<String, Object>> all = singles(fairs, zirve, cfg, cfg.pickMinProb, fraction(cfg, balance), now);
-        if (all.isEmpty()) return null;
+        double f = fraction(cfg, balance);
+        Map<String, Object> pick = chooseFrom(singles(fairs, zirve, cfg, cfg.pickMinProb, f, now), cfg, balance);
+        if (pick != null && !Json.bool(pick, "skip", false)) return pick;
+        // 2.67: kullanıcı istedi: bugün kurala uyan seçim yoksa yarının maçlarından (karar penceresinden sonraki 24 saat)
+        double[] w = cfg.aheadCoupon ? Daily.aheadWindow(cfg) : null;
+        if (w == null) return pick;
+        Map<String, Object> next = chooseFrom(singles(fairs, zirve, cfg, cfg.pickMinProb, f, w[0], w[1], now), cfg, balance);
+        if (next == null || (pick != null && Json.bool(next, "skip", false))) return pick; // yarın da yok: bugünün "oynama"sı
+        next.put("ahead", true);
+        return next;
+    }
+
+    /**
+     * 2.67: kurala uyanlar (beklenen kayıp en fazla pickMaxLoss) arasında {@link #rank} sırasıyla en iyisi; hiçbiri uymuyorsa
+     * en iyi aday "oynama" (skip) olarak (neden gösterilsin diye). Aday yoksa null.
+     */
+    private static Map<String, Object> chooseFrom(List<Map<String, Object>> sorted, Settings cfg, long balance) {
+        if (sorted.isEmpty()) return null;
+        List<Map<String, Object>> ok = new ArrayList<>();
+        for (Map<String, Object> e : sorted) if (Json.dbl(e, "ev", 0) >= -cfg.pickMaxLoss - 1e-9) ok.add(e);
+        List<Map<String, Object>> all = ok.isEmpty() ? sorted : ok;
         Map<String, Object> pick = withStake(all.get(0), cfg, balance);
         List<Object> alt = new ArrayList<>();
         for (int i = 1; i < all.size() && alt.size() < 3; i++) alt.add(all.get(i));

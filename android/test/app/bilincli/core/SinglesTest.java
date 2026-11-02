@@ -147,7 +147,7 @@ public class SinglesTest {
         Calibration.extraMarkets(small, few, new ArrayList<String>(), memory);
         assertTrue(small.get(0).odds.containsKey("AU@1.5"));
         // motor: model pazarı aday olarak karşılaştırılır (payı düşülmüş olasılıkla)
-        Settings cfg = new Settings();
+        Settings cfg = PickTest.legacy();
         Engine.Decision d = Engine.decide(book, sharpsOf(pairs), NOW, cfg);
         assertTrue((Long) d.stats.get("karsilastirilan_secim") > 3 * GAMES.length * 3);
     }
@@ -172,13 +172,13 @@ public class SinglesTest {
                 ProbabilityTest.book(3, 1.70, 2.40, 2));
         List<SharpEvent> sharp = Arrays.asList(ProbabilityTest.sharp(1, 0.40, 0.46), ProbabilityTest.sharp(2, 0.40, 0.46),
                 ProbabilityTest.sharp(3, 0.40, 0.46));
-        Settings combo = new Settings();
+        Settings combo = PickTest.legacy();
         combo.minLegProb = 0;
         combo.minWinProb = 0;
         Engine.Decision d = Engine.decide(book, sharp, NOW, combo);
         assertFalse(d.isPass());
         assertEquals(3, d.candidates.size());
-        Settings singles = new Settings();
+        Settings singles = PickTest.legacy();
         singles.minLegProb = 0;
         singles.minWinProb = 0;
         singles.singlesOnly = true;
@@ -189,15 +189,15 @@ public class SinglesTest {
         for (Models.Proposal p : d.alternatives) assertEquals(1, p.legs.size());
         for (Models.Candidate c : d.candidates) assertEquals(1, c.mbs());
         // ayar: eski kayıt bir kez tek maça geçer, yeni kurulum ve sonradan kapatma korunur
-        Map<String, Object> old = new Settings().toMap();
+        Map<String, Object> old = PickTest.legacy().toMap();
         old.put("v", 6L);
         old.remove("singlesOnly");
         assertTrue(Settings.fromMap(old).singlesOnly);
-        assertFalse(new Settings().singlesOnly);
+        assertFalse(PickTest.legacy().singlesOnly);
         Settings off = Settings.fromMap(old);
         off.singlesOnly = false;
         assertFalse(Settings.fromMap(off.toMap()).singlesOnly);
-        Settings bad = new Settings();
+        Settings bad = PickTest.legacy();
         bad.pickHighProb = 0.5;
         assertTrue(bad.validate().contains("Yüksek olasılık"));
     }
@@ -207,7 +207,7 @@ public class SinglesTest {
         List<Object> fairs = PickTest.fairs();
         // %78 tutan 1,22: −%4,8 (yüksek katmanın en iyisi); 1,05 altı yine alınmaz
         fairs.add(PickTest.row("7", "City", 5, PickTest.sel("MS", "1", 0.78, 1.22, 1), PickTest.sel("CS", "1X", 0.97, 1.04, 1)));
-        Settings cfg = new Settings();
+        Settings cfg = PickTest.legacy();
         cfg.pickMaxLoss = 0.06; // 2.13 kademeleri
         Map<String, Object> p = Pick.choose(fairs, null, cfg, 500000, NOW);
         assertEquals("3", p.get("ref")); // ana seçim: %61, −%3,6
@@ -228,7 +228,7 @@ public class SinglesTest {
         Map<String, Object> modelSel = PickTest.sel("AU@1.5", "UST", 0.74, 1.30, 1);
         modelSel.put("model", true);
         fairs.add(PickTest.row("8", "Brighton", 6, modelSel));
-        Settings tiers = new Settings();
+        Settings tiers = PickTest.legacy();
         tiers.pickMaxLoss = 0.06;
         List<Object> list = Pick.list(fairs, null, tiers, 500000, NOW);
         assertEquals(15000L, Json.obj(list.get(0)).get("stake"));
@@ -291,11 +291,11 @@ public class SinglesTest {
         SharpEvent bs = HandicapTest.sharp(3);
         book.add(HandicapTest.book(3, bs, false, false));
         sharp.add(bs);
-        Engine.Decision d = Engine.decide(book, sharp, NOW, new Settings());
+        Engine.Decision d = Engine.decide(book, sharp, NOW, PickTest.legacy());
         assertEquals(3L, d.stats.get("eslesen"));
         assertEquals(1L, d.stats.get("eslesen_basket"));
         assertTrue(Texts.statsLine(d.stats), Texts.statsLine(d.stats).contains("eşleşen 3 (basketbol 1)"));
-        Settings s = new Settings();
+        Settings s = PickTest.legacy();
         assertTrue(s.basketExtras);
         s.basketExtras = false;
         assertFalse(Settings.fromMap(s.toMap()).basketExtras);

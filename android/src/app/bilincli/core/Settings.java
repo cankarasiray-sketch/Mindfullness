@@ -244,25 +244,27 @@ public final class Settings {
     public boolean dailyPick = true;
     /**
      * 2.66: kullanıcı istedi: bugünün maçlarında değerli kupon yoksa aynı taramadaki yarının maçlarından (karar penceresinden
-     * sonraki 24 saat, Fırsatlar penceresi içinde) aynı kurallarla kupon; yoksa pas.
+     * sonraki 24 saat, Fırsatlar penceresi içinde) aynı kurallarla kupon; yoksa pas. 2.67: günün seçimi de (bugün kurala
+     * uyan seçim yoksa yarının seçimi).
      */
     public boolean aheadCoupon = true;
-    /** Günün seçiminde en az tutma olasılığı. */
-    public double pickMinProb = 0.60;
+    /** Günün seçiminde en az tutma olasılığı (2.67: kullanıcı istedi %68; önce %60). */
+    public double pickMinProb = 0.68;
     /** Günün seçiminin tutarı (TL); 0 = kasanın %3'ü (2.15.2; önce %1). */
     public double pickStake = 0;
     /** Günün seçiminde ikinci katman: en az bu tutma olasılığı (2.10; "%70+ seçimi"). */
     public double pickHighProb = 0.70;
     /**
      * Tek maç listesi, günün seçimi ve kârlı seçim bildiriminde en düşük oran (2.15.6, kullanıcı isteği: çok düşük
-     * oranda bir kayıp birkaç kazancı siler). Başa baş tutma = 1 / oran: 1,18'de %85, 1,25'te %80.
+     * oranda bir kayıp birkaç kazancı siler). Başa baş tutma = 1 / oran: 1,18'de %85, 1,25'te %80. 2.67: kullanıcı istedi 1,25.
      */
-    public double pickMinOdds = 1.18;
+    public double pickMinOdds = 1.25;
     /**
      * Günün seçiminde ve tek maç listesinde kabul edilen en kötü beklenen kayıp: buna kadar tam tutar, daha
-     * kötüyse oynanmaz. 2.15: %6 -> %15 (adil oranın %15 altına kadar); 2.15.1: yarım tutar kademesi yok.
+     * kötüyse oynanmaz. 2.15: %6 -> %15 (adil oranın %15 altına kadar); 2.15.1: yarım tutar kademesi yok. 2.67: kullanıcı
+     * istedi %14; günün seçimi yalnızca bu sınırın içindeki seçimlerden yapılır.
      */
-    public double pickMaxLoss = 0.15;
+    public double pickMaxLoss = 0.14;
     /**
      * Yalnızca tek maç (2.10): değerli kuponlar tek seçimli kurulur ve yalnızca tek oynanabilen (MBS 1)
      * maçlar alınır. Kombine yok: iddaa marjı her bacakta yeniden ödenir.
@@ -400,7 +402,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 17L);
+        m.put("v", 18L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -503,6 +505,13 @@ public final class Settings {
         if (Json.lng(m, "v", 1) < 8) {
             // 2.15: kullanıcı istedi: adil oranın %15 altına kadar (beklenen −%15) tutar verilir
             s.pickMaxLoss = 0.15;
+        }
+        if (Json.lng(m, "v", 1) < 18) {
+            // 2.67: kullanıcı istedi (yeniden kurulumda 2.65 ayarları silinmişti): günün seçimi en az %68 tutan, oranı
+            // en az 1,25 ve beklenen kaybı en fazla %14 olan maçlardan
+            s.pickMinProb = 0.68;
+            s.pickMinOdds = 1.25;
+            s.pickMaxLoss = 0.14;
         }
         if (Json.lng(m, "v", 1) < 9 && s.kgEvents == 0) {
             // 2.15.3: kullanıcı istedi: Karşılıklı Gol açık (günde 12 maç), kredi planı kısmaz

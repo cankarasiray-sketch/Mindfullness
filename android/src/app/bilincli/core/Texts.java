@@ -128,7 +128,9 @@ public final class Texts {
                         + Fmt.odds(Json.dbl(pick, "odds", 0));
                 String why = Json.bool(pick, "value", false) ? "Bu seçim adil oranı geçiyor (değerli). "
                         : "Değerli seçim yok (iddaa oranları adilin altında); bu, kâr ve tutma olasılığı birlikte en iyi seçim. ";
-                return new String[] {"Günün seçimi · " + head, Pick.line(pick) + "\n" + why
+                boolean ahead = Json.bool(pick, "ahead", false); // 2.67: bugün kurala uyan seçim yoktu
+                return new String[] {(ahead ? "Yarının seçimi · " : "Günün seçimi · ") + head,
+                        (ahead ? "Bugün kurala uyan seçim yok; bu seçim yarının maçlarından.\n" : "") + Pick.line(pick) + "\n" + why
                         + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + ".\n\n" + passWhy};
             }
             return new String[] {"Bugün pas · " + when, passWhy + "\n" + statsLine(r.decision.stats)};

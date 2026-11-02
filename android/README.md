@@ -62,6 +62,15 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Günün seçimi kuralları ve yarının seçimi (2.67)
+
+- Kullanıcı istedi (yeniden kurulumda 2.65 ayarları silinmişti): günün seçimi en az %68 tutan, oranı en az 1,25 ve beklenen
+  kaybı en fazla %14 olan tek maçlardan. Önceden en iyi aday sınırı aşınca "oynama" deniyordu (listede sınıra uyan olsa da);
+  artık seçim yalnızca sınırın içindekilerden. Ayar göçü v18 bu üç değeri bir kez yazar; varsayılanlar da bunlar.
+- Bugün kurala uyan seçim yoksa yarının maçlarından (karar penceresinden sonraki 24 saat) "Yarının seçimi" (kartta ve
+  bildirimde). Yarın da yoksa bugünün "oynama"sı ve nedeni gösterilir. Ayar: "Bugün öneri yoksa yarınkini öner (günün
+  seçimi ve kupon)" (2.66'daki değerli kupon için de aynı ayar).
+
 ## Bugün kupon yoksa yarının kuponu (2.66)
 
 - Kullanıcı istedi: sabah kararında bugünün penceresinde (24 saat) değerli kupon çıkmazsa aynı taramadaki yarının maçlarına
