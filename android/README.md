@@ -71,6 +71,9 @@ bildirim olarak gelir.
 - Ertesi günün kararı: oynanmış yarının kuponundaki maç yeniden önerilmez (aynı maça iki kupon olmasın); oynanmamış yarının
   kuponu yeni kararla geçersiz sayılır (güncel oranlarla yeniden değerlendirilir).
 - Ayarlar → Tek maç: "Bugün değerli kupon yoksa yarının kuponunu öner" (varsayılan açık).
+- İmza anahtarı: bulut oturumu yeni makinede açılınca `.keystore` yoktu, derleme sessizce yeni anahtar üretti (2.66 eski
+  sürümün üzerine kurulamadı; yedekle–sil–kur–geri yükle). Artık anahtar `KEYSTORE_B64` + `KEYSTORE_PASSWORD` ortam
+  değişkenlerinden de okunur; anahtar yoksa derleme durur (yeni anahtar yalnızca `NEW_KEYSTORE=1` ile).
 
 ## Altılı ve at yarışı kaldırıldı (2.65)
 

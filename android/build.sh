@@ -5,9 +5,9 @@
 #   ./build.sh          -> testler + build/BilincliKupon.apk
 #   ./build.sh test     -> yalnızca testler
 #
-# İmza anahtarı: .keystore/bilincli.p12 (yoksa oluşturulur, repoya girmez). Uygulamayı
-# güncellerken AYNI anahtar kullanılmalı; anahtar kaybolursa telefondaki sürüm
-# kaldırılmadan yeni sürüm kurulamaz (önce uygulamadan yedek al).
+# İmza anahtarı: .keystore/bilincli.p12 ya da KEYSTORE_B64 + KEYSTORE_PASSWORD ortam değişkenleri (repoya girmez).
+# Uygulamayı güncellerken AYNI anahtar kullanılmalı; anahtar kaybolursa telefondaki sürüm kaldırılmadan yeni sürüm
+# kurulamaz (önce uygulamadan yedek al). Anahtar yoksa derleme durur; ilk kurulumda NEW_KEYSTORE=1 ile oluşturulur.
 set -euo pipefail
 cd "$(dirname "$0")"
 ROOT=$(pwd)
@@ -113,12 +113,27 @@ echo "== paketleme"
 python3 tools/align_zip.py "$OUT/base.apk" "$OUT/unsigned.apk" "$OUT/classes.dex=classes.dex"
 KEYDIR="$ROOT/.keystore"
 KEYSTORE="${KEYSTORE:-$KEYDIR/bilincli.p12}"
+# Bulut oturumları makine değiştirir: anahtar ortam değişkenlerinden gelir (KEYSTORE_B64: anahtar dosyasının base64'ü,
+# KEYSTORE_PASSWORD: parolası). Repoya girmez.
+if [ ! -f "$KEYSTORE" ] && [ -n "${KEYSTORE_B64:-}" ]; then
+    mkdir -p "$(dirname "$KEYSTORE")"
+    printf '%s' "$KEYSTORE_B64" | base64 --decode > "$KEYSTORE"
+fi
 if [ -z "${KEYSTORE_PASSWORD:-}" ]; then
     mkdir -p "$KEYDIR"
-    [ -f "$KEYDIR/password" ] || head -c 24 /dev/urandom | base64 | tr -d '/+=' > "$KEYDIR/password"
+    if [ ! -f "$KEYDIR/password" ]; then
+        if [ -f "$KEYSTORE" ]; then echo "HATA: imza anahtarı var ama parolası yok (KEYSTORE_PASSWORD)" >&2; exit 1; fi
+        head -c 24 /dev/urandom | base64 | tr -d '/+=' > "$KEYDIR/password"
+    fi
     KEYSTORE_PASSWORD=$(cat "$KEYDIR/password")
 fi
 if [ ! -f "$KEYSTORE" ]; then
+    # Yeni anahtarla imzalanan APK önceki sürümün üzerine kurulamaz (uygulama silinip yeniden kurulur): yalnızca açıkça istenince
+    if [ "${NEW_KEYSTORE:-}" != "1" ]; then
+        echo "HATA: imza anahtarı yok ($KEYSTORE). Önceki sürümlerle aynı anahtar gerekir: KEYSTORE_B64 ve KEYSTORE_PASSWORD" \
+            "ortam değişkenlerini tanımla. İlk kurulumsa: NEW_KEYSTORE=1 ./build.sh" >&2
+        exit 1
+    fi
     echo "yeni imza anahtarı oluşturuluyor: $KEYSTORE"
     JAVA_OPTS_QUIET keytool -genkeypair -keystore "$KEYSTORE" -storetype PKCS12 -alias bilincli \
         -keyalg RSA -keysize 3072 -validity 10000 -dname "CN=Bilincli Kupon" \
