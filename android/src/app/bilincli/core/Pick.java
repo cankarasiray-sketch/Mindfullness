@@ -260,14 +260,13 @@ public final class Pick {
         if (!cfg.dailyPick) return null;
         double f = fraction(cfg, balance);
         Map<String, Object> pick = chooseFrom(singles(fairs, zirve, cfg, cfg.pickMinProb, f, now), cfg, balance);
-        if (pick != null && !Json.bool(pick, "skip", false)) return pick;
-        // 2.67: kullanıcı istedi: bugün kurala uyan seçim yoksa yarının maçlarından (karar penceresinden sonraki 24 saat)
+        // 2.67–2.68: kullanıcı istedi: yarının seçimi de (karar penceresinden sonraki 24 saat, aynı kurallar)
         double[] w = cfg.aheadCoupon ? Daily.aheadWindow(cfg) : null;
-        if (w == null) return pick;
-        Map<String, Object> next = chooseFrom(singles(fairs, zirve, cfg, cfg.pickMinProb, f, w[0], w[1], now), cfg, balance);
-        if (next == null || (pick != null && Json.bool(next, "skip", false))) return pick; // yarın da yok: bugünün "oynama"sı
-        next.put("ahead", true);
-        return next;
+        Map<String, Object> next = w == null ? null : chooseFrom(singles(fairs, zirve, cfg, cfg.pickMinProb, f, w[0], w[1], now), cfg, balance);
+        if (next != null) next.put("ahead", true);
+        if (pick == null) return next; // bugün aday yok: yarının seçimi
+        if (next != null) pick.put("tomorrow", next); // bugünün seçimi (ya da "oynama"sı) ve yanında yarınınki
+        return pick;
     }
 
     /**
@@ -344,7 +343,7 @@ public final class Pick {
     /** Bildirim ve özet satırı: "Günün seçimi: Ev – Dep · MS 1 @ 1,53 (Zirve) · tutma %60 · adil 1,67 · beklenen −%8,4 · 50,00 TL". */
     public static String line(Map<String, Object> p) {
         if (p == null) return null;
-        return "Günün seçimi: " + body(p);
+        return (Json.bool(p, "ahead", false) ? "Yarının seçimi: " : "Günün seçimi: ") + body(p);
     }
 
     private static String body(Map<String, Object> p) {

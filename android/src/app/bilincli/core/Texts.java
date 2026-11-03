@@ -117,11 +117,15 @@ public final class Texts {
         if (r.decision == null) return null;
         if (r.decision.isPass()) {
             String passWhy = r.decision.reason + (r.aheadNote == null ? "" : " " + r.aheadNote); // 2.66: yarına da bakıldı
+            Map<String, Object> next = pick == null ? null : Json.obj(pick.get("tomorrow")); // 2.68: yarının seçimi de
+            boolean nextOk = next != null && !Json.bool(next, "skip", false);
+            String nextLine = nextOk ? "\n" + Pick.line(next) : "";
             if (pick != null && Json.bool(pick, "skip", false)) {
-                return new String[] {"Bugün oynama · en iyi tek maç bile " + Fmt.pct(Json.dbl(pick, "ev", 0), true),
+                return new String[] {"Bugün oynama · " + (nextOk ? "yarının seçimi " + Json.str(next, "home") + " – " + Json.str(next, "away") + " · "
+                                + Json.str(next, "label") + " @ " + Fmt.odds(Json.dbl(next, "odds", 0)) : "en iyi tek maç bile " + Fmt.pct(Json.dbl(pick, "ev", 0), true)),
                         "Adil orana en yakın, sık tutan tek maç bile beklenen kayıp sınırını aşıyor (sınır "
                                 + Fmt.pct(-Json.dbl(pick, "maxLoss", 0.15), true) + "): oynamamak bugün en kârlı karar.\n"
-                                + Pick.line(pick) + "\n\n" + passWhy};
+                                + Pick.line(pick) + nextLine + "\n\n" + passWhy};
             }
             if (pick != null) {
                 String head = Json.str(pick, "home") + " – " + Json.str(pick, "away") + " · " + Json.str(pick, "label") + " @ "
@@ -131,7 +135,7 @@ public final class Texts {
                 boolean ahead = Json.bool(pick, "ahead", false); // 2.67: bugün kurala uyan seçim yoktu
                 return new String[] {(ahead ? "Yarının seçimi · " : "Günün seçimi · ") + head,
                         (ahead ? "Bugün kurala uyan seçim yok; bu seçim yarının maçlarından.\n" : "") + Pick.line(pick) + "\n" + why
-                        + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + ".\n\n" + passWhy};
+                        + "Beklenen sonuç " + Fmt.tl(Json.lng(pick, "expected", 0)) + "." + nextLine + "\n\n" + passWhy};
             }
             return new String[] {"Bugün pas · " + when, passWhy + "\n" + statsLine(r.decision.stats)};
         }

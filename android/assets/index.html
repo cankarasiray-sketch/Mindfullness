@@ -572,8 +572,23 @@ function pickBlock(x, title) {
       : x.skip ? "<b class=\"neg\">oynama</b> — beklenen " + pct(x.ev, true) + ", sınır " + pct(-(S.settings.pickMaxLoss || 0.14), true) : "kasa boş") + "</p>"
     + (x.skip ? "" : '<div class="btns"><button class="b" onclick="pickSheet(' + i + ')">Oynadım</button></div>') + "</div>";
 }
+/** 2.68: bugünün seçimi (ya da "oynama"sı) ve yanında yarının seçimi. */
 function pickCard() {
   if (S.demo || !S.settings.dailyPick) return "";
+  var t = S.pick && S.pick.tomorrow, played = todayPick();
+  if (t && played && played.legs[0].bookRef === t.ref) t = null; // yarınınki oynandı: "oynandı" kartında
+  return pickToday() + (t ? pickTomorrowCard(t) : "");
+}
+function pickTomorrowCard(t) {
+  if (t.skip) return '<div class="card" id="pickTomorrow"><div class="kicker">YARININ SEÇİMİ · OYNAMA</div><p class="small">Yarın da kurala uyan seçim yok: en iyi aday '
+    + esc(t.home) + " – " + esc(t.away) + " · " + esc(t.label) + " " + odds(t.odds) + " · tutma %" + num(t.p * 100, 0) + ' · <b class="neg">' + pct(t.ev, true) + "</b> (sınır "
+    + pct(-(S.settings.pickMaxLoss || 0.14), true) + ").</p></div>";
+  return '<div class="card" id="pickTomorrow"><div class="kicker">YARININ SEÇİMİ · TEK MAÇ' + (t.value ? " · DEĞERLİ" : "") + "</div>"
+    + pickBlock(t, "")
+    + '<p class="small muted">Yarının maçlarından (sonraki 24 saat), aynı kurallarla: en az %' + num(S.settings.pickMinProb * 100, 0) + " tutma, oran "
+    + odds(S.settings.pickMinOdds || 1.25) + "+, beklenen kayıp en fazla %" + num((S.settings.pickMaxLoss || 0.14) * 100, 0) + ". Oranlar maça kadar değişebilir.</p></div>";
+}
+function pickToday() {
   var p = S.pick, played = todayPick(), high = S.settings.pickHighProb || 0.7;
   if (played) {
     var l = played.legs[0];
@@ -1434,8 +1449,8 @@ function viewSettings() {
       return '<option value="' + o[0] + '"' + ((st.opportunityHours || 48) === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + "</select>"
     + '<p class="small muted">Tek maç fırsatları, denge tablosu, Değerli oranlar ve kârlı seçim bildirimi bu kadar ilerideki maçları da kapsar. Günün kuponu ve günün seçimi 24 saatte kalır.</p>'
-    + '<label class="check"><input type="checkbox" id="sAhead"' + (st.aheadCoupon !== false ? " checked" : "") + ">Bugün öneri yoksa yarınkini öner (günün seçimi ve kupon)</label>" // 2.66–2.67
-    + '<p class="small muted">Bugünün maçlarında kurallara uyan günün seçimi ya da değerli kupon yoksa aynı taramadaki yarının maçlarına (sonraki 24 saat) aynı kurallarla bakılır; kredi harcamaz. Yarına kadar oranlar değişebilir: oynamadan önce kontrol et. Yarın da yoksa bugünkü durum (oynama / pas) gösterilir.</p>'
+    + '<label class="check"><input type="checkbox" id="sAhead"' + (st.aheadCoupon !== false ? " checked" : "") + ">Yarının seçimini de göster; bugün değerli kupon yoksa yarının kuponunu öner</label>" // 2.66–2.68
+    + '<p class="small muted">Günün seçiminin yanında aynı kurallarla yarının seçimi de (aynı taramadan, sonraki 24 saat; kredi harcamaz). Bugünün maçlarında değerli kupon yoksa yarının maçlarına da bakılır. Yarına kadar oranlar değişebilir: oynamadan önce kontrol et.</p>'
     + '<label>En düşük oran</label><input id="sPickMinOdds" inputmode="decimal" value="' + esc(num(st.pickMinOdds || 1.25, 2)) + '">'
     + '<p class="small muted">Tek maç listesi, günün seçimi ve kârlı seçim bildirimi bu orandan düşükleri almaz. Başa baş için gereken tutma = 1 / oran: '
     + "1,18'de %85, 1,25'te %80 (5'te 4 tutarsa ancak başa baş), 1,40'ta %71.</p>"

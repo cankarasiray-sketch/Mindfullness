@@ -55,7 +55,7 @@ test("günün kuponu ve özet görünür", async () => {
   assert.deepEqual(t.errors, []);
 });
 
-test("2.67: günün seçimi yoksa yarının seçimi, kuralı açıkça yazar", async () => {
+test("2.67–2.68: günün seçimi ve yarının seçimi, kuralı açıkça yazar", async () => {
   const s = clone(baseState);
   s.todayRun = { day: s.today, decision: "pas", reason: "48 seçim karşılaştırıldı, hiçbirinde avantaj yok. Bugün pas.", summary: "Bülten 32 maç", couponId: null };
   s.settings.dailyPick = true; s.settings.pickMinProb = 0.68; s.settings.pickMinOdds = 1.25; s.settings.pickMaxLoss = 0.14;
@@ -70,6 +70,19 @@ test("2.67: günün seçimi yoksa yarının seçimi, kuralı açıkça yazar", a
   assert.match(card, /Fulham/);
   delete s.pick.ahead;
   assert.match(boot(s).$("#pickCard").textContent, /GÜNÜN SEÇİMİ · TEK MAÇ/);
+  // 2.68: bugünün seçimi ve altında yarının seçimi (yarınınki de oynanabilir)
+  s.pick.tomorrow = Object.assign(JSON.parse(JSON.stringify(s.pick)), {ref: "8", home: "Atl Madrid", away: "Bayern Münih", label: "2,5 Üst", m: "AU25", o: "UST", odds: 1.27, ahead: true});
+  const both = boot(s);
+  assert.match(both.$("#pickCard").textContent, /GÜNÜN SEÇİMİ · TEK MAÇ[\s\S]*Fulham/);
+  assert.match(both.$("#pickTomorrow").textContent, /YARININ SEÇİMİ · TEK MAÇ[\s\S]*Atl Madrid – Bayern Münih[\s\S]*en az %68 tutma, oran 1,25\+, beklenen kayıp en fazla %14/);
+  both.$("#pickTomorrow button").click();
+  assert.match(both.$("#sheet").textContent, /Atl Madrid – Bayern Münih · 2,5 Üst/);
+  s.pick.skip = true; s.pick.tomorrow.skip = true;
+  const none = boot(s);
+  assert.match(none.$("#pickCard").textContent, /BUGÜN OYNAMA/);
+  assert.match(none.$("#pickTomorrow").textContent, /YARININ SEÇİMİ · OYNAMA[\s\S]*Yarın da kurala uyan seçim yok/);
+  assert.deepEqual(both.errors, []);
+  assert.deepEqual(none.errors, []);
   assert.deepEqual(t.errors, []);
 });
 

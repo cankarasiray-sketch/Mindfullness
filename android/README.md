@@ -70,6 +70,9 @@ bildirim olarak gelir.
 - Bugün kurala uyan seçim yoksa yarının maçlarından (karar penceresinden sonraki 24 saat) "Yarının seçimi" (kartta ve
   bildirimde). Yarın da yoksa bugünün "oynama"sı ve nedeni gösterilir. Ayar: "Bugün öneri yoksa yarınkini öner (günün
   seçimi ve kupon)" (2.66'daki değerli kupon için de aynı ayar).
+- 2.68: kullanıcı istedi: bugünün seçimi (ya da "oynama"sı) ve altında her zaman yarının seçimi (ayrı kart, oynanabilir;
+  bildirimde de satırı). Bugün hiç aday yoksa yalnızca yarının seçimi. Ayar: "Yarının seçimini de göster; bugün değerli
+  kupon yoksa yarının kuponunu öner".
 
 ## Bugün kupon yoksa yarının kuponu (2.66)
 

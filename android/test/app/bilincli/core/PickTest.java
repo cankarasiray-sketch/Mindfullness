@@ -108,30 +108,41 @@ public class PickTest {
         assertNull(p.get("ahead"));
         assertFalse(Json.bool(p, "skip", false));
         assertEquals(1L, p.get("candidates"));
-        // bugün kurala uyan yok (yalnızca −%15'lik Everton): yarının seçimi
-        fx.remove(3);
-        p = Pick.choose(fx, null, cfg, bal, NOW);
-        assertEquals("5", p.get("ref"));
-        assertEquals(Boolean.TRUE, p.get("ahead"));
-        assertTrue(Json.lng(p, "stake", 0) > 0);
+        Map<String, Object> next = Json.obj(p.get("tomorrow")); // 2.68: bugünün yanında yarının seçimi de
+        assertEquals("5", next.get("ref"));
+        assertEquals(Boolean.TRUE, next.get("ahead"));
         Daily.Result r = new Daily.Result();
         r.day = "2026-10-01";
         r.decision = Engine.decide(new ArrayList<Models.BookEvent>(), new ArrayList<Models.SharpEvent>(), NOW, cfg);
         String[] t = Texts.notification(null, r, p);
-        assertTrue(t[0], t[0].startsWith("Yarının seçimi · Leeds – Dep 5 · MS 1 @ 1,40"));
-        assertTrue(t[1].startsWith("Bugün kurala uyan seçim yok; bu seçim yarının maçlarından."));
-        // ayar kapalıysa yarına bakılmaz: bugünün "oynama"sı
+        assertTrue(t[0], t[0].startsWith("Günün seçimi · Fulham – Dep 4"));
+        assertTrue(t[1], t[1].contains("Yarının seçimi: ") && t[1].contains("Leeds – Dep 5 · MS 1 @ 1,40"));
+        // bugün kurala uyan yok (yalnızca −%15'lik Everton): bugün "oynama", yanında yarının seçimi
+        fx.remove(3);
+        p = Pick.choose(fx, null, cfg, bal, NOW);
+        assertEquals("3", p.get("ref"));
+        assertTrue(Json.bool(p, "skip", false));
+        next = Json.obj(p.get("tomorrow"));
+        assertEquals("5", next.get("ref"));
+        assertTrue(Json.lng(next, "stake", 0) > 0);
+        t = Texts.notification(null, r, p);
+        assertTrue(t[0], t[0].startsWith("Bugün oynama · yarının seçimi Leeds – Dep 5 · MS 1 @ 1,40"));
+        assertTrue(t[1], t[1].contains("Yarının seçimi: "));
+        // ayar kapalıysa yarına bakılmaz: yalnızca bugünün "oynama"sı
         cfg.aheadCoupon = false;
         p = Pick.choose(fx, null, cfg, bal, NOW);
         assertEquals("3", p.get("ref"));
         assertTrue(Json.bool(p, "skip", false));
+        assertNull(p.get("tomorrow"));
         cfg.aheadCoupon = true;
-        // yarın da sınırı aşıyorsa bugünün "oynama"sı (nedeni görünsün)
+        // yarın da sınırı aşıyorsa ikisi de "oynama" (nedeni görünsün)
         fx.set(fx.size() - 1, row("5", "Leeds", 30, sel("MS", "1", 0.68, 1.25, 1)));
         p = Pick.choose(fx, null, cfg, bal, NOW);
         assertEquals("3", p.get("ref"));
         assertNull(p.get("ahead"));
         assertTrue(Json.bool(p, "skip", false));
+        assertTrue(Json.bool(Json.obj(p.get("tomorrow")), "skip", false));
+        assertTrue(Texts.notification(null, r, p)[0].startsWith("Bugün oynama · en iyi tek maç bile"));
         // bugün hiç aday yoksa: yarının kurala uyanı; o da yoksa yarının en iyisi "oynama" olarak
         List<Object> only = new ArrayList<>();
         only.add(row("6", "Spurs", 31, sel("MS", "1", 0.68, 1.25, 1))); // −%15
