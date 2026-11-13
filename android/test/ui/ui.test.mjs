@@ -864,6 +864,34 @@ test("tek maç: bahis türü süzgeci (MS 2, 1,5 Üst) ve daha fazla göster", a
   assert.deepEqual(f.errors, []);
 });
 
+test("2.69: Maç Sonucu ve Alt/Üst birleşik seçenekleri listede, kendi süzgeciyle", async () => {
+  const s = clone(baseState);
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  const mk = (i, m, o, label, p, odds) => ({ source: "iddaa", ref: "r" + i, m, o, label, home: "Çekya", away: "İspanya", kickoff: ko, odds, p, fair: 1 / p,
+    ev: p * odds - 1, mbs: 1, stake: 17000, win: Math.round(17000 * odds), expected: Math.round(17000 * (p * odds - 1)) });
+  s.singles = [mk(1, "MS", "2", "MS 2", 0.78, 1.2), mk(1, "AU25", "UST", "2,5 Üst", 0.69, 1.27),
+    Object.assign(mk(1, "MSAU@1.5", "2U", "MS 2 ve 1,5 Üst", 0.62, 1.36), { model: true }),
+    Object.assign(mk(1, "MSAU@4.5", "2A", "MS 2 ve 4,5 Alt", 0.56, 1.48), { model: true })];
+  const f = boot(s, "#firsat");
+  f.button("%50+").click();
+  assert.deepEqual(f.$$("#singlesTypes button").map((b) => b.textContent), ["Tümü", "Maç sonucu", "Alt/Üst", "MS + Alt/Üst"]);
+  f.button("MS + Alt/Üst").click();
+  const rows = f.$$("#singlesCard .single-row");
+  assert.equal(rows.length, 2);
+  assert.match(rows[0].textContent, /MS 2 ve 1,5 Üst/);
+  assert.match(rows[0].textContent, /1,36/);
+  assert.match(rows[0].textContent, /tutma %62/);
+  assert.match(rows[0].textContent, /model/);
+  assert.match(rows[1].textContent, /MS 2 ve 4,5 Alt/);
+  assert.match(rows[1].textContent, /1,48/);
+  assert.match(f.$("#singlesCard").textContent, /maç sonucu ve Alt\/Üst birlikte \(ör\. MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt\)/);
+  // kupon ve geçmiş ekranlarındaki etiket
+  assert.equal(f.w.label("MSAU@4.5", "2A"), "MS 2 ve 4,5 Alt");
+  assert.equal(f.w.label("MSAU@1.5", "1U"), "MS 1 ve 1,5 Üst");
+  assert.equal(f.w.label("MSAU@2.5", "XA"), "MS X ve 2,5 Alt");
+  assert.deepEqual(f.errors, []);
+});
+
 test("beraberlik fırsatları: kâr sırası, en yüksek oran, piyasa beraberlik bekliyor, oynadım", async () => {
   const s = clone(baseState);
   const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();

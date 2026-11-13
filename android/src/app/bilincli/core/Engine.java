@@ -173,7 +173,7 @@ public final class Engine {
             for (Map.Entry<String, Map<String, Double>> m : ev.odds.entrySet()) {
                 if ("CS".equals(m.getKey())) continue; // Çifte Şans'ta olasılıklar toplamı 2; marj ayrı ölçülmez
                 String family = Models.family(m.getKey()); // basketbol Alt/Üst'ün her çizgisi tek "BT" marjında
-                int expected = "MS".equals(m.getKey()) ? 3 : 2;
+                int expected = "MS".equals(m.getKey()) ? 3 : m.getKey().startsWith(GoalModel.COMBO) ? 6 : 2;
                 Map<String, Double> o = m.getValue();
                 if (o.size() != expected) continue;
                 double[] arr = new double[o.size()];

@@ -62,6 +62,23 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Maç Sonucu ve Alt/Üst birleşik pazarı (2.69)
+
+- Kullanıcı istedi: "MS 2 ve 4,5 Alt", "MS 1 ve 1,5 Üst" gibi seçenekler de değerlendirilsin (iddaa: Maç Sonucu ve 1,5 / 2,5 /
+  3,5 / 4,5 Gol Alt/Üst). Pazar `MSAU@çizgi`, seçenekler `1A, XA, 2A, 1U, XU, 2U`.
+- Okuma: Nesine'nin altı seçenekli pazarları aday (`X6#kod@özel değer`; seçenek numaraları küçükten büyüğe 1–6). Bültendeki
+  seçenek sırası ve (özel değer yoksa) çizgi bilinmediği için Calibration.comboMarkets her çizgiyi ve 720 sıralamayı gol
+  modeliyle dener: maç başına ortalama olasılık farkı en küçük olan %3'ün altında ve ikinci adaydan belirgin iyiyse kabul
+  (en az 5 maç); veri azsa son güvenilir eşleme (hafıza "MSAU"). Özet satırında "MS ve A/Ü ✓", veri testinde ayrı satır ve
+  altı seçenekli pazar kodlarının dökümü.
+- Olasılık: Pinnacle bu pazarı fiyatlamaz. Skor matrisi (bağımsız Poisson) Pinnacle'ın MS (1, X, 2) ve 2,5 Alt/Üst adil
+  olasılıklarına yinelemeli ölçeklemeyle tam oturtulur (GoalModel.rake), birleşik olasılık oradan; kararda diğer model
+  pazarları gibi 4 puan güvenlik payı düşülür ("model" işaretli), kapanışta (CLV) düşülmez.
+- Tek maç listesinde "MS + Alt/Üst" süzgeci; günün seçimi ve değerli oranlar aynı kurallarla bunları da görür; sonuç maç
+  bitince (ikisi birlikte tutmalı). Tabloya yalnızca en az %25 olası seçenekler girer.
+- Dürüst not: bu seçenekler iki şartı birlikte ister; tutma olasılığı tek başına MS'den de Alt/Üst'ten de düşüktür ve
+  iddaa'nın kesintisi çoğu zaman daha yüksektir (ör. %72 favoride MS 2 ve 4,5 Alt ≈ %55, MS 2 ve 1,5 Üst ≈ %61).
+
 ## Günün seçimi kuralları ve yarının seçimi (2.67)
 
 - Kullanıcı istedi (yeniden kurulumda 2.65 ayarları silinmişti): günün seçimi en az %68 tutan, oranı en az 1,25 ve beklenen

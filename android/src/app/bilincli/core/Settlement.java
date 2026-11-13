@@ -149,6 +149,10 @@ public final class Settlement {
             double d = home + Models.line(market) - away;
             actual = d > 0 ? "1" : d < 0 ? "2" : "X";
         }
+        else if (market.startsWith(GoalModel.COMBO)) {
+            // 2.69: Maç Sonucu ve Alt/Üst: ikisi birlikte tutmalı
+            actual = (home > away ? "1" : away > home ? "2" : "X") + (home + away < Models.line(market) ? "A" : "U");
+        }
         else if ("KG".equals(market)) actual = home > 0 && away > 0 ? "VAR" : "YOK";
         else if ("CS".equals(market)) {
             // Çifte Şans: iki sonucu birden kapsar

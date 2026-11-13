@@ -28,7 +28,8 @@ public final class Texts {
             for (Map.Entry<String, Object> e : ((Map<String, Object>) m).entrySet()) {
                 String k = e.getKey();
                 String name = "BS".equals(k) ? "basket MS" : "BT".equals(k) ? "basket A/Ü" : "BH".equals(k) ? "basket handikap"
-                        : "AU".equals(k) ? "diğer A/Ü" : "EVG".equals(k) ? "ev gol A/Ü" : "DEPG".equals(k) ? "dep gol A/Ü" : k;
+                        : "AU".equals(k) ? "diğer A/Ü" : "EVG".equals(k) ? "ev gol A/Ü" : "DEPG".equals(k) ? "dep gol A/Ü"
+                        : "MSAU".equals(k) ? "MS ve A/Ü" : k;
                 parts.add("iddaa " + name + " marjı " + Fmt.pct(((Number) e.getValue()).doubleValue(), false));
             }
         }

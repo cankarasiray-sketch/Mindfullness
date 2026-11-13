@@ -27,6 +27,8 @@ public final class Promo {
      * yoğun hafta sonlarında ikinci günün maçları kesilmesin.
      */
     static final int MAX_ROWS = 300;
+    /** 2.69: birleşik pazarın (MS ve Alt/Üst) düşük olasılıklı seçenekleri tabloya alınmaz (çizgi başına 6 seçenek; listelerde zaten görünmez). */
+    static final double COMBO_MIN_PROB = 0.25;
     /** Bu kadar gün ilerisindeki maçlar alınmaz. */
     static final long HORIZON_S = 4 * 86400L;
 
@@ -55,6 +57,7 @@ public final class Promo {
                 for (Map.Entry<String, Double> o : m.getValue().entrySet()) {
                     Double prob = fair.get(o.getKey());
                     if (prob == null || !(prob > 0 && prob < 1)) continue;
+                    if (prob < COMBO_MIN_PROB && m.getKey().startsWith(GoalModel.COMBO)) continue; // tablo şişmesin
                     Map<String, Object> s = new LinkedHashMap<>();
                     s.put("m", m.getKey());
                     s.put("o", o.getKey());

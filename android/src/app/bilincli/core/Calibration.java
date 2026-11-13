@@ -31,6 +31,12 @@ public final class Calibration {
     public static final String RAW_BT = "BT#";
     /** 2.10: çizgili iki seçenekli (gol Alt/Üst adayları) ve çizgili üç seçenekli (handikaplı MS adayı) ham pazarlar. */
     public static final String RAW_X2 = "X2#", RAW_X3 = "X3#";
+    /** 2.69: çizgili altı seçenekli ham pazar (Maç Sonucu ve Alt/Üst adayı): "X6#pazar@çizgi"; seçenekler bülten sırasıyla "1"–"6". */
+    public static final String RAW_X6 = "X6#";
+    /** Altı seçenekli pazarda olasılıklar küçük: doğru eşlemede ortalama fark bunun altında kalır. */
+    static final double X6_MAX_MAD = 0.03;
+    /** Seçenek sırasını (720 olasılık) ayırt etmek için en az bu kadar maç. */
+    static final int X6_MIN_N = 5;
     /** Yön kanıtı sayılması için Üst olasılığının %50'den en az bu kadar uzak olması gerekir. */
     static final double BT_INFORMATIVE = 0.04;
     static final String[] CS_KEYS = {"1X", "12", "X2"};
@@ -145,12 +151,13 @@ public final class Calibration {
         report.put("BT", basketTotals(book, pairs, notes, memory));
         report.put("BH", basketHandicap(book, pairs, notes, memory));
         report.put("EK", extraMarkets(book, pairs, notes, memory));
+        report.put("MSAU", comboMarkets(book, pairs, notes, memory)); // 2.69
         for (BookEvent b : book) {
             Iterator<String> it = b.odds.keySet().iterator();
             while (it.hasNext()) {
                 String k = it.next();
                 if (k.startsWith(RAW_AU25) || k.startsWith(RAW_KG) || k.startsWith(RAW_CS) || k.startsWith(RAW_BS) || k.startsWith(RAW_BT)
-                        || k.startsWith(RAW_X2) || k.startsWith(RAW_X3)) it.remove();
+                        || k.startsWith(RAW_X2) || k.startsWith(RAW_X3) || k.startsWith(RAW_X6)) it.remove();
             }
         }
 
@@ -742,6 +749,7 @@ public final class Calibration {
         if (String.valueOf(r.get("BT")).startsWith("doğrulandı")) b.append(", Basket A/Ü ✓");
         if (String.valueOf(r.get("BH")).startsWith("doğrulandı")) b.append(", Basket H. ✓");
         if (String.valueOf(r.get("EK")).startsWith("doğrulandı")) b.append(", ek pazarlar ✓");
+        if (String.valueOf(r.get("MSAU")).startsWith("doğrulandı")) b.append(", MS ve A/Ü ✓");
         long mis = r.get("mismatched") instanceof Long ? (Long) r.get("mismatched") : 0;
         if (mis > 0) b.append(", ").append(mis).append(" uyumsuz eşleşme ayıklandı");
         long sus = r.get("suspicious") instanceof Long ? (Long) r.get("suspicious") : 0;
@@ -883,5 +891,171 @@ public final class Calibration {
         }
         java.util.Collections.sort(names);
         return "doğrulandı (" + String.join(", ", names) + "; " + adopted + " seçenek grubu, gol modeli)";
+    }
+
+    // ---- 2.69: Maç Sonucu ve Alt/Üst birleşik pazarı -------------------------------------------------------------
+
+    private static final int[][] PERMS6 = perms6();
+
+    private static int[][] perms6() {
+        List<int[]> out = new ArrayList<>();
+        permute(new int[] {0, 1, 2, 3, 4, 5}, 0, out);
+        return out.toArray(new int[0][]);
+    }
+
+    private static void permute(int[] a, int k, List<int[]> out) {
+        if (k == a.length) {
+            out.add(a.clone());
+            return;
+        }
+        for (int i = k; i < a.length; i++) {
+            int t = a[k];
+            a[k] = a[i];
+            a[i] = t;
+            permute(a, k + 1, out);
+            a[i] = a[k];
+            a[k] = t;
+        }
+    }
+
+    private static String permText(int[] perm) {
+        StringBuilder b = new StringBuilder();
+        for (int x : perm) b.append(x);
+        return b.toString();
+    }
+
+    private static int[] permOf(Object text) {
+        String t = text == null ? "" : String.valueOf(text);
+        if (!t.matches("[0-5]{6}")) return null;
+        int[] p = new int[6];
+        boolean[] seen = new boolean[6];
+        for (int i = 0; i < 6; i++) {
+            p[i] = t.charAt(i) - '0';
+            if (seen[p[i]]) return null;
+            seen[p[i]] = true;
+        }
+        return p;
+    }
+
+    private static double permMad(double[][] cost, int[] perm, int n) {
+        double s = 0;
+        for (int i = 0; i < 6; i++) s += cost[i][perm[i]];
+        return s / (6.0 * n);
+    }
+
+    /** Özel değeri olmayan altı seçenekli pazarda denenecek çizgiler (iddaa: Maç Sonucu ve 1,5 / 2,5 / 3,5 / 4,5 Gol Alt/Üst). */
+    static final String[] X6_LINES = {"1.5", "2.5", "3.5", "4.5"};
+
+    /**
+     * 2.69: "Maç Sonucu ve Alt/Üst" (MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt…): Nesine'nin altı seçenekli pazarları, Pinnacle'ın MS ve
+     * 2,5 Alt/Üst olasılıklarına oturtulmuş skor matrisiyle karşılaştırılarak tanınır. Çizgi özel değerdeyse o, değilse
+     * X6_LINES'ın her biri; seçeneklerin bültendeki sırası bilinmediğinden her sıralama (720) denenir: maç başına ortalama
+     * olasılık farkı en küçük (çizgi, sıra) X6_MAX_MAD altında ve ikinci adaydan belirgin iyiyse kabul edilir (başka altı
+     * seçenekli pazar, ör. MS ve Karşılıklı Gol, uymaz). Veri azsa ya da sıra ayırt edilemiyorsa son güvenilir eşleme (hafıza
+     * "MSAU": ham pazar → "çizgi|sıra") bugünkü veriyle çelişmiyorsa kullanılır.
+     */
+    static String comboMarkets(List<BookEvent> book, List<Pair> pairs, List<String> notes, Map<String, Object> memory) {
+        java.util.Set<String> raws = new java.util.TreeSet<>();
+        for (BookEvent b : book) for (String k : b.odds.keySet()) if (k.startsWith(RAW_X6)) raws.add(k);
+        if (raws.isEmpty()) return "bültende yok";
+        Map<String, double[][]> cost = new LinkedHashMap<>(); // ham|çizgi -> [bülten konumu][seçenek] fark toplamı
+        Map<String, int[]> count = new LinkedHashMap<>();
+        for (Pair p : pairs) {
+            double[][] m = Models.jointMatrix(p.sharp);
+            if (m == null) continue;
+            for (Map.Entry<String, Map<String, Double>> e : p.book.odds.entrySet()) {
+                String k = e.getKey();
+                if (!k.startsWith(RAW_X6)) continue;
+                double[] q = new double[6];
+                double s = 0;
+                for (int i = 0; i < 6 && s >= 0; i++) {
+                    Double o = e.getValue().get(String.valueOf(i + 1));
+                    if (o == null || o <= 1) s = -1;
+                    else s += q[i] = 1 / o;
+                }
+                if (s < 1.0 || s > 1.5) continue; // birbirini dışlayan altı seçenek değil (ör. çifte şanslı birleşik)
+                for (String line : x6Lines(k)) {
+                    Map<String, Double> f = GoalModel.market(m, GoalModel.COMBO + line);
+                    if (f == null) continue;
+                    double[][] c = cost.get(k + "|" + line);
+                    if (c == null) {
+                        cost.put(k + "|" + line, c = new double[6][6]);
+                        count.put(k + "|" + line, new int[1]);
+                    }
+                    for (int i = 0; i < 6; i++) for (int j = 0; j < 6; j++) c[i][j] += Math.abs(q[i] / s - f.get(GoalModel.COMBO_OUTCOMES[j]));
+                    count.get(k + "|" + line)[0]++;
+                }
+            }
+        }
+        Map<String, Object> remembered = Json.obj(memory.get("MSAU"));
+        Map<String, Object> learned = remembered == null ? new LinkedHashMap<String, Object>() : new LinkedHashMap<>(remembered);
+        Map<String, Object[]> chosen = new java.util.TreeMap<>(); // hedef -> {ham, sıra, sapma}
+        int ambiguous = 0, games = 0;
+        for (String raw : raws) {
+            String line = null;
+            int[] perm = null;
+            double mad = X6_MAX_MAD, bestMad = 9, secondMad = 9;
+            int n = 0, fresh = 0;
+            for (String l : x6Lines(raw)) {
+                double[][] c = cost.get(raw + "|" + l);
+                int cn = c == null ? 0 : count.get(raw + "|" + l)[0];
+                n = Math.max(n, cn);
+                if (cn < X6_MIN_N) continue;
+                for (int[] pm : PERMS6) {
+                    double v = permMad(c, pm, cn);
+                    if (v < bestMad) {
+                        secondMad = bestMad;
+                        bestMad = v;
+                        perm = pm;
+                        line = l;
+                    } else if (v < secondMad) secondMad = v;
+                }
+            }
+            if (perm != null && bestMad > X6_MAX_MAD) continue; // Maç Sonucu ve Alt/Üst değil
+            if (perm != null && secondMad >= bestMad * 1.5 + 0.002) {
+                mad = bestMad;
+                fresh = n;
+                learned.put(raw, line + "|" + permText(perm));
+            } else { // veri az ya da sıra ayırt edilemedi: son güvenilir eşleme (bugünkü veriyle çelişmiyorsa)
+                if (perm != null) ambiguous++;
+                String old = remembered == null || remembered.get(raw) == null ? "" : String.valueOf(remembered.get(raw));
+                int bar = old.indexOf('|');
+                perm = bar < 0 ? null : permOf(old.substring(bar + 1));
+                if (perm == null) continue;
+                line = old.substring(0, bar);
+                double[][] c = cost.get(raw + "|" + line);
+                if (c != null && permMad(c, perm, count.get(raw + "|" + line)[0]) > X6_MAX_MAD) continue;
+            }
+            String target = GoalModel.COMBO + line;
+            Object[] prev = chosen.get(target);
+            if (prev == null || (Double) prev[2] > mad) chosen.put(target, new Object[] {raw, perm, mad});
+            games = Math.max(games, fresh);
+        }
+        if (!learned.isEmpty()) memory.put("MSAU", learned);
+        for (BookEvent b : book) {
+            for (Map.Entry<String, Object[]> ch : chosen.entrySet()) {
+                Map<String, Double> raw = b.odds.get((String) ch.getValue()[0]);
+                if (raw == null) continue;
+                int[] perm = (int[]) ch.getValue()[1];
+                Map<String, Double> m = new LinkedHashMap<>();
+                for (int j = 0; j < 6; j++) { // seçenek sırasıyla (1A, XA, 2A, 1U, XU, 2U)
+                    for (int i = 0; i < 6; i++) if (perm[i] == j) m.put(GoalModel.COMBO_OUTCOMES[j], raw.get(String.valueOf(i + 1)));
+                }
+                if (m.size() != 6) continue;
+                b.odds.put(ch.getKey(), m);
+                Integer mbs = b.marketMbs.get((String) ch.getValue()[0]);
+                if (mbs != null) b.marketMbs.put(ch.getKey(), mbs);
+            }
+        }
+        if (chosen.isEmpty()) return ambiguous > 0 ? "seçenek sırası belirsiz, kullanılmadı" : "eşleşen pazar yok";
+        List<String> lines = new ArrayList<>();
+        for (String t : chosen.keySet()) lines.add(Fmt.line(Models.line(t)));
+        return "doğrulandı (çizgiler " + String.join(" · ", lines) + (games > 0 ? "; " + games + " maç" : "; önceki eşleme") + ", gol modeli)";
+    }
+
+    /** Ham altı seçenekli pazarın olabileceği çizgiler: özel değer varsa o ("X6#kod@2.5"), yoksa ("@0.0") X6_LINES. */
+    private static String[] x6Lines(String raw) {
+        String sov = raw.substring(raw.indexOf('@') + 1);
+        return Math.abs(Double.parseDouble(sov)) > 1e-9 ? new String[] {sov} : X6_LINES;
     }
 }

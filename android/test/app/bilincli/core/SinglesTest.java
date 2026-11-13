@@ -152,6 +152,152 @@ public class SinglesTest {
         assertTrue((Long) d.stats.get("karsilastirilan_secim") > 3 * GAMES.length * 3);
     }
 
+    /** Bültendeki gibi altı seçenekli pazar: order[i] = i. konumdaki seçeneğin COMBO_OUTCOMES sırası; %12 marj, biraz gürültü. */
+    static Map<String, Double> six(Map<String, Double> f, int[] order, Random rng) {
+        Map<String, Double> m = new LinkedHashMap<>();
+        for (int i = 0; i < 6; i++) {
+            double p = Math.max(0.004, f.get(GoalModel.COMBO_OUTCOMES[order[i]]) + 0.004 * rng.nextGaussian());
+            m.put(String.valueOf(i + 1), Math.max(1.01, Math.round(100 / (p * 1.12)) / 100.0));
+        }
+        return m;
+    }
+
+    @Test
+    public void matchResultAndTotalsComboIsPricedLabelledAndSettled() {
+        // 2.69: "Maç Sonucu ve Alt/Üst" (MS 2 ve 4,5 Alt, MS 1 ve 1,5 Üst…): skor matrisi Pinnacle'ın MS ve 2,5 A/Ü'süne oturtulur
+        SharpEvent s0 = sharp(0); // MS 1 %55, MS 2 %22, 2,5 Üst %55
+        double[][] j = Models.jointMatrix(s0);
+        Map<String, Double> c15 = GoalModel.market(j, "MSAU@1.5"), c25 = GoalModel.market(j, "MSAU@2.5"), c45 = GoalModel.market(j, "MSAU@4.5");
+        assertEquals(Arrays.asList(GoalModel.COMBO_OUTCOMES), new ArrayList<>(c25.keySet()));
+        double sum = 0;
+        for (double v : c25.values()) sum += v;
+        assertEquals(1.0, sum, 1e-9);
+        assertEquals(0.55, c25.get("1A") + c25.get("1U"), 1e-6); // kenar olasılıklar piyasanınkiyle aynı
+        assertEquals(0.23, c25.get("XA") + c25.get("XU"), 1e-6);
+        assertEquals(0.22, c45.get("2A") + c45.get("2U"), 1e-6);
+        assertEquals(0.55, c25.get("1U") + c25.get("XU") + c25.get("2U"), 1e-6);
+        assertTrue(c15.get("1A") < c25.get("1A") && c25.get("1A") < c45.get("1A")); // çizgi yükseldikçe Alt kolaylaşır
+        assertEquals(0.434, c45.get("1A"), 0.01); // ev kazanır (%55) ve en çok 4 gol
+        assertEquals(0.448, c15.get("1U"), 0.01); // ev kazanır ve en az 2 gol (yalnızca 1–0 dışarıda)
+        assertNull(GoalModel.market(j, "MSAU@2.0")); // tam sayı çizgi yok
+        // karar olasılığı güvenlik payı düşülmüş; kapanışta (CLV) düşülmez
+        assertEquals(c45.get("1A") - GoalModel.MARGIN, Models.fair(s0, "MSAU@4.5").get("1A"), 1e-9);
+        assertEquals(c45.get("1A"), Models.closingFair(s0, "MSAU@4.5").get("1A"), 1e-9);
+        // etiketler
+        assertEquals("MS 2 ve 4,5 Alt", Models.outcomeLabel("MSAU@4.5", "2A"));
+        assertEquals("MS 1 ve 1,5 Üst", Models.outcomeLabel("MSAU@1.5", "1U"));
+        assertEquals("MS X ve 2,5 Alt", Models.outcomeLabel("MSAU@2.5", "XA"));
+        assertEquals("Maç Sonucu ve Alt/Üst", Models.marketName("MSAU@2.5"));
+        assertEquals("MSAU", Pick.group("MSAU@2.5"));
+        // sonuç: Çekya 0–2 İspanya (kullanıcının örneği): 2,5 Üst yatar; MS 2 ve 4,5 Alt, MS 2 ve 1,5 Üst tutar
+        assertEquals(Models.LOST, Settlement.legResult("AU25", "UST", 0, 2));
+        assertEquals(Models.WON, Settlement.legResult("MSAU@4.5", "2A", 0, 2));
+        assertEquals(Models.WON, Settlement.legResult("MSAU@1.5", "2U", 0, 2));
+        assertEquals(Models.LOST, Settlement.legResult("MSAU@2.5", "2U", 0, 2)); // sonuç tuttu, Üst tutmadı
+        assertEquals(Models.LOST, Settlement.legResult("MSAU@4.5", "1A", 0, 2)); // Alt tuttu, sonuç tutmadı
+        assertEquals(Models.LOST, Settlement.legResult("MSAU@4.5", "2A", 1, 4));
+        assertEquals(Models.WON, Settlement.legResult("MSAU@1.5", "XA", 0, 0));
+        assertEquals(Models.WON, Settlement.legResult("MSAU@1.5", "XU", 1, 1));
+        assertNull(Settlement.liveResult("MSAU@1.5", "2U", 0, 2)); // maç bitmeden kesinleşmez (sonuç değişebilir)
+    }
+
+    @Test
+    public void nesineKeepsSixWayCandidates() throws Exception {
+        // 2.69: altı seçenekli pazar aday; seçenek numaraları ne olursa olsun küçükten büyüğe 1–6
+        String json = "{\"sg\":{\"EA\":[{\"TYPE\":1,\"HN\":\"A\",\"AN\":\"B\",\"D\":\"03.10.2026\",\"T\":\"20:00\",\"C\":123,\"MBS\":1,"
+                + "\"MA\":[{\"MTID\":1,\"MBS\":1,\"OCA\":[{\"N\":1,\"O\":2.1},{\"N\":2,\"O\":3.3},{\"N\":3,\"O\":3.4}]},"
+                + "{\"MTID\":342,\"SOV\":0.0,\"MBS\":1,\"OCA\":[{\"N\":23,\"O\":9.0},{\"N\":21,\"O\":3.2},{\"N\":22,\"O\":7.5},{\"N\":24,\"O\":4.1},{\"N\":25,\"O\":12.0},{\"N\":26,\"O\":6.3}]},"
+                + "{\"MTID\":343,\"SOV\":4.5,\"OCA\":[{\"N\":1,\"O\":2.4},{\"N\":2,\"O\":4.0},{\"N\":3,\"O\":4.6},{\"N\":4,\"O\":14.0},{\"N\":5,\"O\":60.0},{\"N\":6,\"O\":25.0}]},"
+                + "{\"MTID\":344,\"SOV\":0.0,\"OCA\":[{\"N\":1,\"O\":2.4},{\"N\":2,\"O\":4.0},{\"N\":3,\"O\":4.6},{\"N\":4,\"O\":14.0},{\"N\":5,\"O\":60.0}]}]}]}}";
+        BookEvent b = Nesine.parse(Json.parse(json)).get(0);
+        Map<String, Double> a = b.odds.get(Calibration.RAW_X6 + "342@0.0"); // özel değer yok: çizgi pazar kodunda
+        assertEquals(Arrays.asList("1", "2", "3", "4", "5", "6"), new ArrayList<>(a.keySet()));
+        assertEquals(3.2, a.get("1"), 0);
+        assertEquals(7.5, a.get("2"), 0);
+        assertEquals(9.0, a.get("3"), 0);
+        assertEquals(1, b.mbsFor(Calibration.RAW_X6 + "342@0.0"));
+        assertNotNull(b.odds.get(Calibration.RAW_X6 + "343@4.5")); // çizgi özel değerde
+        assertNull(b.odds.get(Calibration.RAW_X6 + "344@0.0")); // beş seçenek: aday değil
+    }
+
+    @Test
+    public void comboMarketIsDiscoveredWithLineAndOptionOrder() {
+        // 2.69: bültende seçenek sırası ve (özel değer yoksa) çizgi bilinmiyor: gol modeliyle bulunur
+        List<Models.Pair> pairs = new ArrayList<>();
+        List<BookEvent> book = book(pairs, GAMES.length);
+        Random rng = new Random(11);
+        int[] o25 = {0, 3, 1, 4, 2, 5}, o45 = {5, 4, 3, 2, 1, 0}; // 1A,1U,XA,XU,2A,2U ve tersten
+        for (Models.Pair p : pairs) {
+            double[][] m = Models.jointMatrix(p.sharp);
+            p.book.odds.put(Calibration.RAW_X6 + "70@2.5", six(GoalModel.market(m, "MSAU@2.5"), o25, rng));
+            p.book.odds.put(Calibration.RAW_X6 + "71@0.0", six(GoalModel.market(m, "MSAU@4.5"), o45, rng)); // çizgi pazar kodunda
+            Map<String, Double> other = new LinkedHashMap<>();
+            for (int i = 1; i <= 6; i++) other.put("" + i, 5.0 + rng.nextDouble()); // başka altı seçenekli pazar: modele uymaz
+            p.book.odds.put(Calibration.RAW_X6 + "72@0.0", other);
+            p.book.marketMbs.put(Calibration.RAW_X6 + "71@0.0", 1);
+        }
+        Map<String, Object> memory = new LinkedHashMap<>();
+        String r = Calibration.comboMarkets(book, pairs, new ArrayList<String>(), memory);
+        assertEquals("doğrulandı (çizgiler 2,5 · 4,5; 8 maç, gol modeli)", r);
+        BookEvent b = book.get(0);
+        Map<String, Double> c25 = b.odds.get("MSAU@2.5"), c45 = b.odds.get("MSAU@4.5");
+        assertEquals(Arrays.asList(GoalModel.COMBO_OUTCOMES), new ArrayList<>(c25.keySet()));
+        assertEquals(b.odds.get(Calibration.RAW_X6 + "70@2.5").get("2"), c25.get("1U")); // bültenin 2. seçeneği: MS 1 ve Üst
+        assertEquals(b.odds.get(Calibration.RAW_X6 + "70@2.5").get("5"), c25.get("2A"));
+        assertEquals(b.odds.get(Calibration.RAW_X6 + "71@0.0").get("1"), c45.get("2U"));
+        assertEquals(b.odds.get(Calibration.RAW_X6 + "71@0.0").get("6"), c45.get("1A"));
+        assertEquals(1, b.mbsFor("MSAU@4.5"));
+        assertFalse(b.odds.containsKey("MSAU@1.5"));
+        assertFalse(b.odds.containsKey("MSAU@3.5"));
+        Map<String, Object> mem = Json.obj(memory.get("MSAU"));
+        assertEquals("2.5|031425", mem.get(Calibration.RAW_X6 + "70@2.5"));
+        assertEquals("4.5|543210", mem.get(Calibration.RAW_X6 + "71@0.0"));
+        assertNull(mem.get(Calibration.RAW_X6 + "72@0.0"));
+        Map<String, Object> rep = reportWith("eşleşen ek pazar yok");
+        rep.put("MSAU", r);
+        assertTrue(Calibration.summary(rep).contains("MS ve A/Ü ✓"));
+        // az maçta son güvenilir eşleme kullanılır
+        List<Models.Pair> few = new ArrayList<>();
+        List<BookEvent> small = book(few, 2);
+        for (Models.Pair p : few) p.book.odds.put(Calibration.RAW_X6 + "71@0.0", six(GoalModel.market(Models.jointMatrix(p.sharp), "MSAU@4.5"), o45, rng));
+        assertEquals("doğrulandı (çizgiler 4,5; önceki eşleme, gol modeli)", Calibration.comboMarkets(small, few, new ArrayList<String>(), memory));
+        assertEquals(small.get(0).odds.get(Calibration.RAW_X6 + "71@0.0").get("6"), small.get(0).odds.get("MSAU@4.5").get("1A"));
+        // hafıza yoksa az maçta kullanılmaz
+        List<Models.Pair> few2 = new ArrayList<>();
+        List<BookEvent> small2 = book(few2, 2);
+        for (Models.Pair p : few2) p.book.odds.put(Calibration.RAW_X6 + "71@0.0", six(GoalModel.market(Models.jointMatrix(p.sharp), "MSAU@4.5"), o45, rng));
+        assertEquals("eşleşen pazar yok", Calibration.comboMarkets(small2, few2, new ArrayList<String>(), new LinkedHashMap<String, Object>()));
+        assertFalse(small2.get(0).odds.containsKey("MSAU@4.5"));
+        // tek maç listesi: güvenlik payı düşülmüş olasılıkla, "model" işaretli; düşük olasılıklı seçenekler tabloya girmez
+        List<Object> fairs = Promo.table(pairs, NOW);
+        Map<String, Object> strong = null; // 3. maç: ev %70 favori
+        int combos = 0;
+        for (Object ro : fairs) {
+            for (Object so : Json.arr(Json.obj(ro).get("sel"))) {
+                Map<String, Object> sel = Json.obj(so);
+                if (!String.valueOf(sel.get("m")).startsWith("MSAU@")) continue;
+                combos++;
+                assertTrue(Json.dbl(sel, "p", 0) >= 0.25);
+                assertEquals(Boolean.TRUE, sel.get("model"));
+                if ("b2".equals(Json.obj(ro).get("ref")) && "MSAU@4.5".equals(sel.get("m")) && "1A".equals(sel.get("o"))) strong = sel;
+            }
+        }
+        assertTrue(combos >= GAMES.length);
+        assertEquals("MS 1 ve 4,5 Alt", strong.get("label"));
+        double want = GoalModel.market(Models.jointMatrix(pairs.get(2).sharp), "MSAU@4.5").get("1A") - GoalModel.MARGIN;
+        assertEquals(want, Json.dbl(strong, "p", 0), 1e-4);
+        assertEquals(0.472, want, 0.01); // %70 favori: MS 1 ve 4,5 Alt %51, payla %47
+        // tek maç seçimleri arasında (en az %45 tutanlar): MS 1 ve 4,5 Alt, kendi oranıyla
+        Map<String, Object> single = null;
+        for (Map<String, Object> e : Pick.singles(fairs, null, PickTest.legacy(), 0.45, NOW)) {
+            if ("b2".equals(e.get("ref")) && "MSAU@4.5".equals(e.get("m")) && "1A".equals(e.get("o"))) single = e;
+        }
+        assertNotNull(single);
+        assertEquals("MS 1 ve 4,5 Alt", single.get("label"));
+        assertEquals(book.get(2).odds.get("MSAU@4.5").get("1A"), Json.dbl(single, "odds", 0), 1e-9);
+        assertEquals(Boolean.TRUE, single.get("model"));
+    }
+
     static Map<String, Object> reportWith(String ek) {
         Map<String, Object> r = new LinkedHashMap<>();
         r.put("MS", "doğrulandı");

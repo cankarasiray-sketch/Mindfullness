@@ -83,7 +83,7 @@ public final class Models {
      * seçimde temkin içindir, kapanışta düşülürse CLV her zaman eksi görünür). Diğer pazarlar fair ile aynı.
      */
     public static Map<String, Double> closingFair(SharpEvent s, String market) {
-        if (GoalModel.isModelMarket(market)) return market.startsWith("IYAU@") ? null : GoalModel.market(goalMatrix(s), market);
+        if (GoalModel.isModelMarket(market)) return market.startsWith("IYAU@") ? null : GoalModel.market(modelMatrix(s, market), market);
         return fair(s, market);
     }
 
@@ -91,7 +91,7 @@ public final class Models {
         if (GoalModel.isModelMarket(market)) {
             // 2.10: Pinnacle'ın fiyat vermediği tek maç pazarı: gol modeli, güvenlik payı düşülerek
             if (market.startsWith("IYAU@")) return null; // yalnızca eşlemede ayırt etmek için
-            Map<String, Double> raw = GoalModel.market(goalMatrix(s), market);
+            Map<String, Double> raw = GoalModel.market(modelMatrix(s, market), market);
             if (raw == null) return null;
             Map<String, Double> m = new LinkedHashMap<>();
             for (Map.Entry<String, Double> e : raw.entrySet()) m.put(e.getKey(), Math.max(0.001, e.getValue() - GoalModel.MARGIN));
@@ -134,6 +134,25 @@ public final class Models {
         }
     }
 
+    /** 2.69: birleşik pazarda (MS ve Alt/Üst) piyasanın iki kenar olasılığına oturtulmuş matris; diğer model pazarlarında gol modeli. */
+    public static double[][] modelMatrix(SharpEvent s, String market) {
+        return market.startsWith(GoalModel.COMBO) ? jointMatrix(s) : goalMatrix(s);
+    }
+
+    /** 2.69: skor matrisi, Pinnacle'ın MS (1, X, 2) ve 2,5 Alt/Üst adil olasılıklarına tam oturtulmuş (maç başına bir kez). */
+    public static double[][] jointMatrix(SharpEvent s) {
+        double[][] m = goalMatrix(s);
+        if (m == null) return null;
+        synchronized (s) {
+            if (!s.jointTried) {
+                s.jointTried = true;
+                Map<String, Double> ms = s.fair.get("MS"), au = s.fair.get("AU25");
+                s.jointMatrix = GoalModel.rake(m, ms.get("1"), ms.get("2"), au.get("UST"));
+            }
+            return s.jointMatrix;
+        }
+    }
+
     /** "(0:1)" gibi iddaa handikap gösterimi: ev sahibine eklenen gol h. */
     static String handicapText(double h) {
         long g = Math.round(Math.abs(h));
@@ -145,6 +164,9 @@ public final class Models {
         if (market.startsWith("EVG@")) return "Ev " + Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
         if (market.startsWith("DEPG@")) return "Dep " + Fmt.line(line(market)) + ("ALT".equals(outcome) ? " Alt" : " Üst");
         if (market.startsWith("HMS@")) return "H.MS " + handicapText(line(market)) + " " + outcome;
+        if (market.startsWith(GoalModel.COMBO) && outcome.length() == 2) { // 2.69: "MS 1 ve 1,5 Üst"
+            return "MS " + outcome.charAt(0) + " ve " + Fmt.line(line(market)) + (outcome.charAt(1) == 'A' ? " Alt" : " Üst");
+        }
         if ("MS".equals(market)) return "MS " + outcome;
         if ("BS".equals(market)) return "Basket MS " + outcome;
         if (market.startsWith("BT@")) {
@@ -176,6 +198,7 @@ public final class Models {
         if (market.startsWith("EVG@")) return "Ev sahibi gol Alt/Üst";
         if (market.startsWith("DEPG@")) return "Deplasman gol Alt/Üst";
         if (market.startsWith("HMS@")) return "Handikaplı Maç Sonucu";
+        if (market.startsWith(GoalModel.COMBO)) return "Maç Sonucu ve Alt/Üst";
         if ("MS".equals(market)) return "Maç Sonucu";
         if ("AU25".equals(market)) return "2,5 Alt/Üst";
         if ("KG".equals(market)) return "Karşılıklı Gol";
@@ -222,6 +245,9 @@ public final class Models {
         /** Gol modeli skor matrisi (Models.goalMatrix; ilk kullanımda hesaplanır). */
         transient double[][] goalMatrix;
         transient boolean goalTried;
+        /** 2.69: Pinnacle'ın MS ve 2,5 Alt/Üst olasılıklarına tam oturtulmuş skor matrisi (birleşik pazar için). */
+        transient double[][] jointMatrix;
+        transient boolean jointTried;
 
         public SharpEvent(String ref, String sportKey, String home, String away, Instant kickoff,
                           Map<String, Map<String, Double>> fair, String source) {

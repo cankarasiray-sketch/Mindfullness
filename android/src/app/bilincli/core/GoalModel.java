@@ -154,10 +154,45 @@ public final class GoalModel {
         return matrix(l[0], l[1]);
     }
 
-    /** Model pazarı mı: "AU@1.5" (toplam gol), "EVG@0.5", "DEPG@1.5" (takım golü), "HMS@-1" (handikaplı MS), "IYAU@0.5" (ilk yarı; yalnızca eşleme). */
+    /**
+     * Model pazarı mı: "AU@1.5" (toplam gol), "EVG@0.5", "DEPG@1.5" (takım golü), "HMS@-1" (handikaplı MS), "IYAU@0.5" (ilk
+     * yarı; yalnızca eşleme), "MSAU@1.5" (2.69: Maç Sonucu ve Alt/Üst birleşik pazarı).
+     */
     public static boolean isModelMarket(String market) {
         return market.startsWith("AU@") || market.startsWith("EVG@") || market.startsWith("DEPG@") || market.startsWith("HMS@")
-                || market.startsWith("IYAU@");
+                || market.startsWith("IYAU@") || market.startsWith(COMBO);
+    }
+
+    /** 2.69: "Maç Sonucu ve Alt/Üst" birleşik pazarı ("MSAU@çizgi") ve seçenekleri: sonuç (1, X, 2) + A (Alt) / U (Üst). */
+    public static final String COMBO = "MSAU@";
+    public static final String[] COMBO_OUTCOMES = {"1A", "XA", "2A", "1U", "XU", "2U"};
+
+    /**
+     * 2.69: skor matrisini Pinnacle'ın Maç Sonucu (1, X, 2) ve 2,5 Alt/Üst adil olasılıklarına tam oturtur (yinelemeli
+     * orantılı ölçekleme): bağımsız Poisson iki parametreyle üç hedefe ancak yaklaşır (özellikle beraberlik); birleşik
+     * pazarda (sonuç ve toplam gol birlikte) iki kenar olasılık da piyasanınkiyle aynı olsun, hücre içi dağılım modelden.
+     */
+    public static double[][] rake(double[][] m, double p1, double p2, double over) {
+        if (m == null || !(p1 > 0 && p2 > 0 && p1 + p2 < 1 && over > 0 && over < 1)) return m;
+        int n = m.length;
+        double[][] r = new double[n][n];
+        for (int i = 0; i < n; i++) r[i] = m[i].clone();
+        double[] res = {p1, 1 - p1 - p2, p2}, tot = {1 - over, over};
+        for (int it = 0; it < 30; it++) {
+            double[] cur = new double[3];
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) cur[i > j ? 0 : i == j ? 1 : 2] += r[i][j];
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) {
+                int c = i > j ? 0 : i == j ? 1 : 2;
+                if (cur[c] > 0) r[i][j] *= res[c] / cur[c];
+            }
+            double[] ct = new double[2];
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) ct[i + j >= 3 ? 1 : 0] += r[i][j];
+            for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) {
+                int c = i + j >= 3 ? 1 : 0;
+                if (ct[c] > 0) r[i][j] *= tot[c] / ct[c];
+            }
+        }
+        return r;
     }
 
     /**
@@ -176,6 +211,19 @@ public final class GoalModel {
             return null;
         }
         java.util.Map<String, Double> out = new java.util.LinkedHashMap<>();
+        if ("MSAU".equals(fam)) { // 2.69: sonuç ve toplam gol birlikte (x,5 çizgi)
+            if (Math.abs(line * 2 - Math.rint(line * 2)) > 1e-9 || Math.abs(line - Math.rint(line)) < 1e-9 || line <= 0) return null;
+            double[] p = new double[6];
+            double s = 0;
+            for (int i = 0; i <= MAX_GOALS; i++) {
+                for (int j = 0; j <= MAX_GOALS; j++) {
+                    p[(i > j ? 0 : i == j ? 1 : 2) + (i + j < line ? 0 : 3)] += m[i][j];
+                    s += m[i][j];
+                }
+            }
+            for (int k = 0; k < 6; k++) out.put(COMBO_OUTCOMES[k], p[k] / s);
+            return out;
+        }
         if ("HMS".equals(fam)) {
             if (Math.abs(line - Math.rint(line)) > 1e-9) return null;
             double p1 = 0, px = 0, p2 = 0;

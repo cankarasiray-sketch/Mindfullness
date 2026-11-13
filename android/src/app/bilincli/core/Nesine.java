@@ -158,6 +158,18 @@ public final class Nesine {
                     String key = Calibration.RAW_CS + mtid;
                     odds.put(key, raw);
                     if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
+                } else if (raw.size() == 6) {
+                    // 2.69: altı seçenekli aday (Maç Sonucu ve Alt/Üst olabilir; çizgi özel değerde ya da pazar kodunda).
+                    // Seçenek numaraları bilinmiyor: küçükten büyüğe 1–6 diye sıralanır; hangisinin hangi seçenek ve
+                    // (özel değer yoksa) hangi çizgi olduğunu Calibration gol modeliyle bulur.
+                    List<Long> ns = new ArrayList<>();
+                    for (String k : raw.keySet()) ns.add(Long.parseLong(k));
+                    java.util.Collections.sort(ns);
+                    Map<String, Double> six = new LinkedHashMap<>();
+                    for (int i = 0; i < 6; i++) six.put(String.valueOf(i + 1), raw.get(String.valueOf(ns.get(i))));
+                    String key = Calibration.RAW_X6 + mtid + "@" + (special ? sov : 0.0);
+                    odds.put(key, six);
+                    if (mm != null && mm > 0) rawMbs.put(key, mm.intValue());
                 } else if (raw.size() == 2 && raw.containsKey("1") && raw.containsKey("2")) {
                     // İki seçenekli aday pazarlar; hangisinin 2,5 Alt/Üst ya da Karşılıklı Gol olduğunu
                     // Calibration, Pinnacle oranlarıyla karşılaştırarak bulur.

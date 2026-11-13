@@ -124,6 +124,7 @@ public final class Pick {
         if ("MS".equals(m) || "CS".equals(m) || "KG".equals(m)) return m;
         if ("AU25".equals(m) || m.startsWith("AU@")) return "AU";
         if (m.startsWith("HMS@")) return "HMS";
+        if (m.startsWith(GoalModel.COMBO)) return "MSAU"; // 2.69: Maç Sonucu ve Alt/Üst
         if (m.startsWith("EVG@") || m.startsWith("DEPG@")) return "TG";
         return "BASKET"; // BS, BT@, BH@
     }

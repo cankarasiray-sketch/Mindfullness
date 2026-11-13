@@ -579,6 +579,7 @@ public final class Bridge {
         b.append("  Basketbol Alt/Üst: ").append(mark(cal.get("BT"))).append('\n');
         b.append("  Basketbol Handikap: ").append(mark(cal.get("BH"))).append('\n');
         b.append("  Ek tek maç pazarları (Alt/Üst 0,5–4,5, takım golü, handikaplı MS): ").append(mark(cal.get("EK"))).append('\n');
+        b.append("  Maç Sonucu ve Alt/Üst (MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt…): ").append(mark(cal.get("MSAU"))).append('\n'); // 2.69
         d.stats.put("kasa", repo.real().balance());
         b.append("  Karar: ").append(Texts.statsLine(d.stats)).append('\n');
         if (d.isPass()) b.append("  ").append(d.reason).append('\n');
@@ -604,6 +605,13 @@ public final class Bridge {
             b.append("\nPazar envanteri (korner gibi yeni pazarları eşlemek için; ilk 12)\n");
             for (int i = 0; i < Math.min(12, lines.length); i++) b.append(lines[i]).append('\n');
             if (lines.length > 12) b.append("(+").append(lines.length - 12).append(" pazar kodu daha)\n");
+            // 2.69: altı seçenekli pazarlar (Maç Sonucu ve Alt/Üst adayları): eşleme tutmazsa hangi kodlar olduğu görülsün
+            int six = 0;
+            for (String line : lines) {
+                if (!line.matches(".*seçenek \\[[^\\]]*\\b6\\b[^\\]]*\\].*")) continue;
+                if (six == 0) b.append("\nAltı seçenekli pazarlar (Maç Sonucu ve Alt/Üst adayları; ilk 8)\n");
+                if (six++ < 8) b.append(line).append('\n');
+            }
         }
         progress("Bilyoner Zirve Oran okunuyor (kredi harcamaz)…");
         b.append("\nBilyoner Zirve Oran\n");

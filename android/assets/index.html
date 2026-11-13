@@ -250,6 +250,7 @@ function label(market, outcome) {
   if (market.indexOf("EVG@") === 0) return "Ev " + ln.replace(".", ",") + au;
   if (market.indexOf("DEPG@") === 0) return "Dep " + ln.replace(".", ",") + au;
   if (market.indexOf("HMS@") === 0) { var hg = Math.round(Math.abs(parseFloat(ln))); return "H.MS " + (parseFloat(ln) >= 0 ? "(" + hg + ":0)" : "(0:" + hg + ")") + " " + outcome; }
+  if (market.indexOf("MSAU@") === 0) return "MS " + outcome.charAt(0) + " ve " + ln.replace(".", ",") + (outcome.charAt(1) === "A" ? " Alt" : " Üst"); // 2.69
   if (market === "KG") return outcome === "VAR" ? "KG Var" : "KG Yok";
   if (market === "CS") return "ÇŞ " + outcome.charAt(0) + "-" + outcome.charAt(1);
   return market + " " + outcome;
@@ -651,11 +652,12 @@ var singlesMin = null, singlesGroup = null, singlesShow = 25;
 /** Tek maç fırsatlarında varsayılan süzgeç: tutma olasılığı %65 ve üstü (kullanıcı isteği). */
 var SINGLES_DEFAULT_MIN = 0.65;
 /** 2.15.6 bahis türü süzgeci (Pick.group ile aynı eşleme). */
-var SINGLE_GROUPS = [["MS", "Maç sonucu"], ["CS", "Çifte şans"], ["AU", "Alt/Üst"], ["KG", "Karşılıklı gol"], ["HMS", "Handikap"], ["TG", "Takım golü"], ["BASKET", "Basketbol"]];
+var SINGLE_GROUPS = [["MS", "Maç sonucu"], ["CS", "Çifte şans"], ["AU", "Alt/Üst"], ["MSAU", "MS + Alt/Üst"], ["KG", "Karşılıklı gol"], ["HMS", "Handikap"], ["TG", "Takım golü"], ["BASKET", "Basketbol"]];
 function singleGroup(m) {
   if (m === "MS" || m === "CS" || m === "KG") return m;
   if (m === "AU25" || m.indexOf("AU@") === 0) return "AU";
   if (m.indexOf("HMS@") === 0) return "HMS";
+  if (m.indexOf("MSAU@") === 0) return "MSAU"; // 2.69: Maç Sonucu ve Alt/Üst
   if (m.indexOf("EVG@") === 0 || m.indexOf("DEPG@") === 0) return "TG";
   return "BASKET";
 }
@@ -679,7 +681,7 @@ function singlesCard() {
   }).join(" ");
   var stake = S.pick && S.pick.stake ? S.pick.stake : 0;
   return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Önümüzdeki ' + oppText() + ' içinde tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
-    + "ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; oran en az " + odds(S.settings.pickMinOdds || 1.25) + " (Ayarlar → Tek maç); bahis türüne göre süzülebilir (ör. Maç sonucu → MS 2, Alt/Üst → 1,5 Üst). Sıra: önce kârlı olanlar (adil oranı geçen), sonra kâr ve tutma olasılığı birlikte (denge puanı). "
+    + "maç sonucu ve Alt/Üst birlikte (ör. MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt), ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; oran en az " + odds(S.settings.pickMinOdds || 1.25) + " (Ayarlar → Tek maç); bahis türüne göre süzülebilir (ör. Maç sonucu → MS 2, Alt/Üst → 1,5 Üst). Sıra: önce kârlı olanlar (adil oranı geçen), sonra kâr ve tutma olasılığı birlikte (denge puanı). "
     + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
     + bandsHtml()
     + '<div class="btns" style="flex-wrap:wrap">' + chips + "</div>"
