@@ -609,8 +609,8 @@ public final class Bridge {
             int six = 0;
             for (String line : lines) {
                 if (!line.matches(".*seçenek \\[[^\\]]*\\b6\\b[^\\]]*\\].*")) continue;
-                if (six == 0) b.append("\nAltı seçenekli pazarlar (Maç Sonucu ve Alt/Üst adayları; ilk 8)\n");
-                if (six++ < 8) b.append(line).append('\n');
+                if (six == 0) b.append("\nAltı seçenekli pazarlar (Maç Sonucu ve Alt/Üst adayları; ilk 12)\n");
+                if (six++ < 12) b.append(line).append('\n');
             }
         }
         progress("Bilyoner Zirve Oran okunuyor (kredi harcamaz)…");

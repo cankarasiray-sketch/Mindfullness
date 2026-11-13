@@ -238,9 +238,11 @@ public final class Nesine {
             Object[] r = rows.get(mtid);
             if (r == null) {
                 r = new Object[] {0, new java.util.TreeSet<Integer>(), new java.util.TreeSet<Double>(),
-                    new java.util.TreeSet<String>(market.keySet()), sample};
+                    new java.util.TreeSet<String>(market.keySet()), sample, null};
                 rows.put(mtid, r);
             }
+            // 2.70: birleşik pazar eşlemesi için gerçek örnek (örnek maçtan farklı bir maçtansa adıyla)
+            if (outcomes == 6 && r[5] == null) r[5] = (sample != null && !sample.equals(r[4]) ? "(" + sample + ") " : "") + sixSample(market);
             r[0] = (Integer) r[0] + 1;
             ((java.util.Set<Integer>) r[1]).add(outcomes);
             java.util.Set<Double> sovs = (java.util.Set<Double>) r[2];
@@ -253,9 +255,23 @@ public final class Nesine {
                 Object[] r = e.getValue();
                 b.append("MTID ").append(e.getKey()).append(": ").append(r[0]).append(" maç, seçenek ").append(r[1])
                         .append(((java.util.Set<?>) r[2]).isEmpty() ? "" : ", değer " + r[2])
-                        .append(", alanlar ").append(r[3]).append(", örnek ").append(r[4]).append('\n');
+                        .append(", alanlar ").append(r[3]).append(", örnek ").append(r[4])
+                        .append(r[5] == null ? "" : ", seçenekler " + r[5]).append('\n');
             }
             return b.toString();
+        }
+
+        /** Altı seçenekli pazarın bir örneği: seçenek alanları ve "numara=oran" listesi (bültendeki sırayla). */
+        private static String sixSample(Map<String, Object> market) {
+            StringBuilder b = new StringBuilder();
+            java.util.Set<String> keys = new java.util.TreeSet<>();
+            for (Object oo : Json.arr(market.get("OCA"))) {
+                Map<String, Object> oc = Json.obj(oo);
+                if (oc == null) continue;
+                keys.addAll(oc.keySet());
+                b.append(b.length() == 0 ? "" : " ").append(oc.get("N")).append('=').append(oc.get("O"));
+            }
+            return keys + " " + b;
         }
     }
 

@@ -62,6 +62,24 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Birleşik pazar eşlemesi sağlamlaştırıldı (2.70)
+
+- Kullanıcı sordu: "Portekiz – Danimarka MS 1 ve 1,5 Üst neden önerilmiyor?" İki neden: (1) olasılık: MS 1 %64, 2,5 Üst %64 →
+  "MS 1 ve 1,5 Üst" modelde ≈ %56, 4 puan güvenlik payıyla ≈ %52; %68 kuralına ve listedeki %60+ süzgecine girmez (yalnızca
+  "%50+" ile görünür). (2) 2.69'un eşlemesi gerçekçi fiyatlamada 1,5 çizgisini çoğu zaman tanıyamıyordu (benzetim: %0–55;
+  yanlış eşleme yok, "belirsiz" deyip kullanmıyordu): tek çizgide bazı seçenek çiftleri birbirine çok yakın (1,5'te
+  "X ve Alt" ile zayıf tarafın "ve Alt"ı; 4,5'te "1 ve Alt" ile "X ve Alt").
+- Calibration.comboMarkets yeniden yazıldı: iddaa oranları üs yöntemiyle marjdan arındırılır (OddsMath.devigPower; kesinti
+  küçük olasılıklara daha çok biner); aynı pazar türünün çizgileri bültende aynı seçenek sırasıyla geldiğinden önce bütün
+  adaylara birlikte en iyi uyan **ortak sıra** aranır (ikinci sıradan en az 0,4 puan iyi olmalı), her aday o sırayla kendi
+  en iyi uyumuna yakınsa kabul edilir; tek aday varsa kendi sırası kesinse (ortak sıra bulunamadıysa üç kat fark aranır).
+  "Maç Sonucu ve Karşılıklı Gol" da altı seçenekli olduğundan ayrı aile olarak tanınır ve kullanılmaz (2,5 çizgisiyle
+  karışmasın). Benzetim (gerçekçi kesinti ve yuvarlama, 6–30 maç): yanlış eşleme 0, dört çizgi birlikteyken doğru %96–100.
+- Tanı ("Kaynakları test et"): kullanılmayan her adayın nedeni notlarda ("uymuyor / MS ve KG olarak tanındı / ortak sıraya
+  uymuyor / seçenek sırası ayırt edilemedi / veri az", sapma ve maç sayısıyla; en çok 6); altı seçenekli pazar dökümünde
+  (ilk 12) gerçek bir örnek: seçenek alanları ve bültendeki sırayla "numara=oran".
+- Gerçek bültenle hâlâ denenmedi (Nesine uç noktaları yoklanmıyor): doğrulama telefonda, özet satırında "MS ve A/Ü ✓".
+
 ## Maç Sonucu ve Alt/Üst birleşik pazarı (2.69)
 
 - Kullanıcı istedi: "MS 2 ve 4,5 Alt", "MS 1 ve 1,5 Üst" gibi seçenekler de değerlendirilsin (iddaa: Maç Sonucu ve 1,5 / 2,5 /

@@ -945,20 +945,69 @@ public final class Calibration {
 
     /** Özel değeri olmayan altı seçenekli pazarda denenecek çizgiler (iddaa: Maç Sonucu ve 1,5 / 2,5 / 3,5 / 4,5 Gol Alt/Üst). */
     static final String[] X6_LINES = {"1.5", "2.5", "3.5", "4.5"};
+    /** Maç Sonucu ve Karşılıklı Gol ailesi: altı seçenekli, özel değersiz; tanınır ama kullanılmaz (2,5 çizgisiyle karışmasın). */
+    static final String X6_KG = "KG";
+    /** En iyi (aile, sıra) ikinci adaydan ortalama olasılık farkında en az bu kadar iyiyse sıra kesindir. */
+    static final double X6_SEPARATION = 0.004;
+
+    /** Bir ham altı seçenekli pazarın en iyi uyan (aile, sıra) adayı ve ikinci adayın sapması. */
+    private static final class X6Fit {
+        String fam;
+        int[] perm;
+        double mad = 9, second = 9;
+        int n;
+    }
+
+    private static double[][] x6Cost(Map<String, double[][]> cost, String raw, String fam) {
+        return cost.get(raw + "|" + fam);
+    }
+
+    private static int x6Count(Map<String, int[]> count, String raw, String fam) {
+        int[] c = count.get(raw + "|" + fam);
+        return c == null ? 0 : c[0];
+    }
+
+    /** Verilen sırayla en iyi uyan çizgi ailesi: {aile, sapma, maç}; yeterli verili çizgi yoksa null. */
+    private static Object[] x6BestLine(Map<String, double[][]> cost, Map<String, int[]> count, String raw, int[] perm) {
+        String bl = null;
+        double bv = 9;
+        int bn = 0;
+        for (String fam : x6Families(raw)) {
+            int n = x6Count(count, raw, fam);
+            if (X6_KG.equals(fam) || n < X6_MIN_N) continue;
+            double v = permMad(x6Cost(cost, raw, fam), perm, n);
+            if (v < bv) {
+                bv = v;
+                bl = fam;
+                bn = n;
+            }
+        }
+        return bl == null ? null : new Object[] {bl, bv, bn};
+    }
+
+    private static String x6Code(String raw) {
+        return "Altı seçenekli pazar (kod " + raw.substring(RAW_X6.length(), raw.indexOf('@')) + ")";
+    }
 
     /**
-     * 2.69: "Maç Sonucu ve Alt/Üst" (MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt…): Nesine'nin altı seçenekli pazarları, Pinnacle'ın MS ve
-     * 2,5 Alt/Üst olasılıklarına oturtulmuş skor matrisiyle karşılaştırılarak tanınır. Çizgi özel değerdeyse o, değilse
-     * X6_LINES'ın her biri; seçeneklerin bültendeki sırası bilinmediğinden her sıralama (720) denenir: maç başına ortalama
-     * olasılık farkı en küçük (çizgi, sıra) X6_MAX_MAD altında ve ikinci adaydan belirgin iyiyse kabul edilir (başka altı
-     * seçenekli pazar, ör. MS ve Karşılıklı Gol, uymaz). Veri azsa ya da sıra ayırt edilemiyorsa son güvenilir eşleme (hafıza
-     * "MSAU": ham pazar → "çizgi|sıra") bugünkü veriyle çelişmiyorsa kullanılır.
+     * 2.69–2.70: "Maç Sonucu ve Alt/Üst" (MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt…): Nesine'nin altı seçenekli pazarları, Pinnacle'ın MS
+     * ve 2,5 Alt/Üst olasılıklarına oturtulmuş skor matrisiyle karşılaştırılarak tanınır. Çizgi özel değerdeyse o, değilse
+     * X6_LINES'ın her biri (ve ayırt etmek için Maç Sonucu ve Karşılıklı Gol); seçeneklerin bültendeki sırası bilinmediğinden
+     * her sıralama (720) denenir. iddaa oranları üs yöntemiyle marjdan arındırılır (kesinti küçük olasılıklara daha çok
+     * biner). Aday: en iyi (aile, sıra) için maç başına ortalama olasılık farkı X6_MAX_MAD altında olan ham pazar.
+     * 2.70: sıra tek çizgide çoğu zaman ayırt edilemez (ör. 1,5'te "X ve Alt" ile zayıf tarafın "ve Alt"ı, 4,5'te "1 ve Alt"
+     * ile "X ve Alt" birbirine yakın) ama her seçenek çifti en az bir çizgide açıkça ayrışır: aynı pazar türünün çizgileri
+     * bültende aynı sırayla geldiğinden önce bütün adaylara birlikte en iyi uyan ortak sıra aranır (ikinci sıradan en az
+     * X6_SEPARATION iyi olmalı); her aday o sırayla, kendi en iyi uyumuna yakınsa kabul edilir. Tek aday varsa kendi
+     * sırası kesinse kabul edilir. Veri azsa ya da sıra ayırt edilemediyse
+     * son güvenilir eşleme (hafıza "MSAU": ham pazar → "çizgi|sıra") bugünkü veriyle çelişmiyorsa kullanılır.
+     * Kullanılmayan adayların nedeni notlara yazılır (veri testi raporu).
      */
     static String comboMarkets(List<BookEvent> book, List<Pair> pairs, List<String> notes, Map<String, Object> memory) {
         java.util.Set<String> raws = new java.util.TreeSet<>();
         for (BookEvent b : book) for (String k : b.odds.keySet()) if (k.startsWith(RAW_X6)) raws.add(k);
         if (raws.isEmpty()) return "bültende yok";
-        Map<String, double[][]> cost = new LinkedHashMap<>(); // ham|çizgi -> [bülten konumu][seçenek] fark toplamı
+        Map<String, double[][]> cost = new LinkedHashMap<>(); // ham|aile -> [bülten konumu][seçenek] fark toplamı
         Map<String, int[]> count = new LinkedHashMap<>();
         for (Pair p : pairs) {
             double[][] m = Models.jointMatrix(p.sharp);
@@ -966,72 +1015,146 @@ public final class Calibration {
             for (Map.Entry<String, Map<String, Double>> e : p.book.odds.entrySet()) {
                 String k = e.getKey();
                 if (!k.startsWith(RAW_X6)) continue;
-                double[] q = new double[6];
+                double[] o = new double[6];
                 double s = 0;
                 for (int i = 0; i < 6 && s >= 0; i++) {
-                    Double o = e.getValue().get(String.valueOf(i + 1));
-                    if (o == null || o <= 1) s = -1;
-                    else s += q[i] = 1 / o;
+                    Double v = e.getValue().get(String.valueOf(i + 1));
+                    if (v == null || v <= 1) s = -1;
+                    else s += 1 / (o[i] = v);
                 }
                 if (s < 1.0 || s > 1.5) continue; // birbirini dışlayan altı seçenek değil (ör. çifte şanslı birleşik)
-                for (String line : x6Lines(k)) {
-                    Map<String, Double> f = GoalModel.market(m, GoalModel.COMBO + line);
+                double[] q = OddsMath.devigPower(o);
+                for (String fam : x6Families(k)) {
+                    double[] f = GoalModel.comboProbs(m, fam);
                     if (f == null) continue;
-                    double[][] c = cost.get(k + "|" + line);
+                    double[][] c = x6Cost(cost, k, fam);
                     if (c == null) {
-                        cost.put(k + "|" + line, c = new double[6][6]);
-                        count.put(k + "|" + line, new int[1]);
+                        cost.put(k + "|" + fam, c = new double[6][6]);
+                        count.put(k + "|" + fam, new int[1]);
                     }
-                    for (int i = 0; i < 6; i++) for (int j = 0; j < 6; j++) c[i][j] += Math.abs(q[i] / s - f.get(GoalModel.COMBO_OUTCOMES[j]));
-                    count.get(k + "|" + line)[0]++;
+                    for (int i = 0; i < 6; i++) for (int j = 0; j < 6; j++) c[i][j] += Math.abs(q[i] - f[j]);
+                    count.get(k + "|" + fam)[0]++;
                 }
             }
         }
         Map<String, Object> remembered = Json.obj(memory.get("MSAU"));
         Map<String, Object> learned = remembered == null ? new LinkedHashMap<String, Object>() : new LinkedHashMap<>(remembered);
         Map<String, Object[]> chosen = new java.util.TreeMap<>(); // hedef -> {ham, sıra, sapma}
-        int ambiguous = 0, games = 0;
+        Map<String, X6Fit> fits = new LinkedHashMap<>();
+        List<String> cand = new ArrayList<>(), pending = new ArrayList<>(), why = new ArrayList<>();
+        int games = 0, ambiguous = 0;
+        // 1) her ham pazarın kendi en iyi adayı
         for (String raw : raws) {
-            String line = null;
-            int[] perm = null;
-            double mad = X6_MAX_MAD, bestMad = 9, secondMad = 9;
-            int n = 0, fresh = 0;
-            for (String l : x6Lines(raw)) {
-                double[][] c = cost.get(raw + "|" + l);
-                int cn = c == null ? 0 : count.get(raw + "|" + l)[0];
-                n = Math.max(n, cn);
-                if (cn < X6_MIN_N) continue;
+            X6Fit fit = new X6Fit();
+            for (String fam : x6Families(raw)) {
+                double[][] c = x6Cost(cost, raw, fam);
+                int n = x6Count(count, raw, fam);
+                fit.n = Math.max(fit.n, n);
+                if (n < X6_MIN_N) continue;
                 for (int[] pm : PERMS6) {
-                    double v = permMad(c, pm, cn);
-                    if (v < bestMad) {
-                        secondMad = bestMad;
-                        bestMad = v;
-                        perm = pm;
-                        line = l;
-                    } else if (v < secondMad) secondMad = v;
+                    double v = permMad(c, pm, n);
+                    if (v < fit.mad) {
+                        fit.second = fit.mad;
+                        fit.mad = v;
+                        fit.perm = pm;
+                        fit.fam = fam;
+                    } else if (v < fit.second) fit.second = v;
                 }
             }
-            if (perm != null && bestMad > X6_MAX_MAD) continue; // Maç Sonucu ve Alt/Üst değil
-            if (perm != null && secondMad >= bestMad * 1.5 + 0.002) {
-                mad = bestMad;
-                fresh = n;
-                learned.put(raw, line + "|" + permText(perm));
-            } else { // veri az ya da sıra ayırt edilemedi: son güvenilir eşleme (bugünkü veriyle çelişmiyorsa)
-                if (perm != null) ambiguous++;
-                String old = remembered == null || remembered.get(raw) == null ? "" : String.valueOf(remembered.get(raw));
-                int bar = old.indexOf('|');
-                perm = bar < 0 ? null : permOf(old.substring(bar + 1));
-                if (perm == null) continue;
-                line = old.substring(0, bar);
-                double[][] c = cost.get(raw + "|" + line);
-                if (c != null && permMad(c, perm, count.get(raw + "|" + line)[0]) > X6_MAX_MAD) continue;
+            fits.put(raw, fit);
+            if (fit.perm == null) { // veri az: önceki eşleme denenir
+                pending.add(raw);
+                continue;
             }
-            String target = GoalModel.COMBO + line;
-            Object[] prev = chosen.get(target);
-            if (prev == null || (Double) prev[2] > mad) chosen.put(target, new Object[] {raw, perm, mad});
-            games = Math.max(games, fresh);
+            String fitText = (X6_KG.equals(fit.fam) ? "MS ve Karşılıklı Gol" : "MS ve " + Fmt.line(Double.parseDouble(fit.fam)) + " Alt/Üst")
+                    + ", sapma " + Fmt.pct(fit.mad, false) + ", " + fit.n + " maç";
+            if (fit.mad > X6_MAX_MAD) why.add(x6Code(raw) + ": Maç Sonucu ve Alt/Üst'e uymuyor (en yakın " + fitText + ").");
+            else if (X6_KG.equals(fit.fam) && fit.second - fit.mad >= X6_SEPARATION) {
+                why.add(x6Code(raw) + ": Maç Sonucu ve Karşılıklı Gol olarak tanındı (" + fitText + "); kullanılmıyor.");
+            } else cand.add(raw);
+        }
+        // 2) ortak sıra: bütün adaylara birlikte en iyi uyan (her aday kendi en iyi çizgisiyle)
+        int[] convention = null;
+        if (cand.size() >= 2) {
+            double best = 9, second = 9;
+            int[] bp = null;
+            for (int[] pm : PERMS6) {
+                double total = 0;
+                int n = 0;
+                for (String raw : cand) {
+                    Object[] bl = x6BestLine(cost, count, raw, pm);
+                    if (bl == null) continue;
+                    total += (Double) bl[1] * (Integer) bl[2];
+                    n += (Integer) bl[2];
+                }
+                double v = n == 0 ? 9 : total / n;
+                if (v < best) {
+                    second = best;
+                    best = v;
+                    bp = pm;
+                } else if (v < second) second = v;
+            }
+            if (bp != null && second - best >= X6_SEPARATION) convention = bp;
+        }
+        // 3) kabul: ortak sırayla (kendi en iyi uyumuna yakınsa); ortak sıra yoksa kendi sırası kesin olan
+        for (String raw : cand) {
+            X6Fit fit = fits.get(raw);
+            boolean kg = X6_KG.equals(fit.fam);
+            String line = null;
+            int[] perm = null;
+            double mad = 9;
+            if (convention != null) {
+                Object[] bl = x6BestLine(cost, count, raw, convention);
+                if (bl != null && (Double) bl[1] <= X6_MAX_MAD && (Double) bl[1] <= fit.mad + (kg ? 0 : 2 * X6_SEPARATION)) {
+                    line = (String) bl[0];
+                    perm = convention;
+                    mad = (Double) bl[1];
+                } else {
+                    why.add(x6Code(raw) + ": öteki çizgilerin ortak seçenek sırasına uymuyor (kendi en iyi sapması " + Fmt.pct(fit.mad, false)
+                            + (bl == null ? "" : ", ortak sırayla " + Fmt.pct((Double) bl[1], false)) + "); kullanılmadı.");
+                    continue;
+                }
+            } else if (!kg && fit.second - fit.mad >= (cand.size() == 1 ? 1 : 3) * X6_SEPARATION) {
+                // ortak sıra yok: kendi sırası kesinse. Birden çok aday varken ortak sıra ayırt edilemediyse tek çizginin
+                // sınırda "kesin"i rastlantı olabilir (benzetimde hatalı eşlemenin tek kaynağı): üç kat fark aranır
+                line = fit.fam;
+                perm = fit.perm;
+                mad = fit.mad;
+            } else {
+                pending.add(raw);
+                continue;
+            }
+            learned.put(raw, line + "|" + permText(perm));
+            games = Math.max(games, fit.n);
+            Object[] prev = chosen.get(GoalModel.COMBO + line);
+            if (prev == null || (Double) prev[2] > mad) chosen.put(GoalModel.COMBO + line, new Object[] {raw, perm, mad});
+        }
+        // 4) veri az ya da sıra ayırt edilemedi: bu pazarın son güvenilir eşlemesi (bugünkü veriyle çelişmiyorsa)
+        for (String raw : pending) {
+            X6Fit fit = fits.get(raw);
+            String old = remembered == null || remembered.get(raw) == null ? "" : String.valueOf(remembered.get(raw));
+            int bar = old.indexOf('|');
+            int[] perm = bar < 0 ? null : permOf(old.substring(bar + 1));
+            String line = bar < 0 ? null : old.substring(0, bar);
+            double mad = X6_MAX_MAD;
+            if (perm != null) {
+                int n = x6Count(count, raw, line);
+                if (n > 0) mad = permMad(x6Cost(cost, raw, line), perm, n);
+                if (mad > X6_MAX_MAD || (fit.perm != null && mad > fit.mad + X6_SEPARATION)) perm = null;
+            }
+            if (perm == null) {
+                if (fit.perm != null) {
+                    ambiguous++;
+                    why.add(x6Code(raw) + ": seçenek sırası ayırt edilemedi (en iyi " + (X6_KG.equals(fit.fam) ? "MS ve KG" : Fmt.line(Double.parseDouble(fit.fam)))
+                            + " sapma " + Fmt.pct(fit.mad, false) + ", ikinci " + Fmt.pct(fit.second, false) + ", " + fit.n + " maç).");
+                } else if (fit.n > 0) why.add(x6Code(raw) + ": veri az (" + fit.n + " maç; en az " + X6_MIN_N + ").");
+                continue;
+            }
+            Object[] prev = chosen.get(GoalModel.COMBO + line);
+            if (prev == null || (Double) prev[2] > mad) chosen.put(GoalModel.COMBO + line, new Object[] {raw, perm, mad});
         }
         if (!learned.isEmpty()) memory.put("MSAU", learned);
+        for (int i = 0; i < Math.min(6, why.size()); i++) notes.add(why.get(i));
         for (BookEvent b : book) {
             for (Map.Entry<String, Object[]> ch : chosen.entrySet()) {
                 Map<String, Double> raw = b.odds.get((String) ch.getValue()[0]);
@@ -1053,9 +1176,12 @@ public final class Calibration {
         return "doğrulandı (çizgiler " + String.join(" · ", lines) + (games > 0 ? "; " + games + " maç" : "; önceki eşleme") + ", gol modeli)";
     }
 
-    /** Ham altı seçenekli pazarın olabileceği çizgiler: özel değer varsa o ("X6#kod@2.5"), yoksa ("@0.0") X6_LINES. */
-    private static String[] x6Lines(String raw) {
+    /** Ham altı seçenekli pazarın olabileceği aileler: özel değer varsa o çizgi ("X6#kod@2.5"); yoksa ("@0.0") X6_LINES ve X6_KG. */
+    private static String[] x6Families(String raw) {
         String sov = raw.substring(raw.indexOf('@') + 1);
-        return Math.abs(Double.parseDouble(sov)) > 1e-9 ? new String[] {sov} : X6_LINES;
+        if (Math.abs(Double.parseDouble(sov)) > 1e-9) return new String[] {sov};
+        String[] all = java.util.Arrays.copyOf(X6_LINES, X6_LINES.length + 1);
+        all[X6_LINES.length] = X6_KG;
+        return all;
     }
 }

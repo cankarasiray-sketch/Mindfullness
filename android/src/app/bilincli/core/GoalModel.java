@@ -168,6 +168,30 @@ public final class GoalModel {
     public static final String[] COMBO_OUTCOMES = {"1A", "XA", "2A", "1U", "XU", "2U"};
 
     /**
+     * 2.70: altı seçenekli birleşik pazar ailesinin olasılıkları (bülten eşlemesi için). Çizgi ("1.5") → COMBO_OUTCOMES
+     * sırasıyla Maç Sonucu ve Alt/Üst; "KG" → Maç Sonucu ve Karşılıklı Gol (1/X/2 × Yok, sonra 1/X/2 × Var): bültende o da
+     * altı seçeneklidir ve 2,5 Alt/Üst'lü birleşiğe benzer; ayırt edilsin diye (kullanılmaz). Çizgi uygun değilse null.
+     */
+    static double[] comboProbs(double[][] m, String fam) {
+        double[] p = new double[6];
+        if ("KG".equals(fam)) {
+            double s = 0;
+            for (int i = 0; i <= MAX_GOALS; i++) {
+                for (int j = 0; j <= MAX_GOALS; j++) {
+                    p[(i > j ? 0 : i == j ? 1 : 2) + (i > 0 && j > 0 ? 3 : 0)] += m[i][j];
+                    s += m[i][j];
+                }
+            }
+            for (int k = 0; k < 6; k++) p[k] /= s;
+            return p;
+        }
+        java.util.Map<String, Double> f = market(m, COMBO + fam);
+        if (f == null) return null;
+        for (int k = 0; k < 6; k++) p[k] = f.get(COMBO_OUTCOMES[k]);
+        return p;
+    }
+
+    /**
      * 2.69: skor matrisini Pinnacle'ın Maç Sonucu (1, X, 2) ve 2,5 Alt/Üst adil olasılıklarına tam oturtur (yinelemeli
      * orantılı ölçekleme): bağımsız Poisson iki parametreyle üç hedefe ancak yaklaşır (özellikle beraberlik); birleşik
      * pazarda (sonuç ve toplam gol birlikte) iki kenar olasılık da piyasanınkiyle aynı olsun, hücre içi dağılım modelden.
