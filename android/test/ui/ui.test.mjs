@@ -161,6 +161,50 @@ test("2.71: kârlılık kuralı; kâr eşiği, hangi oran yanıtı ve oran tablo
   for (const x of [t, f, tv, tn, st]) assert.deepEqual(x.errors, []);
 });
 
+test("2.72: Zirve Oran'lı seçimde oranın yeri, normal oranla hüküm ve sayfa bağlantısı", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "Bugün pas.", summary: "", couponId: null };
+  s.coupons = s.coupons.filter((c) => !c.pick);
+  s.settings.dailyPick = true; s.settings.zirve = true; s.settings.pickMinProb = 0.5; s.settings.pickMinOdds = 1.25; s.settings.pickMaxLoss = 0.1;
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  const p = 0.6073;
+  s.pick = { source: "zirve", ref: "5", home: "Portekiz", away: "Danimarka", kickoff: ko, league: "UEFA Uluslar Ligi", code: "3294235", m: "KG", o: "VAR", label: "KG Var",
+    odds: 1.51, normalOdds: 1.45, p, fair: 1 / p, ev: p * 1.51 - 1, mbs: 1, stake: 0, win: 0, expected: 0, monthly: 0, candidates: 3, alternatives: [], maxLoss: 0.1 };
+  const t = boot(s);
+  const card = t.$("#pickCard").textContent;
+  // kullanıcı Bilyoner'in normal bülteninde 1,45 gördü: kart iki oranı ve normal oranla hükmü yazar
+  assert.match(card, /1,51 Zirve Oran'dır\. Bilyoner'in normal bülteninde bu seçim 1,45 görünür; 1,51 yalnızca Bilyoner'in Zirve Oran bölümünden eklenince geçerlidir\./);
+  assert.match(card, /Kuponunda 1,45 yazıyorsa beklenen −%11,9: sınırın dışında, oynama\./);
+  assert.match(card, /Zirve Oran'ı Bilyoner'de bulamıyorsan Ayarlar → Radar'dan kapat; seçimler normal oranla yapılır\./);
+  t.button("Bilyoner'de Zirve Oran sayfası").click();
+  await t.tick();
+  assert.deepEqual(t.calls.at(-1), { action: "openUrl", payload: { url: "https://www.bilyoner.com/iddaa/zirve-oran" } });
+  // normal oranla da sınırın içindeyse "oynama" denmez
+  const near = clone(s);
+  near.pick.normalOdds = 1.49;
+  const nearCard = boot(near).$("#pickCard").textContent;
+  assert.match(nearCard, /Kuponunda 1,49 yazıyorsa beklenen −%9,5\. Zirve Oran'ı/);
+  assert.doesNotMatch(nearCard, /sınırın dışında/);
+  // normal oranlı seçimde not yok
+  const plain = clone(s);
+  plain.pick.source = "iddaa"; delete plain.pick.normalOdds; plain.pick.odds = 1.45; plain.pick.ev = p * 1.45 - 1; plain.pick.skip = true;
+  const plainCard = boot(plain).$("#pickCard").textContent;
+  assert.doesNotMatch(plainCard, /Zirve Oran'dır/);
+  // oynama kartında en iyi aday Zirve ise iki oran da yazılır
+  const skip = clone(s);
+  skip.pick.skip = true; skip.pick.odds = 1.47; skip.pick.ev = p * 1.47 - 1;
+  assert.match(boot(skip).$("#pickCard").textContent, /En iyi aday: Portekiz – Danimarka · KG Var 1,47 \(Zirve Oran; normal 1,45\) · tutma %61/);
+  // Fırsatlar'daki Zirve kartında da açıklama ve bağlantı; ayarda kapatınca ne olacağı yazılı
+  const z = clone(s);
+  z.zirve = { v: 4, at: s.now, fairsAt: s.now, events: 1, offers: 1, matched: 1, evaluated: 1, play: 0, rows: [] };
+  const f = boot(z, "#firsat");
+  assert.match(f.$("#zirveCard").textContent, /Bu oranlar Bilyoner'in normal bülteninde görünmez: yalnızca Zirve Oran bölümünden kupona eklenince geçerlidir/);
+  assert.ok(f.$$("#zirveCard button").some((b) => b.textContent === "Bilyoner'de Zirve Oran sayfası"));
+  const st = boot(clone(s), "#ayarlar");
+  assert.match(st.text(), /Bilyoner'de bulamıyorsan kapat: seçimler ve listeler hemen yalnızca normal oranla yapılır/);
+  for (const x of [t, f, st]) assert.deepEqual(x.errors, []);
+});
+
 test("2.66: bugün değerli kupon yoksa yarının kuponu başlığıyla görünür", async () => {
   const s = clone(baseState);
   const nextDay = new Date(Date.parse(s.todayRun.day + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);

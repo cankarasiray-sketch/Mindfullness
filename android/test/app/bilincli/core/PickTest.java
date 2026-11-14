@@ -373,6 +373,16 @@ public class PickTest {
         // gerçekten değerli: eşik geçilirse işaretlenir
         z.put("tval", 1.62);
         assertTrue(Json.bool(Pick.choose(fairs(), zirve, cfg, 500000, NOW), "value", false));
+        // 2.72: Zirve Oran ayarı kapalıysa (kullanıcı Bilyoner'de bu oranı alamıyor) eski okumanın satırları sayılmaz:
+        // seçim, liste ve oran tablosu yalnızca normal oranla
+        cfg.zirve = false;
+        Map<String, Object> normal = Pick.choose(fairs(), zirve, cfg, 500000, NOW);
+        assertEquals("iddaa", normal.get("source"));
+        assertEquals(Pick.choose(fairs(), null, cfg, 500000, NOW), normal);
+        for (Object o : Pick.list(fairs(), zirve, cfg, 500000, NOW)) assertEquals("iddaa", Json.obj(o).get("source"));
+        assertEquals(Pick.oddsBands(fairs(), null, cfg, 500000, NOW), Pick.oddsBands(fairs(), zirve, cfg, 500000, NOW));
+        cfg.zirve = true;
+        assertEquals("zirve", Pick.choose(fairs(), zirve, cfg, 500000, NOW).get("source"));
     }
 
     @Test

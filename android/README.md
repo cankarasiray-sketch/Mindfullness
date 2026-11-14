@@ -62,6 +62,20 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Zirve Oran'lı seçimde oranın yeri ve normal oranla hüküm (2.72)
+
+- Kullanıcı sordu: günün seçimi "Portekiz – Danimarka KG Var 1,51" derken Bilyoner'de kupona eklediği oran 1,45; "oran niye
+  farklı?" 1,51 Bilyoner'in Zirve Oran (artırılmış) fiyatı, 1,45 aynı seçimin normal bülten oranıydı (kartta üstü çizili);
+  kullanıcı Zirve Oran bölümünü Bilyoner uygulamasında bulamadı. Bu oturumdan Bilyoner'e erişilemediği (ağ izni yok) için
+  bölümün güncel yeri doğrulanamadı.
+- Seçim kartı (Zirve kaynaklı seçimlerde): "1,51 Zirve Oran'dır; normal bültende 1,45 görünür; yalnızca Zirve Oran bölümünden
+  eklenince geçerlidir; kuponunda 1,45 yazıyorsa beklenen −%11,9: sınırın dışında, oynama" ve **Bilyoner'de Zirve Oran
+  sayfası** düğmesi (bilyoner.com/iddaa/zirve-oran; uygulamanın bu oranları okuduğu bültenin sayfası). Aynı açıklama ve düğme
+  Fırsatlar'daki Zirve kartında; "oynama" kartında en iyi aday Zirve ise iki oran da yazılır.
+- Ayarlar → Radar → "Bilyoner Zirve Oran'ı kontrol et" kapatılınca seçimler, tek maç listesi ve oran tablosu hemen yalnızca
+  normal oranla yapılır (Pick.singles; önce eski okumanın satırları maç başlayana kadar sayılmaya devam ediyordu); ana
+  sayfadaki Zirve uyarısı da gizlenir.
+
 ## Kârlılık kuralı, kâr eşiği ve oran tablosu (2.71)
 
 - Kullanıcı sordu: "Kârlılık açısından hangi oranda kuponları oynamalıyım, uygulamayı buna göre güncelle; amaç kârlılık, acımasız

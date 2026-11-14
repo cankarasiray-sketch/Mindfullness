@@ -518,7 +518,7 @@ function viewToday() {
       + (pass ? '<p class="small muted">Avantaj yokken oynamamak, kasayı koruyan en kârlı karardır.</p>' : "") + "</div>";
   }
   if (!run) html += pickCard(); // pas gününde yukarıda; koruma devredeyken (kayıp limiti) öneri yok
-  if (!S.demo && S.zirve && S.zirve.play > 0) {
+  if (!S.demo && S.settings.zirve && S.zirve && S.zirve.play > 0) {
     html += '<div class="card" id="zirveHome"><div class="kicker">ZİRVE ORAN</div><p>' + S.zirve.play + " Zirve Oran seçimi adil oranı geçiyor.</p>"
       + '<div class="btns"><button class="b" onclick="show(\'firsat\')">Fırsatlar\'da gör</button></div></div>';
   }
@@ -571,6 +571,7 @@ function pickBlock(x, title) {
     + '<div class="sum"><div><span>Tutma</span><b>%' + num(x.p * 100, 0) + "</b></div><div><span>Adil oran</span><b>" + odds(x.fair) + "</b></div><div><span>Beklenen</span><b class=\"" + cls(x.ev) + "\">"
     + pct(x.ev, true) + "</b></div></div>"
     + needLine(x)
+    + zirveNote(x)
     + '<p class="small"><b>Tutar:</b> ' + (x.stake ? tl(x.stake) + " → tutarsa " + tl(x.win) + " · beklenen sonuç <span class=\"" + cls(x.expected) + "\">" + tl(x.expected) + "</span>"
       : x.skip ? "<b class=\"neg\">oynama</b> — beklenen " + pct(x.ev, true) + ", sınır " + pct(-(S.settings.pickMaxLoss || 0.1), true) : "kasa boş") + "</p>"
     + (x.skip ? "" : '<div class="btns"><button class="b" onclick="pickSheet(' + i + ')">Oynadım</button></div>') + "</div>";
@@ -580,6 +581,22 @@ function needLine(x) {
   return '<p class="small need">' + (x.ev >= 0 ? '<b class="pos">Kârlı:</b> oran kâr eşiğinin (' + odds(x.fair) + ") üstünde."
     : "<b>Kâr eşiği " + odds(x.fair) + ":</b> bu seçim ancak " + odds(x.fair) + " ve üstü oranda kâr bırakır; şimdiki oran " + odds(x.odds) + ", bu yüzden "
       + (x.skip ? "oynanmaz." : "kârlı değil, yalnızca en az kaybettiren seçenek.")) + "</p>";
+}
+/** Bilyoner'in artırılmış oranlarının (Zirve Oran) sayfası: uygulama bu oranları buradaki bültenden okur. */
+var ZIRVE_PAGE = "https://www.bilyoner.com/iddaa/zirve-oran";
+/**
+ * 2.72: Zirve Oran'lı seçimde oranın nereden alındığı ve normal oranla hüküm. Kullanıcı Bilyoner'de normal bültenden eklediği
+ * kuponda düşük (normal) oranı görüp "oran niye farklı" diye sordu: artırılmış oran yalnızca Zirve Oran bölümünden eklenince
+ * geçerli; normal oranla seçim çoğu zaman sınırın dışında kalır.
+ */
+function zirveNote(x) {
+  if (x.source !== "zirve" || !x.normalOdds) return "";
+  var evN = x.p * x.normalOdds - 1, lim = S.settings.pickMaxLoss || 0.1;
+  return '<p class="small zirve-note"><b>' + odds(x.odds) + " Zirve Oran'dır.</b> Bilyoner'in normal bülteninde bu seçim " + odds(x.normalOdds) + " görünür; " + odds(x.odds)
+    + " yalnızca Bilyoner'in Zirve Oran bölümünden eklenince geçerlidir. Kuponunda " + odds(x.normalOdds) + " yazıyorsa beklenen " + pctNw(evN, true)
+    + (evN >= -lim - 1e-9 ? "." : ": sınırın dışında, <b class=\"neg\">oynama</b>.")
+    + " Zirve Oran'ı Bilyoner'de bulamıyorsan Ayarlar → Radar'dan kapat; seçimler normal oranla yapılır.</p>"
+    + '<div class="btns"><button class="b ghost" onclick="act(\'openUrl\',{url:ZIRVE_PAGE},true)">Bilyoner\'de Zirve Oran sayfası</button></div>';
 }
 /** 2.68: bugünün seçimi (ya da "oynama"sı) ve yanında yarının seçimi. */
 function pickCard() {
@@ -673,7 +690,8 @@ function pickToday() {
     return '<div class="card" id="pickCard"><div class="kicker">' + (p.ahead ? "YARININ SEÇİMİ · OYNAMA" : "GÜNÜN SEÇİMİ · BUGÜN OYNAMA") + "</div>" // 2.67
       + '<p>' + (p.ahead ? "Bugün aday yok. Yarın t" : "T") + 'ek maç oynanabilen ve en az %' + num(S.settings.pickMinProb * 100, 0) + " tutan " + p.candidates + " seçimin en iyisi bile <b class=\"neg\">" + pct(p.ev, true)
       + "</b> (sınır " + pct(-lim, true) + "). Kâr için bugün oynamamak en iyisi; sanal takip de bugün bahis saymaz.</p>"
-      + '<p class="small muted">En iyi aday: ' + esc(p.home) + " – " + esc(p.away) + " · " + esc(p.label) + " " + odds(p.odds) + " · tutma %" + num(p.p * 100, 0)
+      + '<p class="small muted">En iyi aday: ' + esc(p.home) + " – " + esc(p.away) + " · " + esc(p.label) + " " + odds(p.odds)
+      + (p.source === "zirve" ? " (Zirve Oran" + (p.normalOdds ? "; normal " + odds(p.normalOdds) : "") + ")" : "") + " · tutma %" + num(p.p * 100, 0)
       + " · kâr için oran en az " + odds(p.fair) + " olmalıydı</p>"
       + '<div class="btns"><button class="b ghost" onclick="show(\'firsat\')">Tüm tek maç fırsatları</button></div></div>';
   }
@@ -1180,7 +1198,8 @@ function zirveCard() {
       + shown.map(row).join("")
       + (rest.length ? '<details class="info"><summary class="small">' + rest.length + " seçim daha</summary>" + rest.map(row).join("") + "</details>" : "") + "</div>";
   });
-  html += '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')"' + (Z.busy ? " disabled" : "") + ">Yeniden oku</button></div></div>";
+  html += '<p class="small muted">Bu oranlar Bilyoner\'in normal bülteninde görünmez: yalnızca Zirve Oran bölümünden kupona eklenince geçerlidir. Bilyoner\'de bulamıyorsan Ayarlar → Radar\'dan kapat; seçimler normal oranla yapılır.</p>'
+    + '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')"' + (Z.busy ? " disabled" : "") + '>Yeniden oku</button><button class="b ghost" onclick="act(\'openUrl\',{url:ZIRVE_PAGE},true)">Bilyoner\'de Zirve Oran sayfası</button></div></div>';
   return html;
 }
 function zirveSheet(i) {
@@ -1514,7 +1533,8 @@ function viewSettings() {
     + '<p class="small muted">İlk 11\'ler maçtan ~60 dk önce açıklanır; Pinnacle hemen tepki verir, iddaa çoğu zaman gecikir. Her maç grubundan ~45 dk önce yalnızca o saatte oynayan ligler taranır; '
     + "avantaj çıkarsa bugünkü kuponlara dokunmadan ek kupon önerilir ve bildirilir. Kredi: her lig günde bir tarama daha; kredi yetmezse plan bunu ilk kapatır (Karşılıklı Gol kısılmaz).</p>"
     + '<label class="check"><input type="checkbox" id="sZirve"' + (st.zirve ? " checked" : "") + ">Bilyoner Zirve Oran'ı kontrol et</label>"
-    + '<p class="small muted">Bilyoner\'in artırılmış oranları herkese açık bültenden okunur (hesap gerekmez, kredi harcamaz) ve adil oranla karşılaştırılır; geçen olursa bildirilir.</p></div>';
+    + '<p class="small muted">Bilyoner\'in artırılmış oranları herkese açık bültenden okunur (hesap gerekmez, kredi harcamaz) ve adil oranla karşılaştırılır; geçen olursa bildirilir. '
+    + "Günün seçimi ve tek maç listesi artırılmış oran daha iyiyse onu kullanır; bu oran yalnızca Bilyoner'in Zirve Oran bölümünden eklenince geçerlidir. Bilyoner'de bulamıyorsan kapat: seçimler ve listeler hemen yalnızca normal oranla yapılır.</p></div>";
   html += '<div class="card" id="pickSettings"><h2>Tek maç</h2><label class="check"><input type="checkbox" id="sSingles"' + (st.singlesOnly ? " checked" : "") + ">Yalnızca tek maç kupon (kombine yok)</label>"
     + '<p class="small muted">Değerli seçimler de yalnızca tek oynanabilen (MBS 1) maçlardan, tekli kupon olarak önerilir. Tutma oranı artar; demo simülasyonunda aylık büyüme +%6,7\'den +%5,4\'e indi (değerli bacakların birleşimi ve MBS 2–3 maçlar dışarıda kalır).</p>'
     + '<label class="check"><input type="checkbox" id="sPick"' + (st.dailyPick ? " checked" : "") + ">Her gün bir seçim öner (günün seçimi)</label>"

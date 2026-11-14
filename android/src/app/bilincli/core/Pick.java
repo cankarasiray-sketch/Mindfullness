@@ -177,7 +177,9 @@ public final class Pick {
                 best.put(Json.str(r, "ref") + "|" + Json.str(s, "m") + "|" + Json.str(s, "o"), e);
             }
         }
-        if (zirve != null) {
+        // 2.72: Zirve Oran ayarı kapalıysa (kullanıcı Bilyoner'de bu oranı alamıyorsa) eski okumanın satırları da sayılmaz:
+        // seçimler, liste ve tablolar yalnızca normal oranla
+        if (zirve != null && cfg.zirve) {
             for (Object o : Json.arr(zirve.get("rows"))) {
                 Map<String, Object> z = Json.obj(o);
                 String st = Json.str(z, "status");
