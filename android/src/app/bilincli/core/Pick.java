@@ -177,9 +177,10 @@ public final class Pick {
                 best.put(Json.str(r, "ref") + "|" + Json.str(s, "m") + "|" + Json.str(s, "o"), e);
             }
         }
-        // 2.72: Zirve Oran ayarı kapalıysa (kullanıcı Bilyoner'de bu oranı alamıyorsa) eski okumanın satırları da sayılmaz:
-        // seçimler, liste ve tablolar yalnızca normal oranla
-        if (zirve != null && cfg.zirve) {
+        // 2.72–2.73: Zirve Oran yalnızca kullanıcı açtıysa sayılır (Ayarlar: "Zirve Oran'ı seçimlerde kullan"; varsayılan kapalı):
+        // Bilyoner'de Zirve Oran bölümü görünmüyorken de veri artırılmış oranı taşıyor, o oran kupona eklenemiyor. Kapalıyken
+        // (ya da Zirve kontrolü kapalıyken) seçimler, liste ve tablolar yalnızca normal oranla; eski okumanın satırları da sayılmaz
+        if (zirve != null && cfg.zirve && cfg.zirvePicks) {
             for (Object o : Json.arr(zirve.get("rows"))) {
                 Map<String, Object> z = Json.obj(o);
                 String st = Json.str(z, "status");

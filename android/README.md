@@ -62,6 +62,16 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Zirve Oran seçimlerde varsayılan kapalı (2.73)
+
+- Kullanıcı Zirve Oran sayfası bağlantısını açtı: Bilyoner uygulaması normal bülteni gösterdi, Zirve Oran bölümü o an yoktu;
+  günün seçimindeki 1,51 (Zirve) kupona eklenemiyordu, kupon normal oranı (1,45) veriyordu. Bilyoner'in verisi (tabType 160)
+  artırılmış oranı (`tval`) kampanya görünmezken de taşıyor ve bölümün açık olup olmadığı okunamıyor.
+- Yeni ayar `zirvePicks` (Ayarlar → Radar → "Zirve Oran'ı seçimlerde kullan"), varsayılan **kapalı**: günün seçimi, tek maç
+  listesi, oran tablosu ve beraberlik listesi yalnızca normal bülten oranıyla (Pick.singles). Alınamayan oranla öneri yapılmaz.
+  Zirve kartı ve "adil oranı geçti" bildirimi sürer; kart, seçimlerin bu oranları kullanıp kullanmadığını yazar. Kullanıcı
+  Bilyoner'de Zirve Oran bölümünü gördüğü günlerde açar (2.72'deki iki oranlı not ve sayfa düğmesi o zaman görünür).
+
 ## Zirve Oran'lı seçimde oranın yeri ve normal oranla hüküm (2.72)
 
 - Kullanıcı sordu: günün seçimi "Portekiz – Danimarka KG Var 1,51" derken Bilyoner'de kupona eklediği oran 1,45; "oran niye

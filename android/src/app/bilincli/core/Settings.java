@@ -235,6 +235,13 @@ public final class Settings {
      * ve son taramanın adil oranıyla karşılaştırılır; değerli olan bildirilir.
      */
     public boolean zirve = true;
+    /**
+     * 2.73: Zirve Oran günün seçiminde, tek maç listesinde ve oran tablosunda kullanılsın mı. Varsayılan kapalı: kullanıcı
+     * günün seçimindeki 1,51'i (Zirve) Bilyoner'de bulamadı; Zirve Oran bölümü o an uygulamada yoktu, kuponda normal oran (1,45)
+     * çıkıyordu. Bilyoner'in verisi artırılmış oranı kampanya görünmezken de taşıyor ve bölümün açık olup olmadığı okunamıyor;
+     * alınamayan oranla öneri yapılmaz. Zirve kartı ve "adil oranı geçti" bildirimi (zirve ayarı) bundan bağımsız sürer.
+     */
+    public boolean zirvePicks = false;
     /** Basketbol handikabı (2.6): Pinnacle'ın handikap fiyatı iddaa'nın handikap çizgisine çevrilir; basketbol taramasına +1 kredi. */
     public boolean basketHandicap = true;
     /**
@@ -412,6 +419,7 @@ public final class Settings {
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
         m.put("zirve", zirve);
+        m.put("zirvePicks", zirvePicks);
         m.put("basketHandicap", basketHandicap);
         m.put("dailyPick", dailyPick);
         m.put("aheadCoupon", aheadCoupon);
@@ -470,6 +478,7 @@ public final class Settings {
         s.lineupScans = Json.bool(m, "lineupScans", s.lineupScans);
         s.quietNights = Json.bool(m, "quietNights", s.quietNights);
         s.zirve = Json.bool(m, "zirve", s.zirve);
+        s.zirvePicks = Json.bool(m, "zirvePicks", s.zirvePicks);
         s.basketHandicap = Json.bool(m, "basketHandicap", s.basketHandicap);
         s.dailyPick = Json.bool(m, "dailyPick", s.dailyPick);
         s.aheadCoupon = Json.bool(m, "aheadCoupon", s.aheadCoupon);

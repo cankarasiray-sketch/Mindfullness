@@ -1198,7 +1198,8 @@ function zirveCard() {
       + shown.map(row).join("")
       + (rest.length ? '<details class="info"><summary class="small">' + rest.length + " seçim daha</summary>" + rest.map(row).join("") + "</details>" : "") + "</div>";
   });
-  html += '<p class="small muted">Bu oranlar Bilyoner\'in normal bülteninde görünmez: yalnızca Zirve Oran bölümünden kupona eklenince geçerlidir. Bilyoner\'de bulamıyorsan Ayarlar → Radar\'dan kapat; seçimler normal oranla yapılır.</p>'
+  html += '<p class="small muted">Bu oranlar Bilyoner\'in normal bülteninde görünmez: yalnızca Bilyoner\'de Zirve Oran bölümü varken, oradan kupona eklenince geçerlidir (bölüm görünmüyorsa kupon normal oranı verir). '
+    + (S.settings.zirvePicks ? "Günün seçimi ve tek maç listesi bu oranları kullanıyor (Ayarlar → Radar)." : "Günün seçimi ve tek maç listesi bu oranları kullanmıyor: yalnızca normal oran (Ayarlar → Radar'dan açılır).") + "</p>"
     + '<div class="btns"><button class="b ghost" onclick="act(\'zirveRefresh\')"' + (Z.busy ? " disabled" : "") + '>Yeniden oku</button><button class="b ghost" onclick="act(\'openUrl\',{url:ZIRVE_PAGE},true)">Bilyoner\'de Zirve Oran sayfası</button></div></div>';
   return html;
 }
@@ -1533,8 +1534,10 @@ function viewSettings() {
     + '<p class="small muted">İlk 11\'ler maçtan ~60 dk önce açıklanır; Pinnacle hemen tepki verir, iddaa çoğu zaman gecikir. Her maç grubundan ~45 dk önce yalnızca o saatte oynayan ligler taranır; '
     + "avantaj çıkarsa bugünkü kuponlara dokunmadan ek kupon önerilir ve bildirilir. Kredi: her lig günde bir tarama daha; kredi yetmezse plan bunu ilk kapatır (Karşılıklı Gol kısılmaz).</p>"
     + '<label class="check"><input type="checkbox" id="sZirve"' + (st.zirve ? " checked" : "") + ">Bilyoner Zirve Oran'ı kontrol et</label>"
-    + '<p class="small muted">Bilyoner\'in artırılmış oranları herkese açık bültenden okunur (hesap gerekmez, kredi harcamaz) ve adil oranla karşılaştırılır; geçen olursa bildirilir. '
-    + "Günün seçimi ve tek maç listesi artırılmış oran daha iyiyse onu kullanır; bu oran yalnızca Bilyoner'in Zirve Oran bölümünden eklenince geçerlidir. Bilyoner'de bulamıyorsan kapat: seçimler ve listeler hemen yalnızca normal oranla yapılır.</p></div>";
+    + '<p class="small muted">Bilyoner\'in artırılmış oranları herkese açık bültenden okunur (hesap gerekmez, kredi harcamaz) ve adil oranla karşılaştırılır; geçen olursa bildirilir.</p>'
+    + '<label class="check"><input type="checkbox" id="sZirvePicks"' + (st.zirvePicks ? " checked" : "") + ">Zirve Oran'ı seçimlerde kullan (günün seçimi, tek maç listesi, oran tablosu)</label>"
+    + '<p class="small muted">Kapalıyken (varsayılan) seçimler yalnızca normal bülten oranıyla yapılır. Bilyoner\'in verisi artırılmış oranı, uygulamasında Zirve Oran bölümü görünmediği zaman da taşıyor; '
+    + "o zaman bu oran kupona eklenemez (kupon normal oranı verir). Yalnızca Bilyoner'de Zirve Oran bölümünü gördüğün günlerde aç; açıkken seçim kartı iki oranı ve normal oranla hükmü de yazar.</p></div>";
   html += '<div class="card" id="pickSettings"><h2>Tek maç</h2><label class="check"><input type="checkbox" id="sSingles"' + (st.singlesOnly ? " checked" : "") + ">Yalnızca tek maç kupon (kombine yok)</label>"
     + '<p class="small muted">Değerli seçimler de yalnızca tek oynanabilen (MBS 1) maçlardan, tekli kupon olarak önerilir. Tutma oranı artar; demo simülasyonunda aylık büyüme +%6,7\'den +%5,4\'e indi (değerli bacakların birleşimi ve MBS 2–3 maçlar dışarıda kalır).</p>'
     + '<label class="check"><input type="checkbox" id="sPick"' + (st.dailyPick ? " checked" : "") + ">Her gün bir seçim öner (günün seçimi)</label>"
@@ -1658,8 +1661,9 @@ function collectSettings() {
   var lu = document.getElementById("sLineup"), qn = document.getElementById("sQuiet");
   st.lineupScans = !!(lu && lu.checked);
   st.quietNights = !!(qn && qn.checked);
-  var zv = document.getElementById("sZirve");
+  var zv = document.getElementById("sZirve"), zp = document.getElementById("sZirvePicks");
   st.zirve = !!(zv && zv.checked);
+  st.zirvePicks = !!(zp && zp.checked); // 2.73
   var pk = document.getElementById("sPick");
   if (pk) {
     st.dailyPick = pk.checked;

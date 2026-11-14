@@ -198,10 +198,21 @@ test("2.72: Zirve Oran'lı seçimde oranın yeri, normal oranla hüküm ve sayfa
   const z = clone(s);
   z.zirve = { v: 4, at: s.now, fairsAt: s.now, events: 1, offers: 1, matched: 1, evaluated: 1, play: 0, rows: [] };
   const f = boot(z, "#firsat");
-  assert.match(f.$("#zirveCard").textContent, /Bu oranlar Bilyoner'in normal bülteninde görünmez: yalnızca Zirve Oran bölümünden kupona eklenince geçerlidir/);
+  assert.match(f.$("#zirveCard").textContent, /Bu oranlar Bilyoner'in normal bülteninde görünmez: yalnızca Bilyoner'de Zirve Oran bölümü varken, oradan kupona eklenince geçerlidir \(bölüm görünmüyorsa kupon normal oranı verir\)/);
+  assert.match(f.$("#zirveCard").textContent, /Günün seçimi ve tek maç listesi bu oranları kullanmıyor: yalnızca normal oran/); // 2.73 varsayılanı
   assert.ok(f.$$("#zirveCard button").some((b) => b.textContent === "Bilyoner'de Zirve Oran sayfası"));
+  const on = clone(z);
+  on.settings.zirvePicks = true;
+  assert.match(boot(on, "#firsat").$("#zirveCard").textContent, /Günün seçimi ve tek maç listesi bu oranları kullanıyor/);
+  // 2.73: Zirve Oran seçimlerde varsayılan kapalı; ayardan açılır ve kaydedilir
   const st = boot(clone(s), "#ayarlar");
-  assert.match(st.text(), /Bilyoner'de bulamıyorsan kapat: seçimler ve listeler hemen yalnızca normal oranla yapılır/);
+  assert.equal(st.$("#sZirvePicks").checked, false);
+  assert.match(st.text(), /Kapalıyken \(varsayılan\) seçimler yalnızca normal bülten oranıyla yapılır/);
+  st.$("#sZirvePicks").checked = true;
+  st.button("Ayarları kaydet").click();
+  await st.tick();
+  assert.equal(st.calls.at(-1).payload.settings.zirvePicks, true);
+  assert.equal(st.calls.at(-1).payload.settings.zirve, true);
   for (const x of [t, f, st]) assert.deepEqual(x.errors, []);
 });
 

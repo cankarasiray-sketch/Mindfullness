@@ -72,6 +72,7 @@ public class PickTest {
         s.pickMinOdds = 1.18;
         s.pickMaxLoss = 0.15;
         s.aheadCoupon = false;
+        s.zirvePicks = true; // 2.73 öncesi: Zirve Oran seçimlerde sayılırdı
         return s;
     }
 
@@ -373,8 +374,20 @@ public class PickTest {
         // gerçekten değerli: eşik geçilirse işaretlenir
         z.put("tval", 1.62);
         assertTrue(Json.bool(Pick.choose(fairs(), zirve, cfg, 500000, NOW), "value", false));
-        // 2.72: Zirve Oran ayarı kapalıysa (kullanıcı Bilyoner'de bu oranı alamıyor) eski okumanın satırları sayılmaz:
-        // seçim, liste ve oran tablosu yalnızca normal oranla
+        // 2.73: varsayılan: Zirve Oran seçimlerde sayılmaz (kullanıcı Bilyoner'de Zirve bölümünü bulamadı; kupon normal oranı veriyor)
+        Settings fresh = new Settings();
+        assertTrue(fresh.zirve);
+        assertFalse(fresh.zirvePicks);
+        assertFalse(Settings.fromMap(fresh.toMap()).zirvePicks);
+        Map<String, Object> before = legacy().toMap();
+        before.remove("zirvePicks"); // 2.72 ve öncesinin kaydı: alan yok -> kapalı
+        assertFalse(Settings.fromMap(before).zirvePicks);
+        assertTrue(Settings.fromMap(legacy().toMap()).zirvePicks); // açılan ayar korunur
+        cfg.zirvePicks = false;
+        assertEquals("iddaa", Pick.choose(fairs(), zirve, cfg, 500000, NOW).get("source"));
+        assertEquals(Pick.choose(fairs(), null, cfg, 500000, NOW), Pick.choose(fairs(), zirve, cfg, 500000, NOW));
+        cfg.zirvePicks = true;
+        // 2.72: Zirve Oran kontrolü kapalıysa eski okumanın satırları da sayılmaz: seçim, liste ve oran tablosu yalnızca normal oranla
         cfg.zirve = false;
         Map<String, Object> normal = Pick.choose(fairs(), zirve, cfg, 500000, NOW);
         assertEquals("iddaa", normal.get("source"));
