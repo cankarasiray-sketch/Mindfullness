@@ -93,6 +93,7 @@ font-size:14px;opacity:0;transform:translateY(10px);transition:all .2s;z-index:2
 .now{font-size:12.5px;margin-top:4px}
 .st{display:inline-block;white-space:nowrap;padding:0 7px;border-radius:999px;font-size:11.5px;font-weight:650;background:var(--chip);color:var(--muted)}
 .st.ok{background:var(--accent-soft);color:var(--accent)}.st.bad{background:var(--bad-soft);color:var(--bad)}
+.odds-row{display:flex;justify-content:space-between;gap:8px;padding:6px 0 0;border-top:1px solid var(--line);font-size:13.5px}.odds-row.on{font-weight:650}.odds-best{padding:0 0 6px}.nw{white-space:nowrap}
 .fresh{font-size:12px;color:var(--muted);margin-top:2px}
 .fresh.stale{color:var(--warn);font-weight:600}
 .prof{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0}
@@ -566,28 +567,93 @@ function pickBlock(x, title) {
   return '<div class="pick-block">' + (title ? '<div class="kicker" style="margin-top:10px">' + title + "</div>" : "")
     + '<div class="small muted">' + esc(dm(x.kickoff)) + " " + esc(hm(x.kickoff)) + (x.league ? " · " + esc(x.league) : "") + (x.code ? " · kod " + esc(x.code) : "") + "</div>"
     + '<div class="teams" style="font-weight:600;font-size:17px">' + esc(x.home) + " – " + esc(x.away) + "</div>"
-    + '<div class="l2"><span>' + pickOdds(x) + "</span></div>"
+    + '<div class="l2"><span>' + pickOdds(x) + (x.ev >= 0 ? ' <span class="st ok">kârlı</span>' : ' <span class="st bad">kâr yok</span>') + "</span></div>" // 2.71
     + '<div class="sum"><div><span>Tutma</span><b>%' + num(x.p * 100, 0) + "</b></div><div><span>Adil oran</span><b>" + odds(x.fair) + "</b></div><div><span>Beklenen</span><b class=\"" + cls(x.ev) + "\">"
     + pct(x.ev, true) + "</b></div></div>"
+    + needLine(x)
     + '<p class="small"><b>Tutar:</b> ' + (x.stake ? tl(x.stake) + " → tutarsa " + tl(x.win) + " · beklenen sonuç <span class=\"" + cls(x.expected) + "\">" + tl(x.expected) + "</span>"
-      : x.skip ? "<b class=\"neg\">oynama</b> — beklenen " + pct(x.ev, true) + ", sınır " + pct(-(S.settings.pickMaxLoss || 0.14), true) : "kasa boş") + "</p>"
+      : x.skip ? "<b class=\"neg\">oynama</b> — beklenen " + pct(x.ev, true) + ", sınır " + pct(-(S.settings.pickMaxLoss || 0.1), true) : "kasa boş") + "</p>"
     + (x.skip ? "" : '<div class="btns"><button class="b" onclick="pickSheet(' + i + ')">Oynadım</button></div>') + "</div>";
+}
+/** 2.71 kâr eşiği: seçim ancak adil oranın üstünde kâr bırakır ("hangi oranda oynamalıyım"ın seçim başına yanıtı). */
+function needLine(x) {
+  return '<p class="small need">' + (x.ev >= 0 ? '<b class="pos">Kârlı:</b> oran kâr eşiğinin (' + odds(x.fair) + ") üstünde."
+    : "<b>Kâr eşiği " + odds(x.fair) + ":</b> bu seçim ancak " + odds(x.fair) + " ve üstü oranda kâr bırakır; şimdiki oran " + odds(x.odds) + ", bu yüzden "
+      + (x.skip ? "oynanmaz." : "kârlı değil, yalnızca en az kaybettiren seçenek.")) + "</p>";
 }
 /** 2.68: bugünün seçimi (ya da "oynama"sı) ve yanında yarının seçimi. */
 function pickCard() {
   if (S.demo || !S.settings.dailyPick) return "";
   var t = S.pick && S.pick.tomorrow, played = todayPick();
   if (t && played && played.legs[0].bookRef === t.ref) t = null; // yarınınki oynandı: "oynandı" kartında
-  return pickToday() + (t ? pickTomorrowCard(t) : "");
+  return pickToday() + (t ? pickTomorrowCard(t) : "") + oddsAnswerCard();
+}
+// ---- Oran tablosu (2.71): "kârlılık açısından hangi oranda oynamalıyım" -----------------------------
+/** Oran aralığı metni: "1,25–1,40"; açık uçlu son bant "3,00+". */
+function oddsRange(b) { return odds(b.from) + (b.to ? "–" + odds(b.to) : "+"); }
+/**
+ * Oran tablosunun özeti: dolu bantlar, en iyi bant, bütün seçimlerin ortalama beklenen değeri. En iyi bant: kârlı seçimi olan
+ * bantlar (kâr gizlenmez); yoksa en iyi seçimi tek maç kuralındaki en az tutma olasılığını sağlayan bantlar; o da yoksa hepsi
+ * arasında denge puanı en yüksek olan. Yüksek oranlı bantların seyrek tutan seçimleri tabloda bilgi olarak durur ("kural dışı").
+ */
+function oddsSummary() {
+  var B = (S.oddsBands || []).filter(function (b) { return b.total > 0 && b.bestEv != null; });
+  if (!B.length) return null;
+  var win = B.filter(function (b) { return b.bestEv >= 0; }), ok = B.filter(function (b) { return b.bestOk; }), pool = win.length ? win : ok.length ? ok : B;
+  var best = pool.reduce(function (a, b) { return b.bestScore > a.bestScore ? b : a; }, pool[0]);
+  var n = 0, sum = 0, playable = 0, value = 0;
+  B.forEach(function (b) { if (b.n && b.avgEv != null) { n += b.n; sum += b.avgEv * b.n; } playable += b.playable || 0; value += b.value || 0; });
+  return {rows: B, best: best, avg: n ? sum / n : null, n: n, playable: playable, value: value};
+}
+/** Bandın en iyi seçimi: "Everton – Dep 3 · MS 1 1,70 · tutma %54". */
+function oddsBest(b) {
+  return esc(b.label || "") + " " + odds(b.bestOdds) + " · tutma %" + num(b.bestP * 100, 0) + (b.model ? " · model" : "");
+}
+/** Yüzde satır sonunda işaretinden ayrılmasın. */
+function pctNw(x, signed) { return '<span class="nw">' + pct(x, signed) + "</span>"; }
+/**
+ * Bugün ekranı: hangi oran aralığında kâr (ya da en az kayıp) var; ayrıntı Fırsatlar'daki oran tablosunda. Tablo Fırsatlar
+ * penceresini (önümüzdeki 1–3 gün) kapsar: en iyi seçim yarının maçı da olabilir.
+ */
+function oddsAnswerCard() {
+  var o = oddsSummary();
+  if (!o) return "";
+  var lim = S.settings.pickMaxLoss || 0.1, best = o.best, floor = "%" + num((S.settings.pickMinProb || 0.5) * 100, 0);
+  return '<div class="card" id="oddsAnswer"><div class="kicker">HANGİ ORAN? · ÖNÜMÜZDEKİ ' + esc(oppText().toUpperCase()) + "</div><p>"
+    + (best.bestEv >= 0 ? "<b class=\"pos\">Kârlı seçim var:</b> " + o.value + " seçimde oran adil oranı geçiyor; en iyisi <b>" + oddsRange(best) + "</b> aralığında (" + pctNw(best.bestEv, true) + ")."
+      : "<b>Şu an hiçbir oran aralığı kârlı değil.</b> " + (o.avg != null ? "İddaa'nın ortalama kesintisi " + pctNw(o.avg, true) + " (" + o.n + " tek maç seçimi). " : "")
+        + "En az kaybettiren aralık <b>" + oddsRange(best) + "</b> (en iyi seçim " + pctNw(best.bestEv, true) + ").")
+    + '</p><p class="small">' + oddsBest(best) + "</p>"
+    + '<p class="small muted">' + (best.bestEv >= 0 ? "" : o.playable ? "Kuralın içinde (en az " + floor + " tutma, kayıp en fazla " + pct(lim) + ") " + o.playable + " seçim var: kâr bırakmaz, en az kaybettirenler bunlar. "
+      : "Kuralın içinde (en az " + floor + " tutma, kayıp en fazla " + pct(lim) + ") seçim yok: şu an en kârlı karar oynamamak. ")
+    + "Kâr oranın büyüklüğünden değil, adil oranı geçmesinden gelir: her seçimin kâr eşiği kendi adil oranıdır"
+    + (o.avg != null && o.avg < 0 ? "; kombinede her maç kesintisini çarpar (2 maç ≈ " + pctNw(Math.pow(1 + o.avg, 2) - 1, true) + ", 3 maç ≈ " + pctNw(Math.pow(1 + o.avg, 3) - 1, true) + ")" : "")
+    + '.</p><div class="btns"><button class="b ghost" onclick="show(\'firsat\')">Oran tablosu</button></div></div>';
+}
+/** Fırsatlar: oran aralığına göre iddaa'nın kesintisi (ortalama beklenen değer) ve aralığın en iyi seçimi. */
+function oddsBandsHtml() {
+  var o = oddsSummary();
+  if (!o) return "";
+  return '<div class="odds-bands" id="oddsBands"><div class="kicker" style="margin-top:6px">ORAN TABLOSU · HANGİ ORANDA KÂR VAR?</div>' + o.rows.map(function (b) {
+    var on = b === o.best;
+    return '<div class="odds-row' + (on ? " on" : "") + '"><span>' + oddsRange(b) + ' <span class="muted">· ' + b.total + " seçim</span>"
+      + (on ? ' <span class="st ' + (b.bestEv >= 0 ? "ok\">kârlı" : "\">en az kayıp") + "</span>" : "") + '</span><span class="nw">'
+      + (b.avgEv != null ? '<span class="muted">ort.</span> <span class="' + cls(b.avgEv) + '">' + pct(b.avgEv, true) + "</span> · " : "")
+      + '<span class="muted">en iyi</span> <b class="' + cls(b.bestEv) + '">' + pct(b.bestEv, true) + "</b></span></div>"
+      + '<div class="small muted odds-best">' + oddsBest(b) + (b.bestOk ? "" : " · kural dışı (seyrek tutar)") + "</div>";
+  }).join("")
+    + '<p class="small muted">Önümüzdeki ' + oppText() + ' içinde tek oynanabilen, en az %20 olası seçimlerde oran aralığına göre: <b>ort.</b> iddaa\'nın o aralıktaki ortalama kesintisi (ortalama beklenen değer), '
+    + "<b>en iyi</b> aralığın en iyi seçimi (altında). Kâr yalnızca artı (yeşil) değerde vardır; hepsi eksiyse hiçbir oran aralığı kârlı değildir, işaretli aralık kurala uyanlar içinde en az kaybettirendir. "
+    + "Düşük oran güvenli demek değildir: %70 tutan seçim ancak 1,43 ve üstünde, %60 tutan 1,67 ve üstünde, %50 tutan 2,00 ve üstünde kâr bırakır.</p></div>";
 }
 function pickTomorrowCard(t) {
   if (t.skip) return '<div class="card" id="pickTomorrow"><div class="kicker">YARININ SEÇİMİ · OYNAMA</div><p class="small">Yarın da kurala uyan seçim yok: en iyi aday '
     + esc(t.home) + " – " + esc(t.away) + " · " + esc(t.label) + " " + odds(t.odds) + " · tutma %" + num(t.p * 100, 0) + ' · <b class="neg">' + pct(t.ev, true) + "</b> (sınır "
-    + pct(-(S.settings.pickMaxLoss || 0.14), true) + ").</p></div>";
+    + pct(-(S.settings.pickMaxLoss || 0.1), true) + ").</p></div>";
   return '<div class="card" id="pickTomorrow"><div class="kicker">YARININ SEÇİMİ · TEK MAÇ' + (t.value ? " · DEĞERLİ" : "") + "</div>"
     + pickBlock(t, "")
     + '<p class="small muted">Yarının maçlarından (sonraki 24 saat), aynı kurallarla: en az %' + num(S.settings.pickMinProb * 100, 0) + " tutma, oran "
-    + odds(S.settings.pickMinOdds || 1.25) + "+, beklenen kayıp en fazla %" + num((S.settings.pickMaxLoss || 0.14) * 100, 0) + ". Oranlar maça kadar değişebilir.</p></div>";
+    + odds(S.settings.pickMinOdds || 1.25) + "+, beklenen kayıp en fazla %" + num((S.settings.pickMaxLoss || 0.1) * 100, 0) + ". Oranlar maça kadar değişebilir.</p></div>";
 }
 function pickToday() {
   var p = S.pick, played = todayPick(), high = S.settings.pickHighProb || 0.7;
@@ -602,17 +668,18 @@ function pickToday() {
     return '<div class="small muted">' + esc(dm(a.kickoff)) + " " + esc(hm(a.kickoff)) + " " + esc(a.home) + " – " + esc(a.away) + " · " + esc(a.label) + " " + odds(a.odds)
       + (a.source === "zirve" ? " (Zirve)" : "") + (a.model ? " (model)" : "") + " · tutma %" + num(a.p * 100, 0) + " · " + pct(a.ev, true) + "</div>";
   }).join("");
-  var lim = S.settings.pickMaxLoss || 0.14;
+  var lim = S.settings.pickMaxLoss || 0.1;
   if (p.skip) {
     return '<div class="card" id="pickCard"><div class="kicker">' + (p.ahead ? "YARININ SEÇİMİ · OYNAMA" : "GÜNÜN SEÇİMİ · BUGÜN OYNAMA") + "</div>" // 2.67
       + '<p>' + (p.ahead ? "Bugün aday yok. Yarın t" : "T") + 'ek maç oynanabilen ve en az %' + num(S.settings.pickMinProb * 100, 0) + " tutan " + p.candidates + " seçimin en iyisi bile <b class=\"neg\">" + pct(p.ev, true)
       + "</b> (sınır " + pct(-lim, true) + "). Kâr için bugün oynamamak en iyisi; sanal takip de bugün bahis saymaz.</p>"
-      + '<p class="small muted">En iyi aday: ' + esc(p.home) + " – " + esc(p.away) + " · " + esc(p.label) + " " + odds(p.odds) + " · tutma %" + num(p.p * 100, 0) + "</p>"
+      + '<p class="small muted">En iyi aday: ' + esc(p.home) + " – " + esc(p.away) + " · " + esc(p.label) + " " + odds(p.odds) + " · tutma %" + num(p.p * 100, 0)
+      + " · kâr için oran en az " + odds(p.fair) + " olmalıydı</p>"
       + '<div class="btns"><button class="b ghost" onclick="show(\'firsat\')">Tüm tek maç fırsatları</button></div></div>';
   }
   return '<div class="card" id="pickCard"><div class="kicker">' + (p.ahead ? "YARININ SEÇİMİ" : "GÜNÜN SEÇİMİ") + " · TEK MAÇ" + (p.isHigh ? " · %" + num(high * 100, 0) + "+" : "") + (p.value ? " · DEĞERLİ" : "") + "</div>"
     + (p.ahead ? '<p class="small">Bugün kurala uyan seçim yok (en az %' + num(S.settings.pickMinProb * 100, 0) + " tutma, oran " + odds(S.settings.pickMinOdds || 1.25)
-      + "+, beklenen kayıp en fazla %" + num((S.settings.pickMaxLoss || 0.14) * 100, 0) + "); bu seçim yarının maçlarından. Oranlar maça kadar değişebilir.</p>" : "") // 2.67
+      + "+, beklenen kayıp en fazla %" + num((S.settings.pickMaxLoss || 0.1) * 100, 0) + "); bu seçim yarının maçlarından. Oranlar maça kadar değişebilir.</p>" : "") // 2.67
     + pickBlock(p, "")
     + (p.high ? pickBlock(p.high, "%" + num(high * 100, 0) + "+ SEÇİMİ · daha sık tutar, ödemesi küçük") : "")
     + '<p class="small muted">' + (p.value ? "Bu seçim adil oranı geçiyor: değerli. "
@@ -649,8 +716,16 @@ function bandsHtml() {
   }).join("") + '<p class="small muted">Her bantta en iyi seçimin (önce kâr, sonra denge puanı) beklenen değeri; "en iyi denge" tutma ve ödemeyi birlikte tartan puanda öndeki bant.</p></div>';
 }
 var singlesMin = null, singlesGroup = null, singlesShow = 25;
-/** Tek maç fırsatlarında varsayılan süzgeç: tutma olasılığı %65 ve üstü (kullanıcı isteği). */
-var SINGLES_DEFAULT_MIN = 0.65;
+var SINGLES_CHIPS = [0.5, 0.6, 0.65, 0.7, 0.8];
+/**
+ * Tek maç fırsatlarında varsayılan süzgeç: tek maç kuralındaki en az tutma olasılığı (Ayarlar → Tek maç), düğmelerden ona en
+ * yakın alt değer. 2.71: kural %50 olunca liste en az kaybettirenlerle açılır (önce %65 sabitti; %65+ seçimler en pahalıları).
+ */
+function singlesDefaultMin() {
+  var m = (S.settings && S.settings.pickMinProb) || 0.5, best = SINGLES_CHIPS[0];
+  SINGLES_CHIPS.forEach(function (v) { if (v <= m + 1e-9) best = v; });
+  return best;
+}
 /** 2.15.6 bahis türü süzgeci (Pick.group ile aynı eşleme). */
 var SINGLE_GROUPS = [["MS", "Maç sonucu"], ["CS", "Çifte şans"], ["AU", "Alt/Üst"], ["MSAU", "MS + Alt/Üst"], ["KG", "Karşılıklı gol"], ["HMS", "Handikap"], ["TG", "Takım golü"], ["BASKET", "Basketbol"]];
 function singleGroup(m) {
@@ -668,12 +743,12 @@ function oppText() {
 }
 function singlesCard() {
   if (S.demo) return "";
-  var all = S.singles || [], min = singlesMin != null ? singlesMin : SINGLES_DEFAULT_MIN;
+  var all = S.singles || [], min = singlesMin != null ? singlesMin : singlesDefaultMin();
   var present = {};
   all.forEach(function (x) { present[singleGroup(x.m)] = true; });
   var match = all.filter(function (x) { return x.p >= min - 1e-9 && (!singlesGroup || singleGroup(x.m) === singlesGroup); });
   var rows = match.slice(0, singlesShow);
-  var chips = [0.5, 0.6, 0.65, 0.7, 0.8].map(function (v) {
+  var chips = SINGLES_CHIPS.map(function (v) {
     return '<button class="chip' + (Math.abs(v - min) < 1e-9 ? " main" : "") + '" onclick="singlesMin=' + v + ';singlesShow=25;render()">%' + Math.round(v * 100) + "+</button>";
   }).join(" ");
   var types = [["", "Tümü"]].concat(SINGLE_GROUPS.filter(function (g) { return present[g[0]]; })).map(function (g) {
@@ -683,6 +758,7 @@ function singlesCard() {
   return '<div class="card" id="singlesCard"><h2>Tek maç fırsatları</h2><p class="small muted">Önümüzdeki ' + oppText() + ' içinde tek oynanabilen (MBS 1) bütün seçimler: maç sonucu, çifte şans, Alt/Üst 0,5–4,5, '
     + "maç sonucu ve Alt/Üst birlikte (ör. MS 1 ve 1,5 Üst, MS 2 ve 4,5 Alt), ev/deplasman gol Alt/Üst, karşılıklı gol, handikaplı maç sonucu, basketbol ve Zirve Oran; oran en az " + odds(S.settings.pickMinOdds || 1.25) + " (Ayarlar → Tek maç); bahis türüne göre süzülebilir (ör. Maç sonucu → MS 2, Alt/Üst → 1,5 Üst). Sıra: önce kârlı olanlar (adil oranı geçen), sonra kâr ve tutma olasılığı birlikte (denge puanı). "
     + "Yeşil beklenen değer gerçek fırsattır (nadir). \"model\" işaretli pazarlara Pinnacle fiyat vermiyor; adil oran gol modelinden, güvenlik payı düşülerek.</p>"
+    + oddsBandsHtml()
     + bandsHtml()
     + '<div class="btns" style="flex-wrap:wrap">' + chips + "</div>"
     + (all.length ? '<div class="btns" style="flex-wrap:wrap" id="singlesTypes">' + types + "</div>" : "")
@@ -1445,12 +1521,14 @@ function viewSettings() {
     + '<p class="small muted">Değerli seçim olmayan günlerde: tek oynanabilen, aşağıdaki olasılıkla tutan seçimler (her pazar, her oran; normal oran ve Zirve Oran) arasında önce kârlı olan, yoksa kâr ve tutma olasılığı birlikte en iyisi (denge puanı). '
     + "Beklenen sonuç çoğu gün eksidir ve kartta yazar; tutar Kelly değil, kasanın %3'ü (ya da aşağıdaki sabit tutar).</p>"
     + '<label>En az tutma olasılığı (%)</label><input id="sPickProb" inputmode="decimal" value="' + esc(num(st.pickMinProb * 100, 0)) + '">'
-    + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.14) * 100, 1)) + '">'
-    + '<p class="small muted">Tek maç seçimlerinde beklenen kayıp bu sınıra kadarsa (oran adil oranın bu kadar altına kadar) tam tutar; daha kötüyse oynanmaz.</p>'
+    + '<label>En kötü beklenen kayıp (%)</label><input id="sPickLoss" inputmode="decimal" value="' + esc(num((st.pickMaxLoss || 0.1) * 100, 1)) + '">'
+    + '<p class="small muted">Tek maç seçimlerinde beklenen kayıp bu sınıra kadarsa (oran adil oranın bu kadar altına kadar) tam tutar; daha kötüyse oynanmaz. '
+    + "Kârlılık kuralı (2.71): en az %50 tutma ve en fazla %10 kayıp. İddaa'nın olağan fiyatı adil oranın %11–15 altında olduğundan çoğu seçim \"oynama\" çıkar; sınırın içinde kalanlar artırılmış ya da adil orana yakın fiyatlardır. "
+    + "Sınırı büyütmek daha çok öneri ve daha çok kayıp demektir; kâr yalnızca oran adil oranı geçtiğinde vardır.</p>"
     + '<label>Fırsatlar penceresi</label><select id="sOppHours">' + [[24, "1 gün (24 saat)"], [48, "2 gün (48 saat)"], [72, "3 gün (72 saat)"]].map(function (o) {
       return '<option value="' + o[0] + '"' + ((st.opportunityHours || 48) === o[0] ? " selected" : "") + ">" + o[1] + "</option>";
     }).join("") + "</select>"
-    + '<p class="small muted">Tek maç fırsatları, denge tablosu, Değerli oranlar ve kârlı seçim bildirimi bu kadar ilerideki maçları da kapsar. Günün kuponu ve günün seçimi 24 saatte kalır.</p>'
+    + '<p class="small muted">Tek maç fırsatları, oran tablosu, denge tablosu, Değerli oranlar ve kârlı seçim bildirimi bu kadar ilerideki maçları da kapsar. Günün kuponu ve günün seçimi 24 saatte kalır.</p>'
     + '<label class="check"><input type="checkbox" id="sAhead"' + (st.aheadCoupon !== false ? " checked" : "") + ">Yarının seçimini de göster; bugün değerli kupon yoksa yarının kuponunu öner</label>" // 2.66–2.68
     + '<p class="small muted">Günün seçiminin yanında aynı kurallarla yarının seçimi de (aynı taramadan, sonraki 24 saat; kredi harcamaz). Bugünün maçlarında değerli kupon yoksa yarının maçlarına da bakılır. Yarına kadar oranlar değişebilir: oynamadan önce kontrol et.</p>'
     + '<label>En düşük oran</label><input id="sPickMinOdds" inputmode="decimal" value="' + esc(num(st.pickMinOdds || 1.25, 2)) + '">'
@@ -1565,9 +1643,9 @@ function collectSettings() {
   var pk = document.getElementById("sPick");
   if (pk) {
     st.dailyPick = pk.checked;
-    st.pickMinProb = numIn(val("sPickProb"), 68) / 100;
+    st.pickMinProb = numIn(val("sPickProb"), 50) / 100;
     st.pickHighProb = numIn(val("sPickHigh"), 70) / 100;
-    st.pickMaxLoss = numIn(val("sPickLoss"), 14) / 100;
+    st.pickMaxLoss = numIn(val("sPickLoss"), 10) / 100;
     st.pickStake = numIn(val("sPickStake"), 0);
     st.pickMinOdds = numIn(val("sPickMinOdds"), 1.25);
     st.opportunityHours = parseInt(val("sOppHours") || "48", 10);

@@ -86,6 +86,81 @@ test("2.67–2.68: günün seçimi ve yarının seçimi, kuralı açıkça yazar
   assert.deepEqual(t.errors, []);
 });
 
+test("2.71: kârlılık kuralı; kâr eşiği, hangi oran yanıtı ve oran tablosu", async () => {
+  const s = clone(baseState);
+  s.todayRun = { day: s.today, decision: "pas", reason: "640 seçim karşılaştırıldı, hiçbirinde avantaj yok. Bugün pas.", summary: "Bülten 32 maç", couponId: null };
+  s.coupons = s.coupons.filter((c) => !c.pick);
+  s.settings.dailyPick = true; s.settings.pickMinProb = 0.5; s.settings.pickMinOdds = 1.25; s.settings.pickMaxLoss = 0.1;
+  const ko = new Date(Date.parse(s.now) + 6 * 3600000).toISOString();
+  const mk = (ref, home, m, o, label, p, odds, extra) => Object.assign({ source: "iddaa", ref, home, away: "Dep " + ref, kickoff: ko, league: "Premier Lig", m, o, label, odds, p,
+    fair: 1 / p, ev: p * odds - 1, mbs: 1, stake: 0, win: 0, expected: 0, monthly: 0, score: p * odds - 1 }, extra || {});
+  s.pick = mk("3", "Everton", "MS", "1", "MS 1", 0.54, 1.70, { candidates: 1, alternatives: [], maxLoss: 0.1, highCount: 0 });
+  s.singles = [mk("3", "Everton", "MS", "1", "MS 1", 0.54, 1.70), mk("2", "Chelsea", "AU25", "UST", "2,5 Üst", 0.69, 1.27, { skip: true }),
+    mk("1", "Arsenal", "MS", "1", "MS 1", 0.70, 1.25, { skip: true })];
+  s.oddsBands = [
+    { from: 1.25, to: 1.4, n: 2, avgEv: -0.1244, total: 2, playable: 0, value: 0, bestEv: -0.1237, bestScore: -0.129, bestOdds: 1.27, bestP: 0.69, bestOk: true, label: "Chelsea – Dep 2 · 2,5 Üst" },
+    { from: 1.4, to: 1.6, n: 0, total: 1, playable: 0, value: 0, bestEv: -0.22, bestScore: -0.23, bestOdds: 1.5, bestP: 0.52, bestOk: true, label: "Leeds – Dep 5 · MS 1 ve 1,5 Üst", model: true },
+    { from: 1.6, to: 1.85, n: 1, avgEv: -0.082, total: 1, playable: 1, value: 0, bestEv: -0.082, bestScore: -0.09, bestOdds: 1.7, bestP: 0.54, bestOk: true, label: "Everton – Dep 3 · MS 1" },
+    { from: 1.85, to: 2.2, n: 1, avgEv: -0.055, total: 1, playable: 0, value: 0, bestEv: -0.055, bestScore: -0.07, bestOdds: 2.1, bestP: 0.45, bestOk: false, label: "Fulham – Dep 4 · MS 2" },
+    { from: 2.2, to: 3, n: 0, total: 0, playable: 0, value: 0 },
+    { from: 3, n: 1, avgEv: -0.142, total: 1, playable: 0, value: 0, bestEv: -0.142, bestScore: -0.19, bestOdds: 3.3, bestP: 0.26, bestOk: false, label: "Everton – Dep 3 · MS X" }];
+  const t = boot(s);
+  // günün seçimi: en az kaybettiren; kâr yok rozeti ve kâr eşiği (adil oran)
+  const card = t.$("#pickCard").textContent;
+  assert.match(card, /GÜNÜN SEÇİMİ · TEK MAÇ/);
+  assert.match(card, /Everton – Dep 3/);
+  assert.match(card, /kâr yok/);
+  assert.match(card, /Kâr eşiği 1,85: bu seçim ancak 1,85 ve üstü oranda kâr bırakır; şimdiki oran 1,70, bu yüzden kârlı değil, yalnızca en az kaybettiren seçenek\./);
+  // hangi oran: hiçbir aralık kârlı değil; en az kaybettiren aralık kurala uyanlardan (1,85–2,20'nin en iyisi %45 tutuyor: kural dışı)
+  const ans = t.$("#oddsAnswer").textContent;
+  assert.match(ans, /HANGİ ORAN\? · ÖNÜMÜZDEKİ 2 GÜN/); // tablo Fırsatlar penceresini kapsar
+  assert.match(ans, /Şu an hiçbir oran aralığı kârlı değil\. İddaa'nın ortalama kesintisi −%10,6 \(5 tek maç seçimi\)\. En az kaybettiren aralık 1,60–1,85 \(en iyi seçim −%8,2\)\./);
+  assert.match(ans, /Everton – Dep 3 · MS 1 1,70 · tutma %54/);
+  assert.match(ans, /Kuralın içinde \(en az %50 tutma, kayıp en fazla %10,0\) 1 seçim var/);
+  assert.match(ans, /kombinede her maç kesintisini çarpar \(2 maç ≈ −%20,0, 3 maç ≈ −%28,4\)/);
+  // Fırsatlar: oran tablosu (boş bant yok), işaretli aralık, kural dışı notu; liste varsayılanı kuraldaki %50
+  const f = boot(clone(s), "#firsat");
+  const rows = f.$$(".odds-row");
+  assert.equal(rows.length, 5);
+  assert.match(rows[0].textContent, /1,25–1,40 · 2 seçim.*ort\. −%12,4 · en iyi −%12,4/);
+  assert.match(rows[1].textContent, /1,40–1,60 · 1 seçim.*en iyi −%22,0/);
+  assert.doesNotMatch(rows[1].textContent, /ort\./); // yalnızca model seçimi: ortalama yok
+  assert.match(f.$(".odds-row.on").textContent, /1,60–1,85 · 1 seçim.*en az kayıp.*ort\. −%8,2 · en iyi −%8,2/);
+  assert.match(rows[4].textContent, /3,00\+ · 1 seçim/);
+  const bests = f.$$(".odds-best").map((x) => x.textContent);
+  assert.match(bests[1], /Leeds – Dep 5 · MS 1 ve 1,5 Üst 1,50 · tutma %52 · model/);
+  assert.match(bests[3], /Fulham – Dep 4 · MS 2 2,10 · tutma %45 · kural dışı \(seyrek tutar\)/);
+  assert.match(f.$("#oddsBands").textContent, /%70 tutan seçim ancak 1,43 ve üstünde, %60 tutan 1,67 ve üstünde, %50 tutan 2,00 ve üstünde kâr bırakır/);
+  assert.match(f.$("#singlesCard .chip.main").textContent, /%50\+/);
+  assert.equal(f.$$("#singlesCard .single-row").length, 3);
+  assert.match(f.$$("#singlesCard .single-row")[1].textContent, /oynama/);
+  // kârlı seçim varsa: yanıt ve tablo yeşil
+  const v = clone(s);
+  Object.assign(v.oddsBands[2], { n: 2, value: 1, playable: 2, bestEv: 0.05, bestScore: 0.04, bestOdds: 1.75, bestP: 0.6, label: "Wolves – Dep 6 · MS 1" });
+  v.pick = mk("6", "Wolves", "MS", "1", "MS 1", 0.60, 1.75, { candidates: 2, alternatives: [], maxLoss: 0.1, value: true });
+  const tv = boot(v);
+  assert.match(tv.$("#oddsAnswer").textContent, /Kârlı seçim var: 1 seçimde oran adil oranı geçiyor; en iyisi 1,60–1,85 aralığında \(\+%5,0\)\./);
+  assert.match(tv.$("#pickCard").textContent, /Kârlı: oran kâr eşiğinin \(1,67\) üstünde\./);
+  assert.match(boot(clone(v), "#firsat").$(".odds-row.on").textContent, /kârlı/);
+  // oynama günü: kâr için gereken oran yazılır; kuralın içinde seçim yoksa oynamamak
+  const no = clone(s);
+  no.pick = mk("2", "Chelsea", "AU25", "UST", "2,5 Üst", 0.69, 1.27, { skip: true, candidates: 2, alternatives: [], maxLoss: 0.1 });
+  no.oddsBands[2].playable = 0; no.oddsBands[2].bestEv = -0.11; no.oddsBands[2].avgEv = -0.11; no.oddsBands[2].bestScore = -0.12;
+  const tn = boot(no);
+  assert.match(tn.$("#pickCard").textContent, /BUGÜN OYNAMA[\s\S]*en az %50 tutan 2 seçimin en iyisi bile −%12,4 \(sınır −%10,0\)[\s\S]*kâr için oran en az 1,45 olmalıydı/);
+  assert.match(tn.$("#oddsAnswer").textContent, /Kuralın içinde \(en az %50 tutma, kayıp en fazla %10,0\) seçim yok: şu an en kârlı karar oynamamak\./);
+  // tablo yoksa (tarama yok) kart da yok; ayarlarda kural açıklaması
+  const e = clone(s);
+  delete e.oddsBands;
+  assert.equal(boot(e).$("#oddsAnswer"), null);
+  assert.equal(boot(clone(e), "#firsat").$("#oddsBands"), null);
+  const st = boot(clone(s), "#ayarlar");
+  assert.equal(st.$("#sPickProb").value, "50");
+  assert.equal(st.$("#sPickLoss").value, "10,0");
+  assert.match(st.$("#pickSettings").textContent, /Kârlılık kuralı \(2\.71\): en az %50 tutma ve en fazla %10 kayıp/);
+  for (const x of [t, f, tv, tn, st]) assert.deepEqual(x.errors, []);
+});
+
 test("2.66: bugün değerli kupon yoksa yarının kuponu başlığıyla görünür", async () => {
   const s = clone(baseState);
   const nextDay = new Date(Date.parse(s.todayRun.day + "T12:00:00Z") + 86400000).toISOString().slice(0, 10);
@@ -1384,8 +1459,10 @@ test("tek maç: %70+ katmanı, tek maç fırsatları süzgeci, yeni bahis türle
   // Fırsatlar: tek maç listesi, olasılık süzgeci
   const f = boot(clone(s), "#firsat");
   let rows = f.$$("#singlesCard .single-row");
-  assert.equal(rows.length, 1); // varsayılan %65+
-  assert.match(f.$("#singlesCard .chip.main").textContent, /%65\+/);
+  assert.equal(rows.length, 2); // 2.71: varsayılan süzgeç tek maç kuralındaki en az tutma olasılığı (burada %60; önce sabit %65+)
+  assert.match(f.$("#singlesCard .chip.main").textContent, /%60\+/);
+  f.button("%65+").click();
+  assert.equal(f.$$("#singlesCard .single-row").length, 1);
   f.button("%60+").click();
   assert.equal(f.$$("#singlesCard .single-row").length, 2);
   f.button("%50+").click();

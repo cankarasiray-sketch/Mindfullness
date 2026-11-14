@@ -64,6 +64,7 @@ public final class Bridge {
         extra.put("singles", picks[1]);
         extra.put("bands", picks[2]);
         extra.put("draws", picks[3]);
+        extra.put("oddsBands", picks[4]); // 2.71: oran aralığına göre kesinti ve en iyi seçim
         long switched = repo.profileSwitchedAt();
         extra.put("profileSwitchedAt", switched > 0 ? Instant.ofEpochMilli(switched).toString() : null);
         extra.put("credits", repo.credits());

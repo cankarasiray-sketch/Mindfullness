@@ -75,24 +75,156 @@ public class PickTest {
         return s;
     }
 
+    /** 2.67 kuralları (kullanıcının o günkü isteği: %68, 1,25, −%14); 2.71'de varsayılan kârlılık kuralına geçti. */
+    static Settings rules267() {
+        Settings s = new Settings();
+        s.pickMinProb = 0.68;
+        s.pickMinOdds = 1.25;
+        s.pickMaxLoss = 0.14;
+        return s;
+    }
+
+    @Test
+    public void profitRulesAndOddsTable() {
+        // 2.71: kullanıcı istedi: "kârlılık açısından hangi oranda oynamalıyım, uygulamayı buna göre güncelle; acımasız kârlılık
+        // odaklı ve dengeli". Kural: en az %50 tutma, beklenen kayıp en fazla %10 (en düşük oran aynı: 1,25)
+        Settings cfg = new Settings();
+        assertEquals(0.50, cfg.pickMinProb, 0);
+        assertEquals(1.25, cfg.pickMinOdds, 0);
+        assertEquals(0.10, cfg.pickMaxLoss, 0);
+        assertNull(cfg.validate());
+        // 2.67–2.70 kaydı (v18: %68, −%14) bir kez yeni kurala; sonradan değiştirilen korunur
+        Map<String, Object> old = rules267().toMap();
+        old.put("v", 18L);
+        Settings moved = Settings.fromMap(old);
+        assertEquals(0.50, moved.pickMinProb, 0);
+        assertEquals(1.25, moved.pickMinOdds, 0);
+        assertEquals(0.10, moved.pickMaxLoss, 0);
+        assertEquals(19L, moved.toMap().get("v"));
+        moved.pickMinProb = 0.68;
+        moved.pickMaxLoss = 0.14;
+        Settings kept = Settings.fromMap(moved.toMap());
+        assertEquals(0.68, kept.pickMinProb, 0);
+        assertEquals(0.14, kept.pickMaxLoss, 0);
+        long bal = 500000;
+        List<Object> fx = new ArrayList<>();
+        // iddaa'nın olağan fiyatı: sık tutan favoriler −%12…−%13 (eski kuralın seçtiği): artık "oynama"
+        fx.add(row("1", "Arsenal", 8, sel("MS", "1", 0.70, 1.25, 1), sel("MS", "2", 0.10, 7.00, 1))); // −%12,5; MS 2 tabloya girmez (%10)
+        fx.add(row("2", "Chelsea", 9, sel("AU25", "UST", 0.69, 1.27, 1), sel("AU25", "ALT", 0.31, 2.80, 1))); // −%12,4 / −%13,2
+        // adil orana daha yakın, daha yüksek oranlı seçim: −%8,2 (sınırın içinde)
+        fx.add(row("3", "Everton", 10, sel("MS", "1", 0.54, 1.70, 1), sel("MS", "X", 0.26, 3.30, 1))); // −%8,2 / −%14,2
+        // tutma %50'nin altı günün seçimine girmez (−%5,5 olsa da): denge
+        fx.add(row("4", "Fulham", 11, sel("MS", "2", 0.45, 2.10, 1)));
+        // model pazarı (güvenlik payı düşülmüş): ortalamaya girmez
+        Map<String, Object> model = sel(GoalModel.COMBO + "1.5", "1U", 0.52, 1.50, 1); // −%22
+        model.put("model", true);
+        fx.add(row("5", "Leeds", 12, model));
+        Map<String, Object> p = Pick.choose(fx, null, cfg, bal, NOW);
+        assertEquals("3", p.get("ref")); // en az kaybettiren, favoriler değil
+        assertEquals("MS", p.get("m"));
+        assertFalse(Json.bool(p, "skip", false));
+        assertEquals(1L, p.get("candidates")); // sınırın içindeki tek seçim
+        assertEquals(1 / 0.54, Json.dbl(p, "fair", 0), 1e-12); // kâr eşiği = adil oran
+        // sınırın içinde seçim kalmazsa: en iyi aday "oynama" olarak
+        List<Object> usual = new ArrayList<>(fx.subList(0, 2));
+        Map<String, Object> skip = Pick.choose(usual, null, cfg, bal, NOW);
+        assertTrue(Json.bool(skip, "skip", false));
+        assertEquals("2", skip.get("ref")); // −%12,4 (2,5 Üst), −%12,5'in önünde
+        assertEquals(0L, skip.get("stake"));
+        // eski kuralla (%68, −%14) aynı gün favori önerilirdi
+        assertEquals("2", Pick.choose(fx, null, rules267(), bal, NOW).get("ref"));
+        assertFalse(Json.bool(Pick.choose(fx, null, rules267(), bal, NOW), "skip", false));
+        // oran tablosu: oran aralığına göre kesinti (ortalama beklenen değer) ve en iyi seçim
+        List<Object> t = Pick.oddsBands(fx, null, cfg, bal, NOW);
+        assertEquals(6, t.size());
+        Map<String, Object> b0 = Json.obj(t.get(0)), b1 = Json.obj(t.get(1)), b2 = Json.obj(t.get(2)), b3 = Json.obj(t.get(3)), b4 = Json.obj(t.get(4)),
+                b5 = Json.obj(t.get(5));
+        assertEquals(1.25, Json.dbl(b0, "from", 0), 0); // ilk bandın altı en düşük oran ayarı
+        assertEquals(1.40, Json.dbl(b0, "to", 0), 0);
+        assertEquals(2L, b0.get("n")); // Arsenal MS 1 1,25, Chelsea Üst 1,27
+        assertEquals(2L, b0.get("total"));
+        assertEquals(((0.70 * 1.25 - 1) + (0.69 * 1.27 - 1)) / 2, Json.dbl(b0, "avgEv", 0), 1e-12);
+        assertEquals(0.69 * 1.27 - 1, Json.dbl(b0, "bestEv", 0), 1e-12);
+        assertEquals(0L, b0.get("playable")); // ikisi de −%10'dan kötü
+        assertEquals(0L, b0.get("value"));
+        assertEquals("Chelsea – Dep 2 · 2,5 Üst", b0.get("label"));
+        // 1,40–1,60: yalnızca model seçimi: sayılır (total) ama ortalamaya girmez
+        assertEquals(0L, b1.get("n"));
+        assertEquals(1L, b1.get("total"));
+        assertNull(b1.get("avgEv"));
+        assertEquals(Boolean.TRUE, b1.get("model"));
+        assertEquals(0.52 * 1.50 - 1, Json.dbl(b1, "bestEv", 0), 1e-12);
+        // 1,60–1,85: Everton MS 1 (sınırın içinde)
+        assertEquals(1L, b2.get("n"));
+        assertEquals(1L, b2.get("playable"));
+        assertEquals(0.54 * 1.70 - 1, Json.dbl(b2, "avgEv", 0), 1e-12);
+        assertEquals(1.70, Json.dbl(b2, "bestOdds", 0), 0);
+        assertEquals(0.54, Json.dbl(b2, "bestP", 0), 0);
+        assertEquals(Boolean.TRUE, b2.get("bestOk"));
+        // 1,85–2,20: Fulham MS 2 (%45: kuraldaki %50'nin altında; tabloda bilgi olarak durur, kurala uyan sayılmaz)
+        assertEquals(1L, b3.get("n"));
+        assertEquals(0.45 * 2.10 - 1, Json.dbl(b3, "bestEv", 0), 1e-12);
+        assertEquals(0L, b3.get("playable"));
+        assertEquals(Boolean.FALSE, b3.get("bestOk"));
+        // 2,20–3,00: Chelsea 2,5 Alt
+        assertEquals(1L, b4.get("n"));
+        assertEquals(0.31 * 2.80 - 1, Json.dbl(b4, "avgEv", 0), 1e-12);
+        // 3,00+: Everton beraberlik (%26); son bant açık uçlu; %20'nin altındaki Arsenal MS 2 yok
+        assertEquals(3.00, Json.dbl(b5, "from", 0), 0);
+        assertNull(b5.get("to"));
+        assertEquals(1L, b5.get("total"));
+        assertEquals(0.26 * 3.30 - 1, Json.dbl(b5, "bestEv", 0), 1e-12);
+        // kârlı seçim (oran adil oranı geçiyor): bandında sayılır ve bandın en iyisi olur
+        fx.add(row("6", "Wolves", 13, sel("MS", "1", 0.60, 1.75, 1))); // +%5
+        t = Pick.oddsBands(fx, null, cfg, bal, NOW);
+        b2 = Json.obj(t.get(2));
+        assertEquals(2L, b2.get("n"));
+        assertEquals(1L, b2.get("value"));
+        assertEquals(2L, b2.get("playable"));
+        assertEquals(0.60 * 1.75 - 1, Json.dbl(b2, "bestEv", 0), 1e-12);
+        assertEquals("6", Pick.choose(fx, null, cfg, bal, NOW).get("ref")); // önce kârlı
+        // bantta kural dışı (seyrek tutan) daha iyi bir seçim olsa da gösterilen, kurala uyanların en iyisi (liste ve seçimle tutarlı)
+        fx.add(row("7", "Villa", 14, sel("KG", "VAR", 0.47, 2.00, 1), sel("MS", "1", 0.50, 1.86, 1))); // −%6 (kural dışı) / −%7 (uyar)
+        b3 = Json.obj(Pick.oddsBands(fx, null, cfg, bal, NOW).get(3));
+        assertEquals(3L, b3.get("total"));
+        assertEquals("Villa – Dep 7 · MS 1", b3.get("label"));
+        assertEquals(0.50 * 1.86 - 1, Json.dbl(b3, "bestEv", 0), 1e-12);
+        assertEquals(Boolean.TRUE, b3.get("bestOk"));
+        assertEquals(1L, b3.get("playable"));
+        // kârlı seçim kural dışı olsa da gösterilir (kâr gizlenmez)
+        fx.add(row("8", "Brighton", 15, sel("MS", "2", 0.48, 2.15, 1))); // +%3,2
+        b3 = Json.obj(Pick.oddsBands(fx, null, cfg, bal, NOW).get(3));
+        assertEquals("Brighton – Dep 8 · MS 2", b3.get("label"));
+        assertEquals(Boolean.FALSE, b3.get("bestOk"));
+        assertEquals(1L, b3.get("value"));
+        fx.remove(fx.size() - 1);
+        fx.remove(fx.size() - 1);
+        // en düşük oran ayarı bir bandın üstündeyse o bant yok; aradaki bandın altı ayar olur
+        cfg.pickMinOdds = 1.50;
+        t = Pick.oddsBands(fx, null, cfg, bal, NOW);
+        assertEquals(5, t.size());
+        assertEquals(1.50, Json.dbl(Json.obj(t.get(0)), "from", 0), 0);
+        assertEquals(1.60, Json.dbl(Json.obj(t.get(0)), "to", 0), 0);
+        // tablo boşken bantlar boş döner (arayüz göstermez)
+        for (Object o : Pick.oddsBands(new ArrayList<Object>(), null, new Settings(), bal, NOW)) assertEquals(0L, Json.obj(o).get("total"));
+    }
+
     @Test
     public void userRulesAndTomorrowsPick() {
         // 2.67: kullanıcı istedi: en az %68 tutan, oranı en az 1,25, beklenen kaybı en fazla %14 olan maçlardan; bugün yoksa yarının
-        Settings cfg = new Settings();
-        assertEquals(0.68, cfg.pickMinProb, 0);
-        assertEquals(1.25, cfg.pickMinOdds, 0);
-        assertEquals(0.14, cfg.pickMaxLoss, 0);
+        // (2.71'de varsayılan kârlılık kuralına geçti: profitRulesAndOddsTable; kuralın işleyişi burada 2.67 değerleriyle)
+        Settings cfg = rules267();
         assertTrue(cfg.aheadCoupon);
-        // yeniden kurulumda kalan eski (v17) ayarlar bir kez kullanıcının değerlerine
+        // yeniden kurulumda kalan eski (v17) ayarlar: 2.67'de kullanıcının değerlerine, 2.71'de kârlılık kuralına (en düşük oran kalır)
         Map<String, Object> old = new Settings().toMap();
         old.put("v", 17L);
         old.put("pickMinProb", 0.60);
         old.put("pickMinOdds", 1.18);
         old.put("pickMaxLoss", 0.15);
         Settings moved = Settings.fromMap(old);
-        assertEquals(0.68, moved.pickMinProb, 0);
+        assertEquals(0.50, moved.pickMinProb, 0);
         assertEquals(1.25, moved.pickMinOdds, 0);
-        assertEquals(0.14, moved.pickMaxLoss, 0);
+        assertEquals(0.10, moved.pickMaxLoss, 0);
         moved.pickMinProb = 0.70; // sonradan değiştirilen korunur
         assertEquals(0.70, Settings.fromMap(moved.toMap()).pickMinProb, 0);
         long bal = 500000;
@@ -281,7 +413,7 @@ public class PickTest {
         // ayar doğrulama ve kalıcılık
         Settings s = new Settings();
         assertTrue(s.dailyPick);
-        assertEquals(0.68, s.pickMinProb, 0); // 2.67: kullanıcı istedi (önce %60)
+        assertEquals(0.50, s.pickMinProb, 0); // 2.71: kârlılık kuralı (2.67'de kullanıcı isteğiyle %68, önce %60)
         s.pickMinProb = 0.2;
         assertTrue(s.validate().contains("Günün seçimi"));
         s.pickMinProb = 0.7;
@@ -332,7 +464,7 @@ public class PickTest {
         assertEquals(0.70 * 1.48 - 1, Json.dbl(Json.obj(bands.get(3)), "bestEv", 0), 1e-9);
         // ayar
         Settings s = new Settings();
-        assertEquals(0.14, s.pickMaxLoss, 0); // 2.67: kullanıcı istedi (önce %15)
+        assertEquals(0.10, s.pickMaxLoss, 0); // 2.71: kârlılık kuralı (2.67'de %14, önce %15)
         s.pickMaxLoss = 0.5;
         assertTrue(s.validate().contains("en kötü beklenen"));
         s.pickMaxLoss = 0.08;
@@ -364,9 +496,9 @@ public class PickTest {
         old.put("v", 7L);
         old.put("pickMaxLoss", 0.06);
         Settings moved = Settings.fromMap(old);
-        assertEquals(0.14, moved.pickMaxLoss, 0); // 2.15'te %15'e, 2.67'de kullanıcı isteğiyle %14'e
-        moved.pickMaxLoss = 0.10;
-        assertEquals(0.10, Settings.fromMap(moved.toMap()).pickMaxLoss, 0);
+        assertEquals(0.10, moved.pickMaxLoss, 0); // 2.15'te %15'e, 2.67'de kullanıcı isteğiyle %14'e, 2.71'de kârlılık kuralıyla %10'a
+        moved.pickMaxLoss = 0.12;
+        assertEquals(0.12, Settings.fromMap(moved.toMap()).pickMaxLoss, 0);
     }
 
     @Test
@@ -545,6 +677,8 @@ public class PickTest {
         assertEquals(Pick.choose(fx, null, cfg, 500000, NOW), all[0]);
         assertEquals(Pick.list(fx, null, cfg, 500000, NOW), all[1]);
         assertEquals(Pick.bands(fx, null, cfg, 500000, NOW), all[2]);
+        assertEquals(Pick.oddsBands(fx, null, cfg, 500000, NOW), all[3]); // 2.71
+        assertEquals(4, all.length);
     }
 
     @Test

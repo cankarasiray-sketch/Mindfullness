@@ -248,8 +248,12 @@ public final class Settings {
      * uyan seçim yoksa yarının seçimi).
      */
     public boolean aheadCoupon = true;
-    /** Günün seçiminde en az tutma olasılığı (2.67: kullanıcı istedi %68; önce %60). */
-    public double pickMinProb = 0.68;
+    /**
+     * Günün seçiminde en az tutma olasılığı. 2.67: kullanıcı istedi %68 (önce %60). 2.71: kullanıcı kârlılık odaklı ve dengeli
+     * kural istedi: %50. %68+ seçimler (oran 1,25–1,30) iddaa'nın en pahalı fiyatları (verisinde −%12…−%15); adil orana en
+     * yakın seçimler çoğu gün daha yüksek oranlarda. %50: kazanma ihtimali en az yarı yarıya kalsın (denge).
+     */
+    public double pickMinProb = 0.50;
     /** Günün seçiminin tutarı (TL); 0 = kasanın %3'ü (2.15.2; önce %1). */
     public double pickStake = 0;
     /** Günün seçiminde ikinci katman: en az bu tutma olasılığı (2.10; "%70+ seçimi"). */
@@ -262,9 +266,10 @@ public final class Settings {
     /**
      * Günün seçiminde ve tek maç listesinde kabul edilen en kötü beklenen kayıp: buna kadar tam tutar, daha
      * kötüyse oynanmaz. 2.15: %6 -> %15 (adil oranın %15 altına kadar); 2.15.1: yarım tutar kademesi yok. 2.67: kullanıcı
-     * istedi %14; günün seçimi yalnızca bu sınırın içindeki seçimlerden yapılır.
+     * istedi %14; günün seçimi yalnızca bu sınırın içindeki seçimlerden yapılır. 2.71: kârlılık odaklı kural: %10 (iddaa'nın
+     * olağan fiyatı −%11…−%15: onlar "oynama"; sınırın içinde kalanlar artırılmış ya da adil orana yakın fiyatlar).
      */
-    public double pickMaxLoss = 0.14;
+    public double pickMaxLoss = 0.10;
     /**
      * Yalnızca tek maç (2.10): değerli kuponlar tek seçimli kurulur ve yalnızca tek oynanabilen (MBS 1)
      * maçlar alınır. Kombine yok: iddaa marjı her bacakta yeniden ödenir.
@@ -402,7 +407,7 @@ public final class Settings {
         m.put("internationals", internationals);
         m.put("basketExtras", basketExtras);
         m.put("profile", detectProfile());
-        m.put("v", 18L);
+        m.put("v", 19L);
         m.put("radarScans", (long) radarScans);
         m.put("lineupScans", lineupScans);
         m.put("quietNights", quietNights);
@@ -512,6 +517,13 @@ public final class Settings {
             s.pickMinProb = 0.68;
             s.pickMinOdds = 1.25;
             s.pickMaxLoss = 0.14;
+        }
+        if (Json.lng(m, "v", 1) < 19) {
+            // 2.71: kullanıcı istedi: "kârlılık açısından hangi oranda oynamalıyım, uygulamayı buna göre güncelle; acımasız
+            // kârlılık odaklı ve dengeli". Tek maç kuralı: en az %50 tutma, beklenen kayıp en fazla %10 (en düşük oran aynı).
+            s.pickMinProb = 0.50;
+            s.pickMaxLoss = 0.10;
+            if (s.pickHighProb < s.pickMinProb) s.pickHighProb = s.pickMinProb;
         }
         if (Json.lng(m, "v", 1) < 9 && s.kgEvents == 0) {
             // 2.15.3: kullanıcı istedi: Karşılıklı Gol açık (günde 12 maç), kredi planı kısmaz

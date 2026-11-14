@@ -62,6 +62,31 @@ okur. Sabah 06:00'da kurulan kuponun oranları gün içinde değişir, bu yüzde
 Ayrıca oynanmamış öneri, ilk maçtan **90 dakika önce otomatik kontrol edilir** ve sonuç
 bildirim olarak gelir.
 
+## Kârlılık kuralı, kâr eşiği ve oran tablosu (2.71)
+
+- Kullanıcı sordu: "Kârlılık açısından hangi oranda kuponları oynamalıyım, uygulamayı buna göre güncelle; amaç kârlılık, acımasız
+  kârlılık odaklı ol ve dengeli ol." Veri (1–22 Ekim dışa aktarımı, oynanan 92 tek bahis): oynarken beklenen değer her oran
+  bandında aynı düzeyde eksi (1,00–1,20 −%12,2; 1,20–1,30 −%12,6; 1,30–1,45 −%11,4; 1,70+ −%12,7; toplam −%12,1), kapanışı
+  yenen bahis 0/38; 3 ve 13 Kasım ekran görüntülerinde %61–70 tutan seçimler −%11…−%15. Sonuç: kârı oranın büyüklüğü değil,
+  adil oranı geçmesi belirler (kâr eşiği = adil oran = 1 / tutma olasılığı: %70 → 1,43, %60 → 1,67, %50 → 2,00); iddaa'nın
+  olağan fiyatı her bantta eşiğin %11–15 altında. Kombinede kesinti çarpılır (ayak başına −%12,5 ile 2 maç −%23, 3 maç −%33).
+- Tek maç kuralı (ayar göçü v19, bir kez): en az tutma olasılığı %68 → **%50**, en kötü beklenen kayıp %14 → **%10**, en düşük
+  oran aynı (1,25). Gerekçe: %68+ seçimler (oran 1,25–1,30) en pahalı fiyatlar; adil orana en yakın seçimler çoğu gün daha
+  yüksek oranlarda (Ekim'de −%10'dan iyi 6 bahsin ortalama oranı 1,67; sanal takipte günün en yakın seçimi ortalama −%8,7,
+  %68 kuralının seçimi −%12). %50 tabanı dengedir (kazanma ihtimali en az yarı yarıya; seyrek tutanlarda beklenen değer
+  tahmini de gürültülü). %10 sınırı olağan fiyatı dışarıda bırakır: çoğu gün "oynama" çıkar, kalanlar artırılmış ya da adil
+  orana yakın fiyatlardır. Sıra değişmedi: önce kârlı, sonra denge puanı (beklenen log büyüme). Ayarlar → Tek maç'tan değişir.
+- Kâr eşiği: seçim kartında "kârlı / kâr yok" rozeti ve "bu seçim ancak X ve üstü oranda kâr bırakır" satırı; "oynama" kartında
+  "kâr için oran en az X olmalıydı".
+- Oran tablosu (Pick.oddsBands; durumda `oddsBands`): Fırsatlar penceresindeki tek oynanabilen, en az %20 olası seçimlerde oran
+  aralığına göre (1,25–1,40 · 1,40–1,60 · 1,60–1,85 · 1,85–2,20 · 2,20–3,00 · 3,00+) iddaa'nın ortalama kesintisi (model
+  pazarları hariç: güvenlik payı ortalamayı aşağı çekerdi), kurala uyan ve kârlı seçim sayısı, aralığın en iyi seçimi (adıyla).
+  Bugün ekranında "Hangi oran?" kartı (kârlı aralık ya da en az kaybettiren aralık; kombine çarpanı), Fırsatlar'da tablo.
+  İşaretli aralık kurala uyan (en az tutma olasılığını sağlayan) seçimler içinden; yüksek oranlı bantların seyrek tutan en
+  iyileri "kural dışı" notuyla bilgi olarak durur. Böylece "hangi oranda" sorusu her taramada gerçek bültenle yanıtlanır.
+- Tek maç listesinin varsayılan süzgeci kuraldaki en az tutma olasılığı (%50+; önce sabit %65+): liste en az kaybettirenlerle açılır.
+- Dürüst not: bu kural kaybı küçültür, kâr üretmez; kâr yalnızca oran adil oranı geçtiğinde (nadir) ya da kampanyayla vardır.
+
 ## Birleşik pazar eşlemesi sağlamlaştırıldı (2.70)
 
 - Kullanıcı sordu: "Portekiz – Danimarka MS 1 ve 1,5 Üst neden önerilmiyor?" İki neden: (1) olasılık: MS 1 %64, 2,5 Üst %64 →

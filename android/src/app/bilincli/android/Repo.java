@@ -1167,6 +1167,7 @@ final class Repo {
     private List<Object> singlesValue;
     private List<Object> bandsValue;
     private List<Object> drawsValue;
+    private List<Object> oddsBandsValue; // 2.71: oran tablosu
 
     private void refreshPicks() {
         Instant now = Instant.now();
@@ -1179,10 +1180,11 @@ final class Repo {
             @SuppressWarnings("unchecked")
             Map<String, Object> pv = (Map<String, Object>) all[0];
             @SuppressWarnings("unchecked")
-            List<Object> sv = (List<Object>) all[1], bv = (List<Object>) all[2];
+            List<Object> sv = (List<Object>) all[1], bv = (List<Object>) all[2], ov = (List<Object>) all[3];
             pickValue = pv;
             singlesValue = sv;
             bandsValue = bv;
+            oddsBandsValue = ov;
             drawsValue = Pick.draws(fairs, z, cfg, balance, now, Json.arr(radar.view().get("moves"))); // 2.17
             // sanal takip: günün seçimi oynansın oynanmasın 100 TL'lik sanal bahis (seçim maç başlamadan değişirse yenisi)
             // "oynama" günü (beklenen kayıp sınırı aşıyor) sanal bahis de yok: strateji o gün oynamıyor
@@ -1230,16 +1232,16 @@ final class Repo {
         }
     }
 
-    /** Ekran için günün seçimi, tek maç listesi ve denge tablosu tek hesapla: {seçim, liste, bantlar} (2.16). */
+    /** Ekran için günün seçimi, tek maç listesi, denge tablosu, beraberlikler ve (2.71) oran tablosu tek hesapla (2.16). */
     Object[] picks() {
-        if (isDemo()) return new Object[4];
+        if (isDemo()) return new Object[5];
         try {
             refreshPicks();
             synchronized (pickLock) {
-                return new Object[] {pickValue, singlesValue, bandsValue, drawsValue};
+                return new Object[] {pickValue, singlesValue, bandsValue, drawsValue, oddsBandsValue};
             }
         } catch (RuntimeException e) {
-            return new Object[4]; // tablo yazılırken okunduysa bir sonraki çizimde gelir
+            return new Object[5]; // tablo yazılırken okunduysa bir sonraki çizimde gelir
         }
     }
 

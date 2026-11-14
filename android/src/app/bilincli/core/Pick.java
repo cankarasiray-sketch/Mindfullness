@@ -215,12 +215,15 @@ public final class Pick {
     }
 
     /**
-     * Günün seçimi, tek maç listesi ve denge tablosu tek seferde: {seçim, liste, bantlar} (2.16: ekran her
-     * yenilendiğinde Fırsatlar penceresinin seçimleri bir kez kurulur; sonuç list/bands/choose ile aynı).
+     * Günün seçimi, tek maç listesi, denge tablosu ve (2.71) oran tablosu tek seferde: {seçim, liste, bantlar, oran bantları}
+     * (2.16: ekran her yenilendiğinde Fırsatlar penceresinin seçimleri bir kez kurulur; sonuç list/bands/choose/oddsBands ile aynı).
      */
     public static Object[] all(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
-        List<Map<String, Object>> wide = singles(fairs, zirve, cfg, LIST_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now);
-        return new Object[] {choose(fairs, zirve, cfg, balance, now), listOf(wide, cfg, balance), bandsOf(wide)};
+        // 2.71: oran tablosu daha geniş (en az ODDS_TABLE_MIN_PROB tutan) kümeden; liste ve denge tablosu onun %50+ kısmı (sıra aynı)
+        List<Map<String, Object>> table = singles(fairs, zirve, cfg, ODDS_TABLE_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now);
+        List<Map<String, Object>> wide = new ArrayList<>();
+        for (Map<String, Object> e : table) if (Json.dbl(e, "p", 0) >= LIST_MIN_PROB) wide.add(e);
+        return new Object[] {choose(fairs, zirve, cfg, balance, now), listOf(wide, cfg, balance), bandsOf(wide), oddsBandsOf(table, cfg)};
     }
 
     private static List<Object> listOf(List<Map<String, Object>> sorted, Settings cfg, long balance) {
@@ -329,6 +332,81 @@ public final class Pick {
                 r.put("bestEv", Json.dbl(best, "ev", 0));
                 r.put("bestScore", Json.dbl(best, "score", 0));
                 r.put("label", Json.str(best, "home") + " – " + Json.str(best, "away") + " · " + Json.str(best, "label"));
+            }
+            out.add(r);
+        }
+        return out;
+    }
+
+    /**
+     * Oran bantları (2.71; kullanıcı sordu: "kârlılık açısından hangi oranda oynamalıyım"). Son bant açık uçludur; ilk bandın
+     * altı en düşük oran ayarıdır (cfg.pickMinOdds).
+     */
+    static final double[] ODDS_BANDS = {1.0, 1.40, 1.60, 1.85, 2.20, 3.00};
+    /**
+     * Oran tablosuna en az bu kadar olası seçimler girer: daha seyrek tutanlarda adil olasılıktaki küçük bir hata beklenen
+     * değeri çok oynatır (%10 olası seçimde 1 puanlık hata = %10 beklenen değer).
+     */
+    public static final double ODDS_TABLE_MIN_PROB = 0.20;
+
+    /**
+     * Oran tablosu (2.71): Fırsatlar penceresindeki tek oynanabilen seçimlerde oran aralığına göre iddaa'nın kesintisi ve en
+     * iyi seçim: {from, to (açık uçlu bantta yok), n, avgEv, total, playable, value, bestEv, bestScore, bestOdds, bestP, bestOk,
+     * label, model}. n ve avgEv: Pinnacle fiyatlı (model olmayan) seçimlerin sayısı ve ortalama beklenen değeri (model
+     * pazarlarında olasılıktan güvenlik payı düşülür, ortalamayı aşağı çekerdi); total: bütün seçimler; playable: tek maç
+     * kuralına uyanlar (en az cfg.pickMinProb tutan, beklenen kaybı cfg.pickMaxLoss'un içinde); value: oranı adil oranı
+     * geçenler (beklenen ≥ 0); best*: bandın gösterilen en iyi seçimi, {@link #rank} sırasıyla (önce kârlı, sonra denge puanı):
+     * kârlı seçim varsa o (kâr her zaman gösterilir); yoksa kuraldaki en az tutma olasılığını sağlayanların en iyisi (liste ve
+     * günün seçimiyle tutarlı); o da yoksa bandın en iyisi. bestOk: gösterilen seçim en az tutma olasılığını sağlıyor (yüksek
+     * oranlı bantlarda çoğu zaman sağlamaz: tabloda bilgi olarak durur, günün seçimi olmaz). "Hangi oranda kâr var"
+     * sorusunun günlük, gerçek veriyle yanıtı.
+     */
+    public static List<Object> oddsBands(List<Object> fairs, Map<String, Object> zirve, Settings cfg, long balance, Instant now) {
+        return oddsBandsOf(singles(fairs, zirve, cfg, ODDS_TABLE_MIN_PROB, fraction(cfg, balance), cfg.scanHours(), now), cfg);
+    }
+
+    /** all: en az ODDS_TABLE_MIN_PROB tutan, {@link #rank} sıralı seçimler. */
+    private static List<Object> oddsBandsOf(List<Map<String, Object>> all, Settings cfg) {
+        double floor = Math.max(MIN_ODDS, cfg.pickMinOdds);
+        List<Object> out = new ArrayList<>();
+        for (int b = 0; b < ODDS_BANDS.length; b++) {
+            boolean open = b + 1 == ODDS_BANDS.length;
+            double from = Math.max(ODDS_BANDS[b], floor), to = open ? Double.MAX_VALUE : ODDS_BANDS[b + 1];
+            if (from >= to) continue; // en düşük oran ayarı bu bandın üstünde
+            long n = 0, total = 0, playable = 0, value = 0;
+            double sum = 0;
+            Map<String, Object> first = null, rule = null; // bandın en iyisi; kuraldaki tutma olasılığını sağlayanların en iyisi
+            for (Map<String, Object> e : all) {
+                double o = Json.dbl(e, "odds", 0), ev = Json.dbl(e, "ev", 0);
+                if (o < from || o >= to) continue;
+                boolean ok = Json.dbl(e, "p", 0) >= cfg.pickMinProb;
+                total++;
+                if (!Json.bool(e, "model", false)) {
+                    n++;
+                    sum += ev;
+                }
+                if (ok && ev >= -cfg.pickMaxLoss - 1e-9) playable++;
+                if (ev >= 0) value++;
+                if (first == null) first = e; // liste sıralı
+                if (rule == null && ok) rule = e;
+            }
+            Map<String, Object> best = first != null && Json.dbl(first, "ev", 0) >= 0 ? first : rule != null ? rule : first;
+            Map<String, Object> r = new LinkedHashMap<>();
+            r.put("from", from);
+            if (!open) r.put("to", to);
+            r.put("n", n);
+            if (n > 0) r.put("avgEv", sum / n);
+            r.put("total", total);
+            r.put("playable", playable);
+            r.put("value", value);
+            if (best != null) {
+                r.put("bestEv", Json.dbl(best, "ev", 0));
+                r.put("bestScore", Json.dbl(best, "score", 0));
+                r.put("bestOdds", Json.dbl(best, "odds", 0));
+                r.put("bestP", Json.dbl(best, "p", 0));
+                r.put("bestOk", Json.dbl(best, "p", 0) >= cfg.pickMinProb);
+                r.put("label", Json.str(best, "home") + " – " + Json.str(best, "away") + " · " + Json.str(best, "label"));
+                if (Json.bool(best, "model", false)) r.put("model", true);
             }
             out.add(r);
         }
